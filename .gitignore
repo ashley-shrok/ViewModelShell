@@ -1,0 +1,19 @@
+# Node
+**/node_modules/
+**/dist/
+**/.cache/
+
+# .NET
+**/bin/
+**/obj/
+**/*.user
+**/.vs/
+**/ProjectEvaluation/
+
+# Build artifacts
+**/wwwroot/assets/
+**/wwwroot/index.html
+
+# OS
+.DS_Store
+Thumbs.db

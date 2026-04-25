@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Help Desk</title>
+  <style>
+    :root {
+      --bg:      #0f0f11;
+      --surface: #18181c;
+      --border:  #2e2e38;
+      --accent:  #7c6af7;
+      --text:    #e8e8f0;
+      --muted:   #6b6b80;
+      --radius:  10px;
+      --font:    'DM Mono', 'Fira Mono', monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .landing {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2rem;
+    }
+    h1 { font-size: 2rem; font-weight: 400; letter-spacing: -0.02em; }
+    p  { color: var(--muted); font-size: 13px; }
+    .roles {
+      display: flex;
+      gap: 1rem;
+    }
+    a.role {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 2rem 3rem;
+      text-decoration: none;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    a.role:hover { border-color: var(--accent); background: #1e1e24; }
+    a.role .icon { font-size: 2rem; }
+    a.role .label { font-size: 14px; }
+    a.role .sub   { font-size: 11px; color: var(--muted); }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="landing">
+    <div>
+      <h1>Help Desk</h1>
+      <p>Choose your role to continue</p>
+    </div>
+    <div class="roles">
+      <a href="/requester.html" class="role">
+        <span class="icon">&#128100;</span>
+        <span class="label">Requester</span>
+        <span class="sub">Submit &amp; track tickets</span>
+      </a>
+      <a href="/agent.html" class="role">
+        <span class="icon">&#128736;</span>
+        <span class="label">Agent</span>
+        <span class="sub">Manage the queue</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>
