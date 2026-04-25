@@ -117,7 +117,7 @@ public record ModalNode(
     ActionDescriptor? DismissAction = null
 ) : ViewNode;
 
-public record TableColumn(string Key, string Label, bool Sortable = false, bool Filterable = false, string? FilterValue = null);
+public record TableColumn(string Key, string Label, bool Sortable = false, bool Filterable = false, string? FilterValue = null, string? LinkLabel = null, bool LinkExternal = false);
 
 public record TableRow(
     Dictionary<string, string> Cells,

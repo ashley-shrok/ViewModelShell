@@ -459,7 +459,20 @@ export class BrowserAdapter implements Adapter {
       n.columns.forEach(col => {
         const td = document.createElement("td");
         td.className = "vms-table__td";
-        td.textContent = row.cells[col.key] ?? "";
+        const cellValue = row.cells[col.key] ?? "";
+        if (col.linkLabel && cellValue) {
+          const a = document.createElement("a");
+          a.href = cellValue;
+          a.textContent = col.linkLabel;
+          a.className = "vms-table__link";
+          if (col.linkExternal) {
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+          }
+          td.appendChild(a);
+        } else {
+          td.textContent = cellValue;
+        }
         tr.appendChild(td);
       });
       tbody.appendChild(tr);

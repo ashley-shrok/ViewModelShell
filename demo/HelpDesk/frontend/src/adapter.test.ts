@@ -513,6 +513,41 @@ describe("BrowserAdapter — table", () => {
     });
   });
 
+  it("link column renders anchor with href and label", () => {
+    const vm: ViewNode = {
+      type: "table",
+      columns: [{ key: "log", label: "Log", linkLabel: "Download" }],
+      rows: [{ cells: { log: "/jobs/output?path=abc" } }],
+    };
+    const { container } = render(vm);
+    const a = container.querySelector<HTMLAnchorElement>(".vms-table__link")!;
+    expect(a.href).toContain("/jobs/output?path=abc");
+    expect(a.textContent).toBe("Download");
+    expect(a.target).toBe("");
+  });
+
+  it("linkExternal opens in new tab with noopener", () => {
+    const vm: ViewNode = {
+      type: "table",
+      columns: [{ key: "log", label: "Log", linkLabel: "Download", linkExternal: true }],
+      rows: [{ cells: { log: "/jobs/output?path=abc" } }],
+    };
+    const { container } = render(vm);
+    const a = container.querySelector<HTMLAnchorElement>(".vms-table__link")!;
+    expect(a.target).toBe("_blank");
+    expect(a.rel).toBe("noopener noreferrer");
+  });
+
+  it("empty cell value does not render anchor", () => {
+    const vm: ViewNode = {
+      type: "table",
+      columns: [{ key: "log", label: "Log", linkLabel: "Download" }],
+      rows: [{ cells: { log: "" } }],
+    };
+    const { container } = render(vm);
+    expect(container.querySelector(".vms-table__link")).toBeNull();
+  });
+
   it("non-filterable columns have no filter input", () => {
     const vm: ViewNode = {
       type: "table",

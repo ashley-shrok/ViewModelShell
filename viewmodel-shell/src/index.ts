@@ -136,6 +136,10 @@ export interface TableColumn {
   sortable?: boolean;
   filterable?: boolean;
   filterValue?: string;
+  /** If set, cell values render as <a href={value}>{linkLabel}</a> */
+  linkLabel?: string;
+  /** true = open outside current app context (browser: new tab + noopener) */
+  linkExternal?: boolean;
 }
 
 export interface TableRow {

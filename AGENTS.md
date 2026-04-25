@@ -203,7 +203,7 @@ Full example: `C:\requests\mvc-agent-framework\demo\Tasks\frontend\src\main.ts`
 | tabs | `.vms-tabs`, `.vms-tabs__tab`, `.vms-tabs__tab--active` |
 | progress | `.vms-progress`, `.vms-progress__bar` |
 | modal | `.vms-modal-backdrop`, `.vms-modal`, `.vms-modal__header`, `.vms-modal__title`, `.vms-modal__close`, `.vms-modal__body` |
-| table | `.vms-table-wrapper`, `.vms-table`, `.vms-table__th`, `.vms-table__th--sortable`, `.vms-table__th--asc`, `.vms-table__th--desc`, `.vms-table__filter-row`, `.vms-table__filter-input`, `.vms-table__row`, `.vms-table__row--{variant}`, `.vms-table__row--clickable`, `.vms-table__td` |
+| table | `.vms-table-wrapper`, `.vms-table`, `.vms-table__th`, `.vms-table__th--sortable`, `.vms-table__th--asc`, `.vms-table__th--desc`, `.vms-table__filter-row`, `.vms-table__filter-input`, `.vms-table__row`, `.vms-table__row--{variant}`, `.vms-table__row--clickable`, `.vms-table__td`, `.vms-table__link` |
 
 Style them however you like. The demo's full CSS is in `C:\requests\mvc-agent-framework\demo\Tasks\frontend\index.html`.
 
