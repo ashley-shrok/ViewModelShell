@@ -1,5 +1,3 @@
-using ContactManager.Services;
-
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers()
@@ -8,8 +6,6 @@ builder.Services.AddControllers()
         o.JsonSerializerOptions.PropertyNamingPolicy =
             System.Text.Json.JsonNamingPolicy.CamelCase;
     });
-
-builder.Services.AddSingleton<ContactStoreRegistry>();
 
 var app = builder.Build();
 

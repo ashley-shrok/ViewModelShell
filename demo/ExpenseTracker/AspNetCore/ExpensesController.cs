@@ -2,29 +2,33 @@ namespace ExpenseTracker.Controllers;
 
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using ExpenseTracker.Services;
+using ExpenseTracker.State;
 using ViewModelShell.ViewModels;
 
 [ApiController]
 [Route("api/expenses")]
-public class ExpensesController(ExpenseStoreRegistry registry) : ControllerBase
+public class ExpensesController : ControllerBase
 {
-    private ExpenseStore Store => registry.GetOrCreate(
-        Request.Query.TryGetValue("tab", out var t) ? t.ToString() : "default"
-    );
-
     [HttpGet]
-    public ActionResult<ViewNode> Get() => BuildViewModel();
+    public ShellResponse<ExpensesState> Get()
+    {
+        var state = ExpensesState.Initial();
+        return new(BuildVm(state), state);
+    }
 
     [HttpPost("action")]
     [Consumes("multipart/form-data")]
-    public ActionResult<ViewNode> Action()
+    public ActionResult<ShellResponse<ExpensesState>> Action()
     {
-        var payload = ActionPayload.Parse(Request.Form["_action"].ToString());
+        var payload = ActionPayload<ExpensesState>.Parse(
+            Request.Form["_action"].ToString(),
+            Request.Form["_state"].ToString());
 
         string? Str(string key) =>
             payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
                 ? v.GetString() : null;
+
+        var state = payload.State;
 
         switch (payload.Name)
         {
@@ -33,48 +37,50 @@ public class ExpensesController(ExpenseStoreRegistry registry) : ControllerBase
                 var note      = Str("note") ?? "";
                 if (!decimal.TryParse(amountStr, out var amount) || amount <= 0)
                     return BadRequest("amount must be a positive number");
-                Store.AddTransaction(amount, Store.GetAddCategory(), note);
+                var added = new Transaction(
+                    Id:         Guid.NewGuid().ToString("N")[..8],
+                    CategoryId: state.AddCategory,
+                    Amount:     amount,
+                    Note:       note.Trim(),
+                    CreatedAt:  DateTimeOffset.UtcNow);
+                state = state with { Transactions = [.. state.Transactions, added] };
                 break;
 
             case "delete":
                 var deleteId = Str("id");
-                if (deleteId != null) Store.DeleteTransaction(deleteId);
+                if (deleteId != null)
+                    state = state with { Transactions = [.. state.Transactions.Where(t => t.Id != deleteId)] };
                 break;
 
             case "filter":
                 var filterValue = Str("value");
-                if (filterValue != null) Store.SetFilter(filterValue);
+                if (filterValue != null) state = state with { FilterCategory = filterValue };
                 break;
 
             case "select-category":
                 var catValue = Str("value");
-                if (catValue != null) Store.SetAddCategory(catValue);
+                if (catValue != null) state = state with { AddCategory = catValue };
                 break;
 
             default:
                 return BadRequest($"Unknown action: {payload.Name}");
         }
 
-        return BuildViewModel();
+        return new ShellResponse<ExpensesState>(BuildVm(state), state);
     }
 
-    private ViewNode BuildViewModel()
+    private static ViewNode BuildVm(ExpensesState state)
     {
-        var categories  = Store.GetCategories();
-        var allTx       = Store.GetAll();
-        var filter      = Store.GetFilter();
-        var addCategory = Store.GetAddCategory();
+        var totalBudget = state.Categories.Sum(c => c.Budget);
+        var totalSpent  = state.Categories.Sum(c => state.Transactions.Where(t => t.CategoryId == c.Id).Sum(t => t.Amount));
 
-        var totalBudget = categories.Sum(c => c.Budget);
-        var totalSpent  = categories.Sum(c => allTx.Where(t => t.CategoryId == c.Id).Sum(t => t.Amount));
+        var filteredTx = state.FilterCategory == "all"
+            ? state.Transactions.AsEnumerable()
+            : state.Transactions.Where(t => t.CategoryId == state.FilterCategory);
 
-        var filteredTx = filter == "all"
-            ? allTx.AsEnumerable()
-            : allTx.Where(t => t.CategoryId == filter);
-
-        var categoryItems = categories.Select(c =>
+        var categoryItems = state.Categories.Select(c =>
         {
-            var spent = allTx.Where(t => t.CategoryId == c.Id).Sum(t => t.Amount);
+            var spent = state.Transactions.Where(t => t.CategoryId == c.Id).Sum(t => t.Amount);
             var pct   = c.Budget == 0 ? 0 : (int)Math.Min(100, Math.Round(100m * spent / c.Budget));
             var over  = spent > c.Budget;
             return (ViewNode)new ListItemNode(
@@ -93,7 +99,7 @@ public class ExpensesController(ExpenseStoreRegistry registry) : ControllerBase
             .OrderByDescending(t => t.CreatedAt)
             .Select(t =>
             {
-                var cat   = categories.FirstOrDefault(c => c.Id == t.CategoryId);
+                var cat   = state.Categories.FirstOrDefault(c => c.Id == t.CategoryId);
                 var label = string.IsNullOrWhiteSpace(t.Note) ? cat?.Name ?? t.CategoryId : t.Note;
                 return (ViewNode)new ListItemNode(
                     Id:      t.Id,
@@ -114,7 +120,7 @@ public class ExpensesController(ExpenseStoreRegistry registry) : ControllerBase
             .ToList();
 
         var filterTabs = new List<TabItem> { new("all", "All") };
-        filterTabs.AddRange(categories.Select(c => new TabItem(c.Id, c.Name)));
+        filterTabs.AddRange(state.Categories.Select(c => new TabItem(c.Id, c.Name)));
 
         return new PageNode(
             Title: "Expenses",
@@ -137,9 +143,9 @@ public class ExpensesController(ExpenseStoreRegistry registry) : ControllerBase
                     Children:
                     [
                         new TabsNode(
-                            Selected: addCategory,
+                            Selected: state.AddCategory,
                             Action:   new ActionDescriptor("select-category"),
-                            Tabs:     categories.Select(c => new TabItem(c.Id, c.Name)).ToList()
+                            Tabs:     state.Categories.Select(c => new TabItem(c.Id, c.Name)).ToList()
                         ),
                         new FormNode(
                             SubmitAction: new ActionDescriptor("add"),
@@ -158,7 +164,7 @@ public class ExpensesController(ExpenseStoreRegistry registry) : ControllerBase
                     Children:
                     [
                         new TabsNode(
-                            Selected: filter,
+                            Selected: state.FilterCategory,
                             Action:   new ActionDescriptor("filter"),
                             Tabs:     filterTabs
                         ),

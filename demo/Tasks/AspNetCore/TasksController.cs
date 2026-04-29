@@ -2,25 +2,27 @@ namespace ViewModelShell.Controllers;
 
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using ViewModelShell.Services;
+using ViewModelShell.State;
 using ViewModelShell.ViewModels;
 
 [ApiController]
 [Route("api/tasks")]
-public class TasksController(TaskStoreRegistry registry) : ControllerBase
+public class TasksController : ControllerBase
 {
-    private TaskStore Store => registry.GetOrCreate(
-        Request.Query.TryGetValue("tab", out var t) ? t.ToString() : "default"
-    );
-
     [HttpGet]
-    public ActionResult<ViewNode> Get() => BuildViewModel();
+    public ShellResponse<TasksState> Get()
+    {
+        var state = TasksState.Initial();
+        return new(BuildVm(state), state);
+    }
 
     [HttpPost("action")]
     [Consumes("multipart/form-data")]
-    public ActionResult<ViewNode> Action()
+    public ActionResult<ShellResponse<TasksState>> Action()
     {
-        var payload = ActionPayload.Parse(Request.Form["_action"].ToString());
+        var payload = ActionPayload<TasksState>.Parse(
+            Request.Form["_action"].ToString(),
+            Request.Form["_state"].ToString());
 
         string? Str(string key) =>
             payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
@@ -36,51 +38,63 @@ public class TasksController(TaskStoreRegistry registry) : ControllerBase
                 }
                 : null;
 
+        var state = payload.State;
+
         switch (payload.Name)
         {
             case "add":
                 var title = Str("title");
                 if (string.IsNullOrWhiteSpace(title)) return BadRequest("title required");
-                Store.Add(title.Trim());
+                var newTask = new TaskRecord(
+                    Id: Guid.NewGuid().ToString("N")[..8],
+                    Title: title.Trim(),
+                    Completed: false,
+                    CreatedAt: DateTimeOffset.UtcNow);
+                state = state with { Items = [.. state.Items, newTask] };
                 break;
 
             case "toggle":
                 var toggleId  = Str("id");
                 var isChecked = Bool("checked");
-                if (toggleId != null && isChecked.HasValue) Store.SetCompleted(toggleId, isChecked.Value);
+                if (toggleId != null && isChecked.HasValue)
+                {
+                    state = state with
+                    {
+                        Items = [.. state.Items.Select(t =>
+                            t.Id == toggleId ? t with { Completed = isChecked.Value } : t)]
+                    };
+                }
                 break;
 
             case "delete":
                 var deleteId = Str("id");
-                if (deleteId != null) Store.Delete(deleteId);
+                if (deleteId != null)
+                    state = state with { Items = [.. state.Items.Where(t => t.Id != deleteId)] };
                 break;
 
             case "filter":
                 var value = Str("value");
-                if (value != null) Store.SetFilter(value);
+                if (value != null) state = state with { Filter = value };
                 break;
 
             default:
                 return BadRequest($"Unknown action: {payload.Name}");
         }
 
-        return BuildViewModel();
+        return new ShellResponse<TasksState>(BuildVm(state), state);
     }
 
-    private ViewNode BuildViewModel()
+    private static ViewNode BuildVm(TasksState state)
     {
-        var filter = Store.GetFilter();
-        var all    = Store.GetAll();
-
-        var filtered = filter switch
+        var filtered = state.Filter switch
         {
-            "active"    => all.Where(t => !t.Completed),
-            "completed" => all.Where(t => t.Completed),
-            _           => all.AsEnumerable()
+            "active"    => state.Items.Where(t => !t.Completed),
+            "completed" => state.Items.Where(t => t.Completed),
+            _           => state.Items.AsEnumerable()
         };
 
-        var total     = all.Count;
-        var completed = all.Count(t => t.Completed);
+        var total     = state.Items.Count;
+        var completed = state.Items.Count(t => t.Completed);
         var pct       = total == 0 ? 0 : (int)Math.Round(100.0 * completed / total);
 
         return new PageNode(
@@ -102,7 +116,7 @@ public class TasksController(TaskStoreRegistry registry) : ControllerBase
                 ),
 
                 new TabsNode(
-                    Selected: filter,
+                    Selected: state.Filter,
                     Action:   new ActionDescriptor("filter"),
                     Tabs:
                     [

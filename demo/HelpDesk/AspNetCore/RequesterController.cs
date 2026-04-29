@@ -6,79 +6,77 @@ using HelpDesk.ViewModels;
 
 [ApiController]
 [Route("api/requester")]
-public class RequesterController(RequesterStateRegistry registry, HelpDeskDb db) : ControllerBase
+public class RequesterController(HelpDeskDb db) : ControllerBase
 {
-    private RequesterState State => registry.GetOrCreate(
-        Request.Query.TryGetValue("tab", out var t) ? t.ToString() : "default"
-    );
-
     [HttpGet]
-    public ActionResult<ViewNode> Get() => BuildViewModel();
+    public ShellResponse<RequesterState> Get()
+    {
+        var state = RequesterState.Initial();
+        return new(BuildVm(state), state);
+    }
 
     [HttpPost("action")]
     [Consumes("multipart/form-data")]
-    public ActionResult<ViewNode> Action()
+    public ActionResult<ShellResponse<RequesterState>> Action()
     {
-        var payload = ActionPayload.Parse(Request.Form["_action"].ToString());
+        var payload = ActionPayload<RequesterState>.Parse(
+            Request.Form["_action"].ToString(),
+            Request.Form["_state"].ToString());
 
         string? Str(string key) =>
             payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
                 ? v.GetString() : null;
 
-        var state = State;
+        var state = payload.State;
 
         switch (payload.Name)
         {
             case "filter":
-                state.Filter = Str("value") ?? "all";
+                state = state with { Filter = Str("value") ?? "all" };
                 break;
 
             case "select-ticket":
                 var selId = Str("id");
                 if (selId != null && long.TryParse(selId, out var sid))
-                {
-                    state.SelectedTicketId = sid;
-                    state.View = "detail";
-                }
+                    state = state with { SelectedTicketId = sid, View = "detail" };
                 break;
 
             case "back-to-list":
-                state.View = "list";
-                state.SelectedTicketId = null;
-                state.ValidationError = null;
+                state = state with { View = "list", SelectedTicketId = null, ValidationError = null };
                 break;
 
             case "start-create":
-                state.View = "create";
-                state.CreateType = "hardware";
-                state.CreatePriority = "medium";
-                state.CreateAccessLevel = "read";
-                state.ValidationError = null;
+                state = state with
+                {
+                    View = "create",
+                    CreateType = "hardware",
+                    CreatePriority = "medium",
+                    CreateAccessLevel = "read",
+                    ValidationError = null
+                };
                 break;
 
             case "cancel-create":
-                state.View = "list";
-                state.ValidationError = null;
+                state = state with { View = "list", ValidationError = null };
                 break;
 
             case "set-type":
-                state.CreateType = Str("value") ?? "hardware";
-                state.ValidationError = null;
+                state = state with { CreateType = Str("value") ?? "hardware", ValidationError = null };
                 break;
 
             case "set-priority":
-                state.CreatePriority = Str("value") ?? "medium";
+                state = state with { CreatePriority = Str("value") ?? "medium" };
                 break;
 
             case "set-access-level":
-                state.CreateAccessLevel = Str("value") ?? "read";
+                state = state with { CreateAccessLevel = Str("value") ?? "read" };
                 break;
 
             case "create-ticket":
                 var title = Str("title");
                 if (string.IsNullOrWhiteSpace(title))
                 {
-                    state.ValidationError = "Title is required.";
+                    state = state with { ValidationError = "Title is required." };
                     break;
                 }
                 db.Create(
@@ -92,27 +90,22 @@ public class RequesterController(RequesterStateRegistry registry, HelpDeskDb db)
                     systemName:  Str("system_name"),
                     accessLevel: Str("access_level")
                 );
-                state.ValidationError = null;
-                state.View = "list";
+                state = state with { ValidationError = null, View = "list" };
                 break;
 
             default:
                 return BadRequest($"Unknown action: {payload.Name}");
         }
 
-        return BuildViewModel();
+        return new ShellResponse<RequesterState>(BuildVm(state), state);
     }
 
-    private ViewNode BuildViewModel()
+    private ViewNode BuildVm(RequesterState state) => state.View switch
     {
-        var state = State;
-        return state.View switch
-        {
-            "create" => BuildCreateView(state),
-            "detail" => BuildDetailView(state),
-            _        => BuildListView(state),
-        };
-    }
+        "create" => BuildCreateView(state),
+        "detail" => BuildDetailView(state),
+        _        => BuildListView(state),
+    };
 
     private ViewNode BuildListView(RequesterState state)
     {
@@ -160,7 +153,7 @@ public class RequesterController(RequesterStateRegistry registry, HelpDeskDb db)
         ]);
     }
 
-    private ViewNode BuildCreateView(RequesterState state)
+    private static ViewNode BuildCreateView(RequesterState state)
     {
         var formChildren = new List<ViewNode>();
 
@@ -253,11 +246,7 @@ public class RequesterController(RequesterStateRegistry registry, HelpDeskDb db)
     {
         var ticket = db.GetById(state.SelectedTicketId!.Value);
         if (ticket == null)
-        {
-            state.View = "list";
-            state.SelectedTicketId = null;
-            return BuildListView(state);
-        }
+            return BuildListView(state with { View = "list", SelectedTicketId = null });
 
         var info = new List<ViewNode>
         {

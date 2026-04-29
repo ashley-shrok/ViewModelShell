@@ -11,8 +11,6 @@ builder.Services.AddControllers()
 
 var dbPath = Path.Combine(builder.Environment.ContentRootPath, "helpdesk.db");
 builder.Services.AddSingleton(_ => new HelpDeskDb($"Data Source={dbPath}"));
-builder.Services.AddSingleton<RequesterStateRegistry>();
-builder.Services.AddSingleton<AgentStateRegistry>();
 
 var app = builder.Build();
 

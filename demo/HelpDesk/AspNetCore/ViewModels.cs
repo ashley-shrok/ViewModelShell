@@ -10,17 +10,29 @@ public record ActionDescriptor(
     Dictionary<string, object>? Context = null
 );
 
-public record ActionPayload(
+public record ActionPayload<TState>(
     string Name,
-    Dictionary<string, JsonElement>? Context = null
+    Dictionary<string, JsonElement>? Context,
+    TState State
 )
 {
     private static readonly JsonSerializerOptions _parseOpts =
         new() { PropertyNameCaseInsensitive = true };
 
-    public static ActionPayload Parse(string json) =>
-        JsonSerializer.Deserialize<ActionPayload>(json, _parseOpts)!;
+    public static ActionPayload<TState> Parse(string actionJson, string stateJson)
+    {
+        var actionDoc = JsonSerializer.Deserialize<JsonElement>(actionJson, _parseOpts);
+        var name = actionDoc.GetProperty("name").GetString()!;
+        var context = actionDoc.TryGetProperty("context", out var ctxEl)
+                      && ctxEl.ValueKind == JsonValueKind.Object
+            ? ctxEl.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone())
+            : null;
+        var state = JsonSerializer.Deserialize<TState>(stateJson, _parseOpts)!;
+        return new ActionPayload<TState>(name, context, state);
+    }
 }
+
+public record ShellResponse<TState>(ViewNode Vm, TState State);
 
 // ─── ViewNode hierarchy ───────────────────────────────────────────────────────
 
@@ -39,6 +51,7 @@ public record ActionPayload(
 [JsonDerivedType(typeof(ProgressNode), "progress")]
 [JsonDerivedType(typeof(ModalNode),    "modal")]
 [JsonDerivedType(typeof(TableNode),    "table")]
+[JsonDerivedType(typeof(LinkNode),     "link")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -96,7 +109,13 @@ public record ButtonNode(
 
 public record TextNode(
     string Value,
-    string? Style   // heading | subheading | body | muted | strikethrough | error
+    string? Style   // heading | subheading | body | muted | strikethrough | error | pre
+) : ViewNode;
+
+public record LinkNode(
+    string Label,
+    string Href,
+    bool External = false
 ) : ViewNode;
 
 public record StatItem(string Label, string Value);

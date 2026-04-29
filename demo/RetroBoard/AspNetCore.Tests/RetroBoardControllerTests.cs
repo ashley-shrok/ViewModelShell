@@ -3,21 +3,19 @@ namespace RetroBoard.Tests;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Primitives;
 using RetroBoard.Controllers;
-using RetroBoard.Services;
+using RetroBoard.State;
 using ViewModelShell.ViewModels;
 
 public class RetroBoardControllerTests
 {
-    private static RetroBoardController CreateController(string tab = "test")
+    private static RetroBoardController CreateController()
     {
-        var controller = new RetroBoardController(new RetroRegistry());
+        var controller = new RetroBoardController();
         controller.ControllerContext = new ControllerContext
         {
-            HttpContext = new DefaultHttpContext
-            {
-                Request = { QueryString = new QueryString($"?tab={tab}") }
-            }
+            HttpContext = new DefaultHttpContext()
         };
         return controller;
     }
@@ -29,50 +27,66 @@ public class RetroBoardControllerTests
             .ToDictionary(p => p.Name, p => p.Value.Clone());
     }
 
-    private static PageNode Page(ActionResult<ViewNode> result) =>
-        Assert.IsType<PageNode>(result.Value);
+    private static ActionResult<ShellResponse<RetroState>> Act(
+        RetroBoardController ctrl, RetroState state, string name,
+        Dictionary<string, JsonElement>? ctx = null)
+    {
+        var actionJson = JsonSerializer.Serialize(new { name, context = ctx });
+        var stateJson  = JsonSerializer.Serialize(state);
+        ctrl.ControllerContext.HttpContext.Request.Form = new FormCollection(
+            new Dictionary<string, StringValues>
+            {
+                ["_action"] = actionJson,
+                ["_state"]  = stateJson,
+            });
+        return ctrl.Action();
+    }
 
-    private static StatBarNode StatBar(PageNode page) =>
-        page.Children.OfType<StatBarNode>().Single();
+    private static ShellResponse<RetroState> Ok(ActionResult<ShellResponse<RetroState>> result) =>
+        result.Value ?? throw new Xunit.Sdk.XunitException("Expected a value, got " + result.Result?.GetType().Name);
 
-    private static IReadOnlyList<SectionNode> Sections(PageNode page) =>
-        page.Children.OfType<SectionNode>().ToList();
-
-    private static ListNode CardList(SectionNode section) =>
-        section.Children.OfType<ListNode>().Single();
+    private static PageNode Page(ViewNode vm) => Assert.IsType<PageNode>(vm);
+    private static StatBarNode StatBar(PageNode page) => page.Children.OfType<StatBarNode>().Single();
+    private static IReadOnlyList<SectionNode> Sections(PageNode page) => page.Children.OfType<SectionNode>().ToList();
+    private static ListNode CardList(SectionNode section) => section.Children.OfType<ListNode>().Single();
 
     // ── GET ─────────────────────────────────────────────────────────────────────
 
     [Fact]
     public void Get_ReturnsPageNode()
     {
-        var controller = CreateController();
-        var page = Page(controller.Get());
+        var page = Page(CreateController().Get().Vm);
         Assert.Equal("Retro Board", page.Title);
+    }
+
+    [Fact]
+    public void Get_ReturnsInitialState()
+    {
+        var resp = CreateController().Get();
+        Assert.Single(resp.State.WentWell);
+        Assert.Single(resp.State.DidntGoWell);
+        Assert.Single(resp.State.ActionItems);
     }
 
     [Fact]
     public void Get_HasThreeSections()
     {
-        var controller = CreateController();
-        Assert.Equal(3, Sections(Page(controller.Get())).Count);
+        Assert.Equal(3, Sections(Page(CreateController().Get().Vm)).Count);
     }
 
     [Fact]
     public void Get_SectionHeadings_ContainCardCount()
     {
-        var controller = CreateController();
-        var sections = Sections(Page(controller.Get()));
-        Assert.Contains("(1)", sections[0].Heading); // went-well: 1 seed card
-        Assert.Contains("(1)", sections[1].Heading); // didnt-go-well: 1 seed card
-        Assert.Contains("(1)", sections[2].Heading); // action-items: 1 seed card
+        var sections = Sections(Page(CreateController().Get().Vm));
+        Assert.Contains("(1)", sections[0].Heading);
+        Assert.Contains("(1)", sections[1].Heading);
+        Assert.Contains("(1)", sections[2].Heading);
     }
 
     [Fact]
     public void Get_EachSection_HasFormAndList()
     {
-        var controller = CreateController();
-        foreach (var section in Sections(Page(controller.Get())))
+        foreach (var section in Sections(Page(CreateController().Get().Vm)))
         {
             Assert.Contains(section.Children, c => c is FormNode);
             Assert.Contains(section.Children, c => c is ListNode);
@@ -82,40 +96,35 @@ public class RetroBoardControllerTests
     [Fact]
     public void Get_StatBar_ShowsThreeCards()
     {
-        var controller = CreateController();
-        var stat = StatBar(Page(controller.Get())).Stats.Single(s => s.Label == "cards");
+        var stat = StatBar(Page(CreateController().Get().Vm)).Stats.Single(s => s.Label == "cards");
         Assert.Equal("3", stat.Value);
     }
 
     [Fact]
     public void Get_StatBar_ShowsZeroVotes()
     {
-        var controller = CreateController();
-        var stat = StatBar(Page(controller.Get())).Stats.Single(s => s.Label == "votes");
+        var stat = StatBar(Page(CreateController().Get().Vm)).Stats.Single(s => s.Label == "votes");
         Assert.Equal("0", stat.Value);
     }
 
     [Fact]
     public void Get_StatBar_ShowsOneOpenAction()
     {
-        var controller = CreateController();
-        var stat = StatBar(Page(controller.Get())).Stats.Single(s => s.Label == "open");
+        var stat = StatBar(Page(CreateController().Get().Vm)).Stats.Single(s => s.Label == "open");
         Assert.Equal("1", stat.Value);
     }
 
     [Fact]
     public void Get_StatBar_ShowsZeroResolved()
     {
-        var controller = CreateController();
-        var stat = StatBar(Page(controller.Get())).Stats.Single(s => s.Label == "resolved");
+        var stat = StatBar(Page(CreateController().Get().Vm)).Stats.Single(s => s.Label == "resolved");
         Assert.Equal("0", stat.Value);
     }
 
     [Fact]
     public void Get_ActionItems_CardHasCheckbox()
     {
-        var controller = CreateController();
-        var sections = Sections(Page(controller.Get()));
+        var sections = Sections(Page(CreateController().Get().Vm));
         var card = Assert.IsType<ListItemNode>(CardList(sections[2]).Children.Single());
         Assert.Contains(card.Children, c => c is CheckboxNode);
     }
@@ -123,8 +132,7 @@ public class RetroBoardControllerTests
     [Fact]
     public void Get_WentWell_CardHasNoCheckbox()
     {
-        var controller = CreateController();
-        var sections = Sections(Page(controller.Get()));
+        var sections = Sections(Page(CreateController().Get().Vm));
         var card = Assert.IsType<ListItemNode>(CardList(sections[0]).Children.Single());
         Assert.DoesNotContain(card.Children, c => c is CheckboxNode);
     }
@@ -132,8 +140,7 @@ public class RetroBoardControllerTests
     [Fact]
     public void Get_EachCard_HasTextUpvoteButtonAndDeleteButton()
     {
-        var controller = CreateController();
-        foreach (var section in Sections(Page(controller.Get())))
+        foreach (var section in Sections(Page(CreateController().Get().Vm)))
         {
             foreach (var node in CardList(section).Children.Cast<ListItemNode>())
             {
@@ -149,46 +156,45 @@ public class RetroBoardControllerTests
     [Fact]
     public void Action_AddCard_AppendsToCorrectSection()
     {
-        var controller = CreateController();
-        var page = Page(controller.Action(new ActionPayload("add-card",
-            Ctx(new { section = "went-well", text = "Great sprint velocity" }))));
-        Assert.Equal(2, CardList(Sections(page)[0]).Children.Count);
+        var ctrl = CreateController();
+        var resp = Ok(Act(ctrl, RetroState.Initial(), "add-card",
+            Ctx(new { section = "went-well", text = "Great sprint velocity" })));
+        Assert.Equal(2, CardList(Sections(Page(resp.Vm))[0]).Children.Count);
+        Assert.Equal(2, resp.State.WentWell.Count);
     }
 
     [Fact]
     public void Action_AddCard_DoesNotAffectOtherSections()
     {
-        var controller = CreateController();
-        var page = Page(controller.Action(new ActionPayload("add-card",
-            Ctx(new { section = "went-well", text = "Great sprint velocity" }))));
-        Assert.Equal(1, CardList(Sections(page)[1]).Children.Count);
-        Assert.Equal(1, CardList(Sections(page)[2]).Children.Count);
+        var ctrl = CreateController();
+        var resp = Ok(Act(ctrl, RetroState.Initial(), "add-card",
+            Ctx(new { section = "went-well", text = "Great sprint velocity" })));
+        Assert.Equal(1, CardList(Sections(Page(resp.Vm))[1]).Children.Count);
+        Assert.Equal(1, CardList(Sections(Page(resp.Vm))[2]).Children.Count);
     }
 
     [Fact]
     public void Action_AddCard_UpdatesStatBarCardCount()
     {
-        var controller = CreateController();
-        var page = Page(controller.Action(new ActionPayload("add-card",
-            Ctx(new { section = "went-well", text = "New card" }))));
-        Assert.Equal("4", StatBar(page).Stats.Single(s => s.Label == "cards").Value);
+        var ctrl = CreateController();
+        var resp = Ok(Act(ctrl, RetroState.Initial(), "add-card",
+            Ctx(new { section = "went-well", text = "New card" })));
+        Assert.Equal("4", StatBar(Page(resp.Vm)).Stats.Single(s => s.Label == "cards").Value);
     }
 
     [Fact]
     public void Action_AddCard_EmptyText_ReturnsBadRequest()
     {
-        var controller = CreateController();
-        var result = controller.Action(new ActionPayload("add-card",
-            Ctx(new { section = "went-well", text = "" })));
+        var result = Act(CreateController(), RetroState.Initial(), "add-card",
+            Ctx(new { section = "went-well", text = "" }));
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     [Fact]
     public void Action_AddCard_WhitespaceText_ReturnsBadRequest()
     {
-        var controller = CreateController();
-        var result = controller.Action(new ActionPayload("add-card",
-            Ctx(new { section = "went-well", text = "   " })));
+        var result = Act(CreateController(), RetroState.Initial(), "add-card",
+            Ctx(new { section = "went-well", text = "   " }));
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
@@ -197,23 +203,21 @@ public class RetroBoardControllerTests
     [Fact]
     public void Action_DeleteCard_RemovesCard()
     {
-        var controller = CreateController();
-        var cardId = CardList(Sections(Page(controller.Get()))[0]).Children
-            .Cast<ListItemNode>().First().Id;
-        var page = Page(controller.Action(new ActionPayload("delete-card",
-            Ctx(new { id = cardId }))));
-        Assert.Equal(0, CardList(Sections(page)[0]).Children.Count);
+        var ctrl = CreateController();
+        var initial = RetroState.Initial();
+        var cardId = initial.WentWell.First().Id;
+        var resp = Ok(Act(ctrl, initial, "delete-card", Ctx(new { id = cardId })));
+        Assert.Equal(0, CardList(Sections(Page(resp.Vm))[0]).Children.Count);
     }
 
     [Fact]
     public void Action_DeleteCard_UpdatesStatBarCardCount()
     {
-        var controller = CreateController();
-        var cardId = CardList(Sections(Page(controller.Get()))[0]).Children
-            .Cast<ListItemNode>().First().Id;
-        var page = Page(controller.Action(new ActionPayload("delete-card",
-            Ctx(new { id = cardId }))));
-        Assert.Equal("2", StatBar(page).Stats.Single(s => s.Label == "cards").Value);
+        var ctrl = CreateController();
+        var initial = RetroState.Initial();
+        var cardId = initial.WentWell.First().Id;
+        var resp = Ok(Act(ctrl, initial, "delete-card", Ctx(new { id = cardId })));
+        Assert.Equal("2", StatBar(Page(resp.Vm)).Stats.Single(s => s.Label == "cards").Value);
     }
 
     // ── upvote-card ─────────────────────────────────────────────────────────────
@@ -221,23 +225,21 @@ public class RetroBoardControllerTests
     [Fact]
     public void Action_UpvoteCard_IncrementsVoteStatTotal()
     {
-        var controller = CreateController();
-        var cardId = CardList(Sections(Page(controller.Get()))[0]).Children
-            .Cast<ListItemNode>().First().Id;
-        var page = Page(controller.Action(new ActionPayload("upvote-card",
-            Ctx(new { id = cardId }))));
-        Assert.Equal("1", StatBar(page).Stats.Single(s => s.Label == "votes").Value);
+        var ctrl = CreateController();
+        var initial = RetroState.Initial();
+        var cardId = initial.WentWell.First().Id;
+        var resp = Ok(Act(ctrl, initial, "upvote-card", Ctx(new { id = cardId })));
+        Assert.Equal("1", StatBar(Page(resp.Vm)).Stats.Single(s => s.Label == "votes").Value);
     }
 
     [Fact]
     public void Action_UpvoteCard_ShowsCountInButtonLabel()
     {
-        var controller = CreateController();
-        var sections = Sections(Page(controller.Get()));
-        var cardId = CardList(sections[0]).Children.Cast<ListItemNode>().First().Id;
-        var page = Page(controller.Action(new ActionPayload("upvote-card",
-            Ctx(new { id = cardId }))));
-        var upvoteBtn = CardList(Sections(page)[0]).Children
+        var ctrl = CreateController();
+        var initial = RetroState.Initial();
+        var cardId = initial.WentWell.First().Id;
+        var resp = Ok(Act(ctrl, initial, "upvote-card", Ctx(new { id = cardId })));
+        var upvoteBtn = CardList(Sections(Page(resp.Vm))[0]).Children
             .Cast<ListItemNode>().First()
             .Children.OfType<ButtonNode>()
             .Single(b => b.Action.Name == "upvote-card");
@@ -249,36 +251,33 @@ public class RetroBoardControllerTests
     [Fact]
     public void Action_ResolveCard_MarksItemWithDoneVariant()
     {
-        var controller = CreateController();
-        var actionId = CardList(Sections(Page(controller.Get()))[2]).Children
-            .Cast<ListItemNode>().First().Id;
-        var page = Page(controller.Action(new ActionPayload("resolve-card",
-            Ctx(new { id = actionId, @checked = true }))));
-        var item = CardList(Sections(page)[2]).Children.Cast<ListItemNode>().First();
+        var ctrl = CreateController();
+        var initial = RetroState.Initial();
+        var actionId = initial.ActionItems.First().Id;
+        var resp = Ok(Act(ctrl, initial, "resolve-card", Ctx(new { id = actionId, @checked = true })));
+        var item = CardList(Sections(Page(resp.Vm))[2]).Children.Cast<ListItemNode>().First();
         Assert.Equal("done", item.Variant);
     }
 
     [Fact]
     public void Action_ResolveCard_AppliesStrikethroughToText()
     {
-        var controller = CreateController();
-        var actionId = CardList(Sections(Page(controller.Get()))[2]).Children
-            .Cast<ListItemNode>().First().Id;
-        var page = Page(controller.Action(new ActionPayload("resolve-card",
-            Ctx(new { id = actionId, @checked = true }))));
-        var item = CardList(Sections(page)[2]).Children.Cast<ListItemNode>().First();
+        var ctrl = CreateController();
+        var initial = RetroState.Initial();
+        var actionId = initial.ActionItems.First().Id;
+        var resp = Ok(Act(ctrl, initial, "resolve-card", Ctx(new { id = actionId, @checked = true })));
+        var item = CardList(Sections(Page(resp.Vm))[2]).Children.Cast<ListItemNode>().First();
         Assert.Contains(item.Children.OfType<TextNode>(), t => t.Style == "strikethrough");
     }
 
     [Fact]
     public void Action_ResolveCard_UpdatesOpenAndResolvedStats()
     {
-        var controller = CreateController();
-        var actionId = CardList(Sections(Page(controller.Get()))[2]).Children
-            .Cast<ListItemNode>().First().Id;
-        var page = Page(controller.Action(new ActionPayload("resolve-card",
-            Ctx(new { id = actionId, @checked = true }))));
-        var stats = StatBar(page).Stats;
+        var ctrl = CreateController();
+        var initial = RetroState.Initial();
+        var actionId = initial.ActionItems.First().Id;
+        var resp = Ok(Act(ctrl, initial, "resolve-card", Ctx(new { id = actionId, @checked = true })));
+        var stats = StatBar(Page(resp.Vm)).Stats;
         Assert.Equal("0", stats.Single(s => s.Label == "open").Value);
         Assert.Equal("1", stats.Single(s => s.Label == "resolved").Value);
     }
@@ -286,13 +285,12 @@ public class RetroBoardControllerTests
     [Fact]
     public void Action_ResolveCard_CanUnresolve()
     {
-        var controller = CreateController();
-        var actionId = CardList(Sections(Page(controller.Get()))[2]).Children
-            .Cast<ListItemNode>().First().Id;
-        controller.Action(new ActionPayload("resolve-card", Ctx(new { id = actionId, @checked = true })));
-        var page = Page(controller.Action(new ActionPayload("resolve-card",
-            Ctx(new { id = actionId, @checked = false }))));
-        var item = CardList(Sections(page)[2]).Children.Cast<ListItemNode>().First();
+        var ctrl = CreateController();
+        var initial = RetroState.Initial();
+        var actionId = initial.ActionItems.First().Id;
+        var step1 = Ok(Act(ctrl, initial, "resolve-card", Ctx(new { id = actionId, @checked = true })));
+        var step2 = Ok(Act(ctrl, step1.State, "resolve-card", Ctx(new { id = actionId, @checked = false })));
+        var item = CardList(Sections(Page(step2.Vm))[2]).Children.Cast<ListItemNode>().First();
         Assert.Null(item.Variant);
     }
 
@@ -301,8 +299,7 @@ public class RetroBoardControllerTests
     [Fact]
     public void Action_UnknownName_ReturnsBadRequest()
     {
-        var controller = CreateController();
-        var result = controller.Action(new ActionPayload("blast-off", null));
+        var result = Act(CreateController(), RetroState.Initial(), "blast-off");
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 }

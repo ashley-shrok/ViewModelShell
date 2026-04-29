@@ -1,14 +1,12 @@
 import { ViewModelShell } from "viewmodel-shell";
 import { BrowserAdapter } from "viewmodel-shell/browser";
 
-const tabId = Math.random().toString(36).slice(2, 10);
-
 const container = document.getElementById("app")!;
 const adapter = new BrowserAdapter(container);
 
 const shell = new ViewModelShell({
-  endpoint: `/api/contacts?tab=${tabId}`,
-  actionEndpoint: `/api/contacts/action?tab=${tabId}`,
+  endpoint: `/api/contacts`,
+  actionEndpoint: `/api/contacts/action`,
   adapter,
   onLoading(loading) {
     document.body.classList.toggle("is-loading", loading);

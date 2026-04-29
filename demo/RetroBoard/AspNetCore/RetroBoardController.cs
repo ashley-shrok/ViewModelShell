@@ -2,25 +2,27 @@ namespace RetroBoard.Controllers;
 
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using RetroBoard.Services;
+using RetroBoard.State;
 using ViewModelShell.ViewModels;
 
 [ApiController]
 [Route("api/retro")]
-public class RetroBoardController(RetroRegistry registry) : ControllerBase
+public class RetroBoardController : ControllerBase
 {
-    private RetroStore Store => registry.GetOrCreate(
-        Request.Query.TryGetValue("tab", out var t) ? t.ToString() : "default"
-    );
-
     [HttpGet]
-    public ActionResult<ViewNode> Get() => BuildViewModel();
+    public ShellResponse<RetroState> Get()
+    {
+        var state = RetroState.Initial();
+        return new(BuildVm(state), state);
+    }
 
     [HttpPost("action")]
     [Consumes("multipart/form-data")]
-    public ActionResult<ViewNode> Action()
+    public ActionResult<ShellResponse<RetroState>> Action()
     {
-        var payload = ActionPayload.Parse(Request.Form["_action"].ToString());
+        var payload = ActionPayload<RetroState>.Parse(
+            Request.Form["_action"].ToString(),
+            Request.Form["_state"].ToString());
 
         string? Str(string key) =>
             payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
@@ -36,49 +38,83 @@ public class RetroBoardController(RetroRegistry registry) : ControllerBase
                 }
                 : null;
 
+        var state = payload.State;
+
         switch (payload.Name)
         {
             case "add-card":
                 var section = Str("section");
                 var text    = Str("text");
                 if (string.IsNullOrWhiteSpace(text)) return BadRequest("text required");
-                if (section != null) Store.AddCard(section, text.Trim());
+                if (section != null)
+                {
+                    var card = new RetroCard(
+                        Id:        Guid.NewGuid().ToString("N")[..8],
+                        Text:      text.Trim(),
+                        Votes:     0,
+                        Resolved:  false,
+                        CreatedAt: DateTimeOffset.UtcNow);
+                    state = AddCard(state, section, card);
+                }
                 break;
 
             case "delete-card":
                 var deleteId = Str("id");
-                if (deleteId != null) Store.DeleteCard(deleteId);
+                if (deleteId != null) state = DeleteCard(state, deleteId);
                 break;
 
             case "upvote-card":
                 var upvoteId = Str("id");
-                if (upvoteId != null) Store.UpvoteCard(upvoteId);
+                if (upvoteId != null) state = UpvoteCard(state, upvoteId);
                 break;
 
             case "resolve-card":
                 var resolveId  = Str("id");
                 var isResolved = Bool("checked");
                 if (resolveId != null && isResolved.HasValue)
-                    Store.ResolveCard(resolveId, isResolved.Value);
+                    state = ResolveCard(state, resolveId, isResolved.Value);
                 break;
 
             default:
                 return BadRequest($"Unknown action: {payload.Name}");
         }
 
-        return BuildViewModel();
+        return new ShellResponse<RetroState>(BuildVm(state), state);
     }
 
-    private ViewNode BuildViewModel()
+    private static RetroState AddCard(RetroState s, string section, RetroCard card) => section switch
     {
-        var wentWell    = Store.GetCards("went-well");
-        var didntGoWell = Store.GetCards("didnt-go-well");
-        var actionItems = Store.GetCards("action-items");
+        "went-well"     => s with { WentWell    = [.. s.WentWell, card] },
+        "didnt-go-well" => s with { DidntGoWell = [.. s.DidntGoWell, card] },
+        "action-items"  => s with { ActionItems = [.. s.ActionItems, card] },
+        _ => s
+    };
 
-        var totalCards  = wentWell.Count + didntGoWell.Count + actionItems.Count;
-        var totalVotes  = wentWell.Sum(c => c.Votes) + didntGoWell.Sum(c => c.Votes) + actionItems.Sum(c => c.Votes);
-        var openActions = actionItems.Count(c => !c.Resolved);
-        var doneActions = actionItems.Count(c => c.Resolved);
+    private static RetroState DeleteCard(RetroState s, string id) => s with
+    {
+        WentWell    = [.. s.WentWell.Where(c => c.Id != id)],
+        DidntGoWell = [.. s.DidntGoWell.Where(c => c.Id != id)],
+        ActionItems = [.. s.ActionItems.Where(c => c.Id != id)],
+    };
+
+    private static RetroState UpvoteCard(RetroState s, string id) => s with
+    {
+        WentWell    = [.. s.WentWell.Select(c => c.Id == id ? c with { Votes = c.Votes + 1 } : c)],
+        DidntGoWell = [.. s.DidntGoWell.Select(c => c.Id == id ? c with { Votes = c.Votes + 1 } : c)],
+        ActionItems = [.. s.ActionItems.Select(c => c.Id == id ? c with { Votes = c.Votes + 1 } : c)],
+    };
+
+    private static RetroState ResolveCard(RetroState s, string id, bool resolved) => s with
+    {
+        ActionItems = [.. s.ActionItems.Select(c => c.Id == id ? c with { Resolved = resolved } : c)]
+    };
+
+    private static ViewNode BuildVm(RetroState state)
+    {
+        var totalCards  = state.WentWell.Count + state.DidntGoWell.Count + state.ActionItems.Count;
+        var totalVotes  = state.WentWell.Sum(c => c.Votes) + state.DidntGoWell.Sum(c => c.Votes) + state.ActionItems.Sum(c => c.Votes);
+        var openActions = state.ActionItems.Count(c => !c.Resolved);
+        var doneActions = state.ActionItems.Count(c => c.Resolved);
 
         return new PageNode(
             Title: "Retro Board",
@@ -92,9 +128,9 @@ public class RetroBoardController(RetroRegistry registry) : ControllerBase
                     new StatItem("resolved", doneActions.ToString()),
                 ]),
 
-                BuildSectionNode("Went Well",      "went-well",     wentWell,    isActionItems: false),
-                BuildSectionNode("Didn't Go Well", "didnt-go-well", didntGoWell, isActionItems: false),
-                BuildSectionNode("Action Items",   "action-items",  actionItems, isActionItems: true),
+                BuildSectionNode("Went Well",      "went-well",     state.WentWell,    isActionItems: false),
+                BuildSectionNode("Didn't Go Well", "didnt-go-well", state.DidntGoWell, isActionItems: false),
+                BuildSectionNode("Action Items",   "action-items",  state.ActionItems, isActionItems: true),
             ]
         );
     }

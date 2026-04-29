@@ -2,102 +2,124 @@ namespace ContactManager.Controllers;
 
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using ContactManager.Services;
+using ContactManager.State;
 using ViewModelShell.ViewModels;
 
 [ApiController]
 [Route("api/contacts")]
-public class ContactsController(ContactStoreRegistry registry) : ControllerBase
+public class ContactsController : ControllerBase
 {
-    private ContactStore Store => registry.GetOrCreate(
-        Request.Query.TryGetValue("tab", out var t) ? t.ToString() : "default"
-    );
-
     [HttpGet]
-    public ActionResult<ViewNode> Get() => BuildViewModel();
+    public ShellResponse<ContactsState> Get()
+    {
+        var state = ContactsState.Initial();
+        return new(BuildVm(state), state);
+    }
 
     [HttpPost("action")]
     [Consumes("multipart/form-data")]
-    public ActionResult<ViewNode> Action()
+    public ActionResult<ShellResponse<ContactsState>> Action()
     {
-        var payload = ActionPayload.Parse(Request.Form["_action"].ToString());
+        var payload = ActionPayload<ContactsState>.Parse(
+            Request.Form["_action"].ToString(),
+            Request.Form["_state"].ToString());
 
         string? Str(string key) =>
             payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
                 ? v.GetString() : null;
+
+        var state = payload.State;
 
         switch (payload.Name)
         {
             case "navigate-to-detail":
                 var detailId = Str("id");
                 if (detailId == null) return BadRequest("id required");
-                Store.SetSelectedId(detailId);
-                Store.SetCurrentView(ContactView.Detail);
+                state = state with { SelectedId = detailId, CurrentView = "detail" };
                 break;
 
             case "navigate-to-add":
-                Store.SetCurrentView(ContactView.Add);
-                Store.SetSelectedId(null);
+                state = state with { CurrentView = "add", SelectedId = null };
                 break;
 
             case "navigate-to-list":
-                Store.SetCurrentView(ContactView.List);
-                Store.SetSelectedId(null);
+                state = state with { CurrentView = "list", SelectedId = null };
                 break;
 
             case "save-contact":
                 var name = Str("name");
                 if (string.IsNullOrWhiteSpace(name)) return BadRequest("name required");
-                var email  = Str("email")  ?? "";
-                var phone  = Str("phone")  ?? "";
-                var notes  = Str("notes")  ?? "";
+                var email  = (Str("email")  ?? "").Trim();
+                var phone  = (Str("phone")  ?? "").Trim();
+                var notes  = (Str("notes")  ?? "").Trim();
+                var trimmedName = name.Trim();
                 var editId = Str("id");
                 if (!string.IsNullOrEmpty(editId))
                 {
-                    Store.Update(editId, name.Trim(), email.Trim(), phone.Trim(), notes.Trim());
-                    Store.SetSelectedId(editId);
-                    Store.SetCurrentView(ContactView.Detail);
+                    state = state with
+                    {
+                        Contacts = [.. state.Contacts.Select(c =>
+                            c.Id == editId ? c with { Name = trimmedName, Email = email, Phone = phone, Notes = notes } : c)],
+                        SelectedId = editId,
+                        CurrentView = "detail"
+                    };
                 }
                 else
                 {
-                    Store.Add(name.Trim(), email.Trim(), phone.Trim(), notes.Trim());
-                    Store.SetCurrentView(ContactView.List);
+                    var added = new ContactRecord(
+                        Id:        Guid.NewGuid().ToString("N")[..8],
+                        Name:      trimmedName,
+                        Email:     email,
+                        Phone:     phone,
+                        Notes:     notes,
+                        CreatedAt: DateTimeOffset.UtcNow);
+                    state = state with
+                    {
+                        Contacts    = [.. state.Contacts, added],
+                        CurrentView = "list"
+                    };
                 }
                 break;
 
             case "delete-contact":
                 var deleteId = Str("id");
-                if (deleteId != null) Store.Delete(deleteId);
-                Store.SetCurrentView(ContactView.List);
-                Store.SetSelectedId(null);
+                if (deleteId != null)
+                    state = state with { Contacts = [.. state.Contacts.Where(c => c.Id != deleteId)] };
+                state = state with { CurrentView = "list", SelectedId = null };
                 break;
 
             case "search":
-                Store.SetSearchQuery(Str("query") ?? "");
+                state = state with { SearchQuery = Str("query") ?? "" };
                 break;
 
             default:
                 return BadRequest($"Unknown action: {payload.Name}");
         }
 
-        return BuildViewModel();
+        return new ShellResponse<ContactsState>(BuildVm(state), state);
     }
 
-    private ViewNode BuildViewModel() => Store.GetCurrentView() switch
+    private static ViewNode BuildVm(ContactsState state) => state.CurrentView switch
     {
-        ContactView.Detail => BuildDetailView(),
-        ContactView.Add    => BuildAddView(),
-        _                  => BuildListView()
+        "detail" => BuildDetailView(state),
+        "add"    => BuildAddView(),
+        _        => BuildListView(state)
     };
 
-    private ViewNode BuildListView()
+    private static IReadOnlyList<ContactRecord> Filtered(ContactsState state)
     {
-        var query    = Store.GetSearchQuery();
-        var all      = Store.GetAll();
-        var filtered = Store.GetFiltered(query);
-        var statText = filtered.Count == all.Count
-            ? $"{all.Count}"
-            : $"{filtered.Count} of {all.Count}";
+        if (string.IsNullOrWhiteSpace(state.SearchQuery)) return state.Contacts;
+        return [.. state.Contacts.Where(c =>
+            c.Name.Contains(state.SearchQuery,  StringComparison.OrdinalIgnoreCase) ||
+            c.Email.Contains(state.SearchQuery, StringComparison.OrdinalIgnoreCase))];
+    }
+
+    private static ViewNode BuildListView(ContactsState state)
+    {
+        var filtered = Filtered(state);
+        var statText = filtered.Count == state.Contacts.Count
+            ? $"{state.Contacts.Count}"
+            : $"{filtered.Count} of {state.Contacts.Count}";
 
         return new PageNode(
             Title: "Contacts",
@@ -113,7 +135,7 @@ public class ContactsController(ContactStoreRegistry registry) : ControllerBase
                     SubmitLabel:  "Search",
                     Children:
                     [
-                        new FieldNode("query", "text", null, "Search by name or email…", query,
+                        new FieldNode("query", "text", null, "Search by name or email…", state.SearchQuery,
                             Action: new ActionDescriptor("search"))
                     ]
                 ),
@@ -149,15 +171,12 @@ public class ContactsController(ContactStoreRegistry registry) : ControllerBase
         );
     }
 
-    private ViewNode BuildDetailView()
+    private static ViewNode BuildDetailView(ContactsState state)
     {
-        var id      = Store.GetSelectedId();
-        var contact = id != null ? Store.GetById(id) : null;
-        if (contact == null)
-        {
-            Store.SetCurrentView(ContactView.List);
-            return BuildListView();
-        }
+        var contact = state.SelectedId != null
+            ? state.Contacts.FirstOrDefault(c => c.Id == state.SelectedId)
+            : null;
+        if (contact == null) return BuildListView(state with { CurrentView = "list", SelectedId = null });
 
         return new PageNode(
             Title: contact.Name,
@@ -190,7 +209,7 @@ public class ContactsController(ContactStoreRegistry registry) : ControllerBase
         );
     }
 
-    private ViewNode BuildAddView()
+    private static ViewNode BuildAddView()
     {
         return new PageNode(
             Title: "New Contact",

@@ -6,46 +6,43 @@ using HelpDesk.ViewModels;
 
 [ApiController]
 [Route("api/agent")]
-public class AgentController(AgentStateRegistry registry, HelpDeskDb db) : ControllerBase
+public class AgentController(HelpDeskDb db) : ControllerBase
 {
-    private AgentState State => registry.GetOrCreate(
-        Request.Query.TryGetValue("tab", out var t) ? t.ToString() : "default"
-    );
-
     [HttpGet]
-    public ActionResult<ViewNode> Get() => BuildViewModel();
+    public ShellResponse<AgentState> Get()
+    {
+        var state = AgentState.Initial();
+        return new(BuildVm(state), state);
+    }
 
     [HttpPost("action")]
     [Consumes("multipart/form-data")]
-    public ActionResult<ViewNode> Action()
+    public ActionResult<ShellResponse<AgentState>> Action()
     {
-        var payload = ActionPayload.Parse(Request.Form["_action"].ToString());
+        var payload = ActionPayload<AgentState>.Parse(
+            Request.Form["_action"].ToString(),
+            Request.Form["_state"].ToString());
 
         string? Str(string key) =>
             payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
                 ? v.GetString() : null;
 
-        var state = State;
-        state.NotesSaved = false;
+        var state = payload.State with { NotesSaved = false };
 
         switch (payload.Name)
         {
             case "filter":
-                state.Filter = Str("value") ?? "all";
+                state = state with { Filter = Str("value") ?? "all" };
                 break;
 
             case "select-ticket":
                 var selId = Str("id");
                 if (selId != null && long.TryParse(selId, out var sid))
-                {
-                    state.SelectedTicketId = sid;
-                    state.View = "detail";
-                }
+                    state = state with { SelectedTicketId = sid, View = "detail" };
                 break;
 
             case "back-to-queue":
-                state.View = "queue";
-                state.SelectedTicketId = null;
+                state = state with { View = "queue", SelectedTicketId = null };
                 break;
 
             case "start-ticket":
@@ -53,10 +50,8 @@ public class AgentController(AgentStateRegistry registry, HelpDeskDb db) : Contr
                 if (startId != null && long.TryParse(startId, out var stid))
                 {
                     db.UpdateStatus(stid, "in-progress");
-                    // If we're in detail view, stay there to show updated status
-                    if (state.View != "detail")
-                        break;
-                    state.SelectedTicketId = stid;
+                    if (state.View == "detail")
+                        state = state with { SelectedTicketId = stid };
                 }
                 break;
 
@@ -78,7 +73,7 @@ public class AgentController(AgentStateRegistry registry, HelpDeskDb db) : Contr
                 if (notesId != null && long.TryParse(notesId, out var nid))
                 {
                     db.UpdateAgentNotes(nid, notes);
-                    state.NotesSaved = true;
+                    state = state with { NotesSaved = true };
                 }
                 break;
 
@@ -86,18 +81,14 @@ public class AgentController(AgentStateRegistry registry, HelpDeskDb db) : Contr
                 return BadRequest($"Unknown action: {payload.Name}");
         }
 
-        return BuildViewModel();
+        return new ShellResponse<AgentState>(BuildVm(state), state);
     }
 
-    private ViewNode BuildViewModel()
+    private ViewNode BuildVm(AgentState state) => state.View switch
     {
-        var state = State;
-        return state.View switch
-        {
-            "detail" => BuildDetailView(state),
-            _        => BuildQueueView(state),
-        };
-    }
+        "detail" => BuildDetailView(state),
+        _        => BuildQueueView(state),
+    };
 
     private ViewNode BuildQueueView(AgentState state)
     {
@@ -159,11 +150,7 @@ public class AgentController(AgentStateRegistry registry, HelpDeskDb db) : Contr
     {
         var ticket = db.GetById(state.SelectedTicketId!.Value);
         if (ticket == null)
-        {
-            state.View = "queue";
-            state.SelectedTicketId = null;
-            return BuildQueueView(state);
-        }
+            return BuildQueueView(state with { View = "queue", SelectedTicketId = null });
 
         var info = new List<ViewNode>
         {
@@ -194,7 +181,6 @@ public class AgentController(AgentStateRegistry registry, HelpDeskDb db) : Contr
         if (!string.IsNullOrEmpty(ticket.Description))
             info.Add(new TextNode(ticket.Description, "body"));
 
-        // Conditionally available actions based on status
         var actionChildren = new List<ViewNode>();
         switch (ticket.Status)
         {

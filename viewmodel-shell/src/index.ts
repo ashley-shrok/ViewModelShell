@@ -184,8 +184,14 @@ export interface ShellOptions {
   getRequestHeaders?: () => Record<string, string> | Promise<Record<string, string>>;
 }
 
+export interface ShellResponse {
+  vm: ViewNode;
+  state: unknown;
+}
+
 export class ViewModelShell {
   private currentVm: ViewNode | null = null;
+  private currentState: unknown = null;
   private dispatching = false;
 
   constructor(private options: ShellOptions) {}
@@ -198,9 +204,10 @@ export class ViewModelShell {
       const extraHeaders = this.options.getRequestHeaders ? await this.options.getRequestHeaders() : {};
       const res = await fetch(url, { headers: { Accept: "application/json", ...extraHeaders } });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const vm = (await res.json()) as ViewNode;
-      this.currentVm = vm;
-      adapter.render(vm, (action) => this.dispatch(action));
+      const body = (await res.json()) as ShellResponse;
+      this.currentVm = body.vm;
+      this.currentState = body.state;
+      adapter.render(body.vm, (action) => this.dispatch(action));
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       onError ? onError(error) : console.error("[ViewModelShell]", error);
@@ -217,6 +224,7 @@ export class ViewModelShell {
       onLoading?.(true);
       const form = new FormData();
       form.append("_action", JSON.stringify({ name: action.name, context: action.context ?? {} }));
+      form.append("_state", JSON.stringify(this.currentState));
       if (action.files) {
         for (const [name, file] of Object.entries(action.files)) {
           form.append(name, file);
@@ -229,9 +237,10 @@ export class ViewModelShell {
         body: form,
       });
       if (!res.ok) throw new Error(`Action '${action.name}' failed: ${res.status}`);
-      const vm = (await res.json()) as ViewNode;
-      this.currentVm = vm;
-      adapter.render(vm, (a) => this.dispatch(a));
+      const body = (await res.json()) as ShellResponse;
+      this.currentVm = body.vm;
+      this.currentState = body.state;
+      adapter.render(body.vm, (a) => this.dispatch(a));
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       onError ? onError(error) : console.error("[ViewModelShell]", error);
@@ -243,5 +252,9 @@ export class ViewModelShell {
 
   getCurrentVm(): ViewNode | null {
     return this.currentVm;
+  }
+
+  getCurrentState(): unknown {
+    return this.currentState;
   }
 }

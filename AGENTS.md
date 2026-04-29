@@ -1,8 +1,6 @@
-# ViewModel Shell — Agent Briefing
+# ViewModel Shell
 
-## What this is
-
-A server-driven UI framework. The server returns a JSON tree of typed nodes describing both data and structure; a thin TypeScript client renders it to DOM with no app-specific code. Every interaction dispatches `{ name, context }` as `multipart/form-data` to a single POST endpoint and the server returns a fresh tree. The browser never owns state.
+A server-driven UI framework. The server is a stateless transformer: it takes the client's current UI state plus an action and returns the next state plus a fresh view tree. The client (a thin TypeScript adapter) renders that tree to DOM with no app-specific code, holds the state opaquely, and round-trips it on every dispatch. Persistent/shared data (databases, files) lives server-side; transient UI state lives client-side.
 
 The framework is small enough to copy by hand:
 
@@ -10,7 +8,7 @@ The framework is small enough to copy by hand:
 |---|---|
 | `viewmodel-shell/src/index.ts` | Core: ViewNode types, ActionEvent, Adapter interface, ViewModelShell class |
 | `viewmodel-shell/src/browser.ts` | BrowserAdapter — renders every node type to DOM |
-| `demo/Tasks/AspNetCore/ViewModels.cs` | Backend node records + ActionPayload |
+| `demo/Tasks/AspNetCore/ViewModels.cs` | Backend node records + `ShellResponse<TState>` + `ActionPayload<TState>` |
 
 No NuGet or npm packages required — just `System.Text.Json` on the C# side and the two TS files on the frontend side. Copy the C# file into the new project and update the namespace.
 
@@ -22,15 +20,42 @@ The framework is actively developed. **If your app needs a node type, input type
 
 These are the bugs that take hours to find:
 
-1. **Always `return BuildViewModel()` directly — never `return Ok(BuildViewModel())`.** `Ok()` leaves `DeclaredType = null` on the `ActionResult<T>`; the serializer falls back to the runtime type, skips `[JsonPolymorphic]`, omits `"type"` from the root node, and the page renders blank with no error.
+1. **Always `return BuildVm(state)` (or a `ShellResponse<TState>` wrapping it) directly — never `return Ok(...)`.** `Ok()` leaves `DeclaredType = null` on the `ActionResult<T>`; the serializer falls back to the runtime type, skips `[JsonPolymorphic]`, omits `"type"` from the root node, and the page renders blank with no error.
 
 2. **Never name a local variable `checked`** — it's a reserved C# keyword. Use `isChecked`.
 
 3. **Use regex aliases, not string keys, in `vite.config.ts`.** A string key `"viewmodel-shell"` prefix-matches `"viewmodel-shell/browser"` and breaks the subpath import. Always use `/^viewmodel-shell$/` and `/^viewmodel-shell\/browser$/`.
 
-4. **Inline validation should return the ViewModel with an error TextNode, not `BadRequest`.** Store a `ValidationError` string in per-tab state, set it on failure, clear on success, include `new TextNode(state.ValidationError, Style: "error")` in the form when non-null. See `demo/HelpDesk/AspNetCore/RequesterController.cs`.
+4. **Inline validation goes in the state record, not `BadRequest`.** Add a `ValidationError` field to your state record, set it on failure, clear on success, and include `new TextNode(state.ValidationError, "error")` in the view when non-null. The validation message round-trips with the state. See `demo/HelpDesk/AspNetCore/RequesterController.cs`. Use `BadRequest` only for malformed/programmatic input the user can't see (missing required action fields, unknown action names).
 
 5. **Tests need `global using Xunit;` in `GlobalUsings.cs`** (not auto-imported even with `ImplicitUsings`) and `<FrameworkReference Include="Microsoft.AspNetCore.App" />` to access `DefaultHttpContext`.
+
+---
+
+## Architecture
+
+The server is a pure function `(state, action) → (newState, view)`. Every request carries the entire UI state; the server never holds per-client state in memory. This means:
+
+- **No per-tab registries**, no `ConcurrentDictionary<string, TState>`, no tab-id query parameter
+- **Server can be stateless and horizontally scaled** — restarts don't lose anything (UI state lives client-side until page refresh)
+- **Two browser tabs of the same app are naturally independent** — each holds its own state blob
+- **Persistent data still lives server-side** — anything multi-user, authorized, or stored (database rows, files) stays in singletons. Only transient UI state (current view, filter, selected ID, validation error) round-trips with each request.
+
+### Wire format
+
+**GET (page load)** — server returns initial state alongside the initial view:
+```json
+{ "vm": <ViewNode tree>, "state": <app-defined state record> }
+```
+
+**POST (action dispatch)** — `multipart/form-data` with three kinds of entries:
+| Field | Purpose |
+|---|---|
+| `_action` | JSON: `{ "name": "...", "context": { ... } }` |
+| `_state` | JSON: the current state record |
+| any file-input `name` | the `File` object (when forms have file fields) |
+
+Response is the same `{ "vm", "state" }` shape as GET. The shell stores `state` internally and sends it with the next dispatch automatically — apps don't manage state plumbing.
 
 ---
 
@@ -55,7 +80,7 @@ These are the bugs that take hours to find:
 
 ### Action payload shapes
 
-Every dispatch is `multipart/form-data`. The action JSON travels in a `_action` form field; uploaded files travel as additional form entries keyed by field name.
+Every dispatch is `multipart/form-data`. The action JSON travels in `_action`; the current state in `_state`; uploaded files travel as additional form entries keyed by field name.
 
 | User action | `_action` payload |
 |---|---|
@@ -97,6 +122,7 @@ The framework emits class names; the app owns the CSS. Reference dark-theme styl
 
 These are already implemented — you don't need to do anything to get them, but you should know they exist:
 
+- **Automatic state round-tripping.** The shell holds the current state internally, sends it with every dispatch as the `_state` form field, and updates from the response. Apps never touch state plumbing — `getCurrentState()` exists if you need to inspect it.
 - **Draft value preservation.** Text-like field values typed by the user survive server re-renders as long as the server doesn't explicitly set a new value for that field. Values disappear only if the field disappears from the new tree. **Hidden fields are excluded** (server is always authoritative). **File fields are excluded** but separately preserved via `DataTransfer` (see below). **Selects are excluded** — the snapshot exists to preserve typed text, and we can't safely distinguish "server set this" from "user changed it" after rendering.
 - **File-input persistence.** When the user picks a file, the `File` object is held in the adapter's `fileRegistry` and re-applied to newly rendered file inputs on each render. Files survive intermediate dispatches and travel with the eventual form submission.
 - **Dispatch guard.** A second action can't be dispatched while a round trip is in flight. Concurrent clicks are silently dropped. `onLoading` fires around every dispatch.
@@ -107,40 +133,87 @@ These are already implemented — you don't need to do anything to get them, but
 
 ## Patterns
 
-### Per-tab state isolation
+### State record
 
-Each browser tab generates a random ID on load (a module-level `const`, not `sessionStorage` — ephemeral, resets on refresh) and sends it as `?tab=<id>` on every request. The server uses a `ConcurrentDictionary<string, TState>` registry to look up or create state per tab.
+Define a JSON-round-trippable record per controller. Use `IReadOnlyList<T>` for collections so `with` expressions and collection-expression spreads compose naturally:
 
 ```csharp
-public class YourStateRegistry
+public record TasksState(
+    IReadOnlyList<TaskRecord> Items,
+    string Filter
+)
 {
-    private readonly ConcurrentDictionary<string, YourState> _states = new();
-    public YourState GetOrCreate(string tabId) =>
-        _states.GetOrAdd(tabId, _ => new YourState());
+    public static TasksState Initial() => new(
+        Items: [/* seed data */],
+        Filter: "all"
+    );
 }
 ```
 
-For apps with **shared data** (e.g. a database), keep that in a singleton service and only use per-tab state for UI concerns (current view, selected item, filter, validation error). See `demo/HelpDesk/AspNetCore/` for shared SQLite + per-tab UI state coexisting.
-
-Reference: `demo/Tasks/AspNetCore/TaskStoreRegistry.cs`.
+For apps with **persistent data** (e.g. SQLite, files), keep that in a singleton service injected into the controller — the state record holds only UI state (current view, filter, selected ID, validation error). See `demo/HelpDesk/AspNetCore/` for SQLite + UI state coexisting.
 
 ### Controller pattern
 
 ```csharp
-[HttpGet]
-public ActionResult<ViewNode> Get() => BuildViewModel();
-
-[HttpPost("action")]
-[Consumes("multipart/form-data")]
-public ActionResult<ViewNode> Action()
+[ApiController]
+[Route("api/your-feature")]
+public class YourController : ControllerBase
 {
-    var payload = ActionPayload.Parse(Request.Form["_action"].ToString());
-    IFormFileCollection files = Request.Form.Files; // present only when form has file fields
-    // ... switch on payload.Name, mutate state, return BuildViewModel();
+    [HttpGet]
+    public ShellResponse<YourState> Get()
+    {
+        var state = YourState.Initial();
+        return new(BuildVm(state), state);
+    }
+
+    [HttpPost("action")]
+    [Consumes("multipart/form-data")]
+    public ActionResult<ShellResponse<YourState>> Action()
+    {
+        var payload = ActionPayload<YourState>.Parse(
+            Request.Form["_action"].ToString(),
+            Request.Form["_state"].ToString());
+
+        var state = payload.State;
+        // Read context with helpers, switch on payload.Name, produce new state via `with`:
+        switch (payload.Name)
+        {
+            case "your-action":
+                state = state with { /* changes */ };
+                break;
+            default: return BadRequest($"Unknown action: {payload.Name}");
+        }
+
+        return new ShellResponse<YourState>(BuildVm(state), state);
+    }
+
+    private static ViewNode BuildVm(YourState state) => /* pure function of state */;
 }
 ```
 
-Full example: `demo/Tasks/AspNetCore/TasksController.cs`.
+`BuildVm` is a pure function of state — no controller-level mutable fields, no registry lookup. Files travel as additional form entries; read them with `Request.Form.Files` and persist however the app needs.
+
+Full examples: `demo/Tasks/AspNetCore/TasksController.cs`, `demo/HelpDesk/AspNetCore/AgentController.cs`.
+
+### Frontend wiring
+
+```typescript
+import { ViewModelShell } from "viewmodel-shell";
+import { BrowserAdapter } from "viewmodel-shell/browser";
+
+const container = document.getElementById("app")!;
+const shell = new ViewModelShell({
+  endpoint: `/api/your-feature`,
+  actionEndpoint: `/api/your-feature/action`,
+  adapter: new BrowserAdapter(container),
+  onLoading: (loading) => document.body.classList.toggle("is-loading", loading),
+  onError: (err) => { /* show error banner */ },
+});
+
+shell.load();
+```
+
+No tab ID, no query parameters — multi-tab isolation comes from each tab carrying its own state.
 
 ### MSBuild target
 
@@ -166,17 +239,29 @@ Both layers are testable with normal unit tests — no browser, no Playwright, n
 
 **Frontend:** `cd <frontend-dir> && npx vitest run`. Tests use `BrowserAdapter` directly with jsdom. Pattern: `demo/Tasks/frontend/src/adapter.test.ts`.
 
-**Backend:** `cd <test-project-dir> && dotnet test`. Tests call controller methods directly with a real `DefaultHttpContext` — no HTTP stack. Because the action endpoint reads from `Request.Form`, tests serialize the payload into a form field via an `Act` helper rather than passing `ActionPayload` as a parameter:
+**Backend:** `cd <test-project-dir> && dotnet test`. Tests call controller methods directly with a real `DefaultHttpContext` — no HTTP stack. The action endpoint reads from `Request.Form`, so the `Act` helper serializes both action and state into form fields:
 
 ```csharp
-private static ActionResult<ViewNode> Act(
-    YourController ctrl, string name, Dictionary<string, JsonElement>? ctx = null)
+private static ActionResult<ShellResponse<YourState>> Act(
+    YourController ctrl, YourState state, string name,
+    Dictionary<string, JsonElement>? ctx = null)
 {
-    var json = JsonSerializer.Serialize(new { name, context = ctx });
-    ctrl.ControllerContext.HttpContext.Request.Form =
-        new FormCollection(new Dictionary<string, StringValues> { ["_action"] = json });
+    var actionJson = JsonSerializer.Serialize(new { name, context = ctx });
+    var stateJson  = JsonSerializer.Serialize(state);
+    ctrl.ControllerContext.HttpContext.Request.Form = new FormCollection(
+        new Dictionary<string, StringValues>
+        {
+            ["_action"] = actionJson,
+            ["_state"]  = stateJson,
+        });
     return ctrl.Action();
 }
+```
+
+Multi-step tests thread state explicitly:
+```csharp
+var step1 = Ok(Act(ctrl, YourState.Initial(), "first-action"));
+var step2 = Ok(Act(ctrl, step1.State, "second-action"));
 ```
 
 For DB-backed apps, use a named in-memory SQLite connection shared across test methods (anchor connection kept open for the test class lifetime to keep the in-memory DB alive). See `demo/HelpDesk/AspNetCore.Tests/RequesterControllerTests.cs`.
@@ -193,12 +278,12 @@ All under `demo/`. Patterns are consistent across them.
 | `ContactManager/` | Multi-view navigation, search-on-Enter field action, email + textarea fields |
 | `ExpenseTracker/` | Multiple tab groups on one page, section grouping, number field, per-category progress bars |
 | `RetroBoard/` | Multiple forms and lists on one page, conditional checkboxes, dynamic button labels |
-| `HelpDesk/` | Two-role app (requester + agent), SQLite persistence, conditional form shape based on tab selection, `error` text style for inline validation, `secondary` button variant, per-tab UI state separated from shared data state, multi-page Vite config |
+| `HelpDesk/` | Two-role app (requester + agent), SQLite persistence, conditional form shape based on tab selection, `error` text style for inline validation, `secondary` button variant, persistent data + UI state separation, multi-page Vite config |
 
 ---
 
 ## Conventions for evolving the framework
 
 - **Don't add features the framework doesn't have a clean place for.** When a request would require a workaround, that's usually a signal that the framework needs a new primitive — ask before patching around it.
-- **All demo `ViewModels.cs` copies must stay in sync.** When adding a new node type or changing `ActionPayload`, update all five copies (Tasks, HelpDesk, ExpenseTracker, ContactManager, RetroBoard). Same for shared controller patterns — when changing the dispatch contract, all controllers update together.
+- **All demo `ViewModels.cs` copies must stay in sync.** When adding a new node type or changing the wire format, update all five copies (Tasks, HelpDesk, ExpenseTracker, ContactManager, RetroBoard).
 - **Test suites are non-negotiable.** Every framework change keeps the existing tests green and adds tests for new behavior.

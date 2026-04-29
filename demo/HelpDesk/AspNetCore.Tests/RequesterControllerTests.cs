@@ -24,27 +24,33 @@ public class RequesterControllerTests : IDisposable
 
     public void Dispose() => _anchor.Dispose();
 
-    private RequesterController CreateController(string tab = "test")
+    private RequesterController CreateController()
     {
-        var controller = new RequesterController(new RequesterStateRegistry(), _db);
+        var controller = new RequesterController(_db);
         controller.ControllerContext = new ControllerContext
         {
-            HttpContext = new DefaultHttpContext
-            {
-                Request = { QueryString = new QueryString($"?tab={tab}") }
-            }
+            HttpContext = new DefaultHttpContext()
         };
         return controller;
     }
 
-    private static ActionResult<ViewNode> Act(
-        RequesterController ctrl, string name, Dictionary<string, JsonElement>? ctx = null)
+    private static ActionResult<ShellResponse<RequesterState>> Act(
+        RequesterController ctrl, RequesterState state, string name,
+        Dictionary<string, JsonElement>? ctx = null)
     {
-        var json = JsonSerializer.Serialize(new { name, context = ctx });
-        ctrl.ControllerContext.HttpContext.Request.Form =
-            new FormCollection(new Dictionary<string, StringValues> { ["_action"] = json });
+        var actionJson = JsonSerializer.Serialize(new { name, context = ctx });
+        var stateJson  = JsonSerializer.Serialize(state);
+        ctrl.ControllerContext.HttpContext.Request.Form = new FormCollection(
+            new Dictionary<string, StringValues>
+            {
+                ["_action"] = actionJson,
+                ["_state"]  = stateJson,
+            });
         return ctrl.Action();
     }
+
+    private static ShellResponse<RequesterState> Ok(ActionResult<ShellResponse<RequesterState>> result) =>
+        result.Value ?? throw new Xunit.Sdk.XunitException("Expected a value, got " + result.Result?.GetType().Name);
 
     private static Dictionary<string, JsonElement> Ctx(object obj)
     {
@@ -53,22 +59,21 @@ public class RequesterControllerTests : IDisposable
             .ToDictionary(p => p.Name, p => p.Value.Clone());
     }
 
-    private static PageNode Page(ActionResult<ViewNode> result) =>
-        Assert.IsType<PageNode>(result.Value);
+    private static PageNode Page(ViewNode vm) => Assert.IsType<PageNode>(vm);
 
     // ── GET ────────────────────────────────────────────────────────────────────
 
     [Fact]
     public void Get_ReturnsHelpDeskPage()
     {
-        var page = Page(CreateController().Get());
+        var page = Page(CreateController().Get().Vm);
         Assert.Equal("Help Desk", page.Title);
     }
 
     [Fact]
     public void Get_EmptyDb_ListIsEmpty()
     {
-        var page = Page(CreateController().Get());
+        var page = Page(CreateController().Get().Vm);
         var list = page.Children.OfType<ListNode>().Single();
         Assert.DoesNotContain(list.Children, c => c is ListItemNode);
     }
@@ -76,7 +81,7 @@ public class RequesterControllerTests : IDisposable
     [Fact]
     public void Get_HasStatBar_AllZero()
     {
-        var page = Page(CreateController().Get());
+        var page = Page(CreateController().Get().Vm);
         var bar  = page.Children.OfType<StatBarNode>().Single();
         Assert.Equal(3, bar.Stats.Count);
         Assert.All(bar.Stats, s => Assert.Equal("0", s.Value));
@@ -85,7 +90,7 @@ public class RequesterControllerTests : IDisposable
     [Fact]
     public void Get_HasFilterTabsDefaultingToAll()
     {
-        var page = Page(CreateController().Get());
+        var page = Page(CreateController().Get().Vm);
         var tabs = page.Children.OfType<TabsNode>().Single();
         Assert.Equal("all", tabs.Selected);
     }
@@ -95,18 +100,15 @@ public class RequesterControllerTests : IDisposable
     [Fact]
     public void StartCreate_SwitchesToCreateView()
     {
-        var ctrl = CreateController();
-        var page = Page(Act(ctrl, "start-create"));
-        Assert.Equal("New Ticket", page.Title);
+        var resp = Ok(Act(CreateController(), RequesterState.Initial(), "start-create"));
+        Assert.Equal("New Ticket", Page(resp.Vm).Title);
     }
 
     [Fact]
     public void CreateView_HasTypeTabs_DefaultHardware()
     {
-        var ctrl = CreateController();
-        Act(ctrl, "start-create");
-        var page = Page(Act(ctrl, "start-create"));
-        var typeTabs = page.Children.OfType<TabsNode>().First();
+        var resp = Ok(Act(CreateController(), RequesterState.Initial(), "start-create"));
+        var typeTabs = Page(resp.Vm).Children.OfType<TabsNode>().First();
         Assert.Equal("hardware", typeTabs.Selected);
     }
 
@@ -114,9 +116,9 @@ public class RequesterControllerTests : IDisposable
     public void SetType_Software_ChangesFormFields()
     {
         var ctrl = CreateController();
-        Act(ctrl, "start-create");
-        var page = Page(Act(ctrl, "set-type", Ctx(new { value = "software" })));
-        var form = page.Children.OfType<FormNode>().Single();
+        var step1 = Ok(Act(ctrl, RequesterState.Initial(), "start-create"));
+        var step2 = Ok(Act(ctrl, step1.State, "set-type", Ctx(new { value = "software" })));
+        var form = Page(step2.Vm).Children.OfType<FormNode>().Single();
         Assert.Contains(form.Children, c => c is FieldNode f && f.Name == "application");
         Assert.DoesNotContain(form.Children, c => c is FieldNode f && f.Name == "device_model");
     }
@@ -125,9 +127,9 @@ public class RequesterControllerTests : IDisposable
     public void SetType_Access_ShowsAccessLevelTabs()
     {
         var ctrl = CreateController();
-        Act(ctrl, "start-create");
-        var page = Page(Act(ctrl, "set-type", Ctx(new { value = "access" })));
-        var allTabs = page.Children.OfType<TabsNode>().ToList();
+        var step1 = Ok(Act(ctrl, RequesterState.Initial(), "start-create"));
+        var step2 = Ok(Act(ctrl, step1.State, "set-type", Ctx(new { value = "access" })));
+        var allTabs = Page(step2.Vm).Children.OfType<TabsNode>().ToList();
         Assert.True(allTabs.Count >= 2);
         Assert.Contains(allTabs, t => t.Tabs.Any(tab => tab.Value == "read"));
     }
@@ -136,11 +138,11 @@ public class RequesterControllerTests : IDisposable
     public void CreateTicket_EmptyTitle_ShowsValidationError()
     {
         var ctrl = CreateController();
-        Act(ctrl, "start-create");
-        var page = Page(Act(ctrl, "create-ticket",
+        var step1 = Ok(Act(ctrl, RequesterState.Initial(), "start-create"));
+        var step2 = Ok(Act(ctrl, step1.State, "create-ticket",
             Ctx(new { title = "", type = "hardware", priority = "medium" })));
-        Assert.Equal("New Ticket", page.Title);
-        var form = page.Children.OfType<FormNode>().Single();
+        Assert.Equal("New Ticket", Page(step2.Vm).Title);
+        var form = Page(step2.Vm).Children.OfType<FormNode>().Single();
         var error = form.Children.OfType<TextNode>().FirstOrDefault(t => t.Style == "error");
         Assert.NotNull(error);
     }
@@ -149,12 +151,12 @@ public class RequesterControllerTests : IDisposable
     public void CreateTicket_Valid_ReturnsToListAndShowsTicket()
     {
         var ctrl = CreateController();
-        Act(ctrl, "start-create");
-        var page = Page(Act(ctrl, "create-ticket",
+        var step1 = Ok(Act(ctrl, RequesterState.Initial(), "start-create"));
+        var step2 = Ok(Act(ctrl, step1.State, "create-ticket",
             Ctx(new { title = "Laptop won't boot", type = "hardware",
                       priority = "high", device_model = "ThinkPad X1" })));
-        Assert.Equal("Help Desk", page.Title);
-        var list = page.Children.OfType<ListNode>().Single();
+        Assert.Equal("Help Desk", Page(step2.Vm).Title);
+        var list = Page(step2.Vm).Children.OfType<ListNode>().Single();
         var items = list.Children.OfType<ListItemNode>().ToList();
         Assert.Single(items);
         Assert.Contains(items[0].Children.OfType<TextNode>(),
@@ -165,18 +167,18 @@ public class RequesterControllerTests : IDisposable
     public void CreateTicket_WithDueDate_StoredAndVisible()
     {
         var ctrl = CreateController();
-        Act(ctrl, "start-create");
-        Act(ctrl, "create-ticket",
+        var step1 = Ok(Act(ctrl, RequesterState.Initial(), "start-create"));
+        var step2 = Ok(Act(ctrl, step1.State, "create-ticket",
             Ctx(new { title = "Needs VPN access", type = "access",
                       priority = "low", system_name = "VPN",
-                      access_level = "read", due_date = "2026-06-01" }));
+                      access_level = "read", due_date = "2026-06-01" })));
 
-        var listPage = Page(ctrl.Get());
+        var listPage = Page(step2.Vm);
         var item = listPage.Children.OfType<ListNode>().Single()
             .Children.OfType<ListItemNode>().Single();
 
-        var detailPage = Page(Act(ctrl, "select-ticket", Ctx(new { id = item.Id })));
-        Assert.Contains(detailPage.Children.OfType<SectionNode>().Single().Children.OfType<TextNode>(),
+        var step3 = Ok(Act(ctrl, step2.State, "select-ticket", Ctx(new { id = item.Id })));
+        Assert.Contains(Page(step3.Vm).Children.OfType<SectionNode>().Single().Children.OfType<TextNode>(),
             t => t.Value.Contains("2026-06-01"));
     }
 
@@ -186,11 +188,10 @@ public class RequesterControllerTests : IDisposable
     public void CriticalTicket_HasCriticalVariant()
     {
         var ctrl = CreateController();
-        Act(ctrl, "start-create");
-        Act(ctrl, "create-ticket",
-            Ctx(new { title = "Server down", type = "hardware", priority = "critical" }));
-        var page = Page(ctrl.Get());
-        var item = page.Children.OfType<ListNode>().Single()
+        var step1 = Ok(Act(ctrl, RequesterState.Initial(), "start-create"));
+        var step2 = Ok(Act(ctrl, step1.State, "create-ticket",
+            Ctx(new { title = "Server down", type = "hardware", priority = "critical" })));
+        var item = Page(step2.Vm).Children.OfType<ListNode>().Single()
             .Children.OfType<ListItemNode>().Single();
         Assert.Equal("critical", item.Variant);
     }
@@ -199,10 +200,10 @@ public class RequesterControllerTests : IDisposable
     public void HighTicket_HasHighVariant()
     {
         var ctrl = CreateController();
-        Act(ctrl, "start-create");
-        Act(ctrl, "create-ticket",
-            Ctx(new { title = "Email down", type = "software", priority = "high" }));
-        var item = Page(ctrl.Get()).Children.OfType<ListNode>().Single()
+        var step1 = Ok(Act(ctrl, RequesterState.Initial(), "start-create"));
+        var step2 = Ok(Act(ctrl, step1.State, "create-ticket",
+            Ctx(new { title = "Email down", type = "software", priority = "high" })));
+        var item = Page(step2.Vm).Children.OfType<ListNode>().Single()
             .Children.OfType<ListItemNode>().Single();
         Assert.Equal("high", item.Variant);
     }
@@ -213,12 +214,12 @@ public class RequesterControllerTests : IDisposable
     public void Filter_Open_ShowsOnlyOpenTickets()
     {
         var ctrl = CreateController();
-        Act(ctrl, "start-create");
-        Act(ctrl, "create-ticket",
-            Ctx(new { title = "T1", type = "hardware", priority = "low" }));
-        var page = Page(Act(ctrl, "filter", Ctx(new { value = "open" })));
-        Assert.Equal("open", page.Children.OfType<TabsNode>().Single().Selected);
-        Assert.Single(page.Children.OfType<ListNode>().Single().Children.OfType<ListItemNode>());
+        var step1 = Ok(Act(ctrl, RequesterState.Initial(), "start-create"));
+        var step2 = Ok(Act(ctrl, step1.State, "create-ticket",
+            Ctx(new { title = "T1", type = "hardware", priority = "low" })));
+        var step3 = Ok(Act(ctrl, step2.State, "filter", Ctx(new { value = "open" })));
+        Assert.Equal("open", Page(step3.Vm).Children.OfType<TabsNode>().Single().Selected);
+        Assert.Single(Page(step3.Vm).Children.OfType<ListNode>().Single().Children.OfType<ListItemNode>());
     }
 
     // ── detail view ───────────────────────────────────────────────────────────
@@ -227,29 +228,27 @@ public class RequesterControllerTests : IDisposable
     public void SelectTicket_ShowsDetailView()
     {
         var ctrl = CreateController();
-        Act(ctrl, "start-create");
-        Act(ctrl, "create-ticket",
-            Ctx(new { title = "My ticket", type = "software", priority = "medium" }));
-        var listPage = Page(ctrl.Get());
-        var item = listPage.Children.OfType<ListNode>().Single()
+        var step1 = Ok(Act(ctrl, RequesterState.Initial(), "start-create"));
+        var step2 = Ok(Act(ctrl, step1.State, "create-ticket",
+            Ctx(new { title = "My ticket", type = "software", priority = "medium" })));
+        var item = Page(step2.Vm).Children.OfType<ListNode>().Single()
             .Children.OfType<ListItemNode>().Single();
-
-        var detailPage = Page(Act(ctrl, "select-ticket", Ctx(new { id = item.Id })));
-        Assert.Equal("My ticket", detailPage.Title);
+        var step3 = Ok(Act(ctrl, step2.State, "select-ticket", Ctx(new { id = item.Id })));
+        Assert.Equal("My ticket", Page(step3.Vm).Title);
     }
 
     [Fact]
     public void DetailView_HasNoActionButtons()
     {
         var ctrl = CreateController();
-        Act(ctrl, "start-create");
-        Act(ctrl, "create-ticket",
-            Ctx(new { title = "Ticket", type = "hardware", priority = "low" }));
-        var item = Page(ctrl.Get()).Children.OfType<ListNode>().Single()
+        var step1 = Ok(Act(ctrl, RequesterState.Initial(), "start-create"));
+        var step2 = Ok(Act(ctrl, step1.State, "create-ticket",
+            Ctx(new { title = "Ticket", type = "hardware", priority = "low" })));
+        var item = Page(step2.Vm).Children.OfType<ListNode>().Single()
             .Children.OfType<ListItemNode>().Single();
-        var detailPage = Page(Act(ctrl, "select-ticket", Ctx(new { id = item.Id })));
+        var step3 = Ok(Act(ctrl, step2.State, "select-ticket", Ctx(new { id = item.Id })));
 
-        var allButtons = detailPage.Children
+        var allButtons = Page(step3.Vm).Children
             .SelectMany(c => c is SectionNode s ? s.Children : [c])
             .OfType<ButtonNode>()
             .Where(b => b.Action.Name != "back-to-list")
@@ -261,15 +260,14 @@ public class RequesterControllerTests : IDisposable
     public void BackToList_ReturnsListView()
     {
         var ctrl = CreateController();
-        Act(ctrl, "start-create");
-        Act(ctrl, "create-ticket",
-            Ctx(new { title = "T", type = "hardware", priority = "low" }));
-        var item = Page(ctrl.Get()).Children.OfType<ListNode>().Single()
+        var step1 = Ok(Act(ctrl, RequesterState.Initial(), "start-create"));
+        var step2 = Ok(Act(ctrl, step1.State, "create-ticket",
+            Ctx(new { title = "T", type = "hardware", priority = "low" })));
+        var item = Page(step2.Vm).Children.OfType<ListNode>().Single()
             .Children.OfType<ListItemNode>().Single();
-        Act(ctrl, "select-ticket", Ctx(new { id = item.Id }));
-
-        var page = Page(Act(ctrl, "back-to-list"));
-        Assert.Equal("Help Desk", page.Title);
+        var step3 = Ok(Act(ctrl, step2.State, "select-ticket", Ctx(new { id = item.Id })));
+        var step4 = Ok(Act(ctrl, step3.State, "back-to-list"));
+        Assert.Equal("Help Desk", Page(step4.Vm).Title);
     }
 
     // ── stat bar ──────────────────────────────────────────────────────────────
@@ -278,14 +276,13 @@ public class RequesterControllerTests : IDisposable
     public void StatBar_ReflectsTicketCounts()
     {
         var ctrl = CreateController();
-        Act(ctrl, "start-create");
-        Act(ctrl, "create-ticket",
-            Ctx(new { title = "T1", type = "hardware", priority = "low" }));
-        Act(ctrl, "start-create");
-        Act(ctrl, "create-ticket",
-            Ctx(new { title = "T2", type = "software", priority = "medium" }));
-        var page = Page(ctrl.Get());
-        var bar  = page.Children.OfType<StatBarNode>().Single();
+        var s1 = Ok(Act(ctrl, RequesterState.Initial(), "start-create"));
+        var s2 = Ok(Act(ctrl, s1.State, "create-ticket",
+            Ctx(new { title = "T1", type = "hardware", priority = "low" })));
+        var s3 = Ok(Act(ctrl, s2.State, "start-create"));
+        var s4 = Ok(Act(ctrl, s3.State, "create-ticket",
+            Ctx(new { title = "T2", type = "software", priority = "medium" })));
+        var bar = Page(s4.Vm).Children.OfType<StatBarNode>().Single();
         Assert.Equal("2", bar.Stats.First(s => s.Label == "open").Value);
     }
 
@@ -294,8 +291,7 @@ public class RequesterControllerTests : IDisposable
     [Fact]
     public void UnknownAction_ReturnsBadRequest()
     {
-        var ctrl = CreateController();
-        var result = Act(ctrl, "fly-to-moon");
+        var result = Act(CreateController(), RequesterState.Initial(), "fly-to-moon");
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 }

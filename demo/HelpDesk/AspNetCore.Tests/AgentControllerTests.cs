@@ -24,27 +24,33 @@ public class AgentControllerTests : IDisposable
 
     public void Dispose() => _anchor.Dispose();
 
-    private AgentController CreateAgent(string tab = "agent")
+    private AgentController CreateAgent()
     {
-        var controller = new AgentController(new AgentStateRegistry(), _db);
+        var controller = new AgentController(_db);
         controller.ControllerContext = new ControllerContext
         {
-            HttpContext = new DefaultHttpContext
-            {
-                Request = { QueryString = new QueryString($"?tab={tab}") }
-            }
+            HttpContext = new DefaultHttpContext()
         };
         return controller;
     }
 
-    private static ActionResult<ViewNode> Act(
-        AgentController ctrl, string name, Dictionary<string, JsonElement>? ctx = null)
+    private static ActionResult<ShellResponse<AgentState>> Act(
+        AgentController ctrl, AgentState state, string name,
+        Dictionary<string, JsonElement>? ctx = null)
     {
-        var json = JsonSerializer.Serialize(new { name, context = ctx });
-        ctrl.ControllerContext.HttpContext.Request.Form =
-            new FormCollection(new Dictionary<string, StringValues> { ["_action"] = json });
+        var actionJson = JsonSerializer.Serialize(new { name, context = ctx });
+        var stateJson  = JsonSerializer.Serialize(state);
+        ctrl.ControllerContext.HttpContext.Request.Form = new FormCollection(
+            new Dictionary<string, StringValues>
+            {
+                ["_action"] = actionJson,
+                ["_state"]  = stateJson,
+            });
         return ctrl.Action();
     }
+
+    private static ShellResponse<AgentState> Ok(ActionResult<ShellResponse<AgentState>> result) =>
+        result.Value ?? throw new Xunit.Sdk.XunitException("Expected a value, got " + result.Result?.GetType().Name);
 
     private static Dictionary<string, JsonElement> Ctx(object obj)
     {
@@ -53,8 +59,7 @@ public class AgentControllerTests : IDisposable
             .ToDictionary(p => p.Name, p => p.Value.Clone());
     }
 
-    private static PageNode Page(ActionResult<ViewNode> result) =>
-        Assert.IsType<PageNode>(result.Value);
+    private static PageNode Page(ViewNode vm) => Assert.IsType<PageNode>(vm);
 
     private long SeedTicket(string title = "Test ticket", string priority = "medium", string type = "software")
         => _db.Create(title, type, priority, null, null, null, null, null, null);
@@ -64,14 +69,14 @@ public class AgentControllerTests : IDisposable
     [Fact]
     public void Get_ReturnsAgentQueuePage()
     {
-        var page = Page(CreateAgent().Get());
+        var page = Page(CreateAgent().Get().Vm);
         Assert.Equal("Agent Queue", page.Title);
     }
 
     [Fact]
     public void Get_HasFourStatItems()
     {
-        var page = Page(CreateAgent().Get());
+        var page = Page(CreateAgent().Get().Vm);
         var bar  = page.Children.OfType<StatBarNode>().Single();
         Assert.Equal(4, bar.Stats.Count);
     }
@@ -80,7 +85,7 @@ public class AgentControllerTests : IDisposable
     public void Get_SeededTicket_AppearsInQueue()
     {
         SeedTicket("Printer broken");
-        var page  = Page(CreateAgent().Get());
+        var page  = Page(CreateAgent().Get().Vm);
         var items = page.Children.OfType<ListNode>().Single().Children.OfType<ListItemNode>().ToList();
         Assert.Single(items);
         Assert.Contains(items[0].Children.OfType<TextNode>(), t => t.Value == "Printer broken");
@@ -90,7 +95,7 @@ public class AgentControllerTests : IDisposable
     public void OpenTicket_HasTakeAndViewButtons()
     {
         SeedTicket();
-        var page = Page(CreateAgent().Get());
+        var page = Page(CreateAgent().Get().Vm);
         var item = page.Children.OfType<ListNode>().Single()
             .Children.OfType<ListItemNode>().Single();
         Assert.Contains(item.Children.OfType<ButtonNode>(), b => b.Action.Name == "start-ticket");
@@ -102,10 +107,9 @@ public class AgentControllerTests : IDisposable
     [Fact]
     public void StartTicket_MovesTicketToInProgress()
     {
-        var id   = SeedTicket();
-        var ctrl = CreateAgent();
-        var page = Page(Act(ctrl, "start-ticket", Ctx(new { id = id.ToString() })));
-        var item = page.Children.OfType<ListNode>().Single()
+        var id = SeedTicket();
+        var resp = Ok(Act(CreateAgent(), AgentState.Initial(), "start-ticket", Ctx(new { id = id.ToString() })));
+        var item = Page(resp.Vm).Children.OfType<ListNode>().Single()
             .Children.OfType<ListItemNode>().Single();
         Assert.DoesNotContain(item.Children.OfType<ButtonNode>(), b => b.Action.Name == "start-ticket");
     }
@@ -113,10 +117,9 @@ public class AgentControllerTests : IDisposable
     [Fact]
     public void StartTicket_UpdatesStatBar()
     {
-        var id   = SeedTicket();
-        var ctrl = CreateAgent();
-        var page = Page(Act(ctrl, "start-ticket", Ctx(new { id = id.ToString() })));
-        var bar  = page.Children.OfType<StatBarNode>().Single();
+        var id = SeedTicket();
+        var resp = Ok(Act(CreateAgent(), AgentState.Initial(), "start-ticket", Ctx(new { id = id.ToString() })));
+        var bar = Page(resp.Vm).Children.OfType<StatBarNode>().Single();
         Assert.Equal("0", bar.Stats.First(s => s.Label == "open").Value);
         Assert.Equal("1", bar.Stats.First(s => s.Label == "in progress").Value);
     }
@@ -126,19 +129,17 @@ public class AgentControllerTests : IDisposable
     [Fact]
     public void SelectTicket_ShowsDetailView()
     {
-        var id   = SeedTicket("Broken keyboard");
-        var ctrl = CreateAgent();
-        var page = Page(Act(ctrl, "select-ticket", Ctx(new { id = id.ToString() })));
-        Assert.Equal("Broken keyboard", page.Title);
+        var id = SeedTicket("Broken keyboard");
+        var resp = Ok(Act(CreateAgent(), AgentState.Initial(), "select-ticket", Ctx(new { id = id.ToString() })));
+        Assert.Equal("Broken keyboard", Page(resp.Vm).Title);
     }
 
     [Fact]
     public void DetailView_OpenTicket_HasMarkInProgressButton()
     {
-        var id   = SeedTicket();
-        var ctrl = CreateAgent();
-        var page = Page(Act(ctrl, "select-ticket", Ctx(new { id = id.ToString() })));
-        var actions = page.Children.OfType<SectionNode>()
+        var id = SeedTicket();
+        var resp = Ok(Act(CreateAgent(), AgentState.Initial(), "select-ticket", Ctx(new { id = id.ToString() })));
+        var actions = Page(resp.Vm).Children.OfType<SectionNode>()
             .First(s => s.Heading == "Actions").Children.OfType<ButtonNode>().ToList();
         Assert.Single(actions);
         Assert.Equal("start-ticket", actions[0].Action.Name);
@@ -149,9 +150,8 @@ public class AgentControllerTests : IDisposable
     {
         var id = SeedTicket();
         _db.UpdateStatus(id, "in-progress");
-        var ctrl = CreateAgent();
-        var page = Page(Act(ctrl, "select-ticket", Ctx(new { id = id.ToString() })));
-        var actions = page.Children.OfType<SectionNode>()
+        var resp = Ok(Act(CreateAgent(), AgentState.Initial(), "select-ticket", Ctx(new { id = id.ToString() })));
+        var actions = Page(resp.Vm).Children.OfType<SectionNode>()
             .First(s => s.Heading == "Actions").Children.OfType<ButtonNode>().ToList();
         Assert.Single(actions);
         Assert.Equal("resolve-ticket", actions[0].Action.Name);
@@ -162,9 +162,8 @@ public class AgentControllerTests : IDisposable
     {
         var id = SeedTicket();
         _db.UpdateStatus(id, "resolved");
-        var ctrl = CreateAgent();
-        var page = Page(Act(ctrl, "select-ticket", Ctx(new { id = id.ToString() })));
-        var actions = page.Children.OfType<SectionNode>()
+        var resp = Ok(Act(CreateAgent(), AgentState.Initial(), "select-ticket", Ctx(new { id = id.ToString() })));
+        var actions = Page(resp.Vm).Children.OfType<SectionNode>()
             .First(s => s.Heading == "Actions").Children.OfType<ButtonNode>().ToList();
         Assert.Contains(actions, b => b.Action.Name == "reopen-ticket");
     }
@@ -177,9 +176,9 @@ public class AgentControllerTests : IDisposable
         var id = SeedTicket();
         _db.UpdateStatus(id, "in-progress");
         var ctrl = CreateAgent();
-        Act(ctrl, "select-ticket", Ctx(new { id = id.ToString() }));
-        var page = Page(Act(ctrl, "resolve-ticket", Ctx(new { id = id.ToString() })));
-        var actions = page.Children.OfType<SectionNode>()
+        var step1 = Ok(Act(ctrl, AgentState.Initial(), "select-ticket", Ctx(new { id = id.ToString() })));
+        var step2 = Ok(Act(ctrl, step1.State, "resolve-ticket", Ctx(new { id = id.ToString() })));
+        var actions = Page(step2.Vm).Children.OfType<SectionNode>()
             .First(s => s.Heading == "Actions").Children.OfType<ButtonNode>();
         Assert.Contains(actions, b => b.Action.Name == "reopen-ticket");
     }
@@ -190,8 +189,8 @@ public class AgentControllerTests : IDisposable
         var id = SeedTicket();
         _db.UpdateStatus(id, "in-progress");
         var ctrl = CreateAgent();
-        Act(ctrl, "resolve-ticket", Ctx(new { id = id.ToString() }));
-        var page = Page(ctrl.Get());
+        var step1 = Ok(Act(ctrl, AgentState.Initial(), "resolve-ticket", Ctx(new { id = id.ToString() })));
+        var page = Page(ctrl.Get().Vm);
         var item = page.Children.OfType<ListNode>().Single()
             .Children.OfType<ListItemNode>().Single();
         Assert.Equal("done", item.Variant);
@@ -205,9 +204,9 @@ public class AgentControllerTests : IDisposable
         var id = SeedTicket();
         _db.UpdateStatus(id, "resolved");
         var ctrl = CreateAgent();
-        Act(ctrl, "select-ticket", Ctx(new { id = id.ToString() }));
-        var page = Page(Act(ctrl, "reopen-ticket", Ctx(new { id = id.ToString() })));
-        var actions = page.Children.OfType<SectionNode>()
+        var step1 = Ok(Act(ctrl, AgentState.Initial(), "select-ticket", Ctx(new { id = id.ToString() })));
+        var step2 = Ok(Act(ctrl, step1.State, "reopen-ticket", Ctx(new { id = id.ToString() })));
+        var actions = Page(step2.Vm).Children.OfType<SectionNode>()
             .First(s => s.Heading == "Actions").Children.OfType<ButtonNode>();
         Assert.Contains(actions, b => b.Action.Name == "start-ticket");
     }
@@ -217,12 +216,12 @@ public class AgentControllerTests : IDisposable
     [Fact]
     public void SaveNotes_PersistsAndShowsInDetailView()
     {
-        var id   = SeedTicket();
+        var id = SeedTicket();
         var ctrl = CreateAgent();
-        Act(ctrl, "select-ticket", Ctx(new { id = id.ToString() }));
-        var page = Page(Act(ctrl, "save-notes",
+        var step1 = Ok(Act(ctrl, AgentState.Initial(), "select-ticket", Ctx(new { id = id.ToString() })));
+        var step2 = Ok(Act(ctrl, step1.State, "save-notes",
             Ctx(new { id = id.ToString(), agent_notes = "Checked hardware, needs replacement." })));
-        var notesSection = page.Children.OfType<SectionNode>()
+        var notesSection = Page(step2.Vm).Children.OfType<SectionNode>()
             .First(s => s.Heading == "Agent Notes");
         var form = notesSection.Children.OfType<FormNode>().Single();
         var field = form.Children.OfType<FieldNode>().Single();
@@ -237,22 +236,22 @@ public class AgentControllerTests : IDisposable
         SeedTicket("Open one");
         var id2 = SeedTicket("In-progress one");
         _db.UpdateStatus(id2, "in-progress");
-        var ctrl = CreateAgent();
-        var page = Page(Act(ctrl, "filter", Ctx(new { value = "in-progress" })));
-        var items = page.Children.OfType<ListNode>().Single().Children.OfType<ListItemNode>().ToList();
+        var resp = Ok(Act(CreateAgent(), AgentState.Initial(), "filter", Ctx(new { value = "in-progress" })));
+        var items = Page(resp.Vm).Children.OfType<ListNode>().Single().Children.OfType<ListItemNode>().ToList();
         Assert.Single(items);
         Assert.Contains(items[0].Children.OfType<TextNode>(), t => t.Value == "In-progress one");
     }
 
-    // ── shared state across tabs ──────────────────────────────────────────────
+    // ── shared DB across clients ──────────────────────────────────────────────
 
     [Fact]
-    public void Tickets_SharedAcrossTabs()
+    public void Tickets_SharedAcrossClients()
     {
         SeedTicket("Shared ticket");
 
-        var ctrl2 = CreateAgent("tab2");
-        var page  = Page(ctrl2.Get());
+        // A second "client" with its own initial state should still see DB tickets.
+        var ctrl2 = CreateAgent();
+        var page = Page(ctrl2.Get().Vm);
         var items = page.Children.OfType<ListNode>().Single().Children.OfType<ListItemNode>().ToList();
         Assert.Single(items);
     }
@@ -262,11 +261,11 @@ public class AgentControllerTests : IDisposable
     [Fact]
     public void BackToQueue_ReturnsQueueView()
     {
-        var id   = SeedTicket();
+        var id = SeedTicket();
         var ctrl = CreateAgent();
-        Act(ctrl, "select-ticket", Ctx(new { id = id.ToString() }));
-        var page = Page(Act(ctrl, "back-to-queue"));
-        Assert.Equal("Agent Queue", page.Title);
+        var step1 = Ok(Act(ctrl, AgentState.Initial(), "select-ticket", Ctx(new { id = id.ToString() })));
+        var step2 = Ok(Act(ctrl, step1.State, "back-to-queue"));
+        Assert.Equal("Agent Queue", Page(step2.Vm).Title);
     }
 
     // ── unknown action ────────────────────────────────────────────────────────
@@ -274,8 +273,7 @@ public class AgentControllerTests : IDisposable
     [Fact]
     public void UnknownAction_ReturnsBadRequest()
     {
-        var ctrl = CreateAgent();
-        var result = Act(ctrl, "do-the-thing");
+        var result = Act(CreateAgent(), AgentState.Initial(), "do-the-thing");
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 }
