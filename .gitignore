@@ -17,3 +17,25 @@
 # OS
 .DS_Store
 Thumbs.db
+
+# Ignore agent ad-hoc creations at repo root
+/*.md
+!/AGENTS.md
+/*.ps1
+/*.csv
+/*.xlsx
+/*.txt
+/*.tsv
+/*.bat
+/*.ts
+/*.py
+/*.csx
+/*.js
+/*.mjs
+/*.sh
+/*.sql
+/*.jpg
+/*.jpeg
+/*.png
+/*.bmp
+/*.gif
