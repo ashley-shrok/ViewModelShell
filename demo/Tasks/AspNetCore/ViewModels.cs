@@ -39,6 +39,7 @@ public record ActionPayload(
 [JsonDerivedType(typeof(ProgressNode), "progress")]
 [JsonDerivedType(typeof(ModalNode),    "modal")]
 [JsonDerivedType(typeof(TableNode),    "table")]
+[JsonDerivedType(typeof(LinkNode),     "link")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -133,4 +134,10 @@ public record TableNode(
     string? SortDirection = null,
     ActionDescriptor? SortAction = null,
     ActionDescriptor? FilterAction = null
+) : ViewNode;
+
+public record LinkNode(
+    string Label,
+    string Href,
+    bool External = false
 ) : ViewNode;

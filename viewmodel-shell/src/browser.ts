@@ -2,7 +2,7 @@ import type {
   ViewNode, ActionEvent, Adapter,
   PageNode, SectionNode, ListNode, ListItemNode,
   FormNode, FieldNode, CheckboxNode, ButtonNode,
-  TextNode, StatBarNode, TabsNode, ProgressNode,
+  TextNode, LinkNode, StatBarNode, TabsNode, ProgressNode,
   ModalNode, TableNode,
 } from "./index";
 
@@ -69,6 +69,7 @@ export class BrowserAdapter implements Adapter {
       case "checkbox":  return this.checkbox(n, parent, on);
       case "button":    return this.button(n, parent, on);
       case "text":      return this.text(n, parent);
+      case "link":      return this.link(n, parent);
       case "stat-bar":  return this.statBar(n, parent);
       case "tabs":      return this.tabs(n, parent, on);
       case "progress":  return this.progress(n, parent);
@@ -198,6 +199,12 @@ export class BrowserAdapter implements Adapter {
           : opt.value === n.value;
         sel.appendChild(o);
       });
+      if (n.action) {
+        const action = n.action;
+        sel.addEventListener("change", () => {
+          on({ name: action.name, context: { ...(action.context ?? {}), [n.name]: sel.value } });
+        });
+      }
       wrapper.appendChild(sel);
     } else if (n.inputType === "file") {
       const inp = document.createElement("input");
@@ -289,10 +296,22 @@ export class BrowserAdapter implements Adapter {
   }
 
   private text(n: TextNode, parent: HTMLElement): void {
-    const el = document.createElement("span");
+    const el = document.createElement(n.style === "pre" ? "pre" : "span");
     el.className = `vms-text${n.style ? ` vms-text--${n.style}` : ""}`;
     el.textContent = n.value;
     parent.appendChild(el);
+  }
+
+  private link(n: LinkNode, parent: HTMLElement): void {
+    const a = document.createElement("a");
+    a.className = "vms-link";
+    a.href = n.href;
+    a.textContent = n.label;
+    if (n.external) {
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+    }
+    parent.appendChild(a);
   }
 
   private statBar(n: StatBarNode, parent: HTMLElement): void {

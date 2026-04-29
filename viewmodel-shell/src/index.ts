@@ -26,6 +26,7 @@ export type ViewNode =
   | CheckboxNode
   | ButtonNode
   | TextNode
+  | LinkNode
   | StatBarNode
   | TabsNode
   | ProgressNode
@@ -101,7 +102,15 @@ export interface ButtonNode {
 export interface TextNode {
   type: "text";
   value: string;
-  style?: "heading" | "subheading" | "body" | "muted" | "strikethrough" | "error";
+  style?: "heading" | "subheading" | "body" | "muted" | "strikethrough" | "error" | "pre";
+}
+
+export interface LinkNode {
+  type: "link";
+  label: string;
+  href: string;
+  /** true = open outside current app context (browser: new tab + noopener) */
+  external?: boolean;
 }
 
 export interface StatBarNode {
@@ -171,6 +180,8 @@ export interface ShellOptions {
   adapter: Adapter;
   onError?: (err: Error) => void;
   onLoading?: (loading: boolean) => void;
+  /** Called before each dispatch — merge the returned headers into every POST request. */
+  getRequestHeaders?: () => Record<string, string> | Promise<Record<string, string>>;
 }
 
 export class ViewModelShell {
@@ -184,7 +195,8 @@ export class ViewModelShell {
     try {
       onLoading?.(true);
       const url = params ? `${endpoint}?${new URLSearchParams(params)}` : endpoint;
-      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      const extraHeaders = this.options.getRequestHeaders ? await this.options.getRequestHeaders() : {};
+      const res = await fetch(url, { headers: { Accept: "application/json", ...extraHeaders } });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const vm = (await res.json()) as ViewNode;
       this.currentVm = vm;
@@ -210,9 +222,10 @@ export class ViewModelShell {
           form.append(name, file);
         }
       }
+      const extraHeaders = this.options.getRequestHeaders ? await this.options.getRequestHeaders() : {};
       const res = await fetch(actionEndpoint, {
         method: "POST",
-        headers: { Accept: "application/json" },
+        headers: { Accept: "application/json", ...extraHeaders },
         body: form,
       });
       if (!res.ok) throw new Error(`Action '${action.name}' failed: ${res.status}`);
