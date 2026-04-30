@@ -1,17 +1,6 @@
-/* Dark theme with a blue accent. Override on top of the default stylesheet:
-   import "viewmodel-shell/styles.css";
-   import "viewmodel-shell/themes/dark-blue.css";
-*/
+/* Dark theme · blue accent. Override on top of styles.css. */
 :root {
-  --vms-bg:           #0c0f11;
-  --vms-surface:      #141820;
-  --vms-surface-2:    #1c2028;
-  --vms-border:       #2a3040;
   --vms-accent:       #4a9eff;
-  --vms-accent-glow:  rgba(74, 158, 255, 0.15);
-  --vms-accent-dim:   rgba(74, 158, 255, 0.30);
-  --vms-text:         #dde4f0;
-  --vms-text-muted:   #6272a4;
-  --vms-done-bg:      #1e2830;
-  --vms-done-text:    #4a6080;
+  --vms-accent-glow:  rgba(74, 158, 255, 0.18);
+  --vms-accent-dim:   rgba(74, 158, 255, 0.35);
 }

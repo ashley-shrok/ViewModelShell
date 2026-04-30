@@ -1,0 +1,6 @@
+/* Dark theme · amber accent. Override on top of styles.css. */
+:root {
+  --vms-accent:       #f0a830;
+  --vms-accent-glow:  rgba(240, 168, 48, 0.18);
+  --vms-accent-dim:   rgba(240, 168, 48, 0.35);
+}

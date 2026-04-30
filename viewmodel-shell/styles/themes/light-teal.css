@@ -1,0 +1,21 @@
+/* Light theme · teal accent. Override on top of styles.css. */
+:root {
+  --vms-bg:           #f7f7f9;
+  --vms-surface:      #ffffff;
+  --vms-surface-2:    #f0f0f4;
+  --vms-border:       #d8d8e0;
+  --vms-accent:       #2a9d9d;
+  --vms-accent-glow:  rgba(42, 157, 157, 0.10);
+  --vms-accent-dim:   rgba(42, 157, 157, 0.30);
+  --vms-text:         #1a1a22;
+  --vms-text-muted:   #6c6c80;
+  --vms-done-bg:      #ececf2;
+  --vms-done-text:    #9090a0;
+  --vms-error:        #c2453d;
+  --vms-error-glow:   rgba(194, 69, 61, 0.10);
+  --vms-warning:      #c89610;
+  --vms-priority-high:#d76410;
+  --vms-success:      #2da359;
+  --vms-info:         #2277dd;
+  --vms-color-scheme: light;
+}

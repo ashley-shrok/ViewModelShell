@@ -1,16 +1,23 @@
 import "viewmodel-shell/styles.css";
-import darkBlueCss     from "viewmodel-shell/themes/dark-blue.css?inline";
-import lightCss        from "viewmodel-shell/themes/light.css?inline";
+// All theme files inlined here. Apps would normally pick one and import it
+// statically; the showcase swaps at runtime via a single <style> element.
+import darkBlueCss    from "viewmodel-shell/themes/dark-blue.css?inline";
+import darkGreenCss   from "viewmodel-shell/themes/dark-green.css?inline";
+import darkRoseCss    from "viewmodel-shell/themes/dark-rose.css?inline";
+import darkAmberCss   from "viewmodel-shell/themes/dark-amber.css?inline";
+import darkTealCss    from "viewmodel-shell/themes/dark-teal.css?inline";
+import lightPurpleCss from "viewmodel-shell/themes/light-purple.css?inline";
+import lightBlueCss   from "viewmodel-shell/themes/light-blue.css?inline";
+import lightGreenCss  from "viewmodel-shell/themes/light-green.css?inline";
+import lightRoseCss   from "viewmodel-shell/themes/light-rose.css?inline";
+import lightAmberCss  from "viewmodel-shell/themes/light-amber.css?inline";
+import lightTealCss   from "viewmodel-shell/themes/light-teal.css?inline";
 import { BrowserAdapter } from "viewmodel-shell/browser";
 import type { ViewNode, ActionEvent } from "viewmodel-shell";
 
-// Renders every framework-emitted node type in a single page so the
-// default stylesheet can be visually verified end-to-end. Frontend-only
-// — no backend, just enough local state to make the interactive bits feel
-// real (table sort/filter, tabs, modal, agree checkbox, theme switcher).
-
 // ── State ────────────────────────────────────────────────────────────────
-type Theme = "default" | "dark-blue" | "light";
+type Mode = "dark" | "light";
+type Accent = "purple" | "blue" | "green" | "rose" | "amber" | "teal";
 
 interface State {
   modalShown:    boolean;
@@ -19,7 +26,8 @@ interface State {
   sortColumn:    string;
   sortDirection: "asc" | "desc";
   filters:       Record<string, string>;
-  theme:         Theme;
+  mode:          Mode;
+  accent:        Accent;
 }
 
 let state: State = {
@@ -29,23 +37,34 @@ let state: State = {
   sortColumn:    "name",
   sortDirection: "asc",
   filters:       { name: "", status: "" },
-  theme:         "default",
+  mode:          "dark",
+  accent:        "purple",
 };
 
 // ── Theme switching ──────────────────────────────────────────────────────
-// Apps usually pick one theme at build time (a single static import). The
-// showcase swaps at runtime by toggling a single <style> element so you can
-// see how the variables drive the look.
 const themeStyle = document.createElement("style");
 themeStyle.id = "vms-showcase-theme";
 document.head.appendChild(themeStyle);
 
-function applyTheme(theme: Theme) {
-  state.theme = theme;
-  themeStyle.textContent =
-    theme === "dark-blue" ? darkBlueCss :
-    theme === "light"     ? lightCss :
-    /* default */           "";
+const themeFiles: Record<string, string> = {
+  // dark-purple is the implicit default — no override needed (empty string).
+  "dark-purple":  "",
+  "dark-blue":    darkBlueCss,
+  "dark-green":   darkGreenCss,
+  "dark-rose":    darkRoseCss,
+  "dark-amber":   darkAmberCss,
+  "dark-teal":    darkTealCss,
+  "light-purple": lightPurpleCss,
+  "light-blue":   lightBlueCss,
+  "light-green":  lightGreenCss,
+  "light-rose":   lightRoseCss,
+  "light-amber":  lightAmberCss,
+  "light-teal":   lightTealCss,
+};
+
+function applyTheme() {
+  const key = `${state.mode}-${state.accent}`;
+  themeStyle.textContent = themeFiles[key] ?? "";
 }
 
 // ── Source data for the table (filtered/sorted on render) ────────────────
@@ -76,14 +95,21 @@ function buildVm(): ViewNode {
     type: "page",
     title: "Component Showcase",
     children: [
-      // ── Theme switcher ────────────────────────────────────────────
+      // ── Theme switcher: mode + accent ─────────────────────────────
       { type: "section", heading: "Theme", children: [
-        { type: "tabs", selected: state.theme, action: { name: "theme:set" }, tabs: [
-          { value: "default",   label: "Default (purple)" },
-          { value: "dark-blue", label: "Dark blue" },
-          { value: "light",     label: "Light" },
+        { type: "tabs", selected: state.mode, action: { name: "theme:mode" }, tabs: [
+          { value: "dark",  label: "Dark"  },
+          { value: "light", label: "Light" },
         ]},
-        { type: "text", value: "Same default.css rules — only the CSS-variable values change. Apps import a theme on top of styles.css.", style: "muted" },
+        { type: "tabs", selected: state.accent, action: { name: "theme:accent" }, tabs: [
+          { value: "purple", label: "Purple" },
+          { value: "blue",   label: "Blue"   },
+          { value: "green",  label: "Green"  },
+          { value: "rose",   label: "Rose"   },
+          { value: "amber",  label: "Amber"  },
+          { value: "teal",   label: "Teal"   },
+        ]},
+        { type: "text", value: "Mode × accent gives 12 themes. Apps pick one with a single import — the showcase combines them at runtime so you can sample them all.", style: "muted" },
       ]},
 
       // ── Text styles ───────────────────────────────────────────────
@@ -115,8 +141,6 @@ function buildVm(): ViewNode {
       ]},
 
       // ── Links ─────────────────────────────────────────────────────
-      // Each link is a separate flex item — the framework doesn't model
-      // inline prose with embedded links.
       { type: "section", heading: "Links", children: [
         { type: "link", label: "Internal link to a doc", href: "#docs" },
         { type: "link", label: "External (opens new tab)", href: "https://example.com", external: true },
@@ -125,8 +149,8 @@ function buildVm(): ViewNode {
       // ── Tabs + progress ───────────────────────────────────────────
       { type: "section", heading: "Tabs and progress", children: [
         { type: "tabs", selected: state.selectedTab, action: { name: "tab:set" }, tabs: [
-          { value: "all",       label: "All" },
-          { value: "active",    label: "Active" },
+          { value: "all",       label: "All"       },
+          { value: "active",    label: "Active"    },
           { value: "completed", label: "Completed" },
         ]},
         { type: "progress", value: 67 },
@@ -234,7 +258,6 @@ function buildVm(): ViewNode {
         { type: "button", label: "Open modal", action: { name: "modal:open" }, variant: "primary" },
       ]},
 
-      // The modal lives at page level so the backdrop covers the viewport.
       ...(state.modalShown ? [{
         type: "modal" as const,
         title: "Confirm action",
@@ -274,12 +297,15 @@ function handle(action: ActionEvent): void {
     case "table:filter":
       state.filters = { ...state.filters, ...(ctx.filters as Record<string, string>) };
       stateChanged = true; break;
-    case "theme:set":
-      applyTheme(ctx.value as Theme);
+    case "theme:mode":
+      state.mode = ctx.value as Mode;
+      applyTheme();
+      stateChanged = true; break;
+    case "theme:accent":
+      state.accent = ctx.value as Accent;
+      applyTheme();
       stateChanged = true; break;
     default:
-      // Other actions (noop, form submit, etc.) just log without re-rendering
-      // so native form/checkbox interaction isn't disrupted.
       console.log("[showcase] action (no-op):", action);
       return;
   }
