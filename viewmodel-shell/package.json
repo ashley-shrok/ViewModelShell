@@ -7,7 +7,7 @@
   "author": "ashley-shrok",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ashley-shrok/ViewModelShell"
+    "url": "git+https://github.com/ashley-shrok/ViewModelShell.git"
   },
   "homepage": "https://github.com/ashley-shrok/ViewModelShell#readme",
   "bugs": "https://github.com/ashley-shrok/ViewModelShell/issues",
@@ -25,19 +25,19 @@
     "LICENSE"
   ],
   "exports": {
-    ".":                         "./src/index.ts",
-    "./browser":                 "./src/browser.ts",
-    "./styles.css":              "./styles/default.css",
-    "./themes/dark-blue.css":    "./styles/themes/dark-blue.css",
-    "./themes/dark-green.css":   "./styles/themes/dark-green.css",
-    "./themes/dark-rose.css":    "./styles/themes/dark-rose.css",
-    "./themes/dark-amber.css":   "./styles/themes/dark-amber.css",
-    "./themes/dark-teal.css":    "./styles/themes/dark-teal.css",
+    ".": "./src/index.ts",
+    "./browser": "./src/browser.ts",
+    "./styles.css": "./styles/default.css",
+    "./themes/dark-blue.css": "./styles/themes/dark-blue.css",
+    "./themes/dark-green.css": "./styles/themes/dark-green.css",
+    "./themes/dark-rose.css": "./styles/themes/dark-rose.css",
+    "./themes/dark-amber.css": "./styles/themes/dark-amber.css",
+    "./themes/dark-teal.css": "./styles/themes/dark-teal.css",
     "./themes/light-purple.css": "./styles/themes/light-purple.css",
-    "./themes/light-blue.css":   "./styles/themes/light-blue.css",
-    "./themes/light-green.css":  "./styles/themes/light-green.css",
-    "./themes/light-rose.css":   "./styles/themes/light-rose.css",
-    "./themes/light-amber.css":  "./styles/themes/light-amber.css",
-    "./themes/light-teal.css":   "./styles/themes/light-teal.css"
+    "./themes/light-blue.css": "./styles/themes/light-blue.css",
+    "./themes/light-green.css": "./styles/themes/light-green.css",
+    "./themes/light-rose.css": "./styles/themes/light-rose.css",
+    "./themes/light-amber.css": "./styles/themes/light-amber.css",
+    "./themes/light-teal.css": "./styles/themes/light-teal.css"
   }
 }
