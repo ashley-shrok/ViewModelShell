@@ -73,7 +73,7 @@ export interface FieldNode {
     | "text" | "email" | "password" | "number"
     | "date" | "time" | "datetime-local"
     | "textarea" | "hidden" | "file"
-    | "select" | "select-multiple";
+    | "select" | "select-multiple" | "checkbox";
   label?: string;
   placeholder?: string;
   value?: string;

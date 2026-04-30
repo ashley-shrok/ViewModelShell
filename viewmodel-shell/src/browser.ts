@@ -143,6 +143,13 @@ export class BrowserAdapter implements Adapter {
         "input:not([type=checkbox]):not([type=file]), textarea"
       ).forEach(el => { if (el.name) ctx[el.name] = el.value; });
 
+      // Form-collected checkboxes (FieldNode inputType="checkbox").
+      // CheckboxNode renders with .vms-checkbox__input and is excluded so its
+      // immediate-dispatch path stays the only way it talks to the server.
+      form.querySelectorAll<HTMLInputElement>(
+        "input.vms-field__input[type=checkbox]"
+      ).forEach(el => { if (el.name) ctx[el.name] = el.checked; });
+
       form.querySelectorAll<HTMLSelectElement>("select:not([multiple])").forEach(sel => {
         if (sel.name) ctx[sel.name] = sel.value;
       });
@@ -170,6 +177,30 @@ export class BrowserAdapter implements Adapter {
       inp.name = n.name;
       if (n.value) inp.value = n.value;
       parent.appendChild(inp);
+      return;
+    }
+
+    if (n.inputType === "checkbox") {
+      const wrapper = document.createElement("div");
+      wrapper.className = "vms-field vms-field--checkbox";
+
+      const inp = document.createElement("input");
+      inp.type = "checkbox";
+      inp.className = "vms-field__input";
+      inp.id = `vms-${n.name}`;
+      inp.name = n.name;
+      inp.checked = !!n.value && n.value !== "false" && n.value !== "0";
+
+      wrapper.appendChild(inp);
+
+      if (n.label) {
+        const lbl = document.createElement("label");
+        lbl.className = "vms-field__label";
+        lbl.htmlFor = `vms-${n.name}`;
+        lbl.textContent = n.label;
+        wrapper.appendChild(lbl);
+      }
+      parent.appendChild(wrapper);
       return;
     }
 

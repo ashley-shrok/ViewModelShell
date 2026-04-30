@@ -67,8 +67,8 @@ Response is the same `{ "vm", "state" }` shape as GET. The shell stores `state` 
 | `section` | Grouped content with optional heading |
 | `list`, `list-item` | Containers; `variant` on item becomes `vms-list-item--{variant}` |
 | `form` | Form with submit action; collects all input/textarea/select/file values on submit |
-| `field` | `inputType`: `text`, `email`, `password`, `number`, `date`, `time`, `datetime-local`, `textarea`, `hidden`, `file`, `select`, `select-multiple`. Selects use `options: [{ value, label }]`. Multi-select submits comma-joined. |
-| `checkbox` | Dispatches immediately on change with `{ checked: bool }` merged into context |
+| `field` | `inputType`: `text`, `email`, `password`, `number`, `date`, `time`, `datetime-local`, `textarea`, `hidden`, `file`, `select`, `select-multiple`, `checkbox`. Selects use `options: [{ value, label }]`. Multi-select submits comma-joined. Field-checkboxes are form-collected: `value: "true"`/`"false"` round-trips with the form submission as a boolean (use `Bool(name)` server-side). For per-toggle dispatch, use `CheckboxNode` instead. |
+| `checkbox` | (`CheckboxNode`) Dispatches immediately on change with `{ checked: bool }` merged into context. For checkboxes that should be submitted with a form, use `FieldNode(inputType: "checkbox")` instead. |
 | `button` | `variant`: `primary`, `secondary`, `danger` |
 | `text` | `style`: `heading`, `subheading`, `body`, `muted`, `strikethrough`, `error`, `pre` (renders as `<pre>` for monospace/whitespace-preserving output) |
 | `link` | `<a class="vms-link">`; `external: true` adds `target="_blank" rel="noopener noreferrer"` |
