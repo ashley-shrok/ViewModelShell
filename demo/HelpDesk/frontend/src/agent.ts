@@ -1,3 +1,4 @@
+import "viewmodel-shell/styles.css";
 import { ViewModelShell } from "viewmodel-shell";
 import { BrowserAdapter } from "viewmodel-shell/browser";
 
