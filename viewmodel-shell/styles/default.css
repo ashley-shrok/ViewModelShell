@@ -30,6 +30,8 @@
   --vms-error-glow:  rgba(224, 90, 90, 0.12);
   --vms-warning:       #e0a823;
   --vms-priority-high: #e07015;
+  --vms-success:       #4dd17a;
+  --vms-info:          #4a9eff;
   --vms-radius:      10px;
   --vms-radius-sm:   6px;
   --vms-font-body:   ui-monospace, 'DM Mono', 'Fira Mono', Menlo, monospace;
@@ -229,13 +231,17 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
 /* Common variants — apps can add more by writing .vms-list-item--{name} rules.
    Variant accents go on border-left and are preserved through hover. */
 .vms-list-item--done     { background: var(--vms-done-bg); border-color: transparent; opacity: 0.75; }
-.vms-list-item--warning  { border-left: 3px solid var(--vms-warning); }
+.vms-list-item--critical { border-left: 3px solid var(--vms-error);         background: rgba(224, 90, 90, 0.04); }
 .vms-list-item--high     { border-left: 3px solid var(--vms-priority-high); }
-.vms-list-item--critical { border-left: 3px solid var(--vms-error); background: rgba(224, 90, 90, 0.04); }
+.vms-list-item--warning  { border-left: 3px solid var(--vms-warning); }
+.vms-list-item--success  { border-left: 3px solid var(--vms-success); }
+.vms-list-item--info     { border-left: 3px solid var(--vms-info); }
 
-.vms-list-item--warning:hover  { border-left-color: var(--vms-warning); }
-.vms-list-item--high:hover     { border-left-color: var(--vms-priority-high); }
 .vms-list-item--critical:hover { border-left-color: var(--vms-error); }
+.vms-list-item--high:hover     { border-left-color: var(--vms-priority-high); }
+.vms-list-item--warning:hover  { border-left-color: var(--vms-warning); }
+.vms-list-item--success:hover  { border-left-color: var(--vms-success); }
+.vms-list-item--info:hover     { border-left-color: var(--vms-info); }
 
 @keyframes vms-in {
   from { opacity: 0; transform: translateY(4px); }

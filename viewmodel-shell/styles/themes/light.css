@@ -18,5 +18,7 @@
   --vms-error-glow:   rgba(194, 69, 61, 0.10);
   --vms-warning:      #c89610;
   --vms-priority-high:#d76410;
+  --vms-success:      #2da359;
+  --vms-info:         #2277dd;
   --vms-color-scheme: light;
 }

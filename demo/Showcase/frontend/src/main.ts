@@ -1,8 +1,6 @@
 import "viewmodel-shell/styles.css";
 import darkBlueCss     from "viewmodel-shell/themes/dark-blue.css?inline";
 import lightCss        from "viewmodel-shell/themes/light.css?inline";
-import rainbowDarkCss  from "viewmodel-shell/themes/rainbow-dark.css?inline";
-import rainbowLightCss from "viewmodel-shell/themes/rainbow-light.css?inline";
 import { BrowserAdapter } from "viewmodel-shell/browser";
 import type { ViewNode, ActionEvent } from "viewmodel-shell";
 
@@ -12,7 +10,7 @@ import type { ViewNode, ActionEvent } from "viewmodel-shell";
 // real (table sort/filter, tabs, modal, agree checkbox, theme switcher).
 
 // ── State ────────────────────────────────────────────────────────────────
-type Theme = "default" | "dark-blue" | "light" | "rainbow-dark" | "rainbow-light";
+type Theme = "default" | "dark-blue" | "light";
 
 interface State {
   modalShown:    boolean;
@@ -45,11 +43,9 @@ document.head.appendChild(themeStyle);
 function applyTheme(theme: Theme) {
   state.theme = theme;
   themeStyle.textContent =
-    theme === "dark-blue"      ? darkBlueCss :
-    theme === "light"          ? lightCss :
-    theme === "rainbow-dark"   ? rainbowDarkCss :
-    theme === "rainbow-light"  ? rainbowLightCss :
-    /* default */                "";
+    theme === "dark-blue" ? darkBlueCss :
+    theme === "light"     ? lightCss :
+    /* default */           "";
 }
 
 // ── Source data for the table (filtered/sorted on render) ────────────────
@@ -83,13 +79,11 @@ function buildVm(): ViewNode {
       // ── Theme switcher ────────────────────────────────────────────
       { type: "section", heading: "Theme", children: [
         { type: "tabs", selected: state.theme, action: { name: "theme:set" }, tabs: [
-          { value: "default",        label: "Default" },
-          { value: "dark-blue",      label: "Dark blue" },
-          { value: "light",          label: "Light" },
-          { value: "rainbow-dark",   label: "Rainbow dark" },
-          { value: "rainbow-light",  label: "Rainbow light" },
+          { value: "default",   label: "Default (purple)" },
+          { value: "dark-blue", label: "Dark blue" },
+          { value: "light",     label: "Light" },
         ]},
-        { type: "text", value: "Apps import one theme on top of styles.css. Most themes are pure variable overrides; rainbow adds a few gradient rules for the progress bar, primary button, and title underline.", style: "muted" },
+        { type: "text", value: "Same default.css rules — only the CSS-variable values change. Apps import a theme on top of styles.css.", style: "muted" },
       ]},
 
       // ── Text styles ───────────────────────────────────────────────
@@ -176,29 +170,37 @@ function buildVm(): ViewNode {
         { type: "text", value: "Click toggles via the action. The form-collected variant above lives inside the form and rides along with submit.", style: "muted" },
       ]},
 
-      // ── List + variants ───────────────────────────────────────────
+      // ── List + variants (full rainbow palette) ────────────────────
       { type: "section", heading: "List with variants", children: [
         { type: "list", children: [
           { type: "list-item", children: [
-            { type: "text", value: "Default item",           style: "subheading" },
-            { type: "text", value: "no variant set",         style: "muted" },
+            { type: "text", value: "Default item",       style: "subheading" },
+            { type: "text", value: "no variant set",     style: "muted" },
             { type: "button", label: "Delete", action: { name: "noop" }, variant: "danger" },
           ]},
-          { type: "list-item", variant: "done", children: [
-            { type: "text", value: "Completed item",         style: "subheading" },
-            { type: "text", value: "list-item--done",        style: "muted" },
-          ]},
-          { type: "list-item", variant: "warning", children: [
-            { type: "text", value: "Warning item",           style: "subheading" },
-            { type: "text", value: "list-item--warning · amber", style: "muted" },
+          { type: "list-item", variant: "critical", children: [
+            { type: "text", value: "Critical item",      style: "subheading" },
+            { type: "text", value: "list-item--critical · red",    style: "muted" },
           ]},
           { type: "list-item", variant: "high", children: [
-            { type: "text", value: "High-priority item",     style: "subheading" },
-            { type: "text", value: "list-item--high · orange", style: "muted" },
+            { type: "text", value: "High-priority item", style: "subheading" },
+            { type: "text", value: "list-item--high · orange",     style: "muted" },
           ]},
-          { type: "list-item", variant: "critical", children: [
-            { type: "text", value: "Critical item",          style: "subheading" },
-            { type: "text", value: "list-item--critical · red", style: "muted" },
+          { type: "list-item", variant: "warning", children: [
+            { type: "text", value: "Warning item",       style: "subheading" },
+            { type: "text", value: "list-item--warning · yellow",  style: "muted" },
+          ]},
+          { type: "list-item", variant: "success", children: [
+            { type: "text", value: "Success item",       style: "subheading" },
+            { type: "text", value: "list-item--success · green",   style: "muted" },
+          ]},
+          { type: "list-item", variant: "info", children: [
+            { type: "text", value: "Info item",          style: "subheading" },
+            { type: "text", value: "list-item--info · blue",       style: "muted" },
+          ]},
+          { type: "list-item", variant: "done", children: [
+            { type: "text", value: "Completed item",     style: "subheading" },
+            { type: "text", value: "list-item--done",    style: "muted" },
           ]},
         ]},
       ]},

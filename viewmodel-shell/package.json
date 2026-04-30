@@ -7,8 +7,6 @@
     "./browser":               "./src/browser.ts",
     "./styles.css":              "./styles/default.css",
     "./themes/dark-blue.css":    "./styles/themes/dark-blue.css",
-    "./themes/light.css":        "./styles/themes/light.css",
-    "./themes/rainbow-dark.css": "./styles/themes/rainbow-dark.css",
-    "./themes/rainbow-light.css":"./styles/themes/rainbow-light.css"
+    "./themes/light.css":        "./styles/themes/light.css"
   }
 }
