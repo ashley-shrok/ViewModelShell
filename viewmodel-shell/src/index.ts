@@ -219,6 +219,14 @@ export class ViewModelShell {
   async dispatch(action: ActionEvent): Promise<void> {
     if (this.dispatching) return;
     const { actionEndpoint, adapter, onError, onLoading } = this.options;
+    if (this.currentState === null) {
+      const err = new Error(
+        `Cannot dispatch '${action.name}' before initial load completes. ` +
+        `Call shell.load() and wait for it before allowing user interaction.`
+      );
+      onError ? onError(err) : console.error("[ViewModelShell]", err);
+      return;
+    }
     try {
       this.dispatching = true;
       onLoading?.(true);
