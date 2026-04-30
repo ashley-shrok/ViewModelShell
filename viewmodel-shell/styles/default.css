@@ -162,14 +162,23 @@ select.vms-field__input { cursor: pointer; }
 .vms-button--secondary:hover { border-color: var(--vms-accent); background: var(--vms-accent-glow); }
 .vms-button--danger {
   background: transparent;
+  border: 1px solid transparent;
+  color: var(--vms-error);
+}
+.vms-button--danger:hover { background: var(--vms-error-glow); border-color: var(--vms-error); }
+
+/* Inside a list item, a danger button is treated as the row's "X" affordance:
+   muted and hidden until the row is hovered, then visible and red on hover. */
+.vms-list-item .vms-button--danger {
   border: none;
   color: var(--vms-text-muted);
   opacity: 0;
   padding: 0.25rem 0.4rem;
   border-radius: var(--vms-radius-sm);
+  transition: opacity var(--vms-t), color var(--vms-t), background var(--vms-t);
 }
-.vms-button--danger:hover { color: var(--vms-error); background: var(--vms-error-glow); opacity: 1 !important; }
 .vms-list-item:hover .vms-button--danger { opacity: 1; }
+.vms-list-item .vms-button--danger:hover { color: var(--vms-error); background: var(--vms-error-glow); opacity: 1; }
 
 /* ── Tabs ── */
 .vms-tabs {
@@ -208,7 +217,6 @@ select.vms-field__input { cursor: pointer; }
   border-radius: var(--vms-radius);
   padding: 0.75rem 1rem;
   transition: border-color var(--vms-t), background var(--vms-t);
-  animation: vms-in 0.15s ease;
 }
 .vms-list-item:hover { border-color: var(--vms-accent-dim); }
 

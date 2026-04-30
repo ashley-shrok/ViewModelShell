@@ -18,4 +18,8 @@ export default defineConfig({
       },
     ],
   },
+  build: {
+    outDir: "../AspNetCore/wwwroot",
+    emptyOutDir: true,
+  },
 });
