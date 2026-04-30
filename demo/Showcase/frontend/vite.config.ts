@@ -24,6 +24,14 @@ export default defineConfig({
         replacement: resolve(__dirname, "../../../viewmodel-shell/styles/themes/light.css") + "$1",
       },
       {
+        find: /^viewmodel-shell\/themes\/rainbow-dark\.css(\?.*)?$/,
+        replacement: resolve(__dirname, "../../../viewmodel-shell/styles/themes/rainbow-dark.css") + "$1",
+      },
+      {
+        find: /^viewmodel-shell\/themes\/rainbow-light\.css(\?.*)?$/,
+        replacement: resolve(__dirname, "../../../viewmodel-shell/styles/themes/rainbow-light.css") + "$1",
+      },
+      {
         find: /^viewmodel-shell$/,
         replacement: resolve(__dirname, "../../../viewmodel-shell/src/index.ts"),
       },
