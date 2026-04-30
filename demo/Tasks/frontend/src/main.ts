@@ -1,6 +1,6 @@
-import "viewmodel-shell/styles.css";
-import { ViewModelShell } from "viewmodel-shell";
-import { BrowserAdapter } from "viewmodel-shell/browser";
+import "@ashley-shrok/viewmodel-shell/styles.css";
+import { ViewModelShell } from "@ashley-shrok/viewmodel-shell";
+import { BrowserAdapter } from "@ashley-shrok/viewmodel-shell/browser";
 
 const container = document.getElementById("app")!;
 const adapter = new BrowserAdapter(container);

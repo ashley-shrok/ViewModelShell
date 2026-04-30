@@ -1,10 +1,32 @@
 {
-  "name": "viewmodel-shell",
-  "version": "0.1.0",
+  "name": "@ashley-shrok/viewmodel-shell",
+  "version": "0.2.0",
+  "description": "Server-driven UI framework. Server returns a JSON tree of typed nodes; a thin TypeScript adapter renders it to DOM. Backend-agnostic — a .NET reference backend ships with the repo, but any language can produce the JSON contract.",
   "type": "module",
+  "license": "MIT",
+  "author": "ashley-shrok",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ashley-shrok/ViewModelShell"
+  },
+  "homepage": "https://github.com/ashley-shrok/ViewModelShell#readme",
+  "bugs": "https://github.com/ashley-shrok/ViewModelShell/issues",
+  "keywords": [
+    "viewmodel",
+    "server-driven-ui",
+    "sdui",
+    "framework",
+    "typescript"
+  ],
+  "files": [
+    "src",
+    "styles",
+    "README.md",
+    "LICENSE"
+  ],
   "exports": {
-    ".":                       "./src/index.ts",
-    "./browser":               "./src/browser.ts",
+    ".":                         "./src/index.ts",
+    "./browser":                 "./src/browser.ts",
     "./styles.css":              "./styles/default.css",
     "./themes/dark-blue.css":    "./styles/themes/dark-blue.css",
     "./themes/dark-green.css":   "./styles/themes/dark-green.css",

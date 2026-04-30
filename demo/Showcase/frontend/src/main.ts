@@ -1,19 +1,19 @@
-import "viewmodel-shell/styles.css";
+import "@ashley-shrok/viewmodel-shell/styles.css";
 // All theme files inlined here. Apps would normally pick one and import it
 // statically; the showcase swaps at runtime via a single <style> element.
-import darkBlueCss    from "viewmodel-shell/themes/dark-blue.css?inline";
-import darkGreenCss   from "viewmodel-shell/themes/dark-green.css?inline";
-import darkRoseCss    from "viewmodel-shell/themes/dark-rose.css?inline";
-import darkAmberCss   from "viewmodel-shell/themes/dark-amber.css?inline";
-import darkTealCss    from "viewmodel-shell/themes/dark-teal.css?inline";
-import lightPurpleCss from "viewmodel-shell/themes/light-purple.css?inline";
-import lightBlueCss   from "viewmodel-shell/themes/light-blue.css?inline";
-import lightGreenCss  from "viewmodel-shell/themes/light-green.css?inline";
-import lightRoseCss   from "viewmodel-shell/themes/light-rose.css?inline";
-import lightAmberCss  from "viewmodel-shell/themes/light-amber.css?inline";
-import lightTealCss   from "viewmodel-shell/themes/light-teal.css?inline";
-import { BrowserAdapter } from "viewmodel-shell/browser";
-import type { ViewNode, ActionEvent } from "viewmodel-shell";
+import darkBlueCss    from "@ashley-shrok/viewmodel-shell/themes/dark-blue.css?inline";
+import darkGreenCss   from "@ashley-shrok/viewmodel-shell/themes/dark-green.css?inline";
+import darkRoseCss    from "@ashley-shrok/viewmodel-shell/themes/dark-rose.css?inline";
+import darkAmberCss   from "@ashley-shrok/viewmodel-shell/themes/dark-amber.css?inline";
+import darkTealCss    from "@ashley-shrok/viewmodel-shell/themes/dark-teal.css?inline";
+import lightPurpleCss from "@ashley-shrok/viewmodel-shell/themes/light-purple.css?inline";
+import lightBlueCss   from "@ashley-shrok/viewmodel-shell/themes/light-blue.css?inline";
+import lightGreenCss  from "@ashley-shrok/viewmodel-shell/themes/light-green.css?inline";
+import lightRoseCss   from "@ashley-shrok/viewmodel-shell/themes/light-rose.css?inline";
+import lightAmberCss  from "@ashley-shrok/viewmodel-shell/themes/light-amber.css?inline";
+import lightTealCss   from "@ashley-shrok/viewmodel-shell/themes/light-teal.css?inline";
+import { BrowserAdapter } from "@ashley-shrok/viewmodel-shell/browser";
+import type { ViewNode, ActionEvent } from "@ashley-shrok/viewmodel-shell";
 
 // ── State ────────────────────────────────────────────────────────────────
 type Mode = "dark" | "light";

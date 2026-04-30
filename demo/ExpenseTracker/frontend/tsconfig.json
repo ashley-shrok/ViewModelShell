@@ -13,8 +13,8 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "viewmodel-shell": ["../../../viewmodel-shell/src/index.ts"],
-      "viewmodel-shell/browser": ["../../../viewmodel-shell/src/browser.ts"]
+      "@ashley-shrok/viewmodel-shell": ["../../../viewmodel-shell/src/index.ts"],
+      "@ashley-shrok/viewmodel-shell/browser": ["../../../viewmodel-shell/src/browser.ts"]
     }
   },
   "include": ["src"]

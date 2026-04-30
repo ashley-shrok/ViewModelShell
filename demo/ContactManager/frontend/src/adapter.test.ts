@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { BrowserAdapter } from "viewmodel-shell/browser";
-import type { ViewNode, ActionEvent } from "viewmodel-shell";
+import { BrowserAdapter } from "@ashley-shrok/viewmodel-shell/browser";
+import type { ViewNode, ActionEvent } from "@ashley-shrok/viewmodel-shell";
 
 function render(vm: ViewNode) {
   const container = document.createElement("div");
