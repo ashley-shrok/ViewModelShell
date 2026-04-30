@@ -28,8 +28,8 @@
   --vms-done-text:   #5a5a6e;
   --vms-error:       #e05a5a;
   --vms-error-glow:  rgba(224, 90, 90, 0.12);
-  --vms-warning:       #d4821a;
-  --vms-priority-high: #d4651a;
+  --vms-warning:       #e0a823;
+  --vms-priority-high: #e07015;
   --vms-radius:      10px;
   --vms-radius-sm:   6px;
   --vms-font-body:   ui-monospace, 'DM Mono', 'Fira Mono', Menlo, monospace;

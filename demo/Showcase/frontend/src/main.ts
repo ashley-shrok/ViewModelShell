@@ -1,4 +1,6 @@
 import "viewmodel-shell/styles.css";
+import darkBlueCss from "viewmodel-shell/themes/dark-blue.css?inline";
+import lightCss    from "viewmodel-shell/themes/light.css?inline";
 import { BrowserAdapter } from "viewmodel-shell/browser";
 import type { ViewNode, ActionEvent } from "viewmodel-shell";
 
@@ -31,22 +33,19 @@ let state: State = {
 };
 
 // ── Theme switching ──────────────────────────────────────────────────────
-// Apps usually pick one theme at build time. The showcase swaps at runtime
-// so you can see how the variables drive the look.
-let themeLink: HTMLLinkElement | null = null;
-async function applyTheme(theme: Theme) {
+// Apps usually pick one theme at build time (a single static import). The
+// showcase swaps at runtime by toggling a single <style> element so you can
+// see how the variables drive the look.
+const themeStyle = document.createElement("style");
+themeStyle.id = "vms-showcase-theme";
+document.head.appendChild(themeStyle);
+
+function applyTheme(theme: Theme) {
   state.theme = theme;
-  if (themeLink) themeLink.remove();
-  if (theme === "default") return;
-  themeLink = document.createElement("link");
-  themeLink.rel = "stylesheet";
-  // Load via dynamic import so vite resolves the alias.
-  const url =
-    theme === "dark-blue"
-      ? (await import("viewmodel-shell/themes/dark-blue.css?url")).default
-      : (await import("viewmodel-shell/themes/light.css?url")).default;
-  themeLink.href = url;
-  document.head.appendChild(themeLink);
+  themeStyle.textContent =
+    theme === "dark-blue" ? darkBlueCss :
+    theme === "light"     ? lightCss :
+    /* default */           "";
 }
 
 // ── Source data for the table (filtered/sorted on render) ────────────────
