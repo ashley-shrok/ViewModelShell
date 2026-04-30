@@ -75,7 +75,7 @@ Response is the same `{ "vm", "state" }` shape as GET. The shell stores `state` 
 | `stat-bar` | Row of label/value items |
 | `tabs` | Dispatches immediately on click with `{ value: tab.value }` merged into context |
 | `progress` | 0–100 |
-| `modal` | Optional title + body children + `dismissAction`. No backdrop-click dismissal, no focus management — these are intentional design choices. A modal with no `dismissAction` is non-dismissible by client-side interaction; the dev must include an in-modal action to close it. |
+| `modal` | Optional title + body children + optional `footer` (action-button row) + `dismissAction`. No backdrop-click dismissal, no focus management — these are intentional design choices. A modal with no `dismissAction` and no footer is non-dismissible by client-side interaction; the dev must include an in-body or in-footer action to close it. |
 | `table` | `columns`, `rows`, optional `sortColumn`/`sortDirection`/`sortAction`. Per-column filter via `filterable: true` + `filterValue` + `filterAction` on table. Per-row `action` makes the row clickable. Column `linkLabel` + `linkExternal` renders the cell value as an anchor. |
 
 ### Action payload shapes
@@ -111,7 +111,7 @@ Every dispatch is `multipart/form-data`. The action JSON travels in `_action`; t
 | stat-bar | `.vms-stat-bar`, `.vms-stat-bar__item`, `.vms-stat-bar__value`, `.vms-stat-bar__label` |
 | tabs | `.vms-tabs`, `.vms-tabs__tab`, `.vms-tabs__tab--active` |
 | progress | `.vms-progress`, `.vms-progress__bar` |
-| modal | `.vms-modal-backdrop`, `.vms-modal`, `.vms-modal__header`, `.vms-modal__title`, `.vms-modal__close`, `.vms-modal__body` |
+| modal | `.vms-modal-backdrop`, `.vms-modal`, `.vms-modal__header`, `.vms-modal__title`, `.vms-modal__close`, `.vms-modal__body`, `.vms-modal__footer` |
 | table | `.vms-table-wrapper`, `.vms-table`, `.vms-table__th`, `.vms-table__th--sortable`, `.vms-table__th--asc`, `.vms-table__th--desc`, `.vms-table__filter-row`, `.vms-table__filter-input`, `.vms-table__row`, `.vms-table__row--{variant}`, `.vms-table__row--clickable`, `.vms-table__td`, `.vms-table__link` |
 
 The framework emits class names; the app owns the CSS. Reference dark-theme stylesheets: `demo/Tasks/frontend/index.html` and `demo/HelpDesk/frontend/requester.html`.

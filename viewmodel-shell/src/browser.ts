@@ -428,6 +428,13 @@ export class BrowserAdapter implements Adapter {
     this.kids(n.children, body, on);
     modal.appendChild(body);
 
+    if (n.footer && n.footer.length > 0) {
+      const footer = document.createElement("div");
+      footer.className = "vms-modal__footer";
+      this.kids(n.footer, footer, on);
+      modal.appendChild(footer);
+    }
+
     backdrop.appendChild(modal);
     parent.appendChild(backdrop);
   }

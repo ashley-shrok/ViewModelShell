@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Help Desk — Requester</title>
+  <title>Tasks</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -18,13 +18,20 @@
       padding: 3rem 1rem 4rem;
     }
     body.is-loading #app { opacity: 0.6; pointer-events: none; transition: opacity 0.1s; }
-    #app { width: 100%; max-width: 600px; }
+    #app { width: 100%; max-width: 520px; }
+
+    /* Tasks: horizontal "Add" form */
+    .vms-form { flex-direction: row; gap: 0.5rem; align-items: stretch; }
+    .vms-form .vms-field { flex: 1; }
+    .vms-form .vms-button--primary { align-self: stretch; }
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display&display=swap" rel="stylesheet" />
-  <script type="module" crossorigin src="/assets/requester-DIDaYQBw.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/browser-ChueOy62.js">
-  <link rel="stylesheet" crossorigin href="/assets/browser-D8swTOTy.css">
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display&display=swap"
+    rel="stylesheet"
+  />
+  <script type="module" crossorigin src="/assets/index-BeZkSv1p.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DelbYq1W.css">
 </head>
 <body>
   <div id="app"></div>

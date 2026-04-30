@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Retro Board</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--vms-bg);
+      color: var(--vms-text);
+      font-family: var(--vms-font-body);
+      font-size: 14px;
+      min-height: 100dvh;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+    body.is-loading #app { opacity: 0.6; pointer-events: none; transition: opacity 0.1s; }
+    #app { width: 100%; max-width: 1280px; margin: 0 auto; }
+
+    /* Page wraps so sections sit side-by-side */
+    .vms-page { display: flex; flex-wrap: wrap; gap: 1.5rem; }
+    .vms-page__title { width: 100%; }
+    .vms-stat-bar    { width: 100%; }
+
+    /* Sections become columns */
+    .vms-section {
+      flex: 1;
+      min-width: 280px;
+      background: var(--vms-surface);
+      border: 1px solid var(--vms-border);
+      border-radius: var(--vms-radius);
+      padding: 1rem;
+    }
+    .vms-section__heading {
+      font-family: var(--vms-font-head);
+      font-size: 1.15rem;
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0.01em;
+      color: var(--vms-text);
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--vms-border);
+    }
+
+    /* Horizontal "Add" form inside each column */
+    .vms-section .vms-form { flex-direction: row; gap: 0.5rem; }
+    .vms-section .vms-form .vms-field { flex: 1; }
+    .vms-section .vms-form .vms-button--primary { align-self: stretch; }
+
+    /* List items inside sections sit on the inverted surface */
+    .vms-section .vms-list-item { background: var(--vms-surface-2); }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display&display=swap"
+    rel="stylesheet"
+  />
+  <script type="module" crossorigin src="/assets/index-BsZ-cCNn.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DelbYq1W.css">
+</head>
+<body>
+  <div id="app"></div>
+</body>
+</html>

@@ -162,7 +162,7 @@ select.vms-field__input { cursor: pointer; }
 .vms-button--secondary:hover { border-color: var(--vms-accent); background: var(--vms-accent-glow); }
 .vms-button--danger {
   background: transparent;
-  border: 1px solid transparent;
+  border: 1px solid var(--vms-border);
   color: var(--vms-error);
 }
 .vms-button--danger:hover { background: var(--vms-error-glow); border-color: var(--vms-error); }
@@ -293,7 +293,23 @@ select.vms-field__input { cursor: pointer; }
   padding: 0.25rem 0.5rem;
 }
 .vms-modal__close:hover { color: var(--vms-text); }
-.vms-modal__body { padding: 1.25rem; overflow-y: auto; }
+.vms-modal__body {
+  padding: 1.25rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.vms-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--vms-border);
+}
+/* Buttons inside the footer ignore the framework's default align-self so
+   they sit naturally on the footer row. */
+.vms-modal__footer .vms-button--primary { align-self: auto; padding: 0.55rem 1rem; }
 
 /* ── Table ── */
 .vms-table-wrapper {

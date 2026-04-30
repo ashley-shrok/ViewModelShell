@@ -1,41 +1,14 @@
+# .NET build output
+bin/
+obj/
+
 # Node
-**/node_modules/
-**/dist/
-**/.cache/
+node_modules/
+dist/
 
-# .NET
-**/bin/
-**/obj/
-**/*.user
-**/.vs/
-**/ProjectEvaluation/
+# IDE
+.vs/
+*.user
 
-# Build artifacts
-**/wwwroot/assets/
-**/wwwroot/index.html
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Ignore agent ad-hoc creations at repo root
-/*.md
-!/AGENTS.md
-/*.ps1
-/*.csv
-/*.xlsx
-/*.txt
-/*.tsv
-/*.bat
-/*.ts
-/*.py
-/*.csx
-/*.js
-/*.mjs
-/*.sh
-/*.sql
-/*.jpg
-/*.jpeg
-/*.png
-/*.bmp
-/*.gif
+# SQLite DBs created at runtime by demos
+demo/HelpDesk/AspNetCore/helpdesk.db

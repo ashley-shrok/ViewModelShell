@@ -133,6 +133,7 @@ public record ProgressNode(int Value) : ViewNode;
 public record ModalNode(
     string? Title,
     IReadOnlyList<ViewNode> Children,
+    IReadOnlyList<ViewNode>? Footer = null,
     ActionDescriptor? DismissAction = null
 ) : ViewNode;
 

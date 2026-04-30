@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contact Manager</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--vms-bg);
+      color: var(--vms-text);
+      font-family: var(--vms-font-body);
+      font-size: 14px;
+      min-height: 100dvh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 3rem 1rem 4rem;
+    }
+    body.is-loading #app { opacity: 0.6; pointer-events: none; transition: opacity 0.1s; }
+    #app { width: 100%; max-width: 560px; }
+
+    /* List view: horizontal search form. Detail/Add forms (with textarea) keep column. */
+    .vms-form:not(:has(textarea)) { flex-direction: row; gap: 0.5rem; align-items: stretch; }
+    .vms-form:not(:has(textarea)) .vms-field { flex: 1; }
+    .vms-form:not(:has(textarea)) .vms-button--primary { align-self: stretch; }
+
+    /* Scrollable contact list */
+    #contact-list { max-height: 420px; overflow-y: auto; padding-right: 4px; }
+    #contact-list::-webkit-scrollbar { width: 4px; }
+    #contact-list::-webkit-scrollbar-track { background: transparent; }
+    #contact-list::-webkit-scrollbar-thumb { background: var(--vms-border); border-radius: 2px; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display&display=swap"
+    rel="stylesheet"
+  />
+  <script type="module" crossorigin src="/assets/index-DKrLh9wn.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DelbYq1W.css">
+</head>
+<body>
+  <div id="app"></div>
+</body>
+</html>

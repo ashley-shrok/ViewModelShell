@@ -135,6 +135,8 @@ export interface ModalNode {
   type: "modal";
   title?: string;
   children: ViewNode[];
+  /** Optional footer row (typically holds action buttons). Rendered as an inline row at the bottom of the modal. */
+  footer?: ViewNode[];
   /** Dispatched when the close button is clicked. If omitted, no close button is rendered. */
   dismissAction?: ActionEvent;
 }
