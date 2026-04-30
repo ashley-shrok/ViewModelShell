@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".":           "./src/index.ts",
-    "./browser":   "./src/browser.ts",
-    "./styles.css": "./styles/default.css"
+    ".":                       "./src/index.ts",
+    "./browser":               "./src/browser.ts",
+    "./styles.css":            "./styles/default.css",
+    "./themes/dark-blue.css":  "./styles/themes/dark-blue.css",
+    "./themes/light.css":      "./styles/themes/light.css"
   }
 }

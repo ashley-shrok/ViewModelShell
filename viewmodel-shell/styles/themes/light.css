@@ -1,0 +1,22 @@
+/* Light theme. Override on top of the default stylesheet:
+   import "viewmodel-shell/styles.css";
+   import "viewmodel-shell/themes/light.css";
+*/
+:root {
+  --vms-bg:           #f7f7f9;
+  --vms-surface:      #ffffff;
+  --vms-surface-2:    #f0f0f4;
+  --vms-border:       #d8d8e0;
+  --vms-accent:       #5a4ad7;
+  --vms-accent-glow:  rgba(90, 74, 215, 0.10);
+  --vms-accent-dim:   rgba(90, 74, 215, 0.30);
+  --vms-text:         #1a1a22;
+  --vms-text-muted:   #6c6c80;
+  --vms-done-bg:      #ececf2;
+  --vms-done-text:    #9090a0;
+  --vms-error:        #c2453d;
+  --vms-error-glow:   rgba(194, 69, 61, 0.10);
+  --vms-warning:      #b86d10;
+  --vms-priority-high:#c25d10;
+  --vms-color-scheme: light;
+}

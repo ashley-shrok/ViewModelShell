@@ -28,12 +28,14 @@
   --vms-done-text:   #5a5a6e;
   --vms-error:       #e05a5a;
   --vms-error-glow:  rgba(224, 90, 90, 0.12);
-  --vms-warning:     #d4821a;
+  --vms-warning:       #d4821a;
+  --vms-priority-high: #d4651a;
   --vms-radius:      10px;
   --vms-radius-sm:   6px;
   --vms-font-body:   ui-monospace, 'DM Mono', 'Fira Mono', Menlo, monospace;
   --vms-font-head:   'DM Serif Display', Georgia, serif;
   --vms-t:           0.15s ease;
+  --vms-color-scheme: dark;
 }
 
 /* ── Page ── */
@@ -83,6 +85,10 @@
   outline: none;
   transition: border-color var(--vms-t), box-shadow var(--vms-t);
   resize: vertical;
+  /* Tells the browser whether the form-control chrome (date/time pickers,
+     select carets) is for a light or dark background. Drive from a CSS
+     variable so themes can flip it. */
+  color-scheme: var(--vms-color-scheme);
 }
 .vms-field__input::placeholder { color: var(--vms-text-muted); }
 .vms-field__input:focus {
@@ -90,7 +96,7 @@
   box-shadow: 0 0 0 3px var(--vms-accent-glow);
 }
 textarea.vms-field__input { min-height: 80px; }
-select.vms-field__input { cursor: pointer; }
+select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
 
 /* Form-collected checkbox (FieldNode inputType="checkbox") — inline label. */
 .vms-field--checkbox { flex-direction: row; align-items: center; gap: 0.5rem; }
@@ -220,11 +226,16 @@ select.vms-field__input { cursor: pointer; }
 }
 .vms-list-item:hover { border-color: var(--vms-accent-dim); }
 
-/* Common variants — apps can add more by writing .vms-list-item--{name} rules */
+/* Common variants — apps can add more by writing .vms-list-item--{name} rules.
+   Variant accents go on border-left and are preserved through hover. */
 .vms-list-item--done     { background: var(--vms-done-bg); border-color: transparent; opacity: 0.75; }
 .vms-list-item--warning  { border-left: 3px solid var(--vms-warning); }
-.vms-list-item--high     { border-left: 3px solid var(--vms-warning); }
+.vms-list-item--high     { border-left: 3px solid var(--vms-priority-high); }
 .vms-list-item--critical { border-left: 3px solid var(--vms-error); background: rgba(224, 90, 90, 0.04); }
+
+.vms-list-item--warning:hover  { border-left-color: var(--vms-warning); }
+.vms-list-item--high:hover     { border-left-color: var(--vms-priority-high); }
+.vms-list-item--critical:hover { border-left-color: var(--vms-error); }
 
 @keyframes vms-in {
   from { opacity: 0; transform: translateY(4px); }
@@ -247,6 +258,10 @@ select.vms-field__input { cursor: pointer; }
   text-decoration: none;
   border-bottom: 1px solid transparent;
   transition: border-color var(--vms-t);
+  /* Hug the text inside flex containers so the underline doesn't span the
+     full row width on hover. */
+  display: inline-block;
+  align-self: flex-start;
 }
 .vms-link:hover { border-bottom-color: var(--vms-accent); }
 
