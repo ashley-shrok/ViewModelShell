@@ -266,6 +266,33 @@ export class BrowserAdapter implements Adapter {
       if (n.value) ta.value = n.value;
       if (n.required) ta.required = true;
       wrapper.appendChild(ta);
+    } else if (n.inputType === "code") {
+      // Monospaced editable text. Tab inserts a literal tab instead of moving
+      // focus. Apps wanting syntax highlighting attach their own library
+      // (CodeMirror, Monaco) using the .vms-field--code-{language} class hook.
+      wrapper.classList.add("vms-field--code");
+      if (n.language) wrapper.classList.add(`vms-field--code-${n.language}`);
+      const ta = document.createElement("textarea");
+      ta.className = "vms-field__input vms-field__input--code";
+      ta.id = `vms-${n.name}`;
+      ta.name = n.name;
+      ta.spellcheck = false;
+      ta.autocapitalize = "off";
+      ta.autocomplete = "off";
+      ta.setAttribute("autocorrect", "off");
+      if (n.placeholder) ta.placeholder = n.placeholder;
+      if (n.value) ta.value = n.value;
+      if (n.required) ta.required = true;
+      ta.addEventListener("keydown", (e) => {
+        if (e.key === "Tab") {
+          e.preventDefault();
+          const start = ta.selectionStart ?? 0;
+          const end   = ta.selectionEnd   ?? 0;
+          ta.value = ta.value.slice(0, start) + "\t" + ta.value.slice(end);
+          ta.selectionStart = ta.selectionEnd = start + 1;
+        }
+      });
+      wrapper.appendChild(ta);
     } else {
       const inp = document.createElement("input");
       inp.className = "vms-field__input";

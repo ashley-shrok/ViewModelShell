@@ -73,12 +73,18 @@ export interface FieldNode {
     | "text" | "email" | "password" | "number"
     | "date" | "time" | "datetime-local"
     | "textarea" | "hidden" | "file"
-    | "select" | "select-multiple" | "checkbox";
+    | "select" | "select-multiple" | "checkbox"
+    | "code";
   label?: string;
   placeholder?: string;
   value?: string;
   required?: boolean;
   options?: Array<{ value: string; label: string }>;
+  /** Optional language hint for `inputType: "code"`. Emitted as a class
+   *  (`vms-field--code-{language}`) so apps can attach a syntax-highlighter
+   *  library (CodeMirror, Monaco, etc.) — the framework only ships
+   *  monospaced editable text, no coloring. */
+  language?: string;
   /** Dispatched when Enter is pressed (text-like inputs only). Adapter merges { [name]: value } into context. */
   action?: ActionEvent;
 }

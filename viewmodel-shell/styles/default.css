@@ -100,6 +100,18 @@
 textarea.vms-field__input { min-height: 80px; }
 select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
 
+/* Code editor field — monospaced, tab-aware, no spell-check chrome.
+   Apps add syntax highlighting via .vms-field--code-{language} hooks. */
+.vms-field__input--code {
+  font-family: var(--vms-font-body);
+  font-size: 13px;
+  line-height: 1.5;
+  tab-size: 2;
+  min-height: 140px;
+  white-space: pre;
+  overflow: auto;
+}
+
 /* Form-collected checkbox (FieldNode inputType="checkbox") — inline label. */
 .vms-field--checkbox { flex-direction: row; align-items: center; gap: 0.5rem; }
 .vms-field--checkbox .vms-field__input {
