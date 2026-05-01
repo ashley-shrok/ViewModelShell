@@ -182,6 +182,8 @@ function buildVm(): ViewNode {
             ]},
             { type: "field", name: "subscribe",inputType: "checkbox",        label: "Form-collected checkbox (FieldNode)", value: "true" },
             { type: "field", name: "file",     inputType: "file",            label: "File upload" },
+            { type: "field", name: "query",    inputType: "code",            label: "Code (SQL)", language: "sql",
+              value: "select id, title, status\nfrom tickets\nwhere priority in ('high', 'critical')\norder by created_at desc;" },
           ],
         },
       ]},
