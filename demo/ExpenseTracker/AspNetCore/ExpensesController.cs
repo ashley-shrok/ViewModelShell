@@ -3,7 +3,7 @@ namespace ExpenseTracker.Controllers;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using ExpenseTracker.State;
-using ViewModelShell.ViewModels;
+using ViewModelShell;
 
 [ApiController]
 [Route("api/expenses")]

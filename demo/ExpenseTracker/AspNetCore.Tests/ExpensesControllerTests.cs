@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
 using ExpenseTracker.Controllers;
 using ExpenseTracker.State;
-using ViewModelShell.ViewModels;
+using ViewModelShell;
 
 public class ExpensesControllerTests
 {

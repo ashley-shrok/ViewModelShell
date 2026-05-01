@@ -2,15 +2,14 @@
 
 A server-driven UI framework where the wire format is structured enough that agents can build full-stack apps without ever opening a browser and all UI tests are pure unit tests with no browser runtime. The server is a stateless transformer: it takes the client's current UI state plus an action and returns the next state plus a fresh view tree. The client (a thin TypeScript adapter) renders that tree to DOM with no app-specific code, holds the state opaquely, and round-trips it on every dispatch. Persistent/shared data (databases, files) lives server-side; transient UI state lives client-side.
 
-The framework is small enough to copy by hand:
+The framework ships as two version-aligned packages:
 
-| File | Role |
-|---|---|
-| `viewmodel-shell/src/index.ts` | Core: ViewNode types, ActionEvent, Adapter interface, ViewModelShell class |
-| `viewmodel-shell/src/browser.ts` | BrowserAdapter — renders every node type to DOM |
-| `demo/Tasks/AspNetCore/ViewModels.cs` | Backend node records + `ShellResponse<TState>` + `ActionPayload<TState>` |
+| Package | Source | Use |
+|---|---|---|
+| [`@ashley-shrok/viewmodel-shell`](https://www.npmjs.com/package/@ashley-shrok/viewmodel-shell) (npm) | `viewmodel-shell/src/{index,browser}.ts` + `styles/` | Frontend renderer + themes |
+| [`AshleyShrok.ViewModelShell`](https://www.nuget.org/packages/AshleyShrok.ViewModelShell) (NuGet) | `viewmodel-shell-dotnet/ViewModels.cs` | Backend `ViewNode` types under the `ViewModelShell` namespace |
 
-No NuGet or npm packages required — just `System.Text.Json` on the C# side and the two TS files on the frontend side. Copy the C# file into the new project and update the namespace.
+The two packages share major.minor — bumping a `ViewNode` type or wire-format change bumps both sides. Source for both lives in this repo; demos here consume them via local `ProjectReference`/Vite alias to keep the dev loop tight.
 
 The framework is actively developed. **If your app needs a node type, input type, text style, or interaction that doesn't exist — ask rather than working around it.** Workarounds accumulate technical debt and usually indicate a gap worth closing properly.
 

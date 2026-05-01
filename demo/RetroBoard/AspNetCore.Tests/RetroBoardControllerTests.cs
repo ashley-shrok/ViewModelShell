@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
 using RetroBoard.Controllers;
 using RetroBoard.State;
-using ViewModelShell.ViewModels;
+using ViewModelShell;
 
 public class RetroBoardControllerTests
 {

@@ -25,4 +25,8 @@
     <ProjectReference Include="../AspNetCore/ContactManager.csproj" />
   </ItemGroup>
 
+
+  <ItemGroup>
+    <ProjectReference Include="../../../viewmodel-shell-dotnet/AshleyShrok.ViewModelShell.csproj" />
+  </ItemGroup>
 </Project>

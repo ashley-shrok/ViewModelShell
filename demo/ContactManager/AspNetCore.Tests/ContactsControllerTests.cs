@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
 using ContactManager.Controllers;
 using ContactManager.State;
-using ViewModelShell.ViewModels;
+using ViewModelShell;
 
 public class ContactsControllerTests
 {

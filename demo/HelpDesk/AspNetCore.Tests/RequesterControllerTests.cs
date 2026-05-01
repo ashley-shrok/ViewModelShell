@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Primitives;
 using HelpDesk.Controllers;
-using HelpDesk.ViewModels;
+using ViewModelShell;
 
 public class RequesterControllerTests : IDisposable
 {

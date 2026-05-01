@@ -3,7 +3,7 @@ namespace RetroBoard.Controllers;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using RetroBoard.State;
-using ViewModelShell.ViewModels;
+using ViewModelShell;
 
 [ApiController]
 [Route("api/retro")]

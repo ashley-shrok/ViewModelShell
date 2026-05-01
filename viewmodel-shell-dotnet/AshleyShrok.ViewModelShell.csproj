@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ViewModelShell</RootNamespace>
+    <AssemblyName>AshleyShrok.ViewModelShell</AssemblyName>
+    <LangVersion>latest</LangVersion>
+
+    <!-- ── NuGet packaging ─────────────────────────────────────────── -->
+    <PackageId>AshleyShrok.ViewModelShell</PackageId>
+    <Version>0.3.1</Version>
+    <Authors>ashley-shrok</Authors>
+    <Description>Server-driven UI framework — backend types. Wire-format-aligned with the @ashley-shrok/viewmodel-shell npm package: ViewNode hierarchy with [JsonPolymorphic] discriminators, ActionPayload&lt;TState&gt;, ShellResponse&lt;TState&gt;. Drop the package reference into any .NET project to produce the JSON contract that the TypeScript adapter renders.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ashley-shrok/ViewModelShell</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/ashley-shrok/ViewModelShell</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>viewmodel server-driven-ui sdui aspnetcore framework</PackageTags>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace ViewModelShell.ViewModels;
+namespace ViewModelShell;
 
 // ─── Action types ─────────────────────────────────────────────────────────────
 
@@ -91,7 +91,8 @@ public record FieldNode(
     string? Value,
     bool Required = false,
     ActionDescriptor? Action = null,
-    IReadOnlyList<FieldOption>? Options = null
+    IReadOnlyList<FieldOption>? Options = null,
+    string? Language = null
 ) : ViewNode;
 
 public record CheckboxNode(
@@ -131,7 +132,15 @@ public record ModalNode(
     ActionDescriptor? DismissAction = null
 ) : ViewNode;
 
-public record TableColumn(string Key, string Label, bool Sortable = false, bool Filterable = false, string? FilterValue = null, string? LinkLabel = null, bool LinkExternal = false);
+public record TableColumn(
+    string Key,
+    string Label,
+    bool Sortable = false,
+    bool Filterable = false,
+    string? FilterValue = null,
+    string? LinkLabel = null,
+    bool LinkExternal = false
+);
 
 public record TableRow(
     Dictionary<string, string> Cells,

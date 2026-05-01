@@ -2,7 +2,7 @@ namespace HelpDesk.Controllers;
 
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using HelpDesk.ViewModels;
+using ViewModelShell;
 
 [ApiController]
 [Route("api/requester")]

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
 using ViewModelShell.Controllers;
 using ViewModelShell.State;
-using ViewModelShell.ViewModels;
+using ViewModelShell;
 
 public class TasksControllerTests
 {
