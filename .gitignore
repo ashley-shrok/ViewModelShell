@@ -13,5 +13,8 @@ demo/*/AspNetCore/wwwroot/
 .vs/
 *.user
 
+# npm auth tokens — never commit
+.npmrc
+
 # SQLite DBs created at runtime by demos
 demo/HelpDesk/AspNetCore/helpdesk.db
