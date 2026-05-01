@@ -1,6 +1,8 @@
 # @ashley-shrok/viewmodel-shell
 
-Server-driven UI framework. The server returns a JSON tree of typed nodes; a thin TypeScript adapter renders it to DOM. The browser never owns application state — every interaction dispatches a semantic action to a single POST endpoint and the server returns the next state plus a fresh view.
+A server-driven UI framework where the wire format is structured enough that agents can build full-stack apps without ever opening a browser and all UI tests are pure unit tests with no browser runtime.
+
+The server returns a JSON tree of typed nodes; a thin TypeScript adapter renders it to DOM. The browser never owns application state — every interaction dispatches a semantic action to a single POST endpoint and the server returns the next state plus a fresh view.
 
 The frontend is backend-agnostic: it speaks a small JSON contract over a single POST endpoint that takes `multipart/form-data` (with `_action` and `_state` fields). A .NET reference backend ships in the repo, but any language can produce the same contract.
 
