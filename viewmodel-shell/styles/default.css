@@ -40,6 +40,17 @@
   --vms-color-scheme: dark;
 }
 
+/* ── Page chrome ──
+   Apply the theme background to <body> so areas outside .vms-page (the
+   default browser white) don't fight the active theme. Apps that prefer
+   their own page chrome can override these rules. */
+body {
+  background-color: var(--vms-bg);
+  color: var(--vms-text);
+  color-scheme: var(--vms-color-scheme);
+  font-family: var(--vms-font-body);
+}
+
 /* ── Page ── */
 .vms-page { display: flex; flex-direction: column; gap: 1.5rem; color: var(--vms-text); font-family: var(--vms-font-body); }
 .vms-page__title {
