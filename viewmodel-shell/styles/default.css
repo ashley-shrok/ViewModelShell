@@ -34,8 +34,9 @@
   --vms-info:          #4a9eff;
   --vms-radius:      10px;
   --vms-radius-sm:   6px;
-  --vms-font-body:   ui-monospace, 'DM Mono', 'Fira Mono', Menlo, monospace;
-  --vms-font-head:   'DM Serif Display', Georgia, serif;
+  --vms-font-body:   system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --vms-font-head:   system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --vms-font-mono:   ui-monospace, 'Cascadia Code', 'Fira Code', Menlo, Consolas, 'Liberation Mono', monospace;
   --vms-t:           0.15s ease;
   --vms-color-scheme: dark;
 }
@@ -56,7 +57,7 @@ body {
 .vms-page__title {
   font-family: var(--vms-font-head);
   font-size: 2.25rem;
-  font-weight: 400;
+  font-weight: 600;
   letter-spacing: -0.02em;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--vms-border);
@@ -114,7 +115,7 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
 /* Code editor field — monospaced, tab-aware, no spell-check chrome.
    Apps add syntax highlighting via .vms-field--code-{language} hooks. */
 .vms-field__input--code {
-  font-family: var(--vms-font-body);
+  font-family: var(--vms-font-mono);
   font-size: 13px;
   line-height: 1.5;
   tab-size: 2;
@@ -279,7 +280,7 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
 .vms-text--muted         { color: var(--vms-text-muted); font-size: 12px; }
 .vms-text--strikethrough { color: var(--vms-done-text); text-decoration: line-through; }
 .vms-text--error         { color: var(--vms-error); font-size: 13px; }
-.vms-text--pre           { font-family: var(--vms-font-body); white-space: pre; }
+.vms-text--pre           { font-family: var(--vms-font-mono); white-space: pre; }
 
 /* ── Link ── */
 .vms-link {

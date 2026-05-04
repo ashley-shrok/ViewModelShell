@@ -10,7 +10,7 @@
 
     <!-- ── NuGet packaging ─────────────────────────────────────────── -->
     <PackageId>AshleyShrok.ViewModelShell</PackageId>
-    <Version>0.3.1</Version>
+    <Version>0.3.3</Version>
     <Authors>ashley-shrok</Authors>
     <Description>Server-driven UI framework — backend types. Wire-format-aligned with the @ashley-shrok/viewmodel-shell npm package: ViewNode hierarchy with [JsonPolymorphic] discriminators, ActionPayload&lt;TState&gt;, ShellResponse&lt;TState&gt;. Drop the package reference into any .NET project to produce the JSON contract that the TypeScript adapter renders.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
