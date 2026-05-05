@@ -1,4 +1,4 @@
-viewmodel-shell
+## viewmodel-shell
 
 A server-driven UI framework where the wire format is structured enough that agents can build full-stack apps without ever opening a browser and all UI tests are pure unit tests with no browser runtime.
 
