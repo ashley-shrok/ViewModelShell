@@ -194,11 +194,20 @@ export interface ShellOptions {
   onRedirect?: (url: string) => void;
 }
 
+export interface ShellSideEffect {
+  /** "set-local-storage" | "set-session-storage" — unknown types are silently ignored. */
+  type: string;
+  key?: string;
+  value?: string;
+}
+
 export interface ShellResponse {
   vm: ViewNode;
   state: unknown;
   /** When set, the shell navigates to this URL instead of re-rendering. */
   redirect?: string;
+  /** Applied in order before redirect or re-render. */
+  sideEffects?: ShellSideEffect[];
 }
 
 export class ViewModelShell {
@@ -258,6 +267,14 @@ export class ViewModelShell {
       });
       if (!res.ok) throw new Error(`Action '${action.name}' failed: ${res.status}`);
       const body = (await res.json()) as ShellResponse;
+      for (const effect of body.sideEffects ?? []) {
+        if (effect.type === "set-local-storage" && effect.key != null) {
+          localStorage.setItem(effect.key, effect.value ?? "");
+        } else if (effect.type === "set-session-storage" && effect.key != null) {
+          sessionStorage.setItem(effect.key, effect.value ?? "");
+        }
+        // unknown types silently ignored — forward-compatible
+      }
       if (body.redirect) {
         if (this.options.onRedirect) {
           this.options.onRedirect(body.redirect);

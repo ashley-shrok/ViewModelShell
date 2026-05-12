@@ -32,14 +32,27 @@ public record ActionPayload<TState>(
     }
 }
 
+public record ShellSideEffect(string Type, string? Key = null, string? Value = null)
+{
+    public static ShellSideEffect SetLocalStorage(string key, string value) =>
+        new("set-local-storage", key, value);
+
+    public static ShellSideEffect SetSessionStorage(string key, string value) =>
+        new("set-session-storage", key, value);
+}
+
 public record ShellResponse<TState>(
     ViewNode? Vm,
     TState? State,
-    string? Redirect = null
+    string? Redirect = null,
+    IReadOnlyList<ShellSideEffect>? SideEffects = null
 )
 {
     public static ShellResponse<TState> RedirectTo(string url) =>
         new(null, default, url);
+
+    public ShellResponse<TState> WithEffect(ShellSideEffect effect) =>
+        this with { SideEffects = [.. (SideEffects ?? []), effect] };
 }
 
 // ─── ViewNode hierarchy ───────────────────────────────────────────────────────

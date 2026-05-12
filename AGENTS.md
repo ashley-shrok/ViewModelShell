@@ -220,6 +220,38 @@ Wire format — when the server returns a redirect, `vm` and `state` are omitted
 ```
 Normal responses that don't include `redirect` are unaffected.
 
+### Client side-effects
+
+When a server action needs to reach past the render loop and touch something on the client environment — writing to storage, seeding a flag — return a `sideEffects` array. The shell applies effects in order before the redirect or re-render fires.
+
+**C#:**
+```csharp
+// Redirect + write a JWT to localStorage (e.g. auth login)
+return ShellResponse<LoginState>.RedirectTo(returnUrl ?? "/app")
+    .WithEffect(ShellSideEffect.SetLocalStorage("hecate_jwt", token));
+
+// Side effect without redirect (re-renders normally after applying effects)
+return new ShellResponse<SomeState>(BuildVm(state), state)
+    .WithEffect(ShellSideEffect.SetSessionStorage("draft_id", id));
+```
+
+Built-in effect types:
+
+| Factory | `type` string | What it does |
+|---|---|---|
+| `ShellSideEffect.SetLocalStorage(key, value)` | `"set-local-storage"` | `localStorage.setItem(key, value)` |
+| `ShellSideEffect.SetSessionStorage(key, value)` | `"set-session-storage"` | `sessionStorage.setItem(key, value)` |
+
+Unknown `type` values are silently ignored by the shell — forward-compatible if new effect types are added later.
+
+Wire format:
+```json
+{
+  "sideEffects": [{ "type": "set-local-storage", "key": "hecate_jwt", "value": "eyJ..." }],
+  "redirect": "/app"
+}
+```
+
 ### Frontend wiring
 
 ```typescript
