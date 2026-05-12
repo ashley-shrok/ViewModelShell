@@ -424,7 +424,7 @@ export class BrowserAdapter implements Adapter {
     backdrop.className = "vms-modal-backdrop";
 
     const modal = document.createElement("div");
-    modal.className = "vms-modal";
+    modal.className = `vms-modal${n.size ? ` vms-modal--${n.size}` : ""}`;
     modal.setAttribute("role", "dialog");
     modal.setAttribute("aria-modal", "true");
 

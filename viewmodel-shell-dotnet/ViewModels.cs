@@ -151,7 +151,8 @@ public record ModalNode(
     string? Title,
     IReadOnlyList<ViewNode> Children,
     IReadOnlyList<ViewNode>? Footer = null,
-    ActionDescriptor? DismissAction = null
+    ActionDescriptor? DismissAction = null,
+    string? Size = null
 ) : ViewNode;
 
 public record TableColumn(

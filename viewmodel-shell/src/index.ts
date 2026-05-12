@@ -145,6 +145,9 @@ export interface ModalNode {
   footer?: ViewNode[];
   /** Dispatched when the close button is clicked. If omitted, no close button is rendered. */
   dismissAction?: ActionEvent;
+  /** Width variant. Default is "medium" (~520px). "wide" (~800px) suits tables/dashboards;
+   *  "fullscreen" (~95vw/95vh) for content that needs the whole viewport. */
+  size?: "narrow" | "medium" | "wide" | "fullscreen";
 }
 
 export interface TableColumn {

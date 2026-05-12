@@ -321,6 +321,12 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
   display: flex;
   flex-direction: column;
 }
+/* Size variants — pick via ModalNode.size = "narrow" | "wide" | "fullscreen".
+   Default (no modifier) = ~520px, the same as .vms-modal--medium. */
+.vms-modal--narrow     { max-width: 400px; }
+.vms-modal--medium     { max-width: 520px; }
+.vms-modal--wide       { max-width: 800px; }
+.vms-modal--fullscreen { max-width: 95vw; max-height: 95vh; }
 .vms-modal__header {
   display: flex;
   align-items: center;
@@ -365,7 +371,9 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
 .vms-table-wrapper {
   border: 1px solid var(--vms-border);
   border-radius: var(--vms-radius);
-  overflow: hidden;
+  /* Horizontal scroll when the table is wider than its container (e.g. a
+     7-column table inside a medium modal). Always-reachable beats clipped. */
+  overflow-x: auto;
 }
 .vms-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .vms-table__th {
