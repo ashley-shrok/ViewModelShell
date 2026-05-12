@@ -194,6 +194,32 @@ public class YourController : ControllerBase
 
 Full examples: `demo/Tasks/AspNetCore/TasksController.cs`, `demo/HelpDesk/AspNetCore/AgentController.cs`.
 
+### Server-initiated redirect
+
+When an action needs to hand the browser off to a different URL (login completion, OAuth callback, post-onboarding routing), return `ShellResponse<TState>.RedirectTo(url)` instead of a normal render response. The shell will navigate the browser instead of re-rendering.
+
+**C# (controller action):**
+```csharp
+case "login":
+    var ok = _auth.Validate(Str("username"), Str("password"));
+    if (!ok) { state = state with { Error = "Invalid credentials" }; break; }
+    return ShellResponse<LoginState>.RedirectTo(returnUrl ?? "/app");
+```
+
+**TypeScript (optional override):** By default the shell does `window.location.href = url`. Override via `ShellOptions.onRedirect` when the default isn't right (e.g. SPA router, test environment):
+```typescript
+const shell = new ViewModelShell({
+  // ...
+  onRedirect: (url) => router.navigate(url),
+});
+```
+
+Wire format — when the server returns a redirect, `vm` and `state` are omitted:
+```json
+{ "redirect": "/dashboard" }
+```
+Normal responses that don't include `redirect` are unaffected.
+
 ### Frontend wiring
 
 ```typescript

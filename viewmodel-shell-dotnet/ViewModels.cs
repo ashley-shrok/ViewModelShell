@@ -32,7 +32,15 @@ public record ActionPayload<TState>(
     }
 }
 
-public record ShellResponse<TState>(ViewNode Vm, TState State);
+public record ShellResponse<TState>(
+    ViewNode? Vm,
+    TState? State,
+    string? Redirect = null
+)
+{
+    public static ShellResponse<TState> RedirectTo(string url) =>
+        new(null, default, url);
+}
 
 // ─── ViewNode hierarchy ───────────────────────────────────────────────────────
 

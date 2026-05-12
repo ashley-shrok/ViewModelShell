@@ -190,11 +190,15 @@ export interface ShellOptions {
   onLoading?: (loading: boolean) => void;
   /** Called before each dispatch — merge the returned headers into every POST request. */
   getRequestHeaders?: () => Record<string, string> | Promise<Record<string, string>>;
+  /** Called when the server responds with a redirect URL. Defaults to window.location.href = url. */
+  onRedirect?: (url: string) => void;
 }
 
 export interface ShellResponse {
   vm: ViewNode;
   state: unknown;
+  /** When set, the shell navigates to this URL instead of re-rendering. */
+  redirect?: string;
 }
 
 export class ViewModelShell {
@@ -254,6 +258,14 @@ export class ViewModelShell {
       });
       if (!res.ok) throw new Error(`Action '${action.name}' failed: ${res.status}`);
       const body = (await res.json()) as ShellResponse;
+      if (body.redirect) {
+        if (this.options.onRedirect) {
+          this.options.onRedirect(body.redirect);
+        } else {
+          window.location.href = body.redirect;
+        }
+        return;
+      }
       this.currentVm = body.vm;
       this.currentState = body.state;
       adapter.render(body.vm, (a) => this.dispatch(a));
