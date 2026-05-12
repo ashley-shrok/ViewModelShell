@@ -345,6 +345,11 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
   flex-direction: column;
   gap: 0.75rem;
 }
+/* Children of the modal body must not be flex-shrunk below their natural
+   height — otherwise a table-wrapper (overflow:hidden) inside the modal
+   gets squeezed and clips rows. The modal body's overflow-y:auto handles
+   the scroll. */
+.vms-modal__body > * { flex-shrink: 0; }
 .vms-modal__footer {
   display: flex;
   justify-content: flex-end;
