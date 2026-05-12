@@ -45,7 +45,8 @@ public record ShellResponse<TState>(
     ViewNode? Vm,
     TState? State,
     string? Redirect = null,
-    IReadOnlyList<ShellSideEffect>? SideEffects = null
+    IReadOnlyList<ShellSideEffect>? SideEffects = null,
+    int? NextPollIn = null
 )
 {
     public static ShellResponse<TState> RedirectTo(string url) =>

@@ -192,6 +192,10 @@ export interface ShellOptions {
   getRequestHeaders?: () => Record<string, string> | Promise<Record<string, string>>;
   /** Called when the server responds with a redirect URL. Defaults to window.location.href = url. */
   onRedirect?: (url: string) => void;
+  /** When set, the shell dispatches a "poll" action at this interval (ms) after every load/dispatch.
+   *  The server can override the next interval via ShellResponse.nextPollIn, or stop polling by
+   *  omitting nextPollIn when no pollInterval is configured. */
+  pollInterval?: number;
 }
 
 export interface ShellSideEffect {
@@ -208,17 +212,21 @@ export interface ShellResponse {
   redirect?: string;
   /** Applied in order before redirect or re-render. */
   sideEffects?: ShellSideEffect[];
+  /** When set, schedules the next poll at this delay (ms). Overrides pollInterval for one tick. */
+  nextPollIn?: number;
 }
 
 export class ViewModelShell {
   private currentVm: ViewNode | null = null;
   private currentState: unknown = null;
   private dispatching = false;
+  private pollTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private options: ShellOptions) {}
 
   async load(params?: Record<string, string>): Promise<void> {
     const { endpoint, adapter, onError, onLoading } = this.options;
+    this.stopPolling();
     try {
       onLoading?.(true);
       const url = params ? `${endpoint}?${new URLSearchParams(params)}` : endpoint;
@@ -229,6 +237,7 @@ export class ViewModelShell {
       this.currentVm = body.vm;
       this.currentState = body.state;
       adapter.render(body.vm, (action) => this.dispatch(action));
+      this.schedulePoll(body.nextPollIn);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       onError ? onError(error) : console.error("[ViewModelShell]", error);
@@ -237,9 +246,9 @@ export class ViewModelShell {
     }
   }
 
-  async dispatch(action: ActionEvent): Promise<void> {
+  async dispatch(action: ActionEvent, silent = false): Promise<void> {
     if (this.dispatching) return;
-    const { actionEndpoint, adapter, onError, onLoading } = this.options;
+    const { actionEndpoint, onError, onLoading } = this.options;
     if (this.currentState === null) {
       const err = new Error(
         `Cannot dispatch '${action.name}' before initial load completes. ` +
@@ -250,7 +259,7 @@ export class ViewModelShell {
     }
     try {
       this.dispatching = true;
-      onLoading?.(true);
+      if (!silent) onLoading?.(true);
       const form = new FormData();
       form.append("_action", JSON.stringify({ name: action.name, context: action.context ?? {} }));
       form.append("_state", JSON.stringify(this.currentState));
@@ -266,40 +275,58 @@ export class ViewModelShell {
         body: form,
       });
       if (!res.ok) throw new Error(`Action '${action.name}' failed: ${res.status}`);
-      const body = (await res.json()) as ShellResponse;
-      for (const effect of body.sideEffects ?? []) {
-        if (effect.type === "set-local-storage" && effect.key != null) {
-          localStorage.setItem(effect.key, effect.value ?? "");
-        } else if (effect.type === "set-session-storage" && effect.key != null) {
-          sessionStorage.setItem(effect.key, effect.value ?? "");
-        }
-        // unknown types silently ignored — forward-compatible
-      }
-      if (body.redirect) {
-        if (this.options.onRedirect) {
-          this.options.onRedirect(body.redirect);
-        } else {
-          window.location.href = body.redirect;
-        }
-        return;
-      }
-      this.currentVm = body.vm;
-      this.currentState = body.state;
-      adapter.render(body.vm, (a) => this.dispatch(a));
+      this.processResponse((await res.json()) as ShellResponse);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       onError ? onError(error) : console.error("[ViewModelShell]", error);
     } finally {
       this.dispatching = false;
-      onLoading?.(false);
+      if (!silent) onLoading?.(false);
     }
   }
 
-  getCurrentVm(): ViewNode | null {
-    return this.currentVm;
+  /** Feed a pre-parsed ShellResponse into the shell — for SSE/WebSocket integrations. */
+  push(response: ShellResponse): void {
+    if (this.dispatching) return;
+    this.processResponse(response);
   }
 
-  getCurrentState(): unknown {
-    return this.currentState;
+  stopPolling(): void {
+    if (this.pollTimer) { clearTimeout(this.pollTimer); this.pollTimer = null; }
+  }
+
+  getCurrentVm(): ViewNode | null { return this.currentVm; }
+  getCurrentState(): unknown { return this.currentState; }
+
+  private processResponse(body: ShellResponse): void {
+    for (const effect of body.sideEffects ?? []) {
+      if (effect.type === "set-local-storage" && effect.key != null) {
+        localStorage.setItem(effect.key, effect.value ?? "");
+      } else if (effect.type === "set-session-storage" && effect.key != null) {
+        sessionStorage.setItem(effect.key, effect.value ?? "");
+      }
+    }
+    if (body.redirect) {
+      if (this.options.onRedirect) {
+        this.options.onRedirect(body.redirect);
+      } else {
+        window.location.href = body.redirect;
+      }
+      return;
+    }
+    this.currentVm = body.vm!;
+    this.currentState = body.state;
+    this.options.adapter.render(body.vm!, (a) => this.dispatch(a));
+    this.schedulePoll(body.nextPollIn);
+  }
+
+  private schedulePoll(nextPollIn?: number): void {
+    const delay = nextPollIn ?? this.options.pollInterval;
+    if (delay == null) return;
+    if (this.pollTimer) clearTimeout(this.pollTimer);
+    this.pollTimer = setTimeout(() => {
+      this.pollTimer = null;
+      this.dispatch({ name: "poll" }, true);
+    }, delay);
   }
 }
