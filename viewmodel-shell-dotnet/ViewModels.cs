@@ -30,6 +30,25 @@ public record ActionPayload<TState>(
         var state = JsonSerializer.Deserialize<TState>(stateJson, _parseOpts)!;
         return new ActionPayload<TState>(name, context, state);
     }
+
+    /// <summary>
+    /// Parses a flat JSON body shaped { "name": "...", "context": {...}, "state": {...} }.
+    /// Use this when a controller accepts application/json alongside multipart/form-data —
+    /// removes the two-layer escaping that multipart requires and makes curl/agent callers ergonomic.
+    /// </summary>
+    public static ActionPayload<TState> ParseJson(string jsonBody)
+    {
+        var root = JsonSerializer.Deserialize<JsonElement>(jsonBody, _parseOpts);
+        var name = root.GetProperty("name").GetString()!;
+        var context = root.TryGetProperty("context", out var ctxEl)
+                      && ctxEl.ValueKind == JsonValueKind.Object
+            ? ctxEl.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone())
+            : null;
+        var state = root.TryGetProperty("state", out var stateEl)
+            ? JsonSerializer.Deserialize<TState>(stateEl.GetRawText(), _parseOpts)!
+            : default!;
+        return new ActionPayload<TState>(name, context, state);
+    }
 }
 
 public record ShellSideEffect(string Type, string? Key = null, string? Value = null)

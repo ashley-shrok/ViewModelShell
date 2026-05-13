@@ -252,6 +252,98 @@ Wire format:
 }
 ```
 
+### Polling and push
+
+Two mechanisms for server-initiated updates without user input:
+
+**Built-in polling.** Set `pollInterval` on the TypeScript shell, and the framework dispatches a `"poll"` action on that cadence after every load/dispatch. The server handles `poll` like any other action — read current state, return updated state + view. Polls run silently (no `onLoading` fires).
+
+```typescript
+new ViewModelShell({ pollInterval: 1000, /* ... */ });
+```
+
+```csharp
+case "poll":
+    state = state with { Messages = _db.GetMessages() };
+    break;
+```
+
+**Server-controlled cadence.** `NextPollIn` on the response overrides the next interval, or stops polling entirely:
+
+```csharp
+return new ShellResponse<JobState>(BuildVm(state), state) { NextPollIn = 2000 };
+```
+
+**External push (`shell.push(response)`).** Feed a pre-parsed response into the shell from outside the action loop — for SSE/WebSocket integrations:
+
+```typescript
+new EventSource("/api/chat/stream").onmessage = e => shell.push(JSON.parse(e.data));
+```
+
+**Critical pattern — drive stop/continue from a state field, not a server-side check.**
+
+The natural-seeming approach for one-shot tasks is "return `NextPollIn` while the row's status is non-terminal, omit it when terminal." This works for slow-completing tasks but breaks silently for fast-completion paths: if the task finishes inside the request that started it, the first response carries the terminal state but no `NextPollIn` — so the client never starts polling, never re-renders, and the page freezes on the pre-completion view. Add a `PollingDone` (or similar) boolean to the state record, drive `NextPollIn` from that, and make sure the server emits `NextPollIn` at least once even when the task completes synchronously — the client needs that one tick to render the terminal state.
+
+```csharp
+state = state with { Job = job, PollingDone = job.Status is "complete" or "failed" };
+return new ShellResponse<MyState>(BuildVm(state), state)
+{
+    NextPollIn = state.PollingDone ? 100 : 2000  // one final tick to render terminal state
+};
+```
+
+Draft text, focus, caret position, and scroll positions are all preserved across poll/push re-renders — same as user-action re-renders.
+
+### Action payload — JSON body (curl/agent ergonomics)
+
+The TypeScript shell always submits actions as `multipart/form-data` (because of file uploads). For human-driven or agent-driven callers using curl/PowerShell, multipart's two-layer escaping (JSON inside form field inside multipart) is friction. Controllers can opt into accepting `application/json` as a fallback content-type using `ActionPayload<TState>.ParseJson(jsonBody)`:
+
+```csharp
+[HttpPost("action")]
+[Consumes("multipart/form-data", "application/json")]
+public async Task<ActionResult<ShellResponse<MyState>>> Action()
+{
+    ActionPayload<MyState> payload;
+    if (Request.HasJsonContentType())
+    {
+        using var reader = new StreamReader(Request.Body);
+        payload = ActionPayload<MyState>.ParseJson(await reader.ReadToEndAsync());
+    }
+    else
+    {
+        payload = ActionPayload<MyState>.Parse(
+            Request.Form["_action"].ToString(),
+            Request.Form["_state"].ToString());
+    }
+    // ... rest of action
+}
+```
+
+JSON body shape — flat, no nested escaping:
+```json
+{ "name": "add", "context": { "title": "X" }, "state": { ... } }
+```
+
+`curl --json '{"name":"poll","state":{...}}' /api/your/action` just works. File-bearing actions still need multipart — JSON support is an opt-in convenience, not a replacement.
+
+### ShellResponse&lt;TState&gt; reference
+
+Every field except `Vm` and `State` is optional. The combination determines what the shell does on receipt:
+
+| Field | Type | Effect |
+|---|---|---|
+| `Vm` | `ViewNode?` | The view tree to render. Omit (null) when redirecting. |
+| `State` | `TState?` | The new client state. Omit (null) when redirecting. |
+| `Redirect` | `string?` | When set, the shell navigates to this URL instead of re-rendering. `Vm` and `State` are ignored. |
+| `SideEffects` | `IReadOnlyList<ShellSideEffect>?` | Applied in order before redirect/render. Built-in types: `"set-local-storage"`, `"set-session-storage"`. Unknown types are silently ignored (forward-compatible). |
+| `NextPollIn` | `int?` (ms) | Schedules the next poll at this delay. Falls back to `ShellOptions.pollInterval` if omitted. **Omit on a response with no `pollInterval` set to stop polling.** See the polling section for the fast-completion footgun. |
+
+Factory methods on `ShellResponse<TState>`:
+- `ShellResponse<T>.RedirectTo(url)` — redirect response with `Vm`/`State` null.
+- `response.WithEffect(ShellSideEffect.SetLocalStorage(key, value))` — fluent side-effect append.
+
+`ShellSideEffect` factories: `SetLocalStorage(key, value)`, `SetSessionStorage(key, value)`.
+
 ### Frontend wiring
 
 ```typescript
