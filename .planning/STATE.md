@@ -82,6 +82,12 @@ Progress: [ Phase 1 ██████████ ][ Phase 2 ██████
 
 (None)
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260515-gru | Add CopyButtonNode (copy text to clipboard) | 2026-05-15 | 8c8498c | [260515-gru-add-copybuttonnode-copy-text-to-clipboar](./quick/260515-gru-add-copybuttonnode-copy-text-to-clipboar/) |
+
 ### TODOs
 
 - ~~Plan 01-02: add the grep-based CI guard (D-08/D-10) AND the adapter-level jsdom/vitest test (D-12.2)~~ — DONE; D-12 dual gate verified locally (parity 7/7 + adapter test green) and CI-enforced
