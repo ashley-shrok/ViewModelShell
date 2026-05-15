@@ -140,6 +140,12 @@ function buildVm(): ViewNode {
         { type: "button", label: "Danger",    action: { name: "noop" }, variant: "danger" },
       ]},
 
+      // ── Copy button ───────────────────────────────────────────────
+      { type: "section", heading: "Copy button (clipboard, no dispatch)", children: [
+        { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!" },
+        { type: "copy-button", text: "console.log('hello from CopyButtonNode')" },
+      ]},
+
       // ── Links ─────────────────────────────────────────────────────
       { type: "section", heading: "Links", children: [
         { type: "link", label: "Internal link to a doc", href: "#docs" },
