@@ -8,7 +8,7 @@ export interface ActionEvent {
 
 // ─── Adapter interface ────────────────────────────────────────────────────────
 // Implement this to target a new platform (browser, mobile, terminal, …).
-// The core never references HTMLElement, document, or any platform global —
+// The core references zero platform globals (this is a CI-enforced invariant) —
 // platform side-effects are delegated through this seam, exactly like render().
 // `render` is required; `navigate`/`storage`/`transport` are optional capability
 // verbs a target opts into. A target that handles redirects must implement
@@ -18,7 +18,7 @@ export interface ActionEvent {
 
 export interface Adapter {
   render(vm: ViewNode, onAction: (action: ActionEvent) => void): void;
-  /** Hand the platform off to a URL (browser: window.location.href = url).
+  /** Hand the platform off to a URL (the browser adapter sets the page location).
    *  No safe no-op exists — if a redirect arrives and neither ShellOptions.onRedirect
    *  nor this method is available, the shell fails loudly. */
   navigate?(url: string): void;
@@ -215,7 +215,7 @@ export interface ShellOptions {
   onLoading?: (loading: boolean) => void;
   /** Called before each dispatch — merge the returned headers into every POST request. */
   getRequestHeaders?: () => Record<string, string> | Promise<Record<string, string>>;
-  /** Called when the server responds with a redirect URL. Defaults to window.location.href = url. */
+  /** Called when the server responds with a redirect URL. When unset, falls back to adapter.navigate(url); if the adapter has no navigate, the shell fails loudly. */
   onRedirect?: (url: string) => void;
   /** When set, the shell dispatches a "poll" action at this interval (ms) after every load/dispatch.
    *  The server can override the next interval via ShellResponse.nextPollIn, or stop polling by
@@ -323,19 +323,35 @@ export class ViewModelShell {
   getCurrentVm(): ViewNode | null { return this.currentVm; }
   getCurrentState(): unknown { return this.currentState; }
 
+  private failCapability(capability: "navigate" | "storage", detail: string): void {
+    const err = new Error(
+      `[ViewModelShell] Adapter is missing the "${capability}" capability but the ` +
+      `server response requires it (${detail}). This is a hard failure, not a no-op: ` +
+      `a silently-dropped ${capability} (e.g. an auth token never persisted, or a ` +
+      `redirect that never happens) is a correctness/security bug. Implement ` +
+      `${capability}() on your Adapter, or (for redirect) pass ShellOptions.onRedirect.`
+    );
+    this.options.onError ? this.options.onError(err) : console.error("[ViewModelShell]", err);
+  }
+
   private processResponse(body: ShellResponse): void {
+    const adapter = this.options.adapter;
     for (const effect of body.sideEffects ?? []) {
       if (effect.type === "set-local-storage" && effect.key != null) {
-        localStorage.setItem(effect.key, effect.value ?? "");
+        if (adapter.storage) adapter.storage("local", effect.key, effect.value ?? "");
+        else this.failCapability("storage", `side-effect "${effect.type}" key="${effect.key}"`);
       } else if (effect.type === "set-session-storage" && effect.key != null) {
-        sessionStorage.setItem(effect.key, effect.value ?? "");
+        if (adapter.storage) adapter.storage("session", effect.key, effect.value ?? "");
+        else this.failCapability("storage", `side-effect "${effect.type}" key="${effect.key}"`);
       }
     }
     if (body.redirect) {
       if (this.options.onRedirect) {
         this.options.onRedirect(body.redirect);
+      } else if (adapter.navigate) {
+        adapter.navigate(body.redirect);
       } else {
-        window.location.href = body.redirect;
+        this.failCapability("navigate", `redirect to "${body.redirect}"`);
       }
       return;
     }
