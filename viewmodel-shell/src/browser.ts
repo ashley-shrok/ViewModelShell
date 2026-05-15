@@ -104,6 +104,16 @@ export class BrowserAdapter implements Adapter {
         // Explicitly NEVER (0, 0).
         if (knownTotal > 0) onUploadProgress(knownTotal, knownTotal);
         else onUploadProgress(lastLoaded, lastLoaded);
+        // D-08: status 0 means a network-level failure (CORS rejection / blocked
+        // request) where onload fired but onerror did not. The Fetch Response
+        // constructor throws RangeError for status 0, and that throw would land
+        // OUTSIDE the Promise executor (never settling it → dispatch() hangs).
+        // Reject instead so dispatch()'s try/catch routes it to onError —
+        // byte-identical to fetch, which rejects on CORS/network failure.
+        if (xhr.status === 0) {
+          reject(new Error(`Transport request to ${input} failed (status 0)`));
+          return;
+        }
         // D-08: resolve a real Response so dispatch()'s res.ok / await res.json()
         // / processResponse() is byte-identical to the fetch path.
         resolve(
