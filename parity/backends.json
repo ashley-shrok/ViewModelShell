@@ -123,6 +123,16 @@
       "baseUrl": "http://localhost:5012",
       "ready": "/api/probe",
       "fixtures": ["feature-probe"]
+    },
+    {
+      "name": "node-probe",
+      "cwd": "../demo/FeatureProbe-bun",
+      "start": "node",
+      "args": ["--import", "tsx", "server-node.ts"],
+      "env": { "PORT": "5013" },
+      "baseUrl": "http://localhost:5013",
+      "ready": "/api/probe",
+      "fixtures": ["feature-probe"]
     }
   ]
 }
