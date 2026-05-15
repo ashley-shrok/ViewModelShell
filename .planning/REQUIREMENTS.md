@@ -16,7 +16,7 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 ### Upload Progress Through The Seam (Phase 2)
 
-- [ ] **UPLOAD-01**: `ShellOptions.onUploadProgress(sent,total)` implemented as the first feature built *through* the transport capability — the XHR binding lives in `BrowserAdapter`, never in core; activates only when a dispatch carries files AND the callback is set; response funnels through the shared `processResponse()` so only the send differs
+- [x] **UPLOAD-01**: `ShellOptions.onUploadProgress(sent,total)` implemented as the first feature built *through* the transport capability — the XHR binding lives in `BrowserAdapter`, never in core; activates only when a dispatch carries files AND the callback is set; response funnels through the shared `processResponse()` so only the send differs
 
 ### Milestone Closeout (Phase 2)
 
@@ -43,7 +43,7 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 | AGNOSTIC-02 | Phase 1 | Complete |
 | AGNOSTIC-03 | Phase 1 | Complete |
 | AGNOSTIC-04 | Phase 1 | Complete |
-| UPLOAD-01 | Phase 2 | Pending |
+| UPLOAD-01 | Phase 2 | Complete |
 | MIGRATE-01 | Phase 2 | Pending |
 
 **Coverage:**

@@ -44,7 +44,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Implement UPLOAD-01: ShellOptions.onUploadProgress + dispatch() transport-routing branch (core, additive) + BrowserAdapter.transport XHR upload-progress binding
+- [x] 02-01-PLAN.md — Implement UPLOAD-01: ShellOptions.onUploadProgress + dispatch() transport-routing branch (core, additive) + BrowserAdapter.transport XHR upload-progress binding
 - [ ] 02-02-PLAN.md — Net-new mock-XHR jsdom/vitest test proving D-14 (a)-(e) (UPLOAD-01 verification)
 - [ ] 02-03-PLAN.md — MIGRATE-01: npm 0.3.13 patch bump + copy-pasteable MIGRATION.md + README pointer + full parity/milestone gate
 
