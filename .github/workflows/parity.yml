@@ -28,6 +28,16 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Enforce core platform-agnosticism (AGNOSTIC-03)
+        run: |
+          cd viewmodel-shell
+          npm install
+          npm run build
+          npm run check:core-globals
+
+      - name: Framework adapter-seam tests (D-12.2 relocation proof)
+        run: cd viewmodel-shell && npx vitest run
+
       - name: Build .NET demos
         run: |
           dotnet build demo/Tasks/AspNetCore/ViewModelShell.csproj
