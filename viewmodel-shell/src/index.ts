@@ -217,6 +217,10 @@ export interface ShellOptions {
   getRequestHeaders?: () => Record<string, string> | Promise<Record<string, string>>;
   /** Called when the server responds with a redirect URL. When unset, falls back to adapter.navigate(url); if the adapter has no navigate, the shell fails loudly. */
   onRedirect?: (url: string) => void;
+  /** Called during a files-bearing dispatch when the plugged-in adapter implements transport().
+   *  sent = bytes uploaded so far; total = total bytes, or 0 when the total is indeterminate
+   *  (guard total > 0 before computing sent / total). Never fires on the fetch fallback path. */
+  onUploadProgress?: (sent: number, total: number) => void;
   /** When set, the shell dispatches a "poll" action at this interval (ms) after every load/dispatch.
    *  The server can override the next interval via ShellResponse.nextPollIn, or stop polling by
    *  omitting nextPollIn when no pollInterval is configured. */
@@ -294,11 +298,20 @@ export class ViewModelShell {
         }
       }
       const extraHeaders = this.options.getRequestHeaders ? await this.options.getRequestHeaders() : {};
-      const res = await fetch(actionEndpoint, {
+      const adapter = this.options.adapter;
+      const init = {
         method: "POST",
         headers: { Accept: "application/json", ...extraHeaders },
         body: form,
-      });
+      };
+      let res: Response;
+      if (action.files && this.options.onUploadProgress && adapter.transport) {
+        res = await adapter.transport(actionEndpoint, init, {
+          onUploadProgress: this.options.onUploadProgress,
+        });
+      } else {
+        res = await fetch(actionEndpoint, init);
+      }
       if (!res.ok) throw new Error(`Action '${action.name}' failed: ${res.status}`);
       this.processResponse((await res.json()) as ShellResponse);
     } catch (err) {
