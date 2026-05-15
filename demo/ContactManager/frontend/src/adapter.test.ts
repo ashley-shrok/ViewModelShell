@@ -10,10 +10,17 @@ function render(vm: ViewNode) {
   return { container, onAction };
 }
 
-// ── Field with action (real-time search) ─────────────────────────────────────
+// ── Field with action ────────────────────────────────────────────────────────
+// A FieldNode with an `action` dispatches on Enter keydown (not on every
+// keystroke). Textareas intentionally do not wire an action — Enter is a
+// newline there, so per-keystroke/Enter dispatch would be wrong.
+
+function enter(el: HTMLElement) {
+  el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+}
 
 describe("BrowserAdapter — field with action", () => {
-  it("dispatches action on input event with field value in context", () => {
+  it("dispatches action on Enter with field value in context", () => {
     const { container, onAction } = render({
       type: "form",
       submitAction: { name: "search" },
@@ -23,11 +30,11 @@ describe("BrowserAdapter — field with action", () => {
     });
     const inp = container.querySelector<HTMLInputElement>("input[name=query]")!;
     inp.value = "alice";
-    inp.dispatchEvent(new Event("input", { bubbles: true }));
+    enter(inp);
     expect(onAction).toHaveBeenCalledWith({ name: "search", context: { query: "alice" } });
   });
 
-  it("merges existing action context with field value", () => {
+  it("merges existing action context with field value on Enter", () => {
     const { container, onAction } = render({
       type: "form",
       submitAction: { name: "search" },
@@ -42,11 +49,26 @@ describe("BrowserAdapter — field with action", () => {
     });
     const inp = container.querySelector<HTMLInputElement>("input[name=query]")!;
     inp.value = "bob";
-    inp.dispatchEvent(new Event("input", { bubbles: true }));
+    enter(inp);
     expect(onAction).toHaveBeenCalledWith({ name: "search", context: { source: "list", query: "bob" } });
   });
 
-  it("does not add input listener when field has no action", () => {
+  it("does not dispatch on keystrokes before Enter", () => {
+    const { container, onAction } = render({
+      type: "form",
+      submitAction: { name: "search" },
+      children: [
+        { type: "field", name: "query", inputType: "text", action: { name: "search" } },
+      ],
+    });
+    const inp = container.querySelector<HTMLInputElement>("input[name=query]")!;
+    inp.value = "ali";
+    inp.dispatchEvent(new Event("input", { bubbles: true }));
+    inp.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true }));
+    expect(onAction).not.toHaveBeenCalled();
+  });
+
+  it("does not dispatch when field has no action", () => {
     const { container, onAction } = render({
       type: "form",
       submitAction: { name: "submit" },
@@ -54,11 +76,11 @@ describe("BrowserAdapter — field with action", () => {
     });
     const inp = container.querySelector<HTMLInputElement>("input[name=title]")!;
     inp.value = "hello";
-    inp.dispatchEvent(new Event("input", { bubbles: true }));
+    enter(inp);
     expect(onAction).not.toHaveBeenCalled();
   });
 
-  it("dispatches action on textarea input event", () => {
+  it("does not wire an action on a textarea (Enter is a newline there)", () => {
     const { container, onAction } = render({
       type: "form",
       submitAction: { name: "save" },
@@ -69,7 +91,8 @@ describe("BrowserAdapter — field with action", () => {
     const ta = container.querySelector<HTMLTextAreaElement>("textarea[name=notes]")!;
     ta.value = "some notes";
     ta.dispatchEvent(new Event("input", { bubbles: true }));
-    expect(onAction).toHaveBeenCalledWith({ name: "autosave", context: { notes: "some notes" } });
+    enter(ta);
+    expect(onAction).not.toHaveBeenCalled();
   });
 });
 
