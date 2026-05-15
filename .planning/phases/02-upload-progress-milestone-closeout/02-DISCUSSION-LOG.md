@@ -5,7 +5,7 @@
 
 **Date:** 2026-05-15
 **Phase:** 02-upload-progress-milestone-closeout
-**Mode:** `--auto` (non-interactive — recommended option auto-selected per area, single pass)
+**Mode:** `--auto` (recommended option auto-selected per area, single pass) — **then user reviewed and corrected areas C, E, F post-hoc** (user had not realized `--auto` skipped the interactive questions). Versioning (E) was re-surfaced as an explicit `AskUserQuestion`; user chose patch `0.3.13`.
 **Areas discussed:** Transport routing & fallback; onUploadProgress API surface; XHR progress semantics; Shared response path / parity fidelity; Version bump strategy; Migration blurb format & content; Verification surface / demo scope
 
 ---
@@ -41,7 +41,7 @@
 | No final 100% emission; rely solely on native events | Progress bars may never reach 100% deterministically | |
 | Surface a separate error callback for XHR failures | New error channel — unnecessary, breaks "only send differs" | |
 
-**Auto-selected:** Option 1 (recommended). **Rationale:** Deterministic terminal event is friendlier for progress UIs; rejecting the Promise reuses the existing `dispatch()` try/catch → `onError`, keeping one error channel. → D-05, D-06, D-07.
+**Auto-selected then USER-CORRECTED.** Auto picked Option 1. User confirmed `xhr.upload.onprogress`+`lengthComputable` and the reject→`onError` path are correct, but corrected the completion emit: the terminal call must be `(total,total)` only when total is **known**; when it was never computable it must be `(finalLoaded, finalLoaded)` — emitting `(total,total)` there degenerates to `(0,0)` ("0 of 0" at success). Also: `total === 0` indeterminate sentinel is a divide-by-zero hazard and MUST be loudly documented in the blurb, not just a code comment. → D-05 (revised), D-05a (new), D-06, D-07.
 
 ---
 
@@ -60,11 +60,11 @@
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| npm `0.3.12 → 0.4.0` (minor, new backward-compat API); NuGet stays `0.3.9` (no .NET delta) | Signals "new feature, safe"; npm-only bump sanctioned by PROJECT.md for client-only changes | ✓ |
-| npm patch `0.3.13`; NuGet stays `0.3.9` | Under-signals a new public API | |
-| Version-align both (bump NuGet too) | Misleading — no .NET change; PROJECT.md only requires alignment for wire-format changes | |
+| npm `0.3.12 → 0.4.0` (minor, new backward-compat API); NuGet stays `0.3.9` | Generic pre-1.0 SemVer "minor = feature" | ✗ (auto-picked, then REJECTED by user) |
+| **npm patch `0.3.13`; NuGet stays `0.3.9`** | Honors `AGENTS.md:13` "share major.minor" rule + established patch cadence (redirect 0.3.4, side-effects 0.3.5, polling 0.3.6); zero wire/ViewNode change | ✓ (user-decided) |
+| Version-align both (bump NuGet too) | Misleading — no .NET change | |
 
-**Auto-selected:** Option 1 (recommended). **Rationale:** Pre-1.0 SemVer: new backward-compatible API = minor. PROJECT.md Constraints explicitly allow npm-only bumps for client-only changes; this is client-only. → D-10, D-11.
+**Auto-selected then USER-OVERRIDDEN via explicit question.** Auto picked `0.4.0` (generic SemVer). User pushed back: `AGENTS.md:13` documents "two packages share major.minor — bumping a ViewNode/wire-format change bumps both sides"; this milestone has zero wire/ViewNode change, and every prior client feature shipped as a patch with the minor kept aligned. `0.4.0` would break npm/NuGet major.minor alignment and contradict the documented rule. The "adopt minor=feature going forward" alternative was surfaced as its own AskUserQuestion and **declined** — too consequential to slip in implicitly (would require rewriting the AGENTS.md rule + permanent npm/NuGet minor divergence). **Final: npm `0.3.13` (patch), NuGet `0.3.9` unchanged, AGENTS.md versioning rule NOT changed.** → D-10 (revised), D-10a (new), D-11.
 
 ---
 
@@ -76,7 +76,7 @@
 | Section appended to README only | Less linkable, mixes with general docs | |
 | CHANGELOG entry only | Not copy-pasteable as a maintainer-facing blurb | |
 
-**Auto-selected:** Option 1 (recommended). **Rationale:** ROADMAP criterion 4 demands a concrete copy-pasteable artifact with specific contents; a dedicated file is the cleanest deliverable and the explicit NuGet-no-op rationale prevents maintainer confusion over the version divergence. → D-12, D-13.
+**Auto-selected (structure) + USER-AUGMENTED (content).** Option 1 structure confirmed correct. User mandated two additional inclusions or consumers will trip: (1) from area A — `onUploadProgress` only fires if the adapter implements `transport` (custom adapters without it silently fall back to fetch, no progress); (2) from area C — `total` may be `0` (indeterminate), don't divide by it. Version section is tied to E's resolution: states **npm `0.3.13`** (not `0.4.0`) and must briefly say *why patch* (AGENTS.md:13 alignment rule + patch cadence) since cadence-watching consumers will notice. → D-12, D-13 (revised with subitems 5a/5b).
 
 ---
 
@@ -95,10 +95,11 @@
 ## Claude's Discretion
 
 - Exact `MIGRATION.md` prose / README pointer wording.
-- Exact XHR wiring in `BrowserAdapter.transport` (listener style, `Response` reconstruction) provided D-05..D-08 hold.
-- Indeterminate-total documentation (`0` sentinel vs qualitative) provided the locked `(sent, total)` signature is unchanged.
-- npm bump realized as `0.4.0` exactly unless a release-process reason emerges (recommended default).
+- Exact XHR wiring in `BrowserAdapter.transport` (listener style, `Response` reconstruction) provided D-05/D-05a/D-06/D-07/D-08 hold.
+- Only the *prose* of the indeterminate-total docs is Claude's — documenting the `0` sentinel + `total > 0` guard in `MIGRATION.md` is **mandatory** (D-05a/D-13.5b), not discretionary.
 - Test file placement (extend `adapter-seam.test.ts` vs sibling) provided it runs under existing `npm test` + CI.
+
+**Locked by user (NOT discretionary):** npm `0.3.13` (patch); `AGENTS.md` "share major.minor" versioning rule unchanged.
 
 ## Deferred Ideas
 
