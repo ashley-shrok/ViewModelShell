@@ -70,10 +70,58 @@ export class BrowserAdapter implements Adapter {
   async transport(
     input: string,
     init: { method?: string; headers?: Record<string, string>; body?: FormData | string },
+    hooks?: { onUploadProgress?: (sent: number, total: number) => void },
   ): Promise<Response> {
-    // Phase 1: thin fetch passthrough. The XHR upload-progress binding is
-    // Phase 2 (UPLOAD-01) — built through this same seam, no API change.
-    return fetch(input, init);
+    const onUploadProgress = hooks?.onUploadProgress;
+    if (!onUploadProgress) {
+      // No progress requested → identical to the core fetch path (D-02 fallback parity).
+      return fetch(input, init);
+    }
+
+    return new Promise<Response>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(init.method ?? "GET", input);
+      for (const [k, v] of Object.entries(init.headers ?? {})) {
+        xhr.setRequestHeader(k, v);
+      }
+
+      let knownTotal = 0;          // last computable total (0 = never computable)
+      let lastLoaded = 0;          // last reported bytes sent
+
+      xhr.upload.onprogress = (e: ProgressEvent) => {
+        lastLoaded = e.loaded;
+        if (e.lengthComputable) {
+          knownTotal = e.total;
+          onUploadProgress(e.loaded, e.total);          // D-05 in-flight, computable
+        } else {
+          onUploadProgress(e.loaded, 0);                // D-05 indeterminate sentinel (0)
+        }
+      };
+
+      xhr.onload = () => {
+        // D-05 terminal emission: mirror whichever value was being reported.
+        // Known total → (total, total); indeterminate → (finalLoaded, finalLoaded).
+        // Explicitly NEVER (0, 0).
+        if (knownTotal > 0) onUploadProgress(knownTotal, knownTotal);
+        else onUploadProgress(lastLoaded, lastLoaded);
+        // D-08: resolve a real Response so dispatch()'s res.ok / await res.json()
+        // / processResponse() is byte-identical to the fetch path.
+        resolve(
+          new Response(xhr.responseText, {
+            status: xhr.status,
+            statusText: xhr.statusText,
+          }),
+        );
+      };
+
+      // D-07: error / timeout / abort → reject so dispatch()'s existing
+      // try/catch routes it to onError exactly like a failed fetch.
+      xhr.onerror = () => reject(new Error(`Transport request to ${input} failed`));
+      xhr.ontimeout = () => reject(new Error(`Transport request to ${input} timed out`));
+      xhr.onabort = () => reject(new Error(`Transport request to ${input} aborted`));
+
+      xhr.send(init.body ?? null);
+    });
   }
 
   private node(n: ViewNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
