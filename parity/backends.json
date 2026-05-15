@@ -133,6 +133,26 @@
       "baseUrl": "http://localhost:5013",
       "ready": "/api/probe",
       "fixtures": ["feature-probe"]
+    },
+    {
+      "name": "dotnet-reorder",
+      "cwd": "../demo/Reorder/AspNetCore",
+      "prebuild": { "cmd": "dotnet", "args": ["build", "--nologo", "-v", "minimal"] },
+      "start": "dotnet",
+      "args": ["run", "--no-build", "--no-launch-profile", "--urls", "http://localhost:5014"],
+      "baseUrl": "http://localhost:5014",
+      "ready": "/api/reorder",
+      "fixtures": ["reorder"]
+    },
+    {
+      "name": "bun-reorder",
+      "cwd": "../demo/Reorder-bun",
+      "start": "bun",
+      "args": ["run", "server.ts"],
+      "env": { "PORT": "5015" },
+      "baseUrl": "http://localhost:5015",
+      "ready": "/api/reorder",
+      "fixtures": ["reorder"]
     }
   ]
 }

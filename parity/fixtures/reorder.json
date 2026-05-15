@@ -1,0 +1,19 @@
+{
+  "name": "reorder",
+  "endpoint": "/api/reorder",
+  "actionEndpoint": "/api/reorder/action",
+  "$comment": "Click-to-select-then-place reorder, no framework primitives. Exercises start, place-before (mid + front), place-at-end, cancel, and the self-target no-op edge.",
+  "steps": [
+    { "id": "initial",        "method": "GET" },
+    { "id": "pick-a",         "method": "POST", "action": { "name": "move-start", "context": { "id": "a" } } },
+    { "id": "a-before-d",     "method": "POST", "action": { "name": "move-before", "context": { "id": "d" } } },
+    { "id": "pick-e",         "method": "POST", "action": { "name": "move-start", "context": { "id": "e" } } },
+    { "id": "e-before-b",     "method": "POST", "action": { "name": "move-before", "context": { "id": "b" } } },
+    { "id": "pick-c",         "method": "POST", "action": { "name": "move-start", "context": { "id": "c" } } },
+    { "id": "c-to-end",       "method": "POST", "action": { "name": "move-to-end" } },
+    { "id": "pick-b",         "method": "POST", "action": { "name": "move-start", "context": { "id": "b" } } },
+    { "id": "cancel",         "method": "POST", "action": { "name": "move-cancel" } },
+    { "id": "pick-d",         "method": "POST", "action": { "name": "move-start", "context": { "id": "d" } } },
+    { "id": "d-before-self",  "method": "POST", "action": { "name": "move-before", "context": { "id": "d" } } }
+  ]
+}
