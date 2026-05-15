@@ -25,7 +25,12 @@
   2. The cross-backend parity suite (parity/run.ts) stays 100% green — all 7 fixtures, including the FeatureProbe redirect and side-effect fixtures — proving no observable behavior change from the refactor
   3. A new CI step exists that fails the build whenever core source introduces a platform global reference
   4. AGENTS.md and README contain a documented description of the capability-seam pattern (navigate, storage, transport verbs) and the CI-enforced "core references zero platform globals" invariant
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Relocate the 3 platform-global violations out of core behind the BrowserAdapter capability seam (AGNOSTIC-01/02, behavior-preserving)
+- [ ] 01-02-PLAN.md — CI guard for the invariant + net-new vitest/jsdom adapter test + run the D-12 dual verification gate (AGNOSTIC-03)
+- [ ] 01-03-PLAN.md — Document the capability seam + CI-enforced invariant in AGENTS.md and README.md (AGNOSTIC-04)
 
 ### Phase 2: Upload Progress + Milestone Closeout
 **Goal**: onUploadProgress(sent,total) is delivered as the first feature built through the transport capability seam, and downstream app maintainers receive a clear, copy-pasteable migration blurb
