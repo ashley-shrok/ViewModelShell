@@ -20,7 +20,7 @@
 - **Enforcing the invariant instead of trusting it.** Converting a doc claim into a grep guard + jsdom proof closed the exact gap that had let the drift accumulate originally.
 
 ### What Was Inefficient
-- **Milestone closeout left dangling across sessions.** The bulk of completion (archive, PROJECT evolution, ROADMAP collapse) landed in `f14d496`, but the git tag and RETROSPECTIVE.md were never created, and a CopyButtonNode quick task (npm → 0.3.14) landed on top before closeout finished — forcing the milestone tag to be applied retroactively at `f14d496` rather than at HEAD.
+- **Closeout split across two concerns, with one artifact missed.** The release step (npm `0.3.13` published, git tag `v0.3.13` created at `1f668c4` and pushed) and the GSD archive (MILESTONES.md, PROJECT evolution, ROADMAP collapse at `f14d496`) both completed in the milestone session — but `RETROSPECTIVE.md`, the one remaining GSD closeout artifact, was never written. A later maintenance session also nearly created a *duplicate* local `v0.3.13` tag at `f14d496` by trusting `git tag -l` + a stale status snapshot instead of running `git fetch` first; caught and reverted before any remote write. Lesson banked below.
 - **Doc-heavy commit ratio (21 of 39 commits were `docs`).** Appropriate for an invariant/migration milestone, but a signal that documentation-as-deliverable work benefits from being batched rather than interleaved commit-by-commit.
 
 ### Patterns Established
@@ -31,7 +31,7 @@
 ### Key Lessons
 1. When a framework's central promise is an invariant ("core touches zero platform types"), enforce it mechanically in CI the moment you assert it — unenforced invariants drift back.
 2. Sequence pure refactors before features that depend on them so the feature physically cannot reintroduce the debt the refactor removed.
-3. Finish milestone closeout (tag included) in one pass; deferring the tag lets unrelated work land on top and forces a retroactive, less-obvious tag target.
+3. Verify remote state (`git fetch --tags`) before concluding a release artifact is missing — `git tag -l` shows only local tags and a session-start status snapshot goes stale. Acting on the phantom gap nearly produced a conflicting duplicate tag.
 
 ### Cost Observations
 - Model mix: not precisely tracked this milestone (telemetry not captured). Profile: `balanced`.
@@ -57,4 +57,4 @@
 ### Top Lessons (Verified Across Milestones)
 
 1. Mechanically enforce invariants the moment they are claimed — prose invariants drift. *(First observed: v0.3.13; re-verify next milestone.)*
-2. Complete milestone closeout atomically in one session, tag included. *(First observed: v0.3.13.)*
+2. Fetch before you conclude something is missing — reconcile against the remote, not local refs or stale snapshots, before creating tags/releases. *(First observed: v0.3.13.)*
