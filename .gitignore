@@ -13,6 +13,9 @@ demo/*/AspNetCore/wwwroot/
 .vs/
 *.user
 
+# NuGet pack output — build artifacts, never commit
+viewmodel-shell-dotnet/nupkg/
+
 # npm auth tokens — never commit
 .npmrc
 

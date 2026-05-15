@@ -116,6 +116,7 @@ export interface Adapter {
 | `progress` | 0–100 |
 | `modal` | Optional title + body children + optional `footer` (action-button row) + `dismissAction`. No backdrop-click dismissal, no focus management — these are intentional design choices. A modal with no `dismissAction` and no footer is non-dismissible by client-side interaction; the dev must include an in-body or in-footer action to close it. |
 | `table` | `columns`, `rows`, optional `sortColumn`/`sortDirection`/`sortAction`. Per-column filter via `filterable: true` + `filterValue` + `filterAction` on table. Per-row `action` makes the row clickable. Column `linkLabel` + `linkExternal` renders the cell value as an anchor. |
+| `copy-button` | `text` (required): string to copy. `label` (default: "Copy") / `copiedLabel` (default: "Copied!"): button labels. Pure adapter-side — no dispatch, no server round-trip. Clipboard write via `navigator.clipboard.writeText`; falls back to `execCommand("copy")` on insecure context; silent on both failures. |
 
 ### Action payload shapes
 
@@ -152,6 +153,7 @@ Every dispatch is `multipart/form-data`. The action JSON travels in `_action`; t
 | progress | `.vms-progress`, `.vms-progress__bar` |
 | modal | `.vms-modal-backdrop`, `.vms-modal`, `.vms-modal__header`, `.vms-modal__title`, `.vms-modal__close`, `.vms-modal__body`, `.vms-modal__footer` |
 | table | `.vms-table-wrapper`, `.vms-table`, `.vms-table__th`, `.vms-table__th--sortable`, `.vms-table__th--asc`, `.vms-table__th--desc`, `.vms-table__filter-row`, `.vms-table__filter-input`, `.vms-table__row`, `.vms-table__row--{variant}`, `.vms-table__row--clickable`, `.vms-table__td`, `.vms-table__link` |
+| copy-button | `.vms-button` |
 
 The framework emits class names; the app owns the CSS. Reference dark-theme stylesheets: `demo/Tasks/frontend/index.html` and `demo/HelpDesk/frontend/requester.html`.
 
