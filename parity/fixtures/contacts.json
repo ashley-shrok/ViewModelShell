@@ -1,0 +1,19 @@
+{
+  "name": "contacts",
+  "endpoint": "/api/contacts",
+  "actionEndpoint": "/api/contacts/action",
+  "$comment": "Exercises ContactManager's full navigation surface: list view, search, detail navigation, list return, and search-empty roundtrip. Add/edit are deferred because they generate IDs and timestamps that require special handling.",
+  "steps": [
+    { "id": "initial-load",     "method": "GET" },
+    { "id": "search-alice",     "method": "POST", "action": { "name": "search", "context": { "query": "alice" } } },
+    { "id": "search-clear",     "method": "POST", "action": { "name": "search", "context": { "query": "" } } },
+    { "id": "search-example",   "method": "POST", "action": { "name": "search", "context": { "query": "example" } } },
+    { "id": "search-clear-2",   "method": "POST", "action": { "name": "search", "context": { "query": "" } } },
+    { "id": "view-bob",         "method": "POST", "action": { "name": "navigate-to-detail", "context": { "id": "c2" } } },
+    { "id": "back-to-list",     "method": "POST", "action": { "name": "navigate-to-list" } },
+    { "id": "view-carol",       "method": "POST", "action": { "name": "navigate-to-detail", "context": { "id": "c3" } } },
+    { "id": "back-to-list-2",   "method": "POST", "action": { "name": "navigate-to-list" } },
+    { "id": "delete-eva",       "method": "POST", "action": { "name": "delete-contact", "context": { "id": "c5" } } },
+    { "id": "search-eva-after", "method": "POST", "action": { "name": "search", "context": { "query": "eva" } } }
+  ]
+}

@@ -1,0 +1,54 @@
+name: Parity
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Set up Node (for NuGet/npm tooling)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build .NET demos
+        run: |
+          dotnet build demo/Tasks/AspNetCore/ViewModelShell.csproj
+          dotnet build demo/ContactManager/AspNetCore/ContactManager.csproj
+          dotnet build demo/ExpenseTracker/AspNetCore/ExpenseTracker.csproj
+          dotnet build demo/RetroBoard/AspNetCore/RetroBoard.csproj
+          dotnet build demo/HelpDesk/AspNetCore/HelpDesk.csproj
+
+      - name: Run .NET tests
+        run: |
+          dotnet test demo/Tasks/AspNetCore.Tests --no-build
+          dotnet test demo/ContactManager/AspNetCore.Tests --no-build
+          dotnet test demo/ExpenseTracker/AspNetCore.Tests --no-build
+          dotnet test demo/RetroBoard/AspNetCore.Tests --no-build
+          dotnet test demo/HelpDesk/AspNetCore.Tests --no-build
+
+      - name: Install Bun deps
+        run: |
+          cd demo/Tasks-bun && bun install --frozen-lockfile
+          cd ../ContactManager-bun && bun install --frozen-lockfile
+          cd ../../parity && bun install --frozen-lockfile
+
+      - name: Run cross-backend parity tests
+        run: cd parity && bun run run.ts

@@ -8,12 +8,15 @@ const VOLATILE_FIELD_NAMES = new Set([
   "timestamp",
 ]);
 
-/** Recursively walks a JSON value, replacing volatile field values with placeholders. */
+/** Recursively walks a JSON value, replacing volatile field values with placeholders
+ *  and dropping fields with null values entirely (so "missing" and "null" compare
+ *  equal — which they are semantically for every optional field in the wire format). */
 export function normalize(value: unknown): unknown {
   if (value === null || typeof value !== "object") return value;
   if (Array.isArray(value)) return value.map(normalize);
   const result: Record<string, unknown> = {};
   for (const [key, v] of Object.entries(value)) {
+    if (v === null) continue; // drop null fields — semantically equivalent to missing
     if (VOLATILE_FIELD_NAMES.has(key)) {
       result[key] = "<volatile>";
     } else {

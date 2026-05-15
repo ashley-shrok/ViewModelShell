@@ -16,6 +16,9 @@ interface BackendConfig {
   cwd: string;
   start: string;
   args: string[];
+  /** Optional command run serially before parallel startup. Used to pre-build .NET demos so they
+   *  don't fight over a shared MSBuild lock when started simultaneously. */
+  prebuild?: { cmd: string; args: string[] };
   env?: Record<string, string>;
   baseUrl: string;
   ready: string;
@@ -63,6 +66,22 @@ async function waitForReady(url: string, timeoutMs = 30_000): Promise<void> {
     await new Promise(r => setTimeout(r, 200));
   }
   throw new Error(`Timeout waiting for ${url}`);
+}
+
+async function runOnce(cfg: BackendConfig): Promise<void> {
+  if (!cfg.prebuild) return;
+  const cwd = resolve(__dirname, cfg.cwd);
+  console.log(`  [${cfg.name}] ${cfg.prebuild.cmd} ${cfg.prebuild.args.join(" ")}`);
+  await new Promise<void>((res, rej) => {
+    const child = spawn(cfg.prebuild!.cmd, cfg.prebuild!.args, {
+      cwd,
+      env: { ...process.env, ...(cfg.env ?? {}) },
+      stdio: "inherit",
+      shell: process.platform === "win32",
+    });
+    child.on("exit", code => code === 0 ? res() : rej(new Error(`prebuild for ${cfg.name} exited ${code}`)));
+    child.on("error", rej);
+  });
 }
 
 function startBackend(cfg: BackendConfig): ChildProcess {
@@ -121,6 +140,16 @@ async function main() {
   let exitCode = 0;
 
   try {
+    // Run prebuild commands serially so parallel builds don't fight for shared
+    // MSBuild/NuGet/npm locks (e.g. two .NET demos referencing the same library).
+    const withPrebuild = manifest.backends.filter(b => b.prebuild);
+    if (withPrebuild.length > 0) {
+      console.log("\nPre-building...");
+      for (const cfg of withPrebuild) {
+        await runOnce(cfg);
+      }
+    }
+
     // Start every backend in parallel and wait for all of them to be ready.
     console.log("\nStarting backends...");
     for (const cfg of manifest.backends) {

@@ -1,11 +1,12 @@
 {
-  "$schema-comment": "Each backend implements the same demos. The runner spins each up, sends the fixture script, diffs responses across all backends.",
+  "$schema-comment": "Each backend implements the same demos. The harness runs prebuilds serially (so .NET demos sharing a library don't fight over MSBuild locks), then spins up every backend in parallel, runs the fixture script against each, and diffs responses.",
   "backends": [
     {
       "name": "dotnet-tasks",
       "cwd": "../demo/Tasks/AspNetCore",
+      "prebuild": { "cmd": "dotnet", "args": ["build", "--nologo", "-v", "minimal"] },
       "start": "dotnet",
-      "args": ["run", "--no-launch-profile", "--urls", "http://localhost:5001"],
+      "args": ["run", "--no-build", "--no-launch-profile", "--urls", "http://localhost:5001"],
       "baseUrl": "http://localhost:5001",
       "ready": "/api/tasks",
       "fixtures": ["tasks"]
@@ -19,6 +20,26 @@
       "baseUrl": "http://localhost:5002",
       "ready": "/api/tasks",
       "fixtures": ["tasks"]
+    },
+    {
+      "name": "dotnet-contacts",
+      "cwd": "../demo/ContactManager/AspNetCore",
+      "prebuild": { "cmd": "dotnet", "args": ["build", "--nologo", "-v", "minimal"] },
+      "start": "dotnet",
+      "args": ["run", "--no-build", "--no-launch-profile", "--urls", "http://localhost:5003"],
+      "baseUrl": "http://localhost:5003",
+      "ready": "/api/contacts",
+      "fixtures": ["contacts"]
+    },
+    {
+      "name": "bun-contacts",
+      "cwd": "../demo/ContactManager-bun",
+      "start": "bun",
+      "args": ["run", "server.ts"],
+      "env": { "PORT": "5004" },
+      "baseUrl": "http://localhost:5004",
+      "ready": "/api/contacts",
+      "fixtures": ["contacts"]
     }
   ]
 }

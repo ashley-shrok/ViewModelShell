@@ -29,7 +29,10 @@ bun run test
 ```
 
 Currently exercises:
-- **Tasks** — .NET (`demo/Tasks/AspNetCore`) vs Bun (`demo/Tasks-bun`)
+- **Tasks** — .NET (`demo/Tasks/AspNetCore`) vs Bun (`demo/Tasks-bun`) — 8-step fixture covering forms, lists, checkboxes, tabs, progress
+- **ContactManager** — .NET (`demo/ContactManager/AspNetCore`) vs Bun (`demo/ContactManager-bun`) — 11-step fixture covering views (list/detail), search, navigation, deletion
+
+Runs in GitHub Actions on every push and PR via `.github/workflows/parity.yml`.
 
 ## Adding a new backend
 
