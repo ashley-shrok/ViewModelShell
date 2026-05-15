@@ -6,11 +6,11 @@
 // Cloudflare Workers. Express users can adapt createAction's (Request → Response)
 // handler with a 3-line wrapper.
 
-import type { ViewNode, ShellSideEffect } from "./index";
+import type { ViewNode, ShellSideEffect } from "./index.js";
 
 // Re-export the ViewNode hierarchy and wire types so a backend can import
 // everything it needs from one place.
-export * from "./index";
+export * from "./index.js";
 
 // ─── Action payload ──────────────────────────────────────────────────────────
 

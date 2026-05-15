@@ -4,7 +4,7 @@ import type {
   FormNode, FieldNode, CheckboxNode, ButtonNode,
   TextNode, LinkNode, StatBarNode, TabsNode, ProgressNode,
   ModalNode, TableNode,
-} from "./index";
+} from "./index.js";
 
 export class BrowserAdapter implements Adapter {
   private fileRegistry = new Map<string, File>();
