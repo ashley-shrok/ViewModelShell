@@ -10,7 +10,7 @@
 ## Phases
 
 - [x] **Phase 1: Capability Seam Refactor** - Purge all platform globals from core and enforce the invariant with a CI guard; zero observable behavior change
-- [ ] **Phase 2: Upload Progress + Milestone Closeout** - Implement onUploadProgress as the first feature through the seam and ship the consumer migration blurb
+- [x] **Phase 2: Upload Progress + Milestone Closeout** - Implement onUploadProgress as the first feature through the seam and ship the consumer migration blurb
 
 ---
 
@@ -46,7 +46,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — Implement UPLOAD-01: ShellOptions.onUploadProgress + dispatch() transport-routing branch (core, additive) + BrowserAdapter.transport XHR upload-progress binding
 - [x] 02-02-PLAN.md — Net-new mock-XHR jsdom/vitest test proving D-14 (a)-(e) (UPLOAD-01 verification)
-- [ ] 02-03-PLAN.md — MIGRATE-01: npm 0.3.13 patch bump + copy-pasteable MIGRATION.md + README pointer + full parity/milestone gate
+- [x] 02-03-PLAN.md — MIGRATE-01: npm 0.3.13 patch bump + copy-pasteable MIGRATION.md + README pointer + full parity/milestone gate
 
 ---
 
@@ -55,9 +55,9 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Capability Seam Refactor | 3/3 | Complete | 2026-05-15 |
-| 2. Upload Progress + Milestone Closeout | 2/3 | In Progress|  |
+| 2. Upload Progress + Milestone Closeout | 3/3 | Complete | 2026-05-15 |
 
 ---
 
 *Roadmap created: 2026-05-15*
-*Last updated: 2026-05-15 after Phase 2 planning (3 plans, 2 waves)*
+*Last updated: 2026-05-15 after 02-03 execution (MIGRATE-01 milestone closeout — Phase 2 complete, all 6 requirements done, full parity gate green)*

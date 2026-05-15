@@ -20,7 +20,7 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 ### Milestone Closeout (Phase 2)
 
-- [ ] **MIGRATE-01**: Consumer-maintainer migration blurb — a clear, copy-pasteable message stating exactly what downstream app maintainers must update (npm/NuGet versions, any API or behavior deltas, what is NOT breaking and why) and how to handle the change
+- [x] **MIGRATE-01**: Consumer-maintainer migration blurb — a clear, copy-pasteable message stating exactly what downstream app maintainers must update (npm/NuGet versions, any API or behavior deltas, what is NOT breaking and why) and how to handle the change
 
 ## v2 Requirements
 
@@ -44,7 +44,7 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 | AGNOSTIC-03 | Phase 1 | Complete |
 | AGNOSTIC-04 | Phase 1 | Complete |
 | UPLOAD-01 | Phase 2 | Complete |
-| MIGRATE-01 | Phase 2 | Pending |
+| MIGRATE-01 | Phase 2 | Complete |
 
 **Coverage:**
 - v1 requirements: 6 total
