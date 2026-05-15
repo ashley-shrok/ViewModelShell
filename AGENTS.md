@@ -7,6 +7,7 @@ The framework ships as two version-aligned packages:
 | Package | Source | Use |
 |---|---|---|
 | [`@ashley-shrok/viewmodel-shell`](https://www.npmjs.com/package/@ashley-shrok/viewmodel-shell) (npm) | `viewmodel-shell/src/{index,browser}.ts` + `styles/` | Frontend renderer + themes |
+| [`@ashley-shrok/viewmodel-shell/server`](https://www.npmjs.com/package/@ashley-shrok/viewmodel-shell) (npm subpath) | `viewmodel-shell/src/server.ts` | Backend types + helpers for TypeScript/Node/Bun/Deno/Workers backends |
 | [`AshleyShrok.ViewModelShell`](https://www.nuget.org/packages/AshleyShrok.ViewModelShell) (NuGet) | `viewmodel-shell-dotnet/ViewModels.cs` | Backend `ViewNode` types under the `ViewModelShell` namespace |
 
 The two packages share major.minor — bumping a `ViewNode` type or wire-format change bumps both sides. Source for both lives in this repo; demos here consume them via local `ProjectReference`/Vite alias to keep the dev loop tight.
@@ -343,6 +344,52 @@ Factory methods on `ShellResponse<TState>`:
 - `response.WithEffect(ShellSideEffect.SetLocalStorage(key, value))` — fluent side-effect append.
 
 `ShellSideEffect` factories: `SetLocalStorage(key, value)`, `SetSessionStorage(key, value)`.
+
+### TypeScript backend pattern
+
+For Node/Bun/Deno/Cloudflare Workers backends, the `@ashley-shrok/viewmodel-shell/server` subpath mirrors the C# NuGet package — same wire format, same shapes, written in TypeScript. Use this when your team is end-to-end TypeScript and prefers a single language over the .NET reference backend.
+
+```typescript
+import {
+  createAction,
+  shellRedirect,
+  shellSideEffect,
+  type ActionPayload,
+  type ViewNode,
+} from "@ashley-shrok/viewmodel-shell/server";
+
+interface TasksState {
+  items: Array<{ id: string; title: string; completed: boolean }>;
+  filter: "all" | "active" | "done";
+}
+
+function buildVm(state: TasksState): ViewNode { /* pure function of state */ }
+
+// Hono / Bun.serve / Deno.serve / Cloudflare Workers — anything Web Fetch native:
+app.post("/api/tasks/action", createAction<TasksState>(async (payload) => {
+  let state = payload.state;
+  switch (payload.name) {
+    case "add":
+      state = { ...state, items: [...state.items, /* ... */] };
+      break;
+    case "login":
+      return shellRedirect("/dashboard");
+    case "save-jwt":
+      return {
+        vm: buildVm(state),
+        state,
+        sideEffects: [shellSideEffect.setLocalStorage("jwt", payload.context?.token as string)],
+      };
+  }
+  return { vm: buildVm(state), state };
+}));
+```
+
+`createAction` auto-detects content-type (JSON vs multipart) so shell-driven submissions and curl/agent callers both work without per-route code. Files in multipart submissions are surfaced on `payload.files` as `Record<string, File>`.
+
+For Express, wrap with a small adapter that turns `(req, res)` into a `Request` and writes the `Response` back. The framework stays Web Fetch native to avoid maintaining a matrix of framework-specific adapters.
+
+The subpath ships under the same npm package (no separate version to manage) and the types literally cannot drift because they're in the same source tree.
 
 ### Frontend wiring
 
