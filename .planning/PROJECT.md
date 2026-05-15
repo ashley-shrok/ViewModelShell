@@ -26,13 +26,14 @@ The core is a platform-agnostic transformer of a structured wire protocol — te
 - ✓ **AGNOSTIC-02**: Browser bindings (`window.location`, `localStorage`, `sessionStorage`) relocated out of core into `BrowserAdapter` behind the seam, zero observable behavior change (parity green, all 7 fixtures) — Validated in Phase 1
 - ✓ **AGNOSTIC-03**: CI guard (`check-core-platform-globals.mjs`, step in `parity.yml`) fails the build if `src/index.ts` references a platform global — Validated in Phase 1
 - ✓ **AGNOSTIC-04**: AGENTS.md + README document the capability seam and the CI-enforced "core references zero platform globals" invariant — Validated in Phase 1
+- ✓ **UPLOAD-01**: Upload progress (issue #4) — `ShellOptions.onUploadProgress(sent,total)` shipped as the first feature built *through* the `transport` seam; `XMLHttpRequest` binding lives only in `BrowserAdapter.transport` (zero in core src/index.ts, CI-gated); three-condition routing with silent fetch fallback; XHR failures reject into the existing `onError` path (byte-identical to fetch, parity green) — Validated in Phase 2: Upload Progress + Milestone Closeout
+- ✓ **MIGRATE-01**: Copy-pasteable `MIGRATION.md` at repo root — npm `0.3.13` (patch; NuGet unchanged `0.3.9`; major.minor-alignment rule honored), the `onUploadProgress` API addition, explicit NOT-breaking list, upgrade steps, and the two silent-behavior caveats (transport-fallback, `total > 0` divide-by-zero guard) — Validated in Phase 2
 
 ### Active
 
-<!-- Current scope. Building toward these. Milestone: "Restore & enforce core platform-agnosticism" -->
+<!-- Current scope. Building toward these. -->
 
-- [ ] **UPLOAD-01**: Upload progress (issue #4) — `onUploadProgress(sent,total)` implemented as the first feature built *through* the seam (XHR binding lives in BrowserAdapter, never core)
-- [ ] **MIGRATE-01**: Consumer-maintainer migration blurb — exactly what downstream app maintainers must update (versions, any API/behavior deltas) and how to handle the change
+- (None — milestone "Restore & Enforce Core Platform-Agnosticism" complete; all 6 requirements validated. Awaiting next milestone.)
 
 ### Out of Scope
 
@@ -84,4 +85,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-15 — Phase 1 (Capability Seam Refactor) complete: AGNOSTIC-01..04 validated, core platform-agnostic invariant CI-enforced*
+*Last updated: 2026-05-15 — Phase 2 (Upload Progress + Milestone Closeout) complete: UPLOAD-01 + MIGRATE-01 validated. Milestone "Restore & Enforce Core Platform-Agnosticism" fully delivered — all 6 requirements (AGNOSTIC-01..04, UPLOAD-01, MIGRATE-01) shipped; npm 0.3.13, NuGet 0.3.9.*
