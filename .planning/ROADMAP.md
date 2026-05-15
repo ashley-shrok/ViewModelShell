@@ -45,7 +45,7 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md — Implement UPLOAD-01: ShellOptions.onUploadProgress + dispatch() transport-routing branch (core, additive) + BrowserAdapter.transport XHR upload-progress binding
-- [ ] 02-02-PLAN.md — Net-new mock-XHR jsdom/vitest test proving D-14 (a)-(e) (UPLOAD-01 verification)
+- [x] 02-02-PLAN.md — Net-new mock-XHR jsdom/vitest test proving D-14 (a)-(e) (UPLOAD-01 verification)
 - [ ] 02-03-PLAN.md — MIGRATE-01: npm 0.3.13 patch bump + copy-pasteable MIGRATION.md + README pointer + full parity/milestone gate
 
 ---
@@ -55,7 +55,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Capability Seam Refactor | 3/3 | Complete | 2026-05-15 |
-| 2. Upload Progress + Milestone Closeout | 0/3 | Not started | - |
+| 2. Upload Progress + Milestone Closeout | 2/3 | In Progress|  |
 
 ---
 
