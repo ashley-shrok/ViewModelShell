@@ -58,6 +58,24 @@ export class BrowserAdapter implements Adapter {
     });
   }
 
+  navigate(url: string): void {
+    window.location.href = url;
+  }
+
+  storage(scope: "local" | "session", key: string, value: string): void {
+    const store = scope === "session" ? sessionStorage : localStorage;
+    store.setItem(key, value);
+  }
+
+  async transport(
+    input: string,
+    init: { method?: string; headers?: Record<string, string>; body?: FormData | string },
+  ): Promise<Response> {
+    // Phase 1: thin fetch passthrough. The XHR upload-progress binding is
+    // Phase 2 (UPLOAD-01) — built through this same seam, no API change.
+    return fetch(input, init);
+  }
+
   private node(n: ViewNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     switch (n.type) {
       case "page":      return this.page(n, parent, on);
