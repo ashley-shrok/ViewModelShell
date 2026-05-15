@@ -16,5 +16,8 @@ demo/*/AspNetCore/wwwroot/
 # npm auth tokens — never commit
 .npmrc
 
-# SQLite DBs created at runtime by demos
+# SQLite DBs created at runtime by demos / parity runs
 demo/HelpDesk/AspNetCore/helpdesk.db
+demo/HelpDesk/AspNetCore/helpdesk-parity-dotnet.db
+demo/HelpDesk-bun/helpdesk.db
+demo/HelpDesk-bun/helpdesk-parity-bun.db

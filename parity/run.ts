@@ -4,7 +4,7 @@
 // the run.
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync, rmSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalize, diff } from "./normalize";
@@ -19,6 +19,9 @@ interface BackendConfig {
   /** Optional command run serially before parallel startup. Used to pre-build .NET demos so they
    *  don't fight over a shared MSBuild lock when started simultaneously. */
   prebuild?: { cmd: string; args: string[] };
+  /** Files to delete (relative to cwd) before starting the backend. Used to reset stateful resources
+   *  like SQLite DBs between parity runs so the fixture sees a clean slate. */
+  cleanupFiles?: string[];
   env?: Record<string, string>;
   baseUrl: string;
   ready: string;
@@ -32,6 +35,12 @@ interface Manifest {
 interface FixtureStep {
   id: string;
   method: "GET" | "POST";
+  /** Optional override for this step. When set, used in place of the fixture's default endpoint/actionEndpoint.
+   *  Lets a single fixture mix calls to multiple controllers (e.g. HelpDesk: requester creates a ticket, agent acts on it). */
+  endpoint?: string;
+  actionEndpoint?: string;
+  /** When true, this step starts a fresh state thread (sends null as _state instead of the previous response's state). */
+  freshState?: boolean;
   action?: { name: string; context?: Record<string, unknown> };
 }
 
@@ -103,13 +112,14 @@ async function runFixtureAgainst(cfg: BackendConfig, fixture: Fixture): Promise<
   let lastState: unknown = null;
 
   for (const step of fixture.steps) {
+    if (step.freshState) lastState = null;
     let url: string;
     let init: RequestInit;
     if (step.method === "GET") {
-      url = `${cfg.baseUrl}${fixture.endpoint}`;
+      url = `${cfg.baseUrl}${step.endpoint ?? fixture.endpoint}`;
       init = { method: "GET" };
     } else {
-      url = `${cfg.baseUrl}${fixture.actionEndpoint}`;
+      url = `${cfg.baseUrl}${step.actionEndpoint ?? fixture.actionEndpoint}`;
       const form = new FormData();
       form.append("_action", JSON.stringify({ name: step.action!.name, context: step.action!.context ?? {} }));
       form.append("_state", JSON.stringify(lastState));
@@ -147,6 +157,17 @@ async function main() {
       console.log("\nPre-building...");
       for (const cfg of withPrebuild) {
         await runOnce(cfg);
+      }
+    }
+
+    // Delete stateful artifacts (e.g. SQLite DB files) so each backend starts fresh.
+    for (const cfg of manifest.backends) {
+      for (const file of cfg.cleanupFiles ?? []) {
+        const full = resolve(__dirname, cfg.cwd, file);
+        if (existsSync(full)) {
+          rmSync(full, { force: true });
+          console.log(`  cleaned ${cfg.name}: ${file}`);
+        }
       }
     }
 

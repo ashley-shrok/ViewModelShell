@@ -11,7 +11,9 @@ builder.Services.AddControllers()
             System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
     });
 
-var dbPath = Path.Combine(builder.Environment.ContentRootPath, "helpdesk.db");
+// HELPDESK_DB env var lets the parity harness point at a temp/fresh DB without polluting the demo's file.
+var dbPath = Environment.GetEnvironmentVariable("HELPDESK_DB")
+             ?? Path.Combine(builder.Environment.ContentRootPath, "helpdesk.db");
 builder.Services.AddSingleton(_ => new HelpDeskDb($"Data Source={dbPath}"));
 
 var app = builder.Build();

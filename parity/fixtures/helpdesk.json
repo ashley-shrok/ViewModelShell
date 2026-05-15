@@ -1,0 +1,31 @@
+{
+  "name": "helpdesk",
+  "endpoint": "/api/requester",
+  "actionEndpoint": "/api/requester/action",
+  "$comment": "Cross-controller fixture: Requester creates tickets, Agent acts on them via shared SQLite DB. Per-step endpoint overrides let us switch controllers; GETs at each switch produce fresh state for the new controller (different state shape than the previous controller).",
+  "steps": [
+    { "id": "req-initial",          "method": "GET" },
+    { "id": "req-start-create",     "method": "POST", "action": { "name": "start-create" } },
+    { "id": "req-set-type-software","method": "POST", "action": { "name": "set-type", "context": { "value": "software" } } },
+    { "id": "req-set-priority-high","method": "POST", "action": { "name": "set-priority", "context": { "value": "high" } } },
+    { "id": "req-validation-empty", "method": "POST", "action": { "name": "create-ticket", "context": { "type": "software", "priority": "high" } } },
+    { "id": "req-create-1",         "method": "POST", "action": { "name": "create-ticket", "context": { "title": "Outlook keeps crashing", "type": "software", "priority": "high", "application": "Microsoft Outlook", "description": "Crashes when opening mailbox." } } },
+    { "id": "req-start-create-2",   "method": "POST", "action": { "name": "start-create" } },
+    { "id": "req-set-type-hw",      "method": "POST", "action": { "name": "set-type", "context": { "value": "hardware" } } },
+    { "id": "req-create-2",         "method": "POST", "action": { "name": "create-ticket", "context": { "title": "Laptop won't charge", "type": "hardware", "priority": "medium", "device_model": "Dell XPS 15" } } },
+
+    { "id": "agt-initial",          "method": "GET",  "endpoint": "/api/agent",  "freshState": true },
+    { "id": "agt-filter-open",      "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "filter", "context": { "value": "open" } } },
+    { "id": "agt-filter-all",       "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "filter", "context": { "value": "all" } } },
+    { "id": "agt-select-1",         "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "select-ticket", "context": { "id": "1" } } },
+    { "id": "agt-start-1",          "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "start-ticket", "context": { "id": "1" } } },
+    { "id": "agt-save-notes",       "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "save-notes", "context": { "id": "1", "agent_notes": "Investigating PST corruption." } } },
+    { "id": "agt-resolve-1",        "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "resolve-ticket", "context": { "id": "1" } } },
+    { "id": "agt-back",             "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "back-to-queue" } },
+    { "id": "agt-filter-resolved",  "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "filter", "context": { "value": "resolved" } } },
+
+    { "id": "req-back-to-list",     "method": "GET",  "freshState": true },
+    { "id": "req-view-1",           "method": "POST", "action": { "name": "select-ticket", "context": { "id": "1" } } },
+    { "id": "req-back",             "method": "POST", "action": { "name": "back-to-list" } }
+  ]
+}

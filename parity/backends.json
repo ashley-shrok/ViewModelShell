@@ -80,6 +80,29 @@
       "baseUrl": "http://localhost:5008",
       "ready": "/api/expenses",
       "fixtures": ["expenses"]
+    },
+    {
+      "name": "dotnet-helpdesk",
+      "cwd": "../demo/HelpDesk/AspNetCore",
+      "prebuild": { "cmd": "dotnet", "args": ["build", "--nologo", "-v", "minimal"] },
+      "cleanupFiles": ["helpdesk-parity-dotnet.db"],
+      "start": "dotnet",
+      "args": ["run", "--no-build", "--no-launch-profile", "--urls", "http://localhost:5009"],
+      "env": { "HELPDESK_DB": "helpdesk-parity-dotnet.db" },
+      "baseUrl": "http://localhost:5009",
+      "ready": "/api/requester",
+      "fixtures": ["helpdesk"]
+    },
+    {
+      "name": "bun-helpdesk",
+      "cwd": "../demo/HelpDesk-bun",
+      "cleanupFiles": ["helpdesk-parity-bun.db"],
+      "start": "bun",
+      "args": ["run", "server.ts"],
+      "env": { "PORT": "5010", "HELPDESK_DB": "helpdesk-parity-bun.db" },
+      "baseUrl": "http://localhost:5010",
+      "ready": "/api/requester",
+      "fixtures": ["helpdesk"]
     }
   ]
 }
