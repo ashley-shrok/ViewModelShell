@@ -1,0 +1,12 @@
+{
+  "name": "viewmodel-shell-parity",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun run run.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.4.0"
+  }
+}

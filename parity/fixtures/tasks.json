@@ -1,0 +1,16 @@
+{
+  "name": "tasks",
+  "endpoint": "/api/tasks",
+  "actionEndpoint": "/api/tasks/action",
+  "$comment": "Each step references the previous response's state. The runner threads state through automatically. Actions that generate new IDs (e.g. 'add') are tested by extracting the new ID from the response and using it in subsequent steps via the ${newId.<step-id>} substitution.",
+  "steps": [
+    { "id": "initial-load",   "method": "GET" },
+    { "id": "filter-active",  "method": "POST", "action": { "name": "filter", "context": { "value": "active" } } },
+    { "id": "toggle-2",       "method": "POST", "action": { "name": "toggle", "context": { "id": "2", "checked": true } } },
+    { "id": "toggle-3",       "method": "POST", "action": { "name": "toggle", "context": { "id": "3", "checked": true } } },
+    { "id": "filter-all",     "method": "POST", "action": { "name": "filter", "context": { "value": "all" } } },
+    { "id": "delete-1",       "method": "POST", "action": { "name": "delete", "context": { "id": "1" } } },
+    { "id": "filter-done",    "method": "POST", "action": { "name": "filter", "context": { "value": "completed" } } },
+    { "id": "filter-all-2",   "method": "POST", "action": { "name": "filter", "context": { "value": "all" } } }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "$schema-comment": "Each backend implements the same demos. The runner spins each up, sends the fixture script, diffs responses across all backends.",
+  "backends": [
+    {
+      "name": "dotnet-tasks",
+      "cwd": "../demo/Tasks/AspNetCore",
+      "start": "dotnet",
+      "args": ["run", "--no-launch-profile", "--urls", "http://localhost:5001"],
+      "baseUrl": "http://localhost:5001",
+      "ready": "/api/tasks",
+      "fixtures": ["tasks"]
+    },
+    {
+      "name": "bun-tasks",
+      "cwd": "../demo/Tasks-bun",
+      "start": "bun",
+      "args": ["run", "server.ts"],
+      "env": { "PORT": "5002" },
+      "baseUrl": "http://localhost:5002",
+      "ready": "/api/tasks",
+      "fixtures": ["tasks"]
+    }
+  ]
+}

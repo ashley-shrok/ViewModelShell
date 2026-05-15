@@ -30,6 +30,10 @@ These are the bugs that take hours to find:
 
 5. **Tests need `global using Xunit;` in `GlobalUsings.cs`** (not auto-imported even with `ImplicitUsings`) and `<FrameworkReference Include="Microsoft.AspNetCore.App" />` to access `DefaultHttpContext`.
 
+6. **Configure ASP.NET Core JSON to strip null fields:** `DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull` in `Program.cs`. Without it, every nullable field on every node serializes as `"field": null`, which (a) bloats the wire, (b) drifts from non-.NET backends (TypeScript naturally omits undefined fields), and (c) the frontend adapter handles both anyway. See any demo's `Program.cs` for the canonical config. Non-nullable booleans (e.g. `CheckboxNode.Checked`) keep serializing as `false`/`true` since they have semantic value.
+
+7. **Cross-backend parity testing lives in `parity/`.** Any new official backend must implement the fixtures listed in `parity/backends.json` and pass `bun run parity/run.ts`. The harness spins up every backend in parallel, runs the same action sequences against each, and diffs normalized responses step-for-step. Any wire-format drift fails the run.
+
 ---
 
 ## Architecture
