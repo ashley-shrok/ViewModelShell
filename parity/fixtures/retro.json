@@ -1,0 +1,17 @@
+{
+  "name": "retro",
+  "endpoint": "/api/retro",
+  "actionEndpoint": "/api/retro/action",
+  "$comment": "Exercises RetroBoard's votes/resolve/delete actions on seeded cards. Add-card is deferred (generates IDs + timestamps).",
+  "steps": [
+    { "id": "initial-load",   "method": "GET" },
+    { "id": "upvote-s1",      "method": "POST", "action": { "name": "upvote-card", "context": { "id": "s1" } } },
+    { "id": "upvote-s1-2",    "method": "POST", "action": { "name": "upvote-card", "context": { "id": "s1" } } },
+    { "id": "upvote-s2",      "method": "POST", "action": { "name": "upvote-card", "context": { "id": "s2" } } },
+    { "id": "resolve-s3",     "method": "POST", "action": { "name": "resolve-card", "context": { "id": "s3", "checked": true } } },
+    { "id": "unresolve-s3",   "method": "POST", "action": { "name": "resolve-card", "context": { "id": "s3", "checked": false } } },
+    { "id": "resolve-s3-2",   "method": "POST", "action": { "name": "resolve-card", "context": { "id": "s3", "checked": true } } },
+    { "id": "delete-s2",      "method": "POST", "action": { "name": "delete-card", "context": { "id": "s2" } } },
+    { "id": "upvote-s1-3",    "method": "POST", "action": { "name": "upvote-card", "context": { "id": "s1" } } }
+  ]
+}
