@@ -30,7 +30,7 @@
 Plans:
 - [x] 01-01-PLAN.md — Relocate the 3 platform-global violations out of core behind the BrowserAdapter capability seam (AGNOSTIC-01/02, behavior-preserving)
 - [x] 01-02-PLAN.md — CI guard for the invariant + net-new vitest/jsdom adapter test + run the D-12 dual verification gate (AGNOSTIC-03)
-- [ ] 01-03-PLAN.md — Document the capability seam + CI-enforced invariant in AGENTS.md and README.md (AGNOSTIC-04)
+- [x] 01-03-PLAN.md — Document the capability seam + CI-enforced invariant in AGENTS.md and README.md (AGNOSTIC-04)
 
 ### Phase 2: Upload Progress + Milestone Closeout
 **Goal**: onUploadProgress(sent,total) is delivered as the first feature built through the transport capability seam, and downstream app maintainers receive a clear, copy-pasteable migration blurb

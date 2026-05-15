@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-last_updated: "2026-05-15T12:38:14Z"
+status: completed
+stopped_at: Completed 01-03-PLAN.md (Phase 01 complete)
+last_updated: "2026-05-15T12:47:00.465Z"
 progress:
   total_phases: 2
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 67
+  completed_plans: 3
+  percent: 100
 ---
 
 # Project State: ViewModel Shell
@@ -24,15 +25,14 @@ progress:
 
 ## Current Position
 
-Phase: 01 (Capability Seam Refactor) — EXECUTING
-Plan: 3 of 3 (01-01, 01-02 complete)
+Phase: 01 (Capability Seam Refactor) — COMPLETE (3 of 3 plans)
 **Phase:** 1 — Capability Seam Refactor
-**Plan:** 01-02 complete — next: 01-03 (AGENTS.md + README capability-seam docs, D-14)
-**Status:** Executing Phase 01
+**Plan:** 01-03 complete — Phase 1 done; next: Phase 2 (UPLOAD-01, upload progress through the seam)
+**Status:** Phase 01 complete — ready for Phase 02
 
 ```
-Progress: [ Phase 1 ███████░░░ ][ Phase 2 ░░░░░░░░░░ ]
-           67%                                         100%
+Progress: [ Phase 1 ██████████ ][ Phase 2 ░░░░░░░░░░ ]
+           50% (Phase 1 of 2 complete)               100%
 ```
 
 ---
@@ -42,14 +42,15 @@ Progress: [ Phase 1 ███████░░░ ][ Phase 2 ░░░░░░
 | Metric | Value |
 |--------|-------|
 | Phases total | 2 |
-| Phases complete | 0 |
+| Phases complete | 1 |
 | Requirements total | 6 |
-| Requirements complete | 3 |
+| Requirements complete | 4 |
 | Parity suite status | Green (7/7 fixtures, post-refactor — D-12 gate verified) |
 
 ---
 | Phase 01 P01 | 3min | 3 tasks | 2 files |
 | Phase 01 P02 | 8min | 3 tasks | 6 files |
+| Phase 01 P03 | 2min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -61,6 +62,7 @@ Progress: [ Phase 1 ███████░░░ ][ Phase 2 ░░░░░░
 - Consumer migration blurb is a first-class milestone deliverable — downstream maintainers (multiple apps) must know what/whether to update
 - [01-01] 3 core platform-global violations relocated behind optional Adapter verbs (navigate/storage/transport); fail-loud on missing capability (D-06); index.ts now references zero platform globals; onRedirect signature/precedence byte-identical (D-04/D-05); in-core fetch untouched (D-07)
 - [01-02] AGNOSTIC-03 invariant is CI-enforced: standalone grep-denylist guard (5 tokens, scoped to src/index.ts only, D-08/D-09/D-11) via `npm run check:core-globals`; net-new framework vitest+jsdom harness proves the relocation fires (navigate/onRedirect-precedence/storage/fail-loud, D-12.2); D-12 dual gate satisfied locally (parity 7/7 incl feature-probe + adapter test green) and wired as gating steps into the existing parity workflow (D-10) — no new workflow file
+- [01-03] AGNOSTIC-04 docs shipped with the phase (D-14): AGENTS.md gained `### The capability seam` (verbs, optional-methods shape, onRedirect->adapter.navigate->loud-error order, fail-loud rule w/ hecate_jwt rationale) + the core-platform-globals invariant restated as CI-enforced (check:core-globals guard, parity.yml step, src/index.ts-only scope) + an enforced-invariant convention bullet; README.md gained a consumer-facing capability-seam subsection with non-breaking/onRedirect-unchanged reassurance; purely additive (50 ins / 0 del), every signature cited byte-for-byte from shipped source. Phase 1 complete (3/3 plans).
 
 ### Architectural Notes
 
@@ -76,17 +78,18 @@ Progress: [ Phase 1 ███████░░░ ][ Phase 2 ░░░░░░
 ### TODOs
 
 - ~~Plan 01-02: add the grep-based CI guard (D-08/D-10) AND the adapter-level jsdom/vitest test (D-12.2)~~ — DONE; D-12 dual gate verified locally (parity 7/7 + adapter test green) and CI-enforced
-- Plan 01-03: AGENTS.md + README capability-seam documentation (D-14) — including how the invariant is enforced (check:core-globals guard + parity-workflow step)
+- ~~Plan 01-03: AGENTS.md + README capability-seam documentation (D-14) — including how the invariant is enforced (check:core-globals guard + parity-workflow step)~~ — DONE; AGNOSTIC-04 complete, Phase 1 fully delivered
+- Phase 2 (UPLOAD-01): build the upload-progress XHR binding through the documented `transport?(input, init, hooks?)` seam — no wire/public-API change
 
 ---
 
 ## Session Continuity
 
-**Last session:** 2026-05-15T12:38:14Z
-**Stopped at:** Completed 01-02-PLAN.md
-**Next action:** Execute 01-03-PLAN.md
+**Last session:** 2026-05-15T12:47:00.463Z
+**Stopped at:** Completed 01-03-PLAN.md (Phase 01 complete)
+**Next action:** Plan/execute Phase 02 (UPLOAD-01 — upload progress through the seam)
 
 ---
 
 *State initialized: 2026-05-15*
-*Last updated: 2026-05-15 after 01-02 execution*
+*Last updated: 2026-05-15 after 01-03 execution (Phase 01 complete)*
