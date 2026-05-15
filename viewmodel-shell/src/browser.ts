@@ -113,7 +113,11 @@ export class BrowserAdapter implements Adapter {
       xhr.onload = () => {
         // D-05 terminal emission: mirror whichever value was being reported.
         // Known total → (total, total); indeterminate → (finalLoaded, finalLoaded).
-        // Explicitly NEVER (0, 0).
+        // NEVER (0,0) once any progress event has fired; a body that produces
+        // no progress event (e.g. a zero-byte upload, or a transport that
+        // completes before the browser emits any upload progress) legitimately
+        // terminates at (0,0), which the documented `total > 0` consumer guard
+        // (MIGRATION.md 5b) handles.
         if (knownTotal > 0) onUploadProgress(knownTotal, knownTotal);
         else onUploadProgress(lastLoaded, lastLoaded);
         // D-08: status 0 means a network-level failure (CORS rejection / blocked
