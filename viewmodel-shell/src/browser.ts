@@ -80,7 +80,11 @@ export class BrowserAdapter implements Adapter {
 
     return new Promise<Response>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open(init.method ?? "GET", input);
+      // IN-01: this seam only exists to carry a body+files action request, so
+      // a method-less init is non-sensical. dispatch() (the sole caller) always
+      // passes "POST"; default to "POST" (not "GET") so a future caller bug
+      // never silently produces a body-bearing GET.
+      xhr.open(init.method ?? "POST", input);
       // WR-02: every header dispatch() builds in `init.headers` (Accept +
       // getRequestHeaders()) is applied here, so the XHR path's request
       // headers are byte-identical to the fetch path's. Scope note: this
