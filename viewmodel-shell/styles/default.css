@@ -52,6 +52,24 @@ body {
   font-family: var(--vms-font-body);
 }
 
+/* ── Box model ──
+   Scoped to the framework's own rendered subtree (.vms-page and the
+   separately-appended .vms-modal-backdrop) — NOT a global `*` reset, which
+   would stomp the host app's own page elements (this stylesheet is opt-in).
+   Without this, any full-width element with padding+border (text inputs,
+   table filter inputs, …) overflows a padded container under the UA
+   content-box default. */
+.vms-page,
+.vms-page *,
+.vms-page *::before,
+.vms-page *::after,
+.vms-modal-backdrop,
+.vms-modal-backdrop *,
+.vms-modal-backdrop *::before,
+.vms-modal-backdrop *::after {
+  box-sizing: border-box;
+}
+
 /* ── Page ── */
 .vms-page { display: flex; flex-direction: column; gap: 1.5rem; color: var(--vms-text); font-family: var(--vms-font-body); }
 .vms-page__title {
