@@ -3,8 +3,24 @@ import type {
   PageNode, SectionNode, ListNode, ListItemNode,
   FormNode, FieldNode, CheckboxNode, ButtonNode,
   TextNode, LinkNode, StatBarNode, TabsNode, ProgressNode,
-  ModalNode, TableNode,
+  ModalNode, TableNode, CopyButtonNode,
 } from "./index.js";
+
+function legacyCopy(text: string): boolean {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
 
 export class BrowserAdapter implements Adapter {
   private fileRegistry = new Map<string, File>();
@@ -165,8 +181,9 @@ export class BrowserAdapter implements Adapter {
       case "stat-bar":  return this.statBar(n, parent);
       case "tabs":      return this.tabs(n, parent, on);
       case "progress":  return this.progress(n, parent);
-      case "modal":     return this.modal(n, parent, on);
-      case "table":     return this.table(n, parent, on);
+      case "modal":        return this.modal(n, parent, on);
+      case "table":        return this.table(n, parent, on);
+      case "copy-button":  return this.copyButton(n, parent);
     }
   }
 
@@ -657,5 +674,36 @@ export class BrowserAdapter implements Adapter {
 
     wrapper.appendChild(table);
     parent.appendChild(wrapper);
+  }
+
+  private copyButton(n: CopyButtonNode, parent: HTMLElement): void {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "vms-button";
+    btn.textContent = n.label ?? "Copy";
+    btn.addEventListener("click", () => {
+      const write = navigator.clipboard?.writeText(n.text);
+      if (write) {
+        write.then(() => {
+          btn.textContent = n.copiedLabel ?? "Copied!";
+          setTimeout(() => { btn.textContent = n.label ?? "Copy"; }, 1500);
+        }).catch(() => {
+          // primary failed — try legacy execCommand fallback
+          if (legacyCopy(n.text)) {
+            btn.textContent = n.copiedLabel ?? "Copied!";
+            setTimeout(() => { btn.textContent = n.label ?? "Copy"; }, 1500);
+          }
+          // both paths failed: silent, no confirmation
+        });
+      } else {
+        // navigator.clipboard absent — try legacy
+        if (legacyCopy(n.text)) {
+          btn.textContent = n.copiedLabel ?? "Copied!";
+          setTimeout(() => { btn.textContent = n.label ?? "Copy"; }, 1500);
+        }
+        // else: silent
+      }
+    });
+    parent.appendChild(btn);
   }
 }

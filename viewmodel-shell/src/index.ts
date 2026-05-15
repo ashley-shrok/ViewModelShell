@@ -53,7 +53,8 @@ export type ViewNode =
   | TabsNode
   | ProgressNode
   | ModalNode
-  | TableNode;
+  | TableNode
+  | CopyButtonNode;
 
 export interface PageNode {
   type: "page";
@@ -201,6 +202,16 @@ export interface TableNode {
   sortAction?: ActionEvent;
   /** Base action. Adapter merges { column, value, filters } into context on Enter. */
   filterAction?: ActionEvent;
+}
+
+export interface CopyButtonNode {
+  type: "copy-button";
+  /** The string to write to the clipboard on click. */
+  text: string;
+  /** Label shown on the button before copying. Adapter default: "Copy". */
+  label?: string;
+  /** Ephemeral label shown after a successful copy, reverts after ~1.5 s. Adapter default: "Copied!". */
+  copiedLabel?: string;
 }
 
 // ─── Shell ────────────────────────────────────────────────────────────────────

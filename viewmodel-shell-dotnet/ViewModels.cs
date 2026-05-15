@@ -92,7 +92,8 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(ProgressNode), "progress")]
 [JsonDerivedType(typeof(ModalNode),    "modal")]
 [JsonDerivedType(typeof(TableNode),    "table")]
-[JsonDerivedType(typeof(LinkNode),     "link")]
+[JsonDerivedType(typeof(LinkNode),       "link")]
+[JsonDerivedType(typeof(CopyButtonNode), "copy-button")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -204,4 +205,10 @@ public record LinkNode(
     string Label,
     string Href,
     bool External = false
+) : ViewNode;
+
+public record CopyButtonNode(
+    string Text,
+    string? Label = null,
+    string? CopiedLabel = null
 ) : ViewNode;
