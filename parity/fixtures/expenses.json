@@ -1,0 +1,17 @@
+{
+  "name": "expenses",
+  "endpoint": "/api/expenses",
+  "actionEndpoint": "/api/expenses/action",
+  "$comment": "Exercises ExpenseTracker — categories with progress bars, transaction filtering, category selection. Add is deferred (generates IDs).",
+  "steps": [
+    { "id": "initial-load",     "method": "GET" },
+    { "id": "filter-food",      "method": "POST", "action": { "name": "filter",          "context": { "value": "food" } } },
+    { "id": "filter-transport", "method": "POST", "action": { "name": "filter",          "context": { "value": "transport" } } },
+    { "id": "filter-all",       "method": "POST", "action": { "name": "filter",          "context": { "value": "all" } } },
+    { "id": "select-bills",     "method": "POST", "action": { "name": "select-category", "context": { "value": "bills" } } },
+    { "id": "select-ent",       "method": "POST", "action": { "name": "select-category", "context": { "value": "entertainment" } } },
+    { "id": "delete-tx-3",      "method": "POST", "action": { "name": "delete",          "context": { "id": "3" } } },
+    { "id": "filter-bills",     "method": "POST", "action": { "name": "filter",          "context": { "value": "bills" } } },
+    { "id": "filter-all-2",     "method": "POST", "action": { "name": "filter",          "context": { "value": "all" } } }
+  ]
+}

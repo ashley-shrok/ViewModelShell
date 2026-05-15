@@ -60,6 +60,26 @@
       "baseUrl": "http://localhost:5006",
       "ready": "/api/retro",
       "fixtures": ["retro"]
+    },
+    {
+      "name": "dotnet-expenses",
+      "cwd": "../demo/ExpenseTracker/AspNetCore",
+      "prebuild": { "cmd": "dotnet", "args": ["build", "--nologo", "-v", "minimal"] },
+      "start": "dotnet",
+      "args": ["run", "--no-build", "--no-launch-profile", "--urls", "http://localhost:5007"],
+      "baseUrl": "http://localhost:5007",
+      "ready": "/api/expenses",
+      "fixtures": ["expenses"]
+    },
+    {
+      "name": "bun-expenses",
+      "cwd": "../demo/ExpenseTracker-bun",
+      "start": "bun",
+      "args": ["run", "server.ts"],
+      "env": { "PORT": "5008" },
+      "baseUrl": "http://localhost:5008",
+      "ready": "/api/expenses",
+      "fixtures": ["expenses"]
     }
   ]
 }

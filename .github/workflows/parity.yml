@@ -46,9 +46,10 @@ jobs:
 
       - name: Install Bun deps
         run: |
-          cd demo/Tasks-bun && bun install --frozen-lockfile
-          cd ../ContactManager-bun && bun install --frozen-lockfile
-          cd ../../parity && bun install --frozen-lockfile
+          for dir in demo/*-bun; do
+            (cd "$dir" && bun install --frozen-lockfile)
+          done
+          cd parity && bun install --frozen-lockfile
 
       - name: Run cross-backend parity tests
         run: cd parity && bun run run.ts
