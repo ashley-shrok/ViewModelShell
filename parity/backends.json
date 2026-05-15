@@ -103,6 +103,26 @@
       "baseUrl": "http://localhost:5010",
       "ready": "/api/requester",
       "fixtures": ["helpdesk"]
+    },
+    {
+      "name": "dotnet-probe",
+      "cwd": "../demo/FeatureProbe/AspNetCore",
+      "prebuild": { "cmd": "dotnet", "args": ["build", "--nologo", "-v", "minimal"] },
+      "start": "dotnet",
+      "args": ["run", "--no-build", "--no-launch-profile", "--urls", "http://localhost:5011"],
+      "baseUrl": "http://localhost:5011",
+      "ready": "/api/probe",
+      "fixtures": ["feature-probe"]
+    },
+    {
+      "name": "bun-probe",
+      "cwd": "../demo/FeatureProbe-bun",
+      "start": "bun",
+      "args": ["run", "server.ts"],
+      "env": { "PORT": "5012" },
+      "baseUrl": "http://localhost:5012",
+      "ready": "/api/probe",
+      "fixtures": ["feature-probe"]
     }
   ]
 }

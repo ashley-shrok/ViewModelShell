@@ -1,0 +1,36 @@
+{
+  "name": "feature-probe",
+  "endpoint": "/api/probe",
+  "actionEndpoint": "/api/probe/action",
+  "$comment": "Exercises framework wire surfaces no demo app uses naturally: redirect, side effects, polling cadence, file upload via multipart.",
+  "steps": [
+    { "id": "initial",          "method": "GET" },
+
+    { "id": "redirect-default", "method": "POST", "action": { "name": "trigger-redirect" } },
+    { "id": "fresh-after-redirect", "method": "GET", "freshState": true },
+    { "id": "redirect-custom",  "method": "POST", "action": { "name": "trigger-redirect", "context": { "to": "/custom-target" } } },
+
+    { "id": "fresh-1",          "method": "GET", "freshState": true },
+    { "id": "set-storage-default", "method": "POST", "action": { "name": "set-storage" } },
+    { "id": "set-storage-custom",  "method": "POST", "action": { "name": "set-storage", "context": { "local-value": "L1", "session-value": "S1" } } },
+
+    { "id": "fresh-2",          "method": "GET", "freshState": true },
+    { "id": "poll-1",           "method": "POST", "action": { "name": "do-poll" } },
+    { "id": "poll-2",           "method": "POST", "action": { "name": "do-poll" } },
+    { "id": "poll-3",           "method": "POST", "action": { "name": "do-poll" } },
+
+    { "id": "fresh-3",          "method": "GET", "freshState": true },
+    {
+      "id": "upload-small",
+      "method": "POST",
+      "action": { "name": "upload" },
+      "attach": { "attachment": { "name": "hello.txt", "content": "hello world" } }
+    },
+    {
+      "id": "upload-replace",
+      "method": "POST",
+      "action": { "name": "upload" },
+      "attach": { "attachment": { "name": "second.txt", "content": "second upload contents" } }
+    }
+  ]
+}

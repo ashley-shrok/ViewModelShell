@@ -42,6 +42,9 @@ interface FixtureStep {
   /** When true, this step starts a fresh state thread (sends null as _state instead of the previous response's state). */
   freshState?: boolean;
   action?: { name: string; context?: Record<string, unknown> };
+  /** File attachments to include in the multipart form (e.g. for FieldNode inputType="file").
+   *  Keyed by form field name; value is { name, content }. */
+  attach?: Record<string, { name: string; content: string }>;
 }
 
 interface Fixture {
@@ -123,6 +126,11 @@ async function runFixtureAgainst(cfg: BackendConfig, fixture: Fixture): Promise<
       const form = new FormData();
       form.append("_action", JSON.stringify({ name: step.action!.name, context: step.action!.context ?? {} }));
       form.append("_state", JSON.stringify(lastState));
+      if (step.attach) {
+        for (const [fieldName, file] of Object.entries(step.attach)) {
+          form.append(fieldName, new Blob([file.content], { type: "application/octet-stream" }), file.name);
+        }
+      }
       init = { method: "POST", body: form };
     }
 
