@@ -61,6 +61,41 @@ The server is a pure function `(state, action) → (newState, view)`. Every requ
 
 Response is the same `{ "vm", "state" }` shape as GET. The shell stores `state` internally and sends it with the next dispatch automatically — apps don't manage state plumbing.
 
+### The capability seam
+
+**The core never references `HTMLElement`, `document`, or any platform type.** It is a pure wire-protocol transformer: it speaks the JSON contract and delegates every platform side-effect to the `Adapter` — exactly the way `render()` is already delegated. This is no longer an aspiration: it is a **CI-enforced, checkable invariant** (see *Enforcement* below).
+
+**The verbs.** Platform side-effects are optional methods on the existing `Adapter` interface (`viewmodel-shell/src/index.ts`). `render` is the only required method; the three capability verbs are optional — a target opts into the capabilities it can serve:
+
+```typescript
+export interface Adapter {
+  render(vm: ViewNode, onAction: (action: ActionEvent) => void): void;     // required
+  navigate?(url: string): void;                                            // redirect target
+  storage?(scope: "local" | "session", key: string, value: string): void;  // write-only side-effect
+  transport?(
+    input: string,
+    init: { method?: string; headers?: Record<string, string>; body?: FormData | string },
+    hooks?: { onUploadProgress?: (sent: number, total: number) => void }
+  ): Promise<Response>;                                                     // optional override; fetch is the default
+}
+```
+
+- **`navigate?(url)`** — hand the platform off to a URL. `BrowserAdapter` implements it as `window.location.href = url` (relocated *verbatim* out of core — the binding moved where it executes, not what it does).
+- **`storage?(scope, key, value)`** — write a client side-effect to platform storage. **Write-only**: the wire contract has no storage *read*. `BrowserAdapter` writes to `localStorage`/`sessionStorage` accordingly.
+- **`transport?(input, init, hooks?)`** — optional transport override. **Asymmetric from the other two:** the core's own `fetch` is the universal default (browsers, Node 18+, Deno, Bun), so omitting `transport` is always safe — `load()`/`dispatch()` are *not* routed through a mandatory transport indirection. It exists as the extension point for the Phase 2 upload-progress XHR binding (`hooks.onUploadProgress`), which will be built *through* this seam with no further wire/API change.
+
+**Optional-methods shape & non-breaking guarantee.** All three verbs are optional, so any existing custom `Adapter` that implements only `render` still compiles unchanged. Conversely, a new front-end target (mobile, terminal, …) becomes a *complete* target by implementing exactly one interface — that is the property this seam exists to create.
+
+**Redirect resolution order.** When a response carries `redirect`, the shell resolves in this order:
+
+1. `ShellOptions.onRedirect` if set — its signature is **unchanged** (`(url: string) => void`). Any consumer that sets `onRedirect` sees byte-identical behavior to before the refactor.
+2. else `adapter.navigate(url)` — consumers relying on the old in-core default now get it from `BrowserAdapter.navigate` instead of core (still byte-identical, since every real consumer uses `BrowserAdapter`).
+3. else a **loud error** (see fail-loud rule).
+
+**Fail-loud rule.** Unlike `onError`/`onLoading`, `navigate` and `storage` have **no safe core default** — there is no sane no-op. If a redirect or storage side-effect arrives and the capability is absent (no `onRedirect` and no `adapter.navigate`; or no `adapter.storage`), the shell **fails loudly** — it surfaces an `Error` via `ShellOptions.onError` (or `console.error` if unset), **never a silent no-op**. This is a correctness/security requirement: a `set-local-storage` of an auth JWT (e.g. `hecate_jwt`) silently swallowed, or a post-login redirect silently no-op'd, is a security failure, not a soft degradation. An adapter author who omits `storage`/`navigate` gets a hard, debuggable failure — not a swallowed auth token.
+
+**Enforcement.** The "core references zero platform globals" invariant is enforced by a grep-based CI guard, scoped to **core `src/index.ts` only** (`viewmodel-shell/src/browser.ts` legitimately owns all DOM bindings and is *excluded*; `server.ts` is out of this guard's scope). The guard (`viewmodel-shell/scripts/check-core-platform-globals.mjs`, run locally via `npm run check:core-globals`) fails the build if `src/index.ts` references any of `window`, `document`, `localStorage`, `sessionStorage`, or `XMLHttpRequest`. It runs as a gating step in `.github/workflows/parity.yml` (the `Enforce core platform-agnosticism (AGNOSTIC-03)` step), alongside a framework-level jsdom adapter test that proves the relocated bindings actually fire. Universals deliberately kept in core (`fetch`, `FormData`, `setTimeout`, `URLSearchParams`, `console`) are not on the denylist.
+
 ---
 
 ## Node types
@@ -487,3 +522,4 @@ All under `demo/`. Patterns are consistent across them.
 - **Don't add features the framework doesn't have a clean place for.** When a request would require a workaround, that's usually a signal that the framework needs a new primitive — ask before patching around it.
 - **All demo `ViewModels.cs` copies must stay in sync.** When adding a new node type or changing the wire format, update all five copies (Tasks, HelpDesk, ExpenseTracker, ContactManager, RetroBoard).
 - **Test suites are non-negotiable.** Every framework change keeps the existing tests green and adds tests for new behavior.
+- **The core stays platform-agnostic — and it is enforced, not trusted.** `viewmodel-shell/src/index.ts` must reference zero platform globals. A new platform side-effect goes behind a capability verb on the `Adapter` interface (and into `BrowserAdapter`), never into core. `npm run check:core-globals` (the `viewmodel-shell/scripts/check-core-platform-globals.mjs` guard, a gating step in `.github/workflows/parity.yml`) fails the build on any `window`/`document`/`localStorage`/`sessionStorage`/`XMLHttpRequest` reference in core — run it before you push. A capability that has no safe core default (like `navigate`/`storage`) must fail loudly when its adapter method is absent, never silently no-op. See *The capability seam* under Architecture.
