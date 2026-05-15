@@ -29,7 +29,7 @@
 
 Plans:
 - [x] 01-01-PLAN.md — Relocate the 3 platform-global violations out of core behind the BrowserAdapter capability seam (AGNOSTIC-01/02, behavior-preserving)
-- [ ] 01-02-PLAN.md — CI guard for the invariant + net-new vitest/jsdom adapter test + run the D-12 dual verification gate (AGNOSTIC-03)
+- [x] 01-02-PLAN.md — CI guard for the invariant + net-new vitest/jsdom adapter test + run the D-12 dual verification gate (AGNOSTIC-03)
 - [ ] 01-03-PLAN.md — Document the capability seam + CI-enforced invariant in AGENTS.md and README.md (AGNOSTIC-04)
 
 ### Phase 2: Upload Progress + Milestone Closeout
@@ -49,10 +49,10 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Capability Seam Refactor | 0/? | Not started | - |
+| 1. Capability Seam Refactor | 2/3 | In Progress | - |
 | 2. Upload Progress + Milestone Closeout | 0/? | Not started | - |
 
 ---
 
 *Roadmap created: 2026-05-15*
-*Last updated: 2026-05-15 after initial creation*
+*Last updated: 2026-05-15 after 01-02 execution*
