@@ -47,6 +47,10 @@ function makeMockXHR() {
     status: 200,
   };
   const openCalls: Array<{ method: string; url: string }> = [];
+  // WR-02: capture the headers the SHIPPED transport() applies via
+  // xhr.setRequestHeader so a parity test can assert they are byte-identical
+  // to what the fetch path would send (closing the gap the old no-op left).
+  const setHeaderCalls: Array<{ name: string; value: string }> = [];
 
   class MockXHR {
     upload: { onprogress: ((e: ProgressStep) => void) | null } = { onprogress: null };
@@ -61,8 +65,11 @@ function makeMockXHR() {
     open(method: string, url: string): void {
       openCalls.push({ method, url });
     }
-    setRequestHeader(): void {
-      /* no-op: header fidelity is exercised by parity, not this binding test */
+    setRequestHeader(name: string, value: string): void {
+      // WR-02: record (not no-op) so the parity test can assert the XHR path
+      // applies exactly the headers dispatch() built in init.headers — the
+      // same set the fetch fallback path would send.
+      setHeaderCalls.push({ name, value });
     }
     send(_body?: unknown): void {
       // Defer to a microtask so the Promise inside transport() is wired before
@@ -86,6 +93,7 @@ function makeMockXHR() {
   return {
     MockXHR,
     openCalls,
+    setHeaderCalls,
     setScript(s: Partial<typeof script>) {
       script = { ...script, ...s };
     },
@@ -310,5 +318,71 @@ describe("UPLOAD-01 / D-14 (e) — indeterminate completion is (finalLoaded,fina
     // …and the terminal emission is (finalLoaded, finalLoaded), NEVER (0,0).
     expect(calls.at(-1)).toEqual([73, 73]);
     expect(calls.at(-1)).not.toEqual([0, 0]);
+  });
+});
+
+describe("UPLOAD-01 / WR-02 — XHR path applies the SAME request headers the fetch path would (header parity)", () => {
+  it("the headers transport() sets via xhr.setRequestHeader are byte-identical to the init.headers the fetch fallback receives (same-origin scope)", async () => {
+    // Drive the SHIPPED transport XHR path with a custom getRequestHeaders so
+    // init.headers = { Accept: "application/json", ...extraHeaders }. The mock
+    // now RECORDS setRequestHeader (no longer a no-op) so we can prove the XHR
+    // path carries exactly that header set.
+    const { MockXHR, setScript, setHeaderCalls } = makeMockXHR();
+    vi.stubGlobal("XMLHttpRequest", MockXHR);
+    setScript({ steps: [{ lengthComputable: true, loaded: 5, total: 5 }] });
+
+    const getRequestHeaders = async () => ({ "X-CSRF-Token": "abc123" });
+
+    const xhrShell = new ViewModelShell({
+      adapter: new BrowserAdapter(freshContainer()),
+      endpoint,
+      actionEndpoint,
+      getRequestHeaders,
+      onUploadProgress: () => {},
+    });
+    seedState(xhrShell);
+    await xhrShell.dispatch({
+      name: "upload",
+      context: {},
+      files: { file: new File(["data"], "f.txt") },
+    });
+    await flush();
+
+    const xhrHeaders = Object.fromEntries(
+      setHeaderCalls.map((h) => [h.name, h.value]),
+    );
+
+    // Now run the SAME options through the fetch path (no transport on a
+    // render-only adapter → D-02 fetch fallback) and capture the init.headers
+    // fetch actually receives. The two MUST be byte-identical.
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ vm, state }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const fetchShell = new ViewModelShell({
+      adapter: { render() {} } as Adapter, // no transport → fetch fallback
+      endpoint,
+      actionEndpoint,
+      getRequestHeaders,
+      onUploadProgress: () => {},
+    });
+    seedState(fetchShell);
+    await fetchShell.dispatch({
+      name: "upload",
+      context: {},
+      files: { file: new File(["data"], "f.txt") },
+    });
+    await flush();
+
+    const fetchInit = fetchSpy.mock.calls[0]?.[1] as { headers: Record<string, string> };
+
+    // Parity: the XHR path set EXACTLY the headers the fetch path sends —
+    // closing the gap the old no-op setRequestHeader mock left open. (Cookie
+    // parity is documented same-origin-only; see browser.ts WR-02 scope note.)
+    expect(xhrHeaders).toEqual(fetchInit.headers);
+    expect(xhrHeaders).toEqual({
+      Accept: "application/json",
+      "X-CSRF-Token": "abc123",
+    });
   });
 });

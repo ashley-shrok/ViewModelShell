@@ -81,6 +81,14 @@ export class BrowserAdapter implements Adapter {
     return new Promise<Response>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open(init.method ?? "GET", input);
+      // WR-02: every header dispatch() builds in `init.headers` (Accept +
+      // getRequestHeaders()) is applied here, so the XHR path's request
+      // headers are byte-identical to the fetch path's. Scope note: this
+      // seam is same-origin only. The fetch fallback sends cookies on
+      // same-origin requests via its default `credentials: "same-origin"`;
+      // XHR sends same-origin cookies without `withCredentials`, so the
+      // common (same-origin `actionEndpoint`) case matches fetch exactly.
+      // Cross-origin action endpoints are out of scope for this transport.
       for (const [k, v] of Object.entries(init.headers ?? {})) {
         xhr.setRequestHeader(k, v);
       }
