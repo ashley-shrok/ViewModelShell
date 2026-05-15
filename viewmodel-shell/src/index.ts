@@ -8,10 +8,32 @@ export interface ActionEvent {
 
 // ─── Adapter interface ────────────────────────────────────────────────────────
 // Implement this to target a new platform (browser, mobile, terminal, …).
-// The core never references HTMLElement, document, or any platform type.
+// The core never references HTMLElement, document, or any platform global —
+// platform side-effects are delegated through this seam, exactly like render().
+// `render` is required; `navigate`/`storage`/`transport` are optional capability
+// verbs a target opts into. A target that handles redirects must implement
+// `navigate`; a target that supports the storage side-effects must implement
+// `storage`; `transport` is an optional override point (default transport is
+// the core's own `fetch`).
 
 export interface Adapter {
   render(vm: ViewNode, onAction: (action: ActionEvent) => void): void;
+  /** Hand the platform off to a URL (browser: window.location.href = url).
+   *  No safe no-op exists — if a redirect arrives and neither ShellOptions.onRedirect
+   *  nor this method is available, the shell fails loudly. */
+  navigate?(url: string): void;
+  /** Write a client side-effect to platform storage. Write-only — the wire
+   *  contract has no storage read. scope is "local" | "session". */
+  storage?(scope: "local" | "session", key: string, value: string): void;
+  /** OPTIONAL transport override. Phase 1 leaves the core's `fetch` as the
+   *  universal default and does NOT route load()/dispatch() through this.
+   *  Defined now so Phase 2 (upload progress) can plug an XHR binding in via
+   *  the `hooks.onUploadProgress` callback with no further wire/API change. */
+  transport?(
+    input: string,
+    init: { method?: string; headers?: Record<string, string>; body?: FormData | string },
+    hooks?: { onUploadProgress?: (sent: number, total: number) => void }
+  ): Promise<Response>;
 }
 
 // ─── Node types ───────────────────────────────────────────────────────────────
