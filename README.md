@@ -20,6 +20,8 @@ Implementing this one interface is all a new front-end target (mobile, terminal,
 
 **This is non-breaking for existing consumers.** The wire format, all node types, side-effect behavior, and `ShellOptions.onRedirect` (still `(url: string) => void`) are unchanged. `BrowserAdapter` — which every consumer uses — implements all three verbs, so default behavior is byte-identical to before; the only change is *where* the browser bindings execute (adapter, not core). If you set `onRedirect`, it still takes precedence over the adapter's navigation, exactly as documented in [AGENTS.md](https://github.com/ashley-shrok/ViewModelShell/blob/main/AGENTS.md).
 
+Upgrading from a previous version? See [MIGRATION.md](./MIGRATION.md) for exact npm/NuGet versions, the one new option (`onUploadProgress`), and what is explicitly not breaking.
+
 ## Install
 
 ```bash
