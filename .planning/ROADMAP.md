@@ -28,7 +28,7 @@
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Relocate the 3 platform-global violations out of core behind the BrowserAdapter capability seam (AGNOSTIC-01/02, behavior-preserving)
+- [x] 01-01-PLAN.md — Relocate the 3 platform-global violations out of core behind the BrowserAdapter capability seam (AGNOSTIC-01/02, behavior-preserving)
 - [ ] 01-02-PLAN.md — CI guard for the invariant + net-new vitest/jsdom adapter test + run the D-12 dual verification gate (AGNOSTIC-03)
 - [ ] 01-03-PLAN.md — Document the capability seam + CI-enforced invariant in AGENTS.md and README.md (AGNOSTIC-04)
 

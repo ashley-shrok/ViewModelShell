@@ -9,8 +9,8 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 ### Capability Seam (Phase 1)
 
-- [ ] **AGNOSTIC-01**: Core `src/index.ts` references zero platform globals; a generic capability seam delegates `navigate(url)`, `storage(scope,key,value)`, and a progress-capable transport to the plugged-in front-end (same way `render()` is already delegated to the adapter)
-- [ ] **AGNOSTIC-02**: Existing browser bindings (`window.location.href` for redirect; `localStorage`/`sessionStorage` for side-effects) relocated out of core into `BrowserAdapter` behind the seam, with zero change to observable behavior
+- [x] **AGNOSTIC-01**: Core `src/index.ts` references zero platform globals; a generic capability seam delegates `navigate(url)`, `storage(scope,key,value)`, and a progress-capable transport to the plugged-in front-end (same way `render()` is already delegated to the adapter)
+- [x] **AGNOSTIC-02**: Existing browser bindings (`window.location.href` for redirect; `localStorage`/`sessionStorage` for side-effects) relocated out of core into `BrowserAdapter` behind the seam, with zero change to observable behavior
 - [ ] **AGNOSTIC-03**: A CI guard fails the build if core source references a platform global (`window`, `document`, `localStorage`, `sessionStorage`, `XMLHttpRequest`, etc.) — the claimed invariant becomes an enforced, checkable one
 - [ ] **AGNOSTIC-04**: AGENTS.md and README updated to document the capability-seam pattern and the CI-enforced "core references zero platform globals" invariant (ships with the phase, not after)
 
@@ -39,8 +39,8 @@ Requirements for this milestone. Each maps to exactly one roadmap phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AGNOSTIC-01 | Phase 1 | Pending |
-| AGNOSTIC-02 | Phase 1 | Pending |
+| AGNOSTIC-01 | Phase 1 | Complete |
+| AGNOSTIC-02 | Phase 1 | Complete |
 | AGNOSTIC-03 | Phase 1 | Pending |
 | AGNOSTIC-04 | Phase 1 | Pending |
 | UPLOAD-01 | Phase 2 | Pending |
