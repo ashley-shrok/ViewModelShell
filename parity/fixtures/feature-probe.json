@@ -31,6 +31,7 @@
       "method": "POST",
       "action": { "name": "upload" },
       "attach": { "attachment": { "name": "second.txt", "content": "second upload contents" } }
-    }
+    },
+    { "id": "copy-button-node", "method": "POST", "action": { "name": "show-copy-button" } }
   ]
 }

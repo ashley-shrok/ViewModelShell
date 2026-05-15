@@ -30,6 +30,9 @@ function buildVm(state: FeatureProbeState): ViewNode {
       style: "muted",
     });
   }
+  children.push(
+    { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!" } as ViewNode,
+  );
   return { type: "page", title: "Feature Probe", children };
 }
 
@@ -70,6 +73,9 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
       }
       break;
     }
+
+    case "show-copy-button":
+      break;  // state unchanged; buildVm always includes the copy-button node
 
     case "reset":
       state = initialState();

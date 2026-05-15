@@ -72,6 +72,9 @@ public class FeatureProbeController : ControllerBase
                 }
                 break;
 
+            case "show-copy-button":
+                break;  // state unchanged; BuildVm always includes the copy-button node
+
             case "reset":
                 state = FeatureProbeState.Initial();
                 break;
@@ -91,6 +94,8 @@ public class FeatureProbeController : ControllerBase
         };
         if (state.LastUploadName != null)
             children.Add(new TextNode($"Last upload: {state.LastUploadName} ({state.LastUploadSize} bytes)", "muted"));
+
+        children.Add(new CopyButtonNode("npx @ashley-shrok/viewmodel-shell", "Copy install command", "Copied!"));
 
         return new PageNode("Feature Probe", children);
     }
