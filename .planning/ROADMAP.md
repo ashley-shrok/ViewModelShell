@@ -1,0 +1,53 @@
+# Roadmap: ViewModel Shell — Milestone "Restore & Enforce Core Platform-Agnosticism"
+
+**Milestone:** Restore & Enforce Core Platform-Agnosticism
+**Granularity:** Coarse
+**Phases:** 2
+**Coverage:** 6/6 requirements mapped
+
+---
+
+## Phases
+
+- [ ] **Phase 1: Capability Seam Refactor** - Purge all platform globals from core and enforce the invariant with a CI guard; zero observable behavior change
+- [ ] **Phase 2: Upload Progress + Milestone Closeout** - Implement onUploadProgress as the first feature through the seam and ship the consumer migration blurb
+
+---
+
+## Phase Details
+
+### Phase 1: Capability Seam Refactor
+**Goal**: Core src/index.ts references zero platform globals; all browser bindings live behind a generic capability seam in BrowserAdapter; the invariant is CI-enforced and documented
+**Depends on**: Nothing (first phase)
+**Requirements**: AGNOSTIC-01, AGNOSTIC-02, AGNOSTIC-03, AGNOSTIC-04
+**Success Criteria** (what must be TRUE):
+  1. Running the project's core source through the CI guard produces zero platform-global violations (window, document, localStorage, sessionStorage, XMLHttpRequest are absent from core)
+  2. The cross-backend parity suite (parity/run.ts) stays 100% green — all 7 fixtures, including the FeatureProbe redirect and side-effect fixtures — proving no observable behavior change from the refactor
+  3. A new CI step exists that fails the build whenever core source introduces a platform global reference
+  4. AGENTS.md and README contain a documented description of the capability-seam pattern (navigate, storage, transport verbs) and the CI-enforced "core references zero platform globals" invariant
+**Plans**: TBD
+
+### Phase 2: Upload Progress + Milestone Closeout
+**Goal**: onUploadProgress(sent,total) is delivered as the first feature built through the transport capability seam, and downstream app maintainers receive a clear, copy-pasteable migration blurb
+**Depends on**: Phase 1
+**Requirements**: UPLOAD-01, MIGRATE-01
+**Success Criteria** (what must be TRUE):
+  1. Calling shell.dispatch() with a FormData payload and ShellOptions.onUploadProgress set invokes the callback with (sent, total) bytes during transfer; the callback is never invoked when no files are present or the option is not set
+  2. The XHR upload binding is locatable only inside BrowserAdapter — a grep of core src/index.ts for XMLHttpRequest returns no matches
+  3. The full parity suite (parity/run.ts, all 7 fixtures) remains 100% green, confirming the response path through processResponse() is shared and behavioral parity is preserved
+  4. A migration blurb exists as a concrete, copy-pasteable artifact stating: the exact npm and NuGet version numbers to update to, any public-API additions (onUploadProgress option), what is explicitly NOT breaking (wire format, redirect, side-effects, polling, all existing ViewNode types), and the recommended upgrade steps for downstream app maintainers
+**Plans**: TBD
+
+---
+
+## Progress
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Capability Seam Refactor | 0/? | Not started | - |
+| 2. Upload Progress + Milestone Closeout | 0/? | Not started | - |
+
+---
+
+*Roadmap created: 2026-05-15*
+*Last updated: 2026-05-15 after initial creation*
