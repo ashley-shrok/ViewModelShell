@@ -22,15 +22,15 @@ The core is a platform-agnostic transformer of a structured wire protocol — te
 - ✓ TypeScript backend subpath (`@ashley-shrok/viewmodel-shell/server`), compiled JS so it runs in plain Node — existing (v0.3.11)
 - ✓ Cross-backend parity harness — 7 fixtures, .NET/Bun/Node byte-identical, CI-gated — existing
 - ✓ ModalNode size variants, table horizontal overflow, box-sizing reset (issue #3) — existing
+- ✓ **AGNOSTIC-01**: Core (`src/index.ts`) references zero platform globals — generic capability seam delegates `navigate`, `storage`, and optional `transport` to the adapter — Validated in Phase 1: Capability Seam Refactor
+- ✓ **AGNOSTIC-02**: Browser bindings (`window.location`, `localStorage`, `sessionStorage`) relocated out of core into `BrowserAdapter` behind the seam, zero observable behavior change (parity green, all 7 fixtures) — Validated in Phase 1
+- ✓ **AGNOSTIC-03**: CI guard (`check-core-platform-globals.mjs`, step in `parity.yml`) fails the build if `src/index.ts` references a platform global — Validated in Phase 1
+- ✓ **AGNOSTIC-04**: AGENTS.md + README document the capability seam and the CI-enforced "core references zero platform globals" invariant — Validated in Phase 1
 
 ### Active
 
 <!-- Current scope. Building toward these. Milestone: "Restore & enforce core platform-agnosticism" -->
 
-- [ ] **AGNOSTIC-01**: Core (`src/index.ts`) references zero platform globals — generic capability seam delegates `navigate`, `storage`, and progress-capable transport to the adapter
-- [ ] **AGNOSTIC-02**: Existing browser bindings (`window.location`, `localStorage`, `sessionStorage`) relocated out of core into `BrowserAdapter` behind the seam, with no change to observable behavior (parity stays green)
-- [ ] **AGNOSTIC-03**: CI guard enforces the invariant — core source referencing a platform global fails the build
-- [ ] **AGNOSTIC-04**: AGENTS.md + README updated to document the capability seam and the CI-enforced "core references zero platform globals" invariant
 - [ ] **UPLOAD-01**: Upload progress (issue #4) — `onUploadProgress(sent,total)` implemented as the first feature built *through* the seam (XHR binding lives in BrowserAdapter, never core)
 - [ ] **MIGRATE-01**: Consumer-maintainer migration blurb — exactly what downstream app maintainers must update (versions, any API/behavior deltas) and how to handle the change
 
@@ -61,7 +61,7 @@ The core is a platform-agnostic transformer of a structured wire protocol — te
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Capability seam over per-feature browser hooks | Generic verbs (navigate/storage/transport) let any future front-end pick up redirect/side-effects/progress automatically; restores the core invariant the framework already claims | — Pending |
+| Capability seam over per-feature browser hooks | Generic verbs (navigate/storage/transport) let any future front-end pick up redirect/side-effects/progress automatically; restores the core invariant the framework already claims | ✓ Shipped Phase 1 — optional Adapter methods, CI-enforced, parity green |
 | 2 sequential phases, zero quicks | Phase 1 = refactor (no behavior change, parity-verifiable); Phase 2 = feature through the seam, depends on Phase 1. Quicks skip the verification gates this work centers on | — Pending |
 | Upload progress built *through* the seam, not bolted on | Avoids a third core platform violation; makes issue #4 the first feature done right | — Pending |
 | Consumer migration blurb is a first-class milestone deliverable | Downstream maintainers (multiple apps) must know what/whether to update; not an afterthought | — Pending |
@@ -84,4 +84,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-15 after initialization*
+*Last updated: 2026-05-15 — Phase 1 (Capability Seam Refactor) complete: AGNOSTIC-01..04 validated, core platform-agnostic invariant CI-enforced*
