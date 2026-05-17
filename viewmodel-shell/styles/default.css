@@ -88,40 +88,40 @@ body {
 }
 
 /* ── Page ── */
-.vms-page { display: flex; flex-direction: column; gap: 1.5rem; color: var(--vms-text); font-family: var(--vms-font-body); }
+.vms-page { display: flex; flex-direction: column; gap: var(--vms-space-lg); color: var(--vms-text); font-family: var(--vms-font-body); }
 .vms-page__title {
   font-family: var(--vms-font-head);
-  font-size: 2.25rem;
+  font-size: var(--vms-text-2xl);
   font-weight: 600;
   letter-spacing: -0.02em;
-  padding-bottom: 0.75rem;
+  padding-bottom: var(--vms-space-sm);
   border-bottom: 1px solid var(--vms-border);
 }
 
 /* ── Section ── */
-.vms-section { display: flex; flex-direction: column; gap: 0.75rem; }
+.vms-section { display: flex; flex-direction: column; gap: var(--vms-space-sm); }
 .vms-section__heading {
-  font-size: 11px;
+  font-size: var(--vms-text-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--vms-text-muted);
 }
 
 /* ── Stat bar ── */
-.vms-stat-bar { display: flex; gap: 1.5rem; flex-wrap: wrap; }
-.vms-stat-bar__item { display: flex; align-items: baseline; gap: 0.4rem; }
-.vms-stat-bar__value { color: var(--vms-accent); font-weight: 600; font-size: 16px; }
+.vms-stat-bar { display: flex; gap: var(--vms-space-lg); flex-wrap: wrap; }
+.vms-stat-bar__item { display: flex; align-items: baseline; gap: var(--vms-space-xs); }
+.vms-stat-bar__value { color: var(--vms-accent); font-weight: 600; font-size: var(--vms-text-lg); }
 .vms-stat-bar__label {
   color: var(--vms-text-muted);
-  font-size: 11px;
+  font-size: var(--vms-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 /* ── Form ── */
-.vms-form { display: flex; flex-direction: column; gap: 0.75rem; align-items: stretch; }
-.vms-field { display: flex; flex-direction: column; gap: 0.3rem; }
-.vms-field__label { font-size: 12px; color: var(--vms-text-muted); }
+.vms-form { display: flex; flex-direction: column; gap: var(--vms-space-sm); align-items: stretch; }
+.vms-field { display: flex; flex-direction: column; gap: var(--vms-space-2xs); }
+.vms-field__label { font-size: var(--vms-text-sm); color: var(--vms-text-muted); }
 .vms-field__input {
   width: 100%;
   background: var(--vms-surface);
@@ -129,8 +129,8 @@ body {
   border-radius: var(--vms-radius);
   color: var(--vms-text);
   font-family: var(--vms-font-body);
-  font-size: 14px;
-  padding: 0.65rem 1rem;
+  font-size: var(--vms-text-md);
+  padding: var(--vms-space-sm) var(--vms-space-md);
   outline: none;
   transition: border-color var(--vms-t), box-shadow var(--vms-t);
   resize: vertical;
@@ -145,13 +145,13 @@ body {
   box-shadow: 0 0 0 3px var(--vms-accent-glow);
 }
 textarea.vms-field__input { min-height: 80px; }
-select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
+select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); }
 
 /* Code editor field — monospaced, tab-aware, no spell-check chrome.
    Apps add syntax highlighting via .vms-field--code-{language} hooks. */
 .vms-field__input--code {
   font-family: var(--vms-font-mono);
-  font-size: 13px;
+  font-size: var(--vms-text-base);
   line-height: 1.5;
   tab-size: 2;
   min-height: 140px;
@@ -160,7 +160,7 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
 }
 
 /* Form-collected checkbox (FieldNode inputType="checkbox") — inline label. */
-.vms-field--checkbox { flex-direction: row; align-items: center; gap: 0.5rem; }
+.vms-field--checkbox { flex-direction: row; align-items: center; gap: var(--vms-space-xs); }
 .vms-field--checkbox .vms-field__input {
   width: 18px;
   height: 18px;
@@ -195,7 +195,7 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
   border-left: none;
   transform: rotate(40deg);
 }
-.vms-checkbox__label { margin-left: 0.5rem; font-size: 13px; }
+.vms-checkbox__label { margin-left: var(--vms-space-xs); font-size: var(--vms-text-base); }
 
 /* ── Buttons ── */
 .vms-button {
@@ -205,8 +205,8 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
   color: var(--vms-text);
   cursor: pointer;
   font-family: var(--vms-font-body);
-  font-size: 13px;
-  padding: 0.55rem 0.9rem;
+  font-size: var(--vms-text-base);
+  padding: var(--vms-space-sm) var(--vms-space-md);
   transition: background var(--vms-t), border-color var(--vms-t), transform var(--vms-t);
 }
 .vms-button:hover { border-color: var(--vms-accent-dim); }
@@ -215,7 +215,7 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
   background: var(--vms-accent);
   border-color: var(--vms-accent);
   color: #fff;
-  padding: 0.65rem 1.25rem;
+  padding: var(--vms-space-sm) var(--vms-space-lg);
   align-self: flex-start;
 }
 .vms-button--primary:hover { filter: brightness(1.1); }
@@ -223,8 +223,8 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
   background: transparent;
   border-color: var(--vms-accent-dim);
   color: var(--vms-accent);
-  font-size: 12px;
-  padding: 0.35rem 0.7rem;
+  font-size: var(--vms-text-sm);
+  padding: var(--vms-space-2xs) var(--vms-space-sm);
 }
 .vms-button--secondary:hover { border-color: var(--vms-accent); background: var(--vms-accent-glow); }
 .vms-button--danger {
@@ -240,7 +240,7 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
   border: none;
   color: var(--vms-text-muted);
   opacity: 0;
-  padding: 0.25rem 0.4rem;
+  padding: var(--vms-space-2xs) var(--vms-space-xs);
   border-radius: var(--vms-radius-sm);
   transition: opacity var(--vms-t), color var(--vms-t), background var(--vms-t);
 }
@@ -250,11 +250,11 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
 /* ── Tabs ── */
 .vms-tabs {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--vms-space-2xs);
   background: var(--vms-surface);
   border: 1px solid var(--vms-border);
   border-radius: var(--vms-radius);
-  padding: 0.25rem;
+  padding: var(--vms-space-2xs);
 }
 .vms-tabs__tab {
   flex: 1;
@@ -264,9 +264,9 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
   color: var(--vms-text-muted);
   cursor: pointer;
   font-family: var(--vms-font-body);
-  font-size: 12px;
+  font-size: var(--vms-text-sm);
   letter-spacing: 0.05em;
-  padding: 0.4rem 0;
+  padding: var(--vms-space-xs) 0;
   text-transform: uppercase;
   transition: background var(--vms-t), color var(--vms-t);
 }
@@ -274,15 +274,15 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
 .vms-tabs__tab--active { background: var(--vms-surface-2); color: var(--vms-accent); }
 
 /* ── List ── */
-.vms-list { list-style: none; display: flex; flex-direction: column; gap: 0.375rem; padding: 0; margin: 0; }
+.vms-list { list-style: none; display: flex; flex-direction: column; gap: var(--vms-space-xs); padding: 0; margin: 0; }
 .vms-list-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--vms-space-sm);
   background: var(--vms-surface);
   border: 1px solid var(--vms-border);
   border-radius: var(--vms-radius);
-  padding: 0.75rem 1rem;
+  padding: var(--vms-space-sm) var(--vms-space-md);
   transition: border-color var(--vms-t), background var(--vms-t);
 }
 .vms-list-item:hover { border-color: var(--vms-accent-dim); }
@@ -309,12 +309,12 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
 
 /* ── Text ── */
 .vms-text { flex: 1; line-height: 1.4; word-break: break-word; }
-.vms-text--heading       { font-family: var(--vms-font-head); font-size: 1.5rem; }
-.vms-text--subheading    { font-size: 1.05rem; font-weight: 600; }
+.vms-text--heading       { font-family: var(--vms-font-head); font-size: var(--vms-text-xl); }
+.vms-text--subheading    { font-size: var(--vms-text-lg); font-weight: 600; }
 .vms-text--body          { line-height: 1.6; }
-.vms-text--muted         { color: var(--vms-text-muted); font-size: 12px; }
+.vms-text--muted         { color: var(--vms-text-muted); font-size: var(--vms-text-sm); }
 .vms-text--strikethrough { color: var(--vms-done-text); text-decoration: line-through; }
-.vms-text--error         { color: var(--vms-error); font-size: 13px; }
+.vms-text--error         { color: var(--vms-error); font-size: var(--vms-text-base); }
 .vms-text--pre           { font-family: var(--vms-font-mono); white-space: pre; }
 
 /* ── Link ── */
@@ -342,7 +342,7 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  padding: var(--vms-space-md);
   z-index: 1000;
   animation: vms-in 0.15s ease;
 }
@@ -366,25 +366,25 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.25rem;
+  padding: var(--vms-space-md) var(--vms-space-lg);
   border-bottom: 1px solid var(--vms-border);
 }
-.vms-modal__title { font-family: var(--vms-font-head); font-size: 1.25rem; }
+.vms-modal__title { font-family: var(--vms-font-head); font-size: var(--vms-text-xl); }
 .vms-modal__close {
   background: transparent;
   border: none;
   color: var(--vms-text-muted);
   cursor: pointer;
-  font-size: 1.1rem;
-  padding: 0.25rem 0.5rem;
+  font-size: var(--vms-text-xl);
+  padding: var(--vms-space-2xs) var(--vms-space-xs);
 }
 .vms-modal__close:hover { color: var(--vms-text); }
 .vms-modal__body {
-  padding: 1.25rem;
+  padding: var(--vms-space-lg);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--vms-space-sm);
 }
 /* Children of the modal body must not be flex-shrunk below their natural
    height — otherwise a table-wrapper (overflow:hidden) inside the modal
@@ -394,13 +394,13 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
 .vms-modal__footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
+  gap: var(--vms-space-xs);
+  padding: var(--vms-space-sm) var(--vms-space-lg);
   border-top: 1px solid var(--vms-border);
 }
 /* Buttons inside the footer ignore the framework's default align-self so
    they sit naturally on the footer row. */
-.vms-modal__footer .vms-button--primary { align-self: auto; padding: 0.55rem 1rem; }
+.vms-modal__footer .vms-button--primary { align-self: auto; padding: var(--vms-space-sm) var(--vms-space-md); }
 
 /* ── Table ── */
 .vms-table-wrapper {
@@ -410,15 +410,15 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
      7-column table inside a medium modal). Always-reachable beats clipped. */
   overflow-x: auto;
 }
-.vms-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.vms-table { width: 100%; border-collapse: collapse; font-size: var(--vms-text-base); }
 .vms-table__th {
   background: var(--vms-surface-2);
   color: var(--vms-text-muted);
   font-weight: 600;
-  font-size: 11px;
+  font-size: var(--vms-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 0.6rem 0.9rem;
+  padding: var(--vms-space-sm) var(--vms-space-md);
   text-align: left;
   border-bottom: 1px solid var(--vms-border);
 }
@@ -426,7 +426,7 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
 .vms-table__th--sortable:hover { color: var(--vms-text); }
 .vms-table__th--asc::after  { content: ' ▲'; color: var(--vms-accent); }
 .vms-table__th--desc::after { content: ' ▼'; color: var(--vms-accent); }
-.vms-table__filter-row th { padding: 0.4rem 0.5rem; background: var(--vms-surface); border-bottom: 1px solid var(--vms-border); }
+.vms-table__filter-row th { padding: var(--vms-space-xs) var(--vms-space-xs); background: var(--vms-surface); border-bottom: 1px solid var(--vms-border); }
 .vms-table__filter-input {
   width: 100%;
   background: var(--vms-surface-2);
@@ -434,8 +434,8 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
   border-radius: var(--vms-radius-sm);
   color: var(--vms-text);
   font-family: var(--vms-font-body);
-  font-size: 12px;
-  padding: 0.3rem 0.5rem;
+  font-size: var(--vms-text-sm);
+  padding: var(--vms-space-2xs) var(--vms-space-xs);
   outline: none;
 }
 .vms-table__filter-input:focus { border-color: var(--vms-accent); }
@@ -446,7 +446,7 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
 .vms-table__row--done     { opacity: 0.6; }
 .vms-table__row--warning  { background: rgba(212, 130, 26, 0.06); }
 .vms-table__row--critical { background: rgba(224, 90, 90, 0.06); }
-.vms-table__td { padding: 0.6rem 0.9rem; vertical-align: middle; }
+.vms-table__td { padding: var(--vms-space-sm) var(--vms-space-md); vertical-align: middle; }
 .vms-table__link { color: var(--vms-accent); text-decoration: none; }
 .vms-table__link:hover { text-decoration: underline; }
 
@@ -462,14 +462,14 @@ select.vms-field__input  { cursor: pointer; padding-right: 2.25rem; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 13px;
-  margin-bottom: 1rem;
-  padding: 0.65rem 1rem;
+  font-size: var(--vms-text-base);
+  margin-bottom: var(--vms-space-md);
+  padding: var(--vms-space-sm) var(--vms-space-md);
 }
 .vms-error button {
   background: none;
   border: none;
   color: inherit;
   cursor: pointer;
-  font-size: 16px;
+  font-size: var(--vms-text-lg);
 }
