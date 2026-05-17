@@ -66,7 +66,7 @@ Exceptions: Fixed-pixel control geometry that is **not** rhythm (`.vms-checkbox`
 
 ## Typography
 
-**Token model (D-06, D-09):** New `--vms-text-*` CSS variables in `:root`, **all `rem`** (unifies today's `px`+`rem` mix; respects browser font-size / accessibility zoom). Modular ratio **≈1.2**, base `--vms-text-base = 0.875rem` (14px — the dominant current control font size). 7 steps cover the wide existing range (11px → 36px) coherently. Every current font-size literal snaps to the nearest step (D-08).
+**Token model (D-06, D-09):** New `--vms-text-*` CSS variables in `:root`, **all `rem`** (unifies today's `px`+`rem` mix; respects browser font-size / accessibility zoom). Modular ratio **≈1.2**, base `--vms-text-base = 0.8125rem` (13px — matches the prescriptive token table below, which is authoritative; the dominant current control font size). 7 steps cover the wide existing range (11px → 36px) coherently. Every current font-size literal snaps to the nearest step (D-08).
 
 | Token | rem | px @16 | Snaps which current sizes |
 |-------|-----|--------|---------------------------|
