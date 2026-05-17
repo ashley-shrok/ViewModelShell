@@ -107,6 +107,13 @@ body {
   border-bottom: 1px solid var(--vms-border);
 }
 
+/* ── Density: compact (THEME-03, D-10) — remaps rhythm tokens only ── */
+.vms-page--compact {
+  --vms-space-sm: 0.5rem;
+  --vms-space-md: 0.75rem;
+  --vms-space-lg: 1rem;
+}
+
 /* ── Section ── */
 .vms-section { display: flex; flex-direction: column; gap: var(--vms-space-sm); }
 .vms-section__heading {
@@ -114,6 +121,14 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--vms-text-muted);
+}
+
+/* ── Section variant: card (THEME-04) — grouped surface, existing seam vars ── */
+.vms-section--card {
+  background: var(--vms-surface);
+  border: 1px solid var(--vms-border);
+  border-radius: var(--vms-radius);
+  padding: var(--vms-space-md);
 }
 
 /* ── Stat bar ── */
