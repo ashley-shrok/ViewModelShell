@@ -23,7 +23,7 @@
   --vms-accent-glow: rgba(124, 106, 247, 0.18);
   --vms-accent-dim:  rgba(124, 106, 247, 0.35);
   --vms-text:        #e8e8f0;
-  --vms-text-muted:  #6b6b80;
+  --vms-text-muted:  #9090a8;
   --vms-done-bg:     #3a3a48;
   --vms-done-text:   #5a5a6e;
   --vms-error:       #e05a5a;
@@ -39,6 +39,23 @@
   --vms-font-mono:   ui-monospace, 'Cascadia Code', 'Fira Code', Menlo, Consolas, 'Liberation Mono', monospace;
   --vms-t:           0.15s ease;
   --vms-color-scheme: dark;
+  /* Spacing scale — modular ~1.5, base --vms-space-xs 0.5rem (D-06/D-07) */
+  --vms-space-2xs:  0.25rem;
+  --vms-space-xs:   0.5rem;
+  --vms-space-sm:   0.75rem;
+  --vms-space-md:   1rem;
+  --vms-space-lg:   1.5rem;
+  --vms-space-xl:   2.25rem;
+  /* Type scale — all rem, modular ~1.2, base --vms-text-base 0.8125rem (D-06/D-09) */
+  --vms-text-xs:    0.6875rem;
+  --vms-text-sm:    0.75rem;
+  --vms-text-base:  0.8125rem;
+  --vms-text-md:    0.875rem;
+  --vms-text-lg:    1rem;
+  --vms-text-xl:    1.375rem;
+  --vms-text-2xl:   2.25rem;
+  /* Page shell (D-12) */
+  --vms-page-max:   1080px;
 }
 
 /* ── Page chrome ──
