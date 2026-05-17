@@ -88,7 +88,16 @@ body {
 }
 
 /* ── Page ── */
-.vms-page { display: flex; flex-direction: column; gap: var(--vms-space-lg); color: var(--vms-text); font-family: var(--vms-font-body); }
+.vms-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vms-space-lg);
+  max-width: var(--vms-page-max);
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 5vw, 2.25rem);
+  color: var(--vms-text);
+  font-family: var(--vms-font-body);
+}
 .vms-page__title {
   font-family: var(--vms-font-head);
   font-size: var(--vms-text-2xl);
