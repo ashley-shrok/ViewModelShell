@@ -59,33 +59,33 @@ Explicitly excluded. Documented to prevent scope creep.
 
 ## Traceability
 
-Which phases cover which requirements. Populated during roadmap creation (phase numbering continues from 0.3.13 → starts at Phase 3).
+Which phases cover which requirements. Phase numbering continues from 0.3.13 (Phases 1–2) → 0.4.0 starts at Phase 3.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| THEME-01 | TBD | Pending |
-| THEME-02 | TBD | Pending |
-| THEME-03 | TBD | Pending |
-| THEME-04 | TBD | Pending |
-| THEME-05 | TBD | Pending |
-| LAYOUT-01 | TBD | Pending |
-| LAYOUT-02 | TBD | Pending |
-| LAYOUT-03 | TBD | Pending |
-| LAYOUT-04 | TBD | Pending |
-| LAYOUT-05 | TBD | Pending |
-| EXAMPLES-01 | TBD | Pending |
-| EXAMPLES-02 | TBD | Pending |
-| EXAMPLES-03 | TBD | Pending |
-| RELEASE-01 | TBD | Pending |
-| RELEASE-02 | TBD | Pending |
-| RELEASE-03 | TBD | Pending |
-| RELEASE-04 | TBD | Pending |
+| THEME-01 | Phase 3 | Pending |
+| THEME-02 | Phase 3 | Pending |
+| THEME-03 | Phase 3 | Pending |
+| THEME-04 | Phase 3 | Pending |
+| THEME-05 | Phase 3 | Pending |
+| LAYOUT-01 | Phase 4 | Pending |
+| LAYOUT-02 | Phase 4 | Pending |
+| LAYOUT-03 | Phase 4 | Pending |
+| LAYOUT-04 | Phase 4 | Pending |
+| LAYOUT-05 | Phase 4 | Pending |
+| EXAMPLES-01 | Phase 5 | Pending |
+| EXAMPLES-02 | Phase 5 | Pending |
+| EXAMPLES-03 | Phase 5 | Pending |
+| RELEASE-01 | Phase 5 | Pending |
+| RELEASE-02 | Phase 5 | Pending |
+| RELEASE-03 | Phase 5 | Pending |
+| RELEASE-04 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 17 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 17 ⚠️ (resolved by roadmapper)
+- Mapped to phases: 17 (Phase 3: 5, Phase 4: 5, Phase 5: 7)
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-05-17*
-*Last updated: 2026-05-17 after initial definition (milestone 0.4.0 Design System)*
+*Last updated: 2026-05-17 — roadmap created: all 17 v1 requirements mapped across Phases 3–5 (THEME→Phase 3, LAYOUT→Phase 4, EXAMPLES+RELEASE→Phase 5).*
