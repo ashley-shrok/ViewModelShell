@@ -8,6 +8,17 @@ A server-driven UI framework where the wire format is structured enough that age
 
 The core is a platform-agnostic transformer of a structured wire protocol — testable with no browser runtime, portable to any front-end. If platform assumptions leak into the core, the framework's central promise (and its main differentiator) is broken.
 
+## Current Milestone: 0.4.0 Design System
+
+**Goal:** Ship a serviceable out-of-box look so agents — which are blind by design (no browser, no visual iteration loop) — produce decent apps without human intervention. The framework itself must guarantee the baseline because the only entity that could compensate (the app-building agent) cannot see its output.
+
+**Target features:**
+- **Excellent shipped default theme** — page shell (container max-width, responsive padding), coherent spacing + type scale, density knob, card grouping as a `section` variant. The design system owns rhythm/spacing so the agent never reasons about visuals.
+- **Preset-grid layout** — ONE grid-backed layout enum on the *existing* container nodes (`page`/`section`). Server emits layout *intent*; CSS implements every pixel. Default value = today's vertical flow (non-breaking; no new node types; no spatial geometry/spans in the wire). Agent-familiar but correctly-scoped naming (stack/split/cards-style, not `grid` with implied spans). Consider a fixed-column mode for calendar/scheduling-like grids.
+- **Canonical examples as the few-shot agent surface** — Showcase + demos switched to import the shipped stylesheet (stop hand-rolling per-demo `<style>` blocks), benchmarked against Bootstrap's example pages as the quality bar (Bootstrap as visual acceptance benchmark only, NOT a CSS dependency — the `.vms-*` semantic-class contract makes external CSS frameworks a poor fit).
+
+**Key constraints:** Wire-format change (the layout enum) ⇒ **0.4.0** minor bump, npm + NuGet aligned (npm `0.3.14`→`0.4.0`, NuGet `0.3.10`→`0.4.0`) per the AGENTS.md major.minor-alignment rule; all 5 `ViewModels.cs` copies stay in sync; full cross-backend parity stays green; the CSS-variable / alt-theme override seam stays exactly as-is.
+
 ## Requirements
 
 ### Validated
@@ -33,7 +44,11 @@ The core is a platform-agnostic transformer of a structured wire protocol — te
 
 <!-- Current scope. Building toward these. -->
 
-- (None — milestone "Restore & Enforce Core Platform-Agnosticism" complete; all 6 requirements validated. Awaiting next milestone.)
+- **Default theme** — page shell, spacing + type scale, density knob, card-as-`section`-variant; demos switched to the shipped stylesheet (Milestone 0.4.0 Design System)
+- **Preset-grid layout enum** — one grid-backed layout enum on `page`/`section`, default = vertical flow, no new node types (Milestone 0.4.0)
+- **Canonical examples / few-shot surface** — Showcase + demos benchmarked against Bootstrap example pages (Milestone 0.4.0)
+
+<!-- Detailed REQ-IDs live in REQUIREMENTS.md, scoped per milestone. -->
 
 ### Out of Scope
 
@@ -43,6 +58,8 @@ The core is a platform-agnostic transformer of a structured wire protocol — te
 - `reorderable` convenience on ListNode — deferred; revisit only if per-app reorder boilerplate proves painful across many real apps (driven by usage, not speculation).
 - Global `*` box-sizing reset — rejected; the stylesheet is opt-in and must not stomp the host app's own page elements. Scoped reset shipped instead.
 - Cross-runtime parity beyond Bun+Node (Deno/Workers) — deferred; same Web Fetch surface, low marginal value until a consumer needs it.
+- `image`/media node ([issue #5](https://github.com/ashley-shrok/ViewModelShell/issues/5)) — deferred (not rejected); highest coverage-per-cost content node and zero tension with the no-browser promise, but scoped out of 0.4.0 to keep it tight on theme + layout + examples. Revisit as its own small change.
+- `chart`/data-viz node ([issue #6](https://github.com/ashley-shrok/ViewModelShell/issues/6)) — deferred, needs design; collides with no-browser-testability + multi-target + parity. Tracked as a named deferred decision (server-rendered SVG/image vs. declarative ChartNode behind the seam vs. explicit out-of-scope), likely its own milestone — not a silent gap.
 
 ## Context
 
@@ -67,6 +84,8 @@ The core is a platform-agnostic transformer of a structured wire protocol — te
 | Upload progress built *through* the seam, not bolted on | Avoids a third core platform violation; makes issue #4 the first feature done right | ✓ Good — `onUploadProgress` shipped; `XMLHttpRequest` lives only in `BrowserAdapter.transport`, zero in core |
 | Consumer migration blurb is a first-class milestone deliverable | Downstream maintainers (multiple apps) must know what/whether to update; not an afterthought | ✓ Good — `MIGRATION.md` + `CHANGELOG.md` + GitHub release v0.3.13 shipped; consumers no longer rely on hand-relayed blurbs |
 | npm 0.3.13 PATCH, not 0.4.0 (E pushback) | Generic SemVer "minor=feature" conflicts with the project's documented major.minor-alignment rule and established npm-only-patch cadence; held the project rule over generic convention | ✓ Good — npm 0.3.13, NuGet 0.3.9 unchanged, AGENTS.md rule byte-unchanged |
+| Layout *intent* lives in the model (preset-grid enum on existing containers), not CSS-only | The framework's promise is agents build apps with no browser — the consuming agent is blind and can't iterate on ugliness, and non-browser/multi-target adapters can't read CSS. Appearance stays 100% CSS; arrangement is server intent | — Pending (Milestone 0.4.0) |
+| 0.4.0 minor bump (npm + NuGet aligned) | Same major.minor-alignment rule that kept 0.3.13 a PATCH (no wire change) now *requires* a minor: the layout enum is a wire-format change. Rule applied consistently, opposite outcome | — Pending (Milestone 0.4.0) |
 
 ## Evolution
 
@@ -86,4 +105,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-15 — Phase 2 (Upload Progress + Milestone Closeout) complete: UPLOAD-01 + MIGRATE-01 validated. Milestone "Restore & Enforce Core Platform-Agnosticism" fully delivered — all 6 requirements (AGNOSTIC-01..04, UPLOAD-01, MIGRATE-01) shipped; npm 0.3.13, NuGet 0.3.9.*
+*Last updated: 2026-05-17 — Milestone 0.4.0 "Design System" started: out-of-box default theme + preset-grid layout enum + canonical examples; image (#5) / chart (#6) deferred to Out of Scope. Continues phase numbering from 0.3.13 (starts at Phase 3). Previous milestone 0.3.13 shipped (npm 0.3.13, NuGet 0.3.9; current HEAD npm 0.3.14, NuGet 0.3.10).*
