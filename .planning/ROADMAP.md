@@ -82,6 +82,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |---|---|---|---|---|
 | 1. Capability Seam Refactor | 0.3.13 | 3/3 | Complete | 2026-05-15 |
 | 2. Upload Progress + Closeout | 0.3.13 | 3/3 | Complete | 2026-05-15 |
-| 3. Default Design System | 0.4.0 | 3/3 | Complete   | 2026-05-17 |
+| 3. Default Design System | 0.4.0 | 3/3 | Complete    | 2026-05-17 |
 | 4. Preset-Grid Layout | 0.4.0 | 0/TBD | Not started | - |
 | 5. Canonical Examples + 0.4.0 Closeout | 0.4.0 | 0/TBD | Not started | - |
