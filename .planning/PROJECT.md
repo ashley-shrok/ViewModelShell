@@ -39,12 +39,17 @@ The core is a platform-agnostic transformer of a structured wire protocol — te
 - ✓ **AGNOSTIC-04**: AGENTS.md + README document the capability seam and the CI-enforced "core references zero platform globals" invariant — Validated in Phase 1
 - ✓ **UPLOAD-01**: Upload progress (issue #4) — `ShellOptions.onUploadProgress(sent,total)` shipped as the first feature built *through* the `transport` seam; `XMLHttpRequest` binding lives only in `BrowserAdapter.transport` (zero in core src/index.ts, CI-gated); three-condition routing with silent fetch fallback; XHR failures reject into the existing `onError` path (byte-identical to fetch, parity green) — Validated in Phase 2: Upload Progress + Milestone Closeout
 - ✓ **MIGRATE-01**: Copy-pasteable `MIGRATION.md` at repo root — npm `0.3.13` (patch; NuGet unchanged `0.3.9`; major.minor-alignment rule honored), the `onUploadProgress` API addition, explicit NOT-breaking list, upgrade steps, and the two silent-behavior caveats (transport-fallback, `total > 0` divide-by-zero guard) — Validated in Phase 2
+- ✓ **THEME-01**: Importing only `viewmodel-shell/styles.css` yields a centered, `--vms-page-max: 1080px`, `clamp()`-padded `.vms-page` shell with zero app CSS and zero `@media` queries (shell on the existing `.vms-page` rule, no DOM/renderer change) — Validated in Phase 3: Default Design System
+- ✓ **THEME-02**: One coherent additive scale — 6 `--vms-space-*` + 7 all-`rem` `--vms-text-*` `:root` tokens; every literal spacing/font-size snapped to the nearest step (UI-SPEC ledger) — Validated in Phase 3
+- ✓ **THEME-03**: `PageNode.density?: "comfortable" | "compact"` (additive closed-union wire field, both backends) → `.vms-page--compact` remaps the sm/md/lg rhythm tokens; omitted/comfortable byte-identical — Validated in Phase 3
+- ✓ **THEME-04**: `SectionNode.variant?: "card"` (additive closed-union wire field, both backends) → `.vms-section--card` grouped surface built from existing seam vars, zero new color tokens — Validated in Phase 3
+- ✓ **THEME-05**: Override seam regression-proven — every pre-existing `:root` var byte-identical except the one D-17 WCAG-AA fix (`--vms-text-muted #6b6b80→#9090a8`); zero edits to the 11 `styles/themes/*.css`; parity 7/7 byte-identical — Validated in Phase 3
 
 ### Active
 
 <!-- Current scope. Building toward these. -->
 
-- **Default theme** — page shell, spacing + type scale, density knob, card-as-`section`-variant; demos switched to the shipped stylesheet (Milestone 0.4.0 Design System)
+- **Demos/Showcase on the shipped stylesheet** — switch every demo + Showcase to `styles.css` (no per-demo `<style>` chrome), Bootstrap-benchmarked canonical set (Milestone 0.4.0, Phase 5)
 - **Preset-grid layout enum** — one grid-backed layout enum on `page`/`section`, default = vertical flow, no new node types (Milestone 0.4.0)
 - **Canonical examples / few-shot surface** — Showcase + demos benchmarked against Bootstrap example pages (Milestone 0.4.0)
 
@@ -86,6 +91,7 @@ The core is a platform-agnostic transformer of a structured wire protocol — te
 | npm 0.3.13 PATCH, not 0.4.0 (E pushback) | Generic SemVer "minor=feature" conflicts with the project's documented major.minor-alignment rule and established npm-only-patch cadence; held the project rule over generic convention | ✓ Good — npm 0.3.13, NuGet 0.3.9 unchanged, AGENTS.md rule byte-unchanged |
 | Layout *intent* lives in the model (preset-grid enum on existing containers), not CSS-only | The framework's promise is agents build apps with no browser — the consuming agent is blind and can't iterate on ugliness, and non-browser/multi-target adapters can't read CSS. Appearance stays 100% CSS; arrangement is server intent | — Pending (Milestone 0.4.0) |
 | 0.4.0 minor bump (npm + NuGet aligned) | Same major.minor-alignment rule that kept 0.3.13 a PATCH (no wire change) now *requires* a minor: the layout enum is a wire-format change. Rule applied consistently, opposite outcome | — Pending (Milestone 0.4.0) |
+| Design-system scale = additive CSS variables; density/card = additive closed-union wire fields | Spacing/type as `--vms-space-*`/`--vms-text-*` keeps the override seam sacred (additive only) and lets density be a scoped token remap; the blind agent needs density/card as enumerable model intent, not host CSS. "Serviceable" made falsifiable via a WCAG-AA contrast floor (the one D-17 default-value change) | ✓ Shipped Phase 3 — THEME-01..05 validated; parity 7/7, zero theme-file edits, 23/23 vitest, build/core-globals/dotnet green |
 
 ## Evolution
 
@@ -105,4 +111,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-17 — Milestone 0.4.0 "Design System" started: out-of-box default theme + preset-grid layout enum + canonical examples; image (#5) / chart (#6) deferred to Out of Scope. Continues phase numbering from 0.3.13 (starts at Phase 3). Previous milestone 0.3.13 shipped (npm 0.3.13, NuGet 0.3.9; current HEAD npm 0.3.14, NuGet 0.3.10).*
+*Last updated: 2026-05-17 — Phase 3 (Default Design System) complete: THEME-01..05 validated — shipped `default.css` page shell + additive `--vms-space-*`/`--vms-text-*` scale + `PageNode.density?`/`SectionNode.variant?` closed-union wire fields + `.vms-page--compact`/`.vms-section--card`; override seam regression-proven (parity 7/7, zero theme-file edits, D-17 WCAG-AA fix). No version bump yet (npm 0.3.14 / NuGet 0.3.10; aligned 0.4.0 bump is Phase 5 RELEASE-01). Next: Phase 4 Preset-Grid Layout (the wire-format-forcing change). Milestone 0.4.0 started 2026-05-17: out-of-box default theme + preset-grid layout enum + canonical examples; image (#5) / chart (#6) deferred to Out of Scope.*
