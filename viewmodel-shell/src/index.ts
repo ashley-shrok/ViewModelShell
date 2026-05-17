@@ -59,12 +59,16 @@ export type ViewNode =
 export interface PageNode {
   type: "page";
   title?: string;
+  /** Density of global spacing. Omitted or "comfortable" = current behavior (no modifier class). "compact" emits .vms-page--compact. Closed union (D-03). */
+  density?: "comfortable" | "compact";
   children: ViewNode[];
 }
 
 export interface SectionNode {
   type: "section";
   heading?: string;
+  /** Section surface variant. Omitted = current behavior (no modifier class). "card" emits .vms-section--card. Closed union (D-03). */
+  variant?: "card";
   children: ViewNode[];
 }
 
