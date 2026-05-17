@@ -11,11 +11,11 @@ Requirements for milestone 0.4.0. Each maps to exactly one roadmap phase (number
 
 ### Theme
 
-- [ ] **THEME-01**: An app that imports the shipped stylesheet and renders only `.vms-*` nodes gets a serviceable page shell (centered, max-width container, responsive horizontal padding) with zero app-authored CSS.
-- [ ] **THEME-02**: The shipped stylesheet applies one coherent spacing scale and type scale across all node types, so a page composing form + table + stat-bar + section has consistent vertical rhythm with no per-app tuning.
+- [x] **THEME-01**: An app that imports the shipped stylesheet and renders only `.vms-*` nodes gets a serviceable page shell (centered, max-width container, responsive horizontal padding) with zero app-authored CSS.
+- [x] **THEME-02**: The shipped stylesheet applies one coherent spacing scale and type scale across all node types, so a page composing form + table + stat-bar + section has consistent vertical rhythm with no per-app tuning.
 - [ ] **THEME-03**: A density control on the page (`comfortable` | `compact`) adjusts global spacing / control sizing without app CSS.
 - [ ] **THEME-04**: `section` accepts `variant: "card"`, rendering a visually grouped surface (background, border, padding, radius).
-- [ ] **THEME-05**: The existing CSS-variable / alternate-theme override seam still fully reskins the UI via `:root` variables and the shipped theme files without editing rules (regression-guarded — no override-seam behavior change).
+- [x] **THEME-05**: The existing CSS-variable / alternate-theme override seam still fully reskins the UI via `:root` variables and the shipped theme files without editing rules (regression-guarded — no override-seam behavior change).
 
 ### Layout
 
@@ -63,11 +63,11 @@ Which phases cover which requirements. Phase numbering continues from 0.3.13 (Ph
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| THEME-01 | Phase 3 | Pending |
-| THEME-02 | Phase 3 | Pending |
+| THEME-01 | Phase 3 | Complete |
+| THEME-02 | Phase 3 | Complete |
 | THEME-03 | Phase 3 | Pending |
 | THEME-04 | Phase 3 | Pending |
-| THEME-05 | Phase 3 | Pending |
+| THEME-05 | Phase 3 | Complete |
 | LAYOUT-01 | Phase 4 | Pending |
 | LAYOUT-02 | Phase 4 | Pending |
 | LAYOUT-03 | Phase 4 | Pending |

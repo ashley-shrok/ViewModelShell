@@ -42,7 +42,7 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
   4. A `section` with `variant: "card"` renders a visually grouped surface (background, border, padding, radius) (THEME-04).
   5. Overriding `:root` CSS variables / swapping the shipped theme file fully reskins the UI without editing rules — regression-guarded, no override-seam behavior change (THEME-05).
 **Plans**: 3 plans
-  - [ ] 03-01-PLAN.md — Scale tokens + literals→variables + centered shell + D-17 AA fix (THEME-01, THEME-02, THEME-05)
+  - [x] 03-01-PLAN.md — Scale tokens + literals→variables + centered shell + D-17 AA fix (THEME-01, THEME-02, THEME-05)
   - [ ] 03-02-PLAN.md — Additive PageNode.density?/SectionNode.variant? closed-union fields, TS + .NET (THEME-03, THEME-04)
   - [ ] 03-03-PLAN.md — Renderer emission + .vms-page--compact/.vms-section--card CSS + jsdom tests + parity regression + AGENTS.md tables (THEME-03, THEME-04, THEME-05)
 **UI hint**: yes

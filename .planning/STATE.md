@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 UI-SPEC approved
-last_updated: "2026-05-17T22:32:11.684Z"
-last_activity: 2026-05-17 -- Phase 3 planning complete
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-05-17T22:41:25.754Z"
+last_activity: 2026-05-17
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 3
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 33
 ---
 
 # Project State: ViewModel Shell
@@ -20,16 +20,16 @@ progress:
 
 **Core Value:** The core is a platform-agnostic transformer of a structured wire protocol — testable with no browser runtime, portable to any front-end.
 **Current Milestone:** 0.4.0 Design System (Phases 3–5)
-**Current Focus:** Phase 3 — Default Design System (shipped stylesheet: page shell, spacing/type scale, density, card variant; override seam unchanged)
+**Current Focus:** Phase 3 — Default Design System
 
 ---
 
 ## Current Position
 
-Phase: 3 of 5 (Default Design System) — 0.4.0's first phase; numbering continues from 0.3.13
-Plan: — (not yet planned)
+Phase: 3 (Default Design System) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-05-17 -- Phase 3 planning complete
+Last activity: 2026-05-17
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -44,6 +44,7 @@ Progress: [░░░░░░░░░░] 0%
 | Requirements total (0.4.0) | 17 |
 | Requirements complete | 0 |
 | Parity suite status | Green at 0.3.13 baseline (7/7 fixtures) — must stay green through 0.4.0; Phase 4 adds a new layout fixture, Phase 5 RELEASE-02 gates on full suite green |
+| Phase 03 P01 | 6min | 3 tasks | 1 files |
 
 ## Phase Structure (0.4.0)
 
@@ -62,6 +63,8 @@ Progress: [░░░░░░░░░░] 0%
 - [Roadmap] 3 phases, coarse granularity: theme foundation (no wire change) → layout wire change (the 0.4.0-forcing change) → examples + release closeout (RELEASE-02 parity + RELEASE-04 tests are the concluding gates)
 - [Roadmap] Phase 4 depends on Phase 3 (presets arrange children *within* the shipped design-system rhythm); Phase 5 depends on Phase 4 (demos can't switch to shipped stylesheet until theme+layout exist; parity gate must include Phase 4's layout fixture)
 - [0.3.13] Capability seam shipped; core references zero platform globals (CI-enforced via check:core-globals); parity is the highest-signal gate — must stay green
+- [03-01] Spacing scale: 6 steps base xs=0.5rem modular ~1.5; type scale: 7 all-rem steps base 0.8125rem modular ~1.2 (UI-SPEC, D-06/07/09) — scale-as-variables is the prerequisite for the Plan 02 density remap (D-10)
+- [03-01] D-17 WCAG-AA fix: --vms-text-muted #6b6b80 → #9090a8 is the ONLY allowed default-value change; THEME-05 sacred seam held (every other :root name/value byte-identical, 11 theme files byte-unchanged); parity 7/7 unchanged (CSS has no wire surface)
 
 ### Architectural Notes (0.4.0 Design System)
 
@@ -90,8 +93,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Session Continuity
 
-**Last session:** 2026-05-17T22:13:09.942Z
-**Stopped at:** Phase 3 UI-SPEC approved
+**Last session:** 2026-05-17T22:41:25.752Z
+**Stopped at:** Completed 03-01-PLAN.md
 **Next action:** `/gsd-plan-phase 3` — plan Phase 3: Default Design System (THEME-01..05).
 
 ---
