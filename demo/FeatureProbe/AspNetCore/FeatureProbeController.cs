@@ -97,6 +97,7 @@ public class FeatureProbeController : ControllerBase
 
         children.Add(new CopyButtonNode("npx @ashley-shrok/viewmodel-shell", "Copy install command", "Copied!"));
 
-        return new PageNode("Feature Probe", children);
+        var probeSection = new SectionNode("Probe", children, Variant: "card", Layout: "split");
+        return new PageNode("Feature Probe", new List<ViewNode> { probeSection }, Density: "compact", Layout: "cards");
     }
 }

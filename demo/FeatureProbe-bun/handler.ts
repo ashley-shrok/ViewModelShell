@@ -33,7 +33,20 @@ function buildVm(state: FeatureProbeState): ViewNode {
   children.push(
     { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!" } as ViewNode,
   );
-  return { type: "page", title: "Feature Probe", children };
+  const probeSection: ViewNode = {
+    type: "section",
+    heading: "Probe",
+    variant: "card",
+    layout: "split",
+    children,
+  };
+  return {
+    type: "page",
+    title: "Feature Probe",
+    density: "compact",
+    layout: "cards",
+    children: [probeSection],
+  };
 }
 
 const actionHandler = createAction<FeatureProbeState>(async (payload) => {
