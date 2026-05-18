@@ -28,6 +28,8 @@
     "build": "tsc -p tsconfig.json",
     "check:core-globals": "node scripts/check-core-platform-globals.mjs",
     "check:aa-contrast": "node scripts/check-aa-contrast.mjs",
+    "check:no-demo-style": "node scripts/check-no-demo-style.mjs",
+    "check:theme-byte-identity": "node scripts/check-theme-byte-identity.mjs",
     "test": "vitest run",
     "prepublishOnly": "npm run build"
   },

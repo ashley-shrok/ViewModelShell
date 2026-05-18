@@ -40,6 +40,16 @@ jobs:
           cd viewmodel-shell
           npm run check:aa-contrast
 
+      - name: Enforce zero per-demo <style> (D-12/D-15)
+        run: |
+          cd viewmodel-shell
+          npm run check:no-demo-style
+
+      - name: Enforce theme byte-identity (D-03)
+        run: |
+          cd viewmodel-shell
+          npm run check:theme-byte-identity
+
       - name: Framework adapter-seam tests (D-12.2 relocation proof)
         run: cd viewmodel-shell && npx vitest run
 
