@@ -60,7 +60,7 @@ Additionally, **one** value of the unthemed default was tightened for accessibil
 the shipped default's `--vms-warning` is **`#a37510`** (a slightly darker amber than
 `light-purple.css`'s `#c89610`) so the shipped default clears the WCAG-AA non-text
 contrast floor (≥3.0:1 on `--vms-bg`/`--vms-surface`/`--vms-surface-2`; it was
-2.68/2.51/2.36:1, it is now 4.11/3.84/3.62:1 — CI-enforced). This applies **only** to
+2.51/2.68/2.36:1, it is now 3.84/4.11/3.62:1 — CI-enforced). This applies **only** to
 the unthemed shipped default: if you `import
 "@ashley-shrok/viewmodel-shell/themes/light-purple.css"` explicitly, you still get the
 original `#c89610` (that theme file is byte-unchanged). This is the same
