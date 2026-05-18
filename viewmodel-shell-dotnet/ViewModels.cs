@@ -3,11 +3,29 @@ using System.Text.Json.Serialization;
 
 namespace ViewModelShell;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// WIRE CONTRACT — null omission is INTRINSIC to these types.
+//
+// Every nullable (T?) member of an outbound wire record carries
+//   [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+// so the contract — "an unset optional is ABSENT, never \"field\": null" —
+// holds even under default ASP.NET JsonSerializerOptions with NO
+// DefaultIgnoreCondition configured. The host-side
+// DefaultIgnoreCondition = WhenWritingNull in Program.cs is now redundant
+// defense-in-depth, not load-bearing (it cannot be forgotten per-app).
+//
+// Maintainer rule: a NEW nullable field WITHOUT this attribute silently
+// re-introduces the cross-backend null-vs-absent drift this exists to kill.
+// Non-nullable members (incl. bool/int with semantic defaults) deliberately
+// keep serializing their value. JsonIgnoreAttribute is sealed — it cannot be
+// wrapped in a shorter alias; the attribute is spelled out in full on purpose.
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ─── Action types ─────────────────────────────────────────────────────────────
 
 public record ActionDescriptor(
     string Name,
-    Dictionary<string, object>? Context = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, object>? Context = null
 );
 
 public record ActionPayload<TState>(
@@ -51,7 +69,11 @@ public record ActionPayload<TState>(
     }
 }
 
-public record ShellSideEffect(string Type, string? Key = null, string? Value = null)
+public record ShellSideEffect(
+    string Type,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Key = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Value = null
+)
 {
     public static ShellSideEffect SetLocalStorage(string key, string value) =>
         new("set-local-storage", key, value);
@@ -61,11 +83,11 @@ public record ShellSideEffect(string Type, string? Key = null, string? Value = n
 }
 
 public record ShellResponse<TState>(
-    ViewNode? Vm,
-    TState? State,
-    string? Redirect = null,
-    IReadOnlyList<ShellSideEffect>? SideEffects = null,
-    int? NextPollIn = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Vm,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TState? State,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Redirect = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ShellSideEffect>? SideEffects = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? NextPollIn = null
 )
 {
     public static ShellResponse<TState> RedirectTo(string url) =>
@@ -97,35 +119,35 @@ public record ShellResponse<TState>(
 public abstract record ViewNode;
 
 public record PageNode(
-    string? Title,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Title,
     IReadOnlyList<ViewNode> Children,
-    string? Density = null,
-    string? Layout = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Density = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null
 ) : ViewNode;
 
 public record SectionNode(
-    string? Heading,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Heading,
     IReadOnlyList<ViewNode> Children,
-    string? Variant = null,
-    string? Layout = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null
 ) : ViewNode;
 
 public record ListNode(
     IReadOnlyList<ViewNode> Children,
-    string? Id = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id = null
 ) : ViewNode;
 
 public record ListItemNode(
-    string? Id,
-    string? Variant,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant,
     IReadOnlyList<ViewNode> Children
 ) : ViewNode;
 
 public record FormNode(
     ActionDescriptor SubmitAction,
-    string? SubmitLabel,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SubmitLabel,
     IReadOnlyList<ViewNode> Children,
-    string? Layout = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null
 ) : ViewNode;
 
 public record FieldOption(string Value, string Label);
@@ -133,31 +155,31 @@ public record FieldOption(string Value, string Label);
 public record FieldNode(
     string Name,
     string InputType,
-    string? Label,
-    string? Placeholder,
-    string? Value,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Placeholder,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Value,
     bool Required = false,
-    ActionDescriptor? Action = null,
-    IReadOnlyList<FieldOption>? Options = null,
-    string? Language = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<FieldOption>? Options = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Language = null
 ) : ViewNode;
 
 public record CheckboxNode(
     string Name,
     bool Checked,
-    string? Label,
-    ActionDescriptor? Action
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action
 ) : ViewNode;
 
 public record ButtonNode(
     string Label,
     ActionDescriptor Action,
-    string? Variant
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant
 ) : ViewNode;
 
 public record TextNode(
     string Value,
-    string? Style
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Style
 ) : ViewNode;
 
 public record StatItem(string Label, string Value);
@@ -173,11 +195,11 @@ public record TabsNode(
 public record ProgressNode(int Value) : ViewNode;
 
 public record ModalNode(
-    string? Title,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Title,
     IReadOnlyList<ViewNode> Children,
-    IReadOnlyList<ViewNode>? Footer = null,
-    ActionDescriptor? DismissAction = null,
-    string? Size = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Footer = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? DismissAction = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Size = null
 ) : ViewNode;
 
 public record TableColumn(
@@ -185,25 +207,25 @@ public record TableColumn(
     string Label,
     bool Sortable = false,
     bool Filterable = false,
-    string? FilterValue = null,
-    string? LinkLabel = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FilterValue = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LinkLabel = null,
     bool LinkExternal = false
 );
 
 public record TableRow(
     Dictionary<string, string> Cells,
-    string? Id = null,
-    ActionDescriptor? Action = null,
-    string? Variant = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant = null
 );
 
 public record TableNode(
     IReadOnlyList<TableColumn> Columns,
     IReadOnlyList<TableRow> Rows,
-    string? SortColumn = null,
-    string? SortDirection = null,
-    ActionDescriptor? SortAction = null,
-    ActionDescriptor? FilterAction = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SortColumn = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SortDirection = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? SortAction = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? FilterAction = null
 ) : ViewNode;
 
 public record LinkNode(
@@ -214,6 +236,6 @@ public record LinkNode(
 
 public record CopyButtonNode(
     string Text,
-    string? Label = null,
-    string? CopiedLabel = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? CopiedLabel = null
 ) : ViewNode;
