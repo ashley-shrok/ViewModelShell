@@ -56,6 +56,8 @@
   --vms-text-2xl:   2.25rem;
   /* Page shell (D-12) */
   --vms-page-max:   1080px;
+  /* Card-grid min item width — additive override seam (D-05); host/theme-retunable */
+  --vms-card-min:   16rem;
 }
 
 /* ── Page chrome ──
@@ -112,6 +114,41 @@ body {
   --vms-space-sm: 0.5rem;
   --vms-space-md: 0.75rem;
   --vms-space-lg: 1rem;
+}
+
+/* ── Layout preset: cards (LAYOUT-03, D-04) ──
+   auto-fit intrinsically collapses toward 1 column as the container narrows;
+   min(...,100%) floor prevents single-column overflow on a narrow viewport
+   (Pitfall 4). gap inherited from .vms-page/.vms-section — NOT redeclared. */
+.vms-page--cards,
+.vms-section--cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(var(--vms-card-min), 100%), 1fr));
+}
+.vms-page--cards > .vms-page__title,
+.vms-section--cards > .vms-section__heading {
+  grid-column: 1 / -1;
+}
+
+/* ── Layout preset: split (LAYOUT-02, D-06/D-07) ──
+   Capped exactly-2-then-1, equal-width (shared 1fr max), zero media queries.
+   Each track's MIN is >= max(16rem, 50% - gap): two ~50% tracks fill the row,
+   a 3rd would need >100% (impossible); when 50%-gap < 16rem on a narrow
+   container the 16rem floor wins and only 1 track fits.
+   gap inherited from .vms-page/.vms-section — NOT redeclared. */
+.vms-page--split {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(max(16rem, calc(50% - var(--vms-space-lg))), 1fr));
+}
+.vms-section--split {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(max(16rem, calc(50% - var(--vms-space-sm))), 1fr));
+}
+.vms-page--split > .vms-page__title,
+.vms-section--split > .vms-section__heading {
+  grid-column: 1 / -1;
 }
 
 /* ── Section ── */
