@@ -151,6 +151,32 @@ body {
   grid-column: 1 / -1;
 }
 
+/* ── Layout preset: sidebar (D-28) — thin + wide app shell ──
+   The common real-app shell: a narrow first column + a wide main that
+   grows to fill. Flex-wrap "holy grail": main grows aggressively so the
+   sidebar holds near its basis; when the row can't fit both they wrap to
+   stacked (zero media queries, like split/cards). Title/heading take their
+   own full-width row. First content child = sidebar; the rest = main.
+   gap inherited from .vms-page/.vms-section — NOT redeclared. */
+.vms-page--sidebar,
+.vms-section--sidebar {
+  display: flex;
+  flex-direction: row;   /* override .vms-page/.vms-section base column */
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.vms-page--sidebar > *,
+.vms-section--sidebar > * { flex: 999 1 24rem; }
+.vms-page--sidebar > :first-child:not(.vms-page__title),
+.vms-page--sidebar > .vms-page__title + *,
+.vms-section--sidebar > :first-child:not(.vms-section__heading),
+.vms-section--sidebar > .vms-section__heading + * {
+  flex: 1 1 16rem;
+  max-width: 24rem;
+}
+.vms-page--sidebar > .vms-page__title,
+.vms-section--sidebar > .vms-section__heading { flex: 0 0 100%; }
+
 /* ── Section ── */
 .vms-section { display: flex; flex-direction: column; gap: var(--vms-space-sm); }
 .vms-section__heading {
@@ -362,6 +388,16 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-list-item--warning:hover  { border-left-color: var(--vms-warning); }
 .vms-list-item--success:hover  { border-left-color: var(--vms-success); }
 .vms-list-item--info:hover     { border-left-color: var(--vms-info); }
+
+/* Selection state for master-detail / list-detail patterns (D-27). The
+   currently-selected row. Stronger than the semantic hints (selection is
+   the primary state) and stable through hover. Themable: uses only seam
+   tokens, so it works across every shipped theme. */
+.vms-list-item--active,
+.vms-list-item--active:hover {
+  border-color: var(--vms-accent);
+  background: var(--vms-accent-glow);
+}
 
 @keyframes vms-in {
   from { opacity: 0; transform: translateY(4px); }

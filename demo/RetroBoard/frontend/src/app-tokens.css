@@ -3,5 +3,5 @@
    per-app token mechanism — imported in main.ts immediately AFTER the pinned
    theme, never as an HTML <style>. No other token, no other rule. */
 :root {
-  --vms-page-max: 1280px;
+  --vms-page-max: min(1600px, 96vw);
 }

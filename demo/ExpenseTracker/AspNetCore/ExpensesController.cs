@@ -43,10 +43,13 @@ public class ExpensesController : ControllerBase
                     Amount:     amount,
                     Note:       note.Trim(),
                     CreatedAt:  DateTimeOffset.UtcNow);
-                state = state with { Transactions = [.. state.Transactions, added] };
+                state = state with { Transactions = [.. state.Transactions, added], Adding = false };
                 break;
 
             case "delete":
+                // Retained as a valid action; not surfaced in the realistic
+                // read-only ledger table (option A — TableNode cells are
+                // text-only; no per-row action buttons. Logged limitation).
                 var deleteId = Str("id");
                 if (deleteId != null)
                     state = state with { Transactions = [.. state.Transactions.Where(t => t.Id != deleteId)] };
@@ -62,6 +65,14 @@ public class ExpensesController : ControllerBase
                 if (catValue != null) state = state with { AddCategory = catValue };
                 break;
 
+            case "show-add":
+                state = state with { Adding = true };
+                break;
+
+            case "hide-add":
+                state = state with { Adding = false };
+                break;
+
             default:
                 return BadRequest($"Unknown action: {payload.Name}");
         }
@@ -69,109 +80,110 @@ public class ExpensesController : ControllerBase
         return new ShellResponse<ExpensesState>(BuildVm(state), state);
     }
 
+    // Realistic YNAB/Mint finance app as a real app shell
+    // (page.layout:"sidebar"): a thin left "Overview" rail (headline
+    // numbers + per-category budget progress) next to a wide main area
+    // (add transaction + the transactions ledger).
     private static ViewNode BuildVm(ExpensesState state)
     {
         var totalBudget = state.Categories.Sum(c => c.Budget);
         var totalSpent  = state.Categories.Sum(c => state.Transactions.Where(t => t.CategoryId == c.Id).Sum(t => t.Amount));
+        var remaining   = totalBudget - totalSpent;
+        var pctUsed     = totalBudget == 0 ? 0 : (int)Math.Round(100m * totalSpent / totalBudget);
 
-        var filteredTx = state.FilterCategory == "all"
-            ? state.Transactions.AsEnumerable()
-            : state.Transactions.Where(t => t.CategoryId == state.FilterCategory);
-
-        var categoryItems = state.Categories.Select(c =>
+        // LEFT RAIL — at-a-glance summary + per-category budgets.
+        var railChildren = new List<ViewNode>
+        {
+            new TextNode($"${remaining:F2}", "heading"),
+            new TextNode("remaining this month", "muted"),
+            new TextNode($"Spent ${totalSpent:F2} of ${totalBudget:F2} · {pctUsed}% used", "muted")
+        };
+        foreach (var c in state.Categories)
         {
             var spent = state.Transactions.Where(t => t.CategoryId == c.Id).Sum(t => t.Amount);
             var pct   = c.Budget == 0 ? 0 : (int)Math.Min(100, Math.Round(100m * spent / c.Budget));
             var over  = spent > c.Budget;
-            return (ViewNode)new ListItemNode(
-                Id:      c.Id,
-                Variant: over ? "warning" : null,
-                Children:
-                [
-                    new TextNode(c.Name, "subheading"),
-                    new TextNode($"${spent:F2} / ${c.Budget:F2}", over ? "muted" : null),
-                    new ProgressNode(pct)
-                ]
-            );
-        }).ToList();
+            railChildren.Add(new TextNode(c.Name, "subheading"));
+            railChildren.Add(new TextNode($"${spent:F2} / ${c.Budget:F2}", over ? "error" : "muted"));
+            railChildren.Add(new ProgressNode(pct));
+        }
+        var rail = new SectionNode("Overview", railChildren, Variant: "card");
 
-        var txItems = filteredTx
-            .OrderByDescending(t => t.CreatedAt)
-            .Select(t =>
-            {
-                var cat   = state.Categories.FirstOrDefault(c => c.Id == t.CategoryId);
-                var label = string.IsNullOrWhiteSpace(t.Note) ? cat?.Name ?? t.CategoryId : t.Note;
-                return (ViewNode)new ListItemNode(
-                    Id:      t.Id,
-                    Variant: null,
-                    Children:
-                    [
-                        new TextNode($"${t.Amount:F2}", "subheading"),
-                        new TextNode(label,              null),
-                        new TextNode(cat?.Name ?? t.CategoryId, "muted"),
-                        new ButtonNode(
-                            Label:   "Delete",
-                            Action:  new ActionDescriptor("delete", new() { ["id"] = t.Id }),
-                            Variant: "danger"
-                        )
-                    ]
-                );
-            })
-            .ToList();
+        // MAIN — "+ Add" opens a modal; the main area is the ledger.
 
         var filterTabs = new List<TabItem> { new("all", "All") };
         filterTabs.AddRange(state.Categories.Select(c => new TabItem(c.Id, c.Name)));
 
-        return new PageNode(
-            Title: "Expenses",
+        var filteredTx = (state.FilterCategory == "all"
+                ? state.Transactions.AsEnumerable()
+                : state.Transactions.Where(t => t.CategoryId == state.FilterCategory))
+            .OrderByDescending(t => t.CreatedAt);
+
+        var rows = filteredTx.Select(t =>
+        {
+            var cat = state.Categories.FirstOrDefault(c => c.Id == t.CategoryId);
+            return new TableRow(
+                Cells: new Dictionary<string, string>
+                {
+                    ["date"]     = t.CreatedAt.LocalDateTime.ToString("MMM d, h:mm tt"),
+                    ["category"] = cat?.Name ?? t.CategoryId,
+                    ["note"]     = string.IsNullOrWhiteSpace(t.Note) ? "—" : t.Note,
+                    ["amount"]   = $"${t.Amount:F2}"
+                },
+                Id: t.Id);
+        }).ToList();
+
+        var ledger = new SectionNode(
+            Heading: "Transactions",
             Children:
             [
-                new StatBarNode(
+                new TabsNode(
+                    Selected: state.FilterCategory,
+                    Action:   new ActionDescriptor("filter"),
+                    Tabs:     filterTabs),
+                new TableNode(
+                    Columns:
+                    [
+                        new TableColumn("date",     "Date"),
+                        new TableColumn("category", "Category"),
+                        new TableColumn("note",     "Note"),
+                        new TableColumn("amount",   "Amount")
+                    ],
+                    Rows: rows)
+            ]);
+
+        var mainChildren = new List<ViewNode>
+        {
+            new ButtonNode("+ Add Transaction", new ActionDescriptor("show-add"), Variant: "primary"),
+            ledger
+        };
+        if (state.Adding)
+        {
+            mainChildren.Add(new ModalNode(
+                Title: "Add Transaction",
+                Children:
                 [
-                    new StatItem("spent this month", $"${totalSpent:F2}"),
-                    new StatItem("monthly budget",   $"${totalBudget:F2}"),
-                    new StatItem("remaining",        $"${totalBudget - totalSpent:F2}")
-                ]),
+                    new TabsNode(
+                        Selected: state.AddCategory,
+                        Action:   new ActionDescriptor("select-category"),
+                        Tabs:     state.Categories.Select(c => new TabItem(c.Id, c.Name)).ToList()),
+                    new FormNode(
+                        SubmitAction: new ActionDescriptor("add"),
+                        SubmitLabel:  "Add",
+                        Children:
+                        [
+                            new FieldNode("amount", "number", "Amount ($)", "0.00",          null, true),
+                            new FieldNode("note",   "text",   "Note",       "Coffee, lunch…", null)
+                        ])
+                ],
+                DismissAction: new ActionDescriptor("hide-add"),
+                Size: "narrow"));
+        }
+        var main = new SectionNode(null, mainChildren);
 
-                new SectionNode(
-                    Heading: "Categories",
-                    Children: [new ListNode(categoryItems)]
-                ),
-
-                new SectionNode(
-                    Heading: "Add Transaction",
-                    Children:
-                    [
-                        new TabsNode(
-                            Selected: state.AddCategory,
-                            Action:   new ActionDescriptor("select-category"),
-                            Tabs:     state.Categories.Select(c => new TabItem(c.Id, c.Name)).ToList()
-                        ),
-                        new FormNode(
-                            SubmitAction: new ActionDescriptor("add"),
-                            SubmitLabel:  "Add",
-                            Children:
-                            [
-                                new FieldNode("amount", "number", "Amount ($)", "0.00", null, true),
-                                new FieldNode("note",   "text",   "Note",       "Coffee, lunch…", null)
-                            ]
-                        )
-                    ]
-                ),
-
-                new SectionNode(
-                    Heading: "Transactions",
-                    Children:
-                    [
-                        new TabsNode(
-                            Selected: state.FilterCategory,
-                            Action:   new ActionDescriptor("filter"),
-                            Tabs:     filterTabs
-                        ),
-                        new ListNode(txItems)
-                    ]
-                )
-            ]
-        );
+        return new PageNode(
+            Title:    "Expenses",
+            Children: [rail, main],
+            Layout:   "sidebar");
     }
 }

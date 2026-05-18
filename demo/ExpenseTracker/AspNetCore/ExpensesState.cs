@@ -7,7 +7,8 @@ public record ExpensesState(
     IReadOnlyList<Category> Categories,
     IReadOnlyList<Transaction> Transactions,
     string FilterCategory,    // "all" or a category id
-    string AddCategory        // category for new transactions
+    string AddCategory,       // category for new transactions
+    bool Adding               // is the add-transaction modal open
 )
 {
     public static ExpensesState Initial() => new(
@@ -27,6 +28,7 @@ public record ExpensesState(
             new("5", "food",           8.75m,  "Coffee and snack", DateTimeOffset.UtcNow.AddHours(-1)),
         ],
         FilterCategory: "all",
-        AddCategory:    "food"
+        AddCategory:    "food",
+        Adding:         false
     );
 }

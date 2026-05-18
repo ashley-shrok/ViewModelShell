@@ -111,23 +111,15 @@ public class RetroBoardController : ControllerBase
 
     private static ViewNode BuildVm(RetroState state)
     {
-        var totalCards  = state.WentWell.Count + state.DidntGoWell.Count + state.ActionItems.Count;
-        var totalVotes  = state.WentWell.Sum(c => c.Votes) + state.DidntGoWell.Sum(c => c.Votes) + state.ActionItems.Sum(c => c.Votes);
-        var openActions = state.ActionItems.Count(c => !c.Resolved);
-        var doneActions = state.ActionItems.Count(c => c.Resolved);
-
+        // Real retro board = 3 lanes side by side. `cards` auto-fits them
+        // (3 on desktop; reflows to 2/1 on narrow). Whether that reflow is
+        // acceptable or this needs a true fixed-N preset (LAYOUT-F1) is the
+        // call we make from the rendered result.
         return new PageNode(
-            Title: "Retro Board",
+            Title:  "Retro Board",
+            Layout: "cards",
             Children:
             [
-                new StatBarNode(
-                [
-                    new StatItem("cards",    totalCards.ToString()),
-                    new StatItem("votes",    totalVotes.ToString()),
-                    new StatItem("open",     openActions.ToString()),
-                    new StatItem("resolved", doneActions.ToString()),
-                ]),
-
                 BuildSectionNode("Went Well",      "went-well",     state.WentWell,    isActionItems: false),
                 BuildSectionNode("Didn't Go Well", "didnt-go-well", state.DidntGoWell, isActionItems: false),
                 BuildSectionNode("Action Items",   "action-items",  state.ActionItems, isActionItems: true),
@@ -140,6 +132,7 @@ public class RetroBoardController : ControllerBase
     {
         return new SectionNode(
             Heading: $"{label} ({cards.Count})",
+            Variant: "card",
             Children:
             [
                 new FormNode(
@@ -182,7 +175,7 @@ public class RetroBoardController : ControllerBase
             Variant: null
         ));
         children.Add(new ButtonNode(
-            Label:   "Delete",
+            Label:   "✕",
             Action:  new ActionDescriptor("delete-card", new() { ["id"] = card.Id }),
             Variant: "danger"
         ));

@@ -84,53 +84,40 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         return new ShellResponse<AgentState>(BuildVm(state), state);
     }
 
-    private ViewNode BuildVm(AgentState state) => state.View switch
+    // Realistic ticket system: a full-width filterable ticket queue
+    // (table; whole-row click opens the ticket) → a dedicated full
+    // ticket page. The navigate pattern real ticketing actually uses.
+    private ViewNode BuildVm(AgentState state)
     {
-        "detail" => BuildDetailView(state),
-        _        => BuildQueueView(state),
-    };
+        if (state.View == "detail" && state.SelectedTicketId.HasValue)
+        {
+            var sel = db.GetById(state.SelectedTicketId.Value);
+            if (sel != null) return BuildTicketPage(sel, state);
+        }
+        return BuildQueuePage(state);
+    }
 
-    private ViewNode BuildQueueView(AgentState state)
+    private ViewNode BuildQueuePage(AgentState state)
     {
         var (open, inProgress, resolved) = db.GetCounts();
         var tickets = db.GetAll(state.Filter == "all" ? null : state.Filter);
 
-        var items = tickets.Select(t =>
-        {
-            var children = new List<ViewNode>
+        var rows = tickets.Select(t => new TableRow(
+            Cells: new Dictionary<string, string>
             {
-                new TextNode(t.Title, "subheading"),
-                new TextNode($"{TypeLabel(t.Type)} · {PriorityLabel(t.Priority)}", "muted"),
-                new TextNode(StatusLabel(t.Status), "muted"),
-            };
+                ["title"]    = t.Title,
+                ["type"]     = TypeLabel(t.Type),
+                ["priority"] = PriorityLabel(t.Priority),
+                ["status"]   = StatusLabel(t.Status),
+                ["due"]      = string.IsNullOrEmpty(t.DueDate) ? "—" : t.DueDate!,
+            },
+            Id:      t.Id.ToString(),
+            Action:  new ActionDescriptor("select-ticket", new() { ["id"] = t.Id.ToString() }),
+            Variant: TicketVariant(t))).ToList();
 
-            if (!string.IsNullOrEmpty(t.DueDate))
-                children.Add(new TextNode($"Due {t.DueDate}", "muted"));
-
-            if (t.Status == "open")
-                children.Add(new ButtonNode("Take",
-                    new ActionDescriptor("start-ticket", new() { ["id"] = t.Id.ToString() }),
-                    "primary"));
-
-            children.Add(new ButtonNode("View",
-                new ActionDescriptor("select-ticket", new() { ["id"] = t.Id.ToString() }),
-                "secondary"));
-
-            return (ViewNode)new ListItemNode(t.Id.ToString(), TicketVariant(t), children);
-        }).ToList();
-
-        if (items.Count == 0)
-            items.Add(new TextNode("No tickets in queue.", "muted"));
-
-        return new PageNode("Agent Queue",
+        return new PageNode("Help Desk — Agent",
         [
-            new StatBarNode(
-            [
-                new StatItem("open",        open.ToString()),
-                new StatItem("in progress", inProgress.ToString()),
-                new StatItem("resolved",    resolved.ToString()),
-                new StatItem("total",       (open + inProgress + resolved).ToString()),
-            ]),
+            new TextNode($"{open} open · {inProgress} in progress · {resolved} resolved", "muted"),
             new TabsNode(
                 Selected: state.Filter,
                 Action:   new ActionDescriptor("filter"),
@@ -140,18 +127,24 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                     new TabItem("open",        "Open"),
                     new TabItem("in-progress", "In Progress"),
                     new TabItem("resolved",    "Resolved"),
-                ]
-            ),
-            new ListNode(items),
+                ]),
+            rows.Count == 0
+                ? new TextNode("No tickets in queue.", "muted")
+                : new TableNode(
+                    Columns:
+                    [
+                        new TableColumn("title",    "Title"),
+                        new TableColumn("type",     "Type"),
+                        new TableColumn("priority", "Priority"),
+                        new TableColumn("status",   "Status"),
+                        new TableColumn("due",      "Due"),
+                    ],
+                    Rows: rows),
         ]);
     }
 
-    private ViewNode BuildDetailView(AgentState state)
+    private ViewNode BuildTicketPage(Ticket ticket, AgentState state)
     {
-        var ticket = db.GetById(state.SelectedTicketId!.Value);
-        if (ticket == null)
-            return BuildQueueView(state with { View = "queue", SelectedTicketId = null });
-
         var info = new List<ViewNode>
         {
             new TextNode($"Status: {StatusLabel(ticket.Status)}",      "muted"),

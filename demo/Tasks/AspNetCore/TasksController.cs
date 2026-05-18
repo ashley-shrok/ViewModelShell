@@ -86,6 +86,11 @@ public class TasksController : ControllerBase
 
     private static ViewNode BuildVm(TasksState state)
     {
+        var total     = state.Items.Count;
+        var completed = state.Items.Count(t => t.Completed);
+        var active    = total - completed;
+        var pct       = total == 0 ? 0 : (int)Math.Round(100.0 * completed / total);
+
         var filtered = state.Filter switch
         {
             "active"    => state.Items.Where(t => !t.Completed),
@@ -93,66 +98,50 @@ public class TasksController : ControllerBase
             _           => state.Items.AsEnumerable()
         };
 
-        var total     = state.Items.Count;
-        var completed = state.Items.Count(t => t.Completed);
-        var pct       = total == 0 ? 0 : (int)Math.Round(100.0 * completed / total);
+        // LEFT RAIL — Todoist-style view nav; current view = D-27 active.
+        ViewNode NavItem(string id, string label, int count) => new ListItemNode(
+            id,
+            state.Filter == id ? "active" : null,
+            [new ButtonNode($"{label} ({count})", new ActionDescriptor("filter", new() { ["value"] = id }), null)]);
 
-        return new PageNode(
-            Title: "Tasks",
-            Children:
+        var rail = new SectionNode("Views",
+        [
+            new ListNode(
             [
-                new StatBarNode(
+                NavItem("all",       "All",       total),
+                NavItem("active",    "Active",    active),
+                NavItem("completed", "Completed", completed),
+            ])
+        ], Variant: "card");
+
+        // MAIN — progress, add, the task list.
+        var taskItems = filtered
+            .OrderBy(t => t.CreatedAt)
+            .Select(t => (ViewNode)new ListItemNode(
+                t.Id,
+                t.Completed ? "done" : null,
                 [
-                    new StatItem("complete", $"{completed} of {total}")
-                ]),
+                    new CheckboxNode("completed", t.Completed, null,
+                        new ActionDescriptor("toggle", new() { ["id"] = t.Id })),
+                    new TextNode(t.Title, t.Completed ? "strikethrough" : null),
+                    new ButtonNode("✕",
+                        new ActionDescriptor("delete", new() { ["id"] = t.Id }), "danger"),
+                ]))
+            .ToList();
+        if (taskItems.Count == 0)
+            taskItems.Add(new TextNode("Nothing here.", "muted"));
 
-                new FormNode(
-                    SubmitAction: new ActionDescriptor("add"),
-                    SubmitLabel:  "Add",
-                    Children:
-                    [
-                        new FieldNode("title", "text", null, "Add a task…", null)
-                    ]
-                ),
+        var main = new SectionNode(null,
+        [
+            new TextNode($"{completed} of {total} complete", "muted"),
+            new ProgressNode(pct),
+            new FormNode(
+                SubmitAction: new ActionDescriptor("add"),
+                SubmitLabel:  "Add",
+                Children: [new FieldNode("title", "text", null, "Add a task…", null)]),
+            new ListNode(taskItems),
+        ]);
 
-                new TabsNode(
-                    Selected: state.Filter,
-                    Action:   new ActionDescriptor("filter"),
-                    Tabs:
-                    [
-                        new TabItem("all",       "All"),
-                        new TabItem("active",    "Active"),
-                        new TabItem("completed", "Completed")
-                    ]
-                ),
-
-                new ListNode(
-                    Children: filtered
-                        .OrderBy(t => t.CreatedAt)
-                        .Select(t => (ViewNode)new ListItemNode(
-                            Id:       t.Id,
-                            Variant:  t.Completed ? "done" : null,
-                            Children:
-                            [
-                                new CheckboxNode(
-                                    Name:    "completed",
-                                    Checked: t.Completed,
-                                    Label:   null,
-                                    Action:  new ActionDescriptor("toggle", new() { ["id"] = t.Id })
-                                ),
-                                new TextNode(t.Title, t.Completed ? "strikethrough" : null),
-                                new ButtonNode(
-                                    Label:   "Delete",
-                                    Action:  new ActionDescriptor("delete", new() { ["id"] = t.Id }),
-                                    Variant: "danger"
-                                )
-                            ]
-                        ))
-                        .ToList()
-                ),
-
-                new ProgressNode(pct)
-            ]
-        );
+        return new PageNode("Tasks", [rail, main], Layout: "sidebar");
     }
 }

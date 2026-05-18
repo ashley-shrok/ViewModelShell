@@ -61,8 +61,8 @@ export interface PageNode {
   title?: string;
   /** Density of global spacing. Omitted or "comfortable" = current behavior (no modifier class). "compact" emits .vms-page--compact. Closed union (D-03). */
   density?: "comfortable" | "compact";
-  /** Layout preset arranging direct children. Omitted or "stack" = current vertical flow (no modifier class). "split"/"cards" emit .vms-page--split / .vms-page--cards. Closed union (D-01/D-02). */
-  layout?: "stack" | "split" | "cards";
+  /** Layout preset arranging direct children. Omitted or "stack" = current vertical flow (no modifier class). "split" (equal 2-up), "cards" (uniform grid), "sidebar" (thin + wide app shell) emit .vms-page--{value}. Closed union (D-01/D-02; sidebar D-28). */
+  layout?: "stack" | "split" | "cards" | "sidebar";
   children: ViewNode[];
 }
 
@@ -71,8 +71,8 @@ export interface SectionNode {
   heading?: string;
   /** Section surface variant. Omitted = current behavior (no modifier class). "card" emits .vms-section--card. Closed union (D-03). */
   variant?: "card";
-  /** Layout preset arranging direct children. Omitted or "stack" = current vertical flow (no modifier class). "split"/"cards" emit .vms-section--split / .vms-section--cards. Closed union (D-01/D-02). */
-  layout?: "stack" | "split" | "cards";
+  /** Layout preset arranging direct children. Omitted or "stack" = current vertical flow (no modifier class). "split" (equal 2-up), "cards" (uniform grid), "sidebar" (thin + wide app shell) emit .vms-section--{value}. Closed union (D-01/D-02; sidebar D-28). */
+  layout?: "stack" | "split" | "cards" | "sidebar";
   children: ViewNode[];
 }
 

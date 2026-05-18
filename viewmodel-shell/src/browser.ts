@@ -194,7 +194,7 @@ export class BrowserAdapter implements Adapter {
   private page(n: PageNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const el = document.createElement("div");
     el.className = `vms-page${n.density === "compact" ? " vms-page--compact" : ""}${
-      n.layout === "split" || n.layout === "cards" ? ` vms-page--${n.layout}` : ""}`;
+      n.layout && n.layout !== "stack" ? ` vms-page--${n.layout}` : ""}`;
     if (n.title) {
       const h = document.createElement("h1");
       h.className = "vms-page__title";
@@ -208,7 +208,7 @@ export class BrowserAdapter implements Adapter {
   private section(n: SectionNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const el = document.createElement("section");
     el.className = `vms-section${n.variant === "card" ? " vms-section--card" : ""}${
-      n.layout === "split" || n.layout === "cards" ? ` vms-section--${n.layout}` : ""}`;
+      n.layout && n.layout !== "stack" ? ` vms-section--${n.layout}` : ""}`;
     if (n.heading) {
       const h = document.createElement("h2");
       h.className = "vms-section__heading";

@@ -76,7 +76,8 @@ public class ContactsController : ControllerBase
                     state = state with
                     {
                         Contacts    = [.. state.Contacts, added],
-                        CurrentView = "list"
+                        SelectedId  = added.Id,
+                        CurrentView = "detail"
                     };
                 }
                 break;
@@ -99,12 +100,19 @@ public class ContactsController : ControllerBase
         return new ShellResponse<ContactsState>(BuildVm(state), state);
     }
 
-    private static ViewNode BuildVm(ContactsState state) => state.CurrentView switch
-    {
-        "detail" => BuildDetailView(state),
-        "add"    => BuildAddView(),
-        _        => BuildListView(state)
-    };
+    // Realistic CRM / Google-Contacts shape: ONE page, persistent
+    // list-detail SPLIT. Left = searchable contact list (master); right =
+    // a card panel that shows the selected contact / add form / empty
+    // state (detail). Replaces the old 3-full-page-swap navigation.
+    private static ViewNode BuildVm(ContactsState state) => new PageNode(
+        Title: "Contacts",
+        Density: "compact",      // a real contacts list is information-dense
+        Layout: "split",         // 2-up master/detail; collapses to stacked on narrow
+        Children:
+        [
+            BuildMaster(state),
+            BuildDetail(state)
+        ]);
 
     private static IReadOnlyList<ContactRecord> Filtered(ContactsState state)
     {
@@ -114,22 +122,18 @@ public class ContactsController : ControllerBase
             c.Email.Contains(state.SearchQuery, StringComparison.OrdinalIgnoreCase))];
     }
 
-    private static ViewNode BuildListView(ContactsState state)
+    // LEFT — searchable contact list.
+    private static ViewNode BuildMaster(ContactsState state)
     {
         var filtered = Filtered(state);
-        var statText = filtered.Count == state.Contacts.Count
+        var count = filtered.Count == state.Contacts.Count
             ? $"{state.Contacts.Count}"
             : $"{filtered.Count} of {state.Contacts.Count}";
 
-        return new PageNode(
-            Title: "Contacts",
+        return new SectionNode(
+            Heading: $"All Contacts ({count})",
             Children:
             [
-                new StatBarNode(
-                [
-                    new StatItem("contacts", statText)
-                ]),
-
                 new FormNode(
                     SubmitAction: new ActionDescriptor("search"),
                     SubmitLabel:  "Search",
@@ -137,14 +141,12 @@ public class ContactsController : ControllerBase
                     [
                         new FieldNode("query", "text", null, "Search by name or email…", state.SearchQuery,
                             Action: new ActionDescriptor("search"))
-                    ]
-                ),
+                    ]),
 
                 new ButtonNode(
-                    Label:   "Add Contact",
+                    Label:   "+ Add Contact",
                     Action:  new ActionDescriptor("navigate-to-add"),
-                    Variant: "primary"
-                ),
+                    Variant: "primary"),
 
                 new ListNode(
                     Id: "contact-list",
@@ -152,87 +154,79 @@ public class ContactsController : ControllerBase
                         .OrderBy(c => c.Name)
                         .Select(c => (ViewNode)new ListItemNode(
                             Id:      c.Id,
-                            Variant: null,
+                            // D-27: the shipped .vms-list-item--active default marks
+                            // the current master-detail selection.
+                            Variant: c.Id == state.SelectedId ? "active" : null,
                             Children:
                             [
                                 new TextNode(c.Name,  null),
                                 new TextNode(c.Email, "muted"),
-                                new TextNode(c.Phone, "muted"),
+                                // Finding B (deferred): ListItemNode has no row
+                                // Action — per-row button is the honest affordance.
                                 new ButtonNode(
-                                    Label:   "View",
+                                    Label:   "Open",
                                     Action:  new ActionDescriptor("navigate-to-detail", new() { ["id"] = c.Id }),
-                                    Variant: null
-                                )
-                            ]
-                        ))
-                        .ToList()
-                )
-            ]
-        );
+                                    Variant: null)
+                            ]))
+                        .ToList())
+            ]);
     }
 
-    private static ViewNode BuildDetailView(ContactsState state)
+    // RIGHT — detail card: selected contact / add form / empty state.
+    private static ViewNode BuildDetail(ContactsState state)
     {
+        if (state.CurrentView == "add")
+        {
+            return new SectionNode(
+                Heading: "New Contact",
+                Variant: "card",
+                Children:
+                [
+                    new FormNode(
+                        SubmitAction: new ActionDescriptor("save-contact"),
+                        SubmitLabel:  "Create Contact",
+                        Children:
+                        [
+                            new FieldNode("name",  "text",     "Name",  "Full name",        null, Required: true),
+                            new FieldNode("email", "email",    "Email", "email@example.com", null),
+                            new FieldNode("phone", "text",     "Phone", "555-0100",          null),
+                            new FieldNode("notes", "textarea", "Notes", "Any notes…",        null)
+                        ]),
+                    new ButtonNode("Cancel", new ActionDescriptor("navigate-to-list"), Variant: null)
+                ]);
+        }
+
         var contact = state.SelectedId != null
             ? state.Contacts.FirstOrDefault(c => c.Id == state.SelectedId)
             : null;
-        if (contact == null) return BuildListView(state with { CurrentView = "list", SelectedId = null });
 
-        return new PageNode(
-            Title: contact.Name,
+        if (contact == null)
+        {
+            return new SectionNode(
+                Heading: "Details",
+                Variant: "card",
+                Children:
+                [
+                    new TextNode("Select a contact to view details, or add a new one.", "muted")
+                ]);
+        }
+
+        return new SectionNode(
+            Heading: contact.Name,
+            Variant: "card",
             Children:
             [
-                new ButtonNode(
-                    Label:   "← Back",
-                    Action:  new ActionDescriptor("navigate-to-list"),
-                    Variant: null
-                ),
-
                 new FormNode(
                     SubmitAction: new ActionDescriptor("save-contact", new() { ["id"] = contact.Id }),
                     SubmitLabel:  "Save",
                     Children:
                     [
-                        new FieldNode("name",  "text",     "Name",  null, contact.Name,  Required: true),
+                        new FieldNode("name",  "text",     "Name",  null, contact.Name, Required: true),
                         new FieldNode("email", "email",    "Email", null, contact.Email),
                         new FieldNode("phone", "text",     "Phone", null, contact.Phone),
                         new FieldNode("notes", "textarea", "Notes", null, contact.Notes)
-                    ]
-                ),
-
-                new ButtonNode(
-                    Label:   "Delete",
-                    Action:  new ActionDescriptor("delete-contact", new() { ["id"] = contact.Id }),
-                    Variant: "danger"
-                )
-            ]
-        );
-    }
-
-    private static ViewNode BuildAddView()
-    {
-        return new PageNode(
-            Title: "New Contact",
-            Children:
-            [
-                new ButtonNode(
-                    Label:   "← Cancel",
-                    Action:  new ActionDescriptor("navigate-to-list"),
-                    Variant: null
-                ),
-
-                new FormNode(
-                    SubmitAction: new ActionDescriptor("save-contact"),
-                    SubmitLabel:  "Create Contact",
-                    Children:
-                    [
-                        new FieldNode("name",  "text",     "Name",  "Full name",         null, Required: true),
-                        new FieldNode("email", "email",    "Email", "email@example.com",  null),
-                        new FieldNode("phone", "text",     "Phone", "555-0100",           null),
-                        new FieldNode("notes", "textarea", "Notes", "Any notes…",         null)
-                    ]
-                )
-            ]
-        );
+                    ]),
+                new ButtonNode("Delete", new ActionDescriptor("delete-contact", new() { ["id"] = contact.Id }), Variant: "danger")
+            ]);
     }
 }
