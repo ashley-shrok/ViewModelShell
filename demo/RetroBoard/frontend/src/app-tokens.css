@@ -1,0 +1,7 @@
+/* Sanctioned single-token seam override (D-17/D-19): RetroBoard is a genuinely
+   board-style wide layout, so it retunes ONLY --vms-page-max via the taught
+   per-app token mechanism — imported in main.ts immediately AFTER the pinned
+   theme, never as an HTML <style>. No other token, no other rule. */
+:root {
+  --vms-page-max: 1280px;
+}

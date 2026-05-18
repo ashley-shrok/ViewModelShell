@@ -1,4 +1,6 @@
 import "@ashley-shrok/viewmodel-shell/styles.css";
+import "@ashley-shrok/viewmodel-shell/themes/light-amber.css";
+import "./app-tokens.css";
 import { ViewModelShell } from "@ashley-shrok/viewmodel-shell";
 import { BrowserAdapter } from "@ashley-shrok/viewmodel-shell/browser";
 
