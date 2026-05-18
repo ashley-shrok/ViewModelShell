@@ -75,7 +75,7 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
   4. npm `@ashley-shrok/viewmodel-shell` and NuGet `AshleyShrok.ViewModelShell` ship aligned at `0.4.0`, and MIGRATION.md + CHANGELOG document the additive layout preset (default = prior behavior, non-breaking) + theme/density/card additions + "existing apps render unchanged unless they opt in" (RELEASE-01, RELEASE-03).
   5. The full cross-backend parity suite is green across all fixtures + backends including the new layout-preset fixture, existing unit tests stay green, and new jsdom unit tests cover layout presets / density / card variant with no browser runtime (RELEASE-02, RELEASE-04).
 **Plans**: 6 plans
-  - [ ] 05-01-PLAN.md — Palette re-baseline (light) + dark-purple.css capture + literals audit + WCAG-AA CI guard
+  - [x] 05-01-PLAN.md — Palette re-baseline (light) + dark-purple.css capture + literals audit + WCAG-AA CI guard
   - [ ] 05-02-PLAN.md — Showcase canonical reference set (gallery + Dashboard/Form-heavy/List-detail) + switcher remap/scope
   - [ ] 05-03-PLAN.md — De-chrome every demo onto the shipped stylesheet + distinct pinned themes
   - [ ] 05-04-PLAN.md — AGENTS.md Design system section + bounded accuracy pass

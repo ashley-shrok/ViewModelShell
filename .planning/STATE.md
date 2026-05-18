@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 5 UI-SPEC approved
-last_updated: "2026-05-18T04:32:53.618Z"
-last_activity: 2026-05-18 -- Phase 05 execution started
+stopped_at: Completed 05-01-PLAN.md (D-01↔D-07 conflict resolved; 11/11 WCAG-AA PASS; AA guard gated in parity.yml)
+last_updated: "2026-05-18T04:47:27.768Z"
+last_activity: 2026-05-18 -- Plan 05-01 completed (--vms-warning AA tighten, parity.yml AA gate)
 progress:
   total_phases: 3
   completed_phases: 2
@@ -27,11 +27,11 @@ progress:
 ## Current Position
 
 Phase: 05 (canonical-examples-0-4-0-release-closeout) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 05
-Last activity: 2026-05-18 -- Phase 05 execution started
+Plan: 2 of 6
+Status: Plan 05-01 complete (D-01↔D-07 resolved); ready to execute Plan 05-02
+Last activity: 2026-05-18 -- Plan 05-01 completed (--vms-warning AA tighten, parity.yml AA gate)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 
 ---
 
@@ -47,6 +47,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03 P01 | 6min | 3 tasks | 1 files |
 | Phase 03 P02 | 13min | 2 tasks | 2 files |
 | Phase 03 P03 | 4min | 3 tasks | 4 files |
+| Phase 05 P01 | 15min | 3 tasks | 5 files |
 
 ## Phase Structure (0.4.0)
 
@@ -68,6 +69,8 @@ Progress: [░░░░░░░░░░] 0%
 - [03-01] Spacing scale: 6 steps base xs=0.5rem modular ~1.5; type scale: 7 all-rem steps base 0.8125rem modular ~1.2 (UI-SPEC, D-06/07/09) — scale-as-variables is the prerequisite for the Plan 02 density remap (D-10)
 - [03-01] D-17 WCAG-AA fix: --vms-text-muted #6b6b80 → #9090a8 is the ONLY allowed default-value change; THEME-05 sacred seam held (every other :root name/value byte-identical, 11 theme files byte-unchanged); parity 7/7 unchanged (CSS has no wire surface)
 - [03-02] PageNode.density?/SectionNode.variant? added as additive optional CLOSED unions (D-03) on TS index.ts + .NET ViewModels.cs, structurally aligned (D-05); omitted ⇒ byte-identical wire proven by parity 7/7 (D-01 non-breaking); no version bump (Phase 5 RELEASE-01 owns the aligned 0.4.0); no renderer/CSS here (Plan 03 owns emission)
+- [05-01] default.css :root re-based dark→light onto the light-purple value set (D-01); prior dark default captured byte-exact in themes/dark-purple.css (D-02); 11 prior theme files byte-identical (D-03); standalone check-aa-contrast.mjs WCAG-AA CI guard gated in parity.yml beside core-globals (D-07/D-25); color-literal audit verdict = pure :root swap (D-16)
+- [05-01] D-01 ↔ D-07 locked-decision conflict resolved (user-approved, D-17 precedent): default.css :root --vms-warning #c89610 → #a37510 (ONLY this one value) so the shipped light default clears the WCAG-AA non-text floor (4.11/3.84/3.62:1 vs surface/bg/surface-2, was 2.68/2.51/2.36:1); 17 other colors + --vms-color-scheme verbatim light-purple; themes/light-purple.css + 11 theme files + dark-purple.css byte-unchanged. **Plan 05-05 (MIGRATION/CHANGELOG, D-05/D-26) MUST document this one-variable tighten alongside the dark→light flip**
 
 ### Architectural Notes (0.4.0 Design System)
 
@@ -81,7 +84,7 @@ Progress: [░░░░░░░░░░] 0%
 
 ()
 
-- Phase 5 Plan 01 Task 3: D-01 (light-purple :root verbatim) vs D-07 (WCAG-AA CI floor) conflict. --vms-warning #c89610 on --vms-surface #ffffff = 2.68:1, below the 3.0:1 AA non-text floor. Locked-decision conflict; needs user decision (Rule 4). Tasks 1-2 committed (32baaae, de2f497).
+- ~~Phase 5 Plan 01 Task 3: D-01 vs D-07 conflict (--vms-warning #c89610 = 2.68:1 < 3.0:1 AA floor)~~ — **RESOLVED 2026-05-18** (user-approved, D-17 precedent): default.css :root --vms-warning → #a37510, 11/11 AA PASS, parity.yml gates check:aa-contrast. Plan 05-01 complete (32baaae, de2f497, c79a843, 6f601e4).
 
 ### Quick Tasks Completed
 
@@ -98,9 +101,9 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Session Continuity
 
-**Last session:** 2026-05-18T03:54:25.558Z
-**Stopped at:** Phase 5 UI-SPEC approved
-**Next action:** `/gsd-plan-phase 3` — plan Phase 3: Default Design System (THEME-01..05).
+**Last session:** 2026-05-18T04:46:00Z
+**Stopped at:** Completed 05-01-PLAN.md (D-01↔D-07 conflict resolved; 11/11 WCAG-AA PASS; AA guard gated in parity.yml)
+**Next action:** Execute Plan 05-02 (Phase 5, plan 2 of 6).
 
 ---
 
