@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **0.3.13 Platform-Agnosticism** — Phases 1–2 (shipped 2026-05-15) — [archive](./milestones/0.3.13-ROADMAP.md)
-- 🚧 **0.4.0 Design System** — Phases 3–5 (in progress)
+- ✅ **0.4.0 Design System** — Phases 3–5 (shipped 2026-05-18; npm + NuGet 0.4.1)
 
 ## Phases
 
@@ -21,13 +21,13 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
 
 </details>
 
-### 🚧 0.4.0 Design System (In Progress)
+### ✅ 0.4.0 Design System (Shipped 2026-05-18)
 
 **Milestone Goal:** Ship a serviceable out-of-box look so agents — blind by design (no browser, no visual iteration loop) — produce decent apps without human intervention. The framework guarantees the baseline because the only entity that could compensate (the app-building agent) cannot see its output. Appearance is 100% CSS (untouched override seam); layout *intent* enters the wire as one preset enum on existing containers (the 0.4.0-forcing wire-format change), with the default value byte-identical to today's vertical flow.
 
 - [x] **Phase 3: Default Design System** - Shipped stylesheet delivers page shell, spacing/type scale, density knob, card section variant — zero app CSS, override seam unchanged (completed 2026-05-17)
-- [ ] **Phase 4: Preset-Grid Layout** - One optional layout-preset enum on `page`/`section`, default = today's vertical flow, round-trips byte-identically across .NET/TS backends + new parity fixture
-- [ ] **Phase 5: Canonical Examples + 0.4.0 Release Closeout** - Showcase/demos on the shipped stylesheet (no per-demo `<style>` chrome), AGENTS.md docs, aligned 0.4.0 npm+NuGet bump, full parity green, MIGRATION/CHANGELOG, tests green
+- [x] **Phase 4: Preset-Grid Layout** - One optional layout-preset enum on `page`/`section`, default = today's vertical flow, round-trips byte-identically across .NET/TS backends + new parity fixture (completed 2026-05-18)
+- [x] **Phase 5: Canonical Examples + 0.4.0 Release Closeout** - Showcase/demos on the shipped stylesheet (no per-demo `<style>` chrome), AGENTS.md docs, aligned 0.4.0 npm+NuGet bump, full parity green, MIGRATION/CHANGELOG, tests green (completed 2026-05-18)
 
 ## Phase Details
 
@@ -92,6 +92,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |---|---|---|---|---|
 | 1. Capability Seam Refactor | 0.3.13 | 3/3 | Complete | 2026-05-15 |
 | 2. Upload Progress + Closeout | 0.3.13 | 3/3 | Complete | 2026-05-15 |
-| 3. Default Design System | 0.4.0 | 3/3 | Complete    | 2026-05-17 |
-| 4. Preset-Grid Layout | 0.4.0 | 0/4 | Not started | - |
-| 5. Canonical Examples + 0.4.0 Closeout | 0.4.0 | 0/6 | Not started | - |
+| 3. Default Design System | 0.4.0 | 3/3 | Complete | 2026-05-17 |
+| 4. Preset-Grid Layout | 0.4.0 | 4/4 | Complete | 2026-05-18 |
+| 5. Canonical Examples + 0.4.0 Closeout | 0.4.0 | 6/6 | Complete | 2026-05-18 |

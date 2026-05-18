@@ -19,19 +19,19 @@ progress:
 ## Project Reference
 
 **Core Value:** The core is a platform-agnostic transformer of a structured wire protocol — testable with no browser runtime, portable to any front-end.
-**Current Milestone:** 0.4.0 Design System (Phases 3–5)
-**Current Focus:** Phase 05 — canonical-examples-0-4-0-release-closeout
+**Current Milestone:** 0.4.0 Design System (Phases 3–5) — ✅ SHIPPED (npm + NuGet 0.4.1; git tags v0.4.0/v0.4.1, all pushed)
+**Current Focus:** None — 0.4.0 milestone closed. Awaiting next milestone scope.
 
 ---
 
 ## Current Position
 
-Phase: 05
-Plan: Not started
-Status: Phase complete — ready for verification
+Phase: 05 (final phase of 0.4.0)
+Plan: 6 of 6 complete
+Status: 0.4.0 milestone CLOSED & SHIPPED (npm + NuGet 0.4.1, registries verified live; git tags v0.4.0/v0.4.1 pushed; origin/main in sync)
 Last activity: 2026-05-18
 
-Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
+Progress: [██████████] 13 of 13 plans — Phases 3, 4, 5 all complete
 
 ---
 
@@ -40,10 +40,10 @@ Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 | Metric | Value |
 |--------|-------|
 | Phases total (0.4.0) | 3 (Phases 3–5) |
-| Phases complete (0.4.0) | 0 |
+| Phases complete (0.4.0) | 3 of 3 (Phases 3, 4, 5) |
 | Requirements total (0.4.0) | 17 |
-| Requirements complete | 0 |
-| Parity suite status | Green at 0.3.13 baseline (7/7 fixtures) — must stay green through 0.4.0; Phase 4 adds a new layout fixture, Phase 5 RELEASE-02 gates on full suite green |
+| Requirements complete | 17 of 17 |
+| Parity suite status | GREEN — 7/7 fixtures (incl. feature-probe ×3 + reorder), .NET/Bun/Node byte-identical; 176 .NET tests + inherited jsdom green (verified 2026-05-18) |
 | Phase 03 P01 | 6min | 3 tasks | 1 files |
 | Phase 03 P02 | 13min | 2 tasks | 2 files |
 | Phase 03 P03 | 4min | 3 tasks | 4 files |
@@ -115,11 +115,11 @@ Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 
 ## Session Continuity
 
-**Last session:** 2026-05-18T05:40:21.830Z
-**Stopped at:** Completed 05-06-PLAN.md (0.4.0 milestone closed — Phase 05 ready for verification)
-**Next action:** Execute Plan 05-02 (Phase 5, plan 2 of 6).
+**Last session:** 2026-05-18T12:30:00.000Z
+**Stopped at:** 0.4.0 milestone CLOSED & SHIPPED (Phases 3–5, npm + NuGet 0.4.1 live; tags v0.4.0/v0.4.1 + origin/main pushed and in sync). See frontmatter `stopped_at` for the full release record.
+**Next action:** None pending — awaiting next milestone scope. Explicit deferrals tracked: HelpDesk requester realistic redesign; `.vms-list-item` fixed-horizontal-row finding; LAYOUT-F1.
 
 ---
 
 *State initialized: 2026-05-15*
-*Last updated: 2026-05-17 — roadmap created for milestone 0.4.0 (Phases 3–5, 17/17 requirements mapped). Ready to plan Phase 3.*
+*Last updated: 2026-05-18 — 0.4.0 milestone closed & shipped (npm + NuGet 0.4.1, tags + origin/main pushed). Body sections reconciled with the authoritative `stopped_at` record (prior body drift: read "Phase 05 ready for verification / next plan 05-02 / 0 phases complete" while the milestone was in fact already shipped).*
