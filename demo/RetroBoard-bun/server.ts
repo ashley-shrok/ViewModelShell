@@ -9,17 +9,10 @@
 
 import {
   createAction,
+  type PageNode,
+  type SectionNode,
   type ViewNode,
 } from "@ashley-shrok/viewmodel-shell/server";
-
-// The locally-pinned @ashley-shrok/viewmodel-shell (0.3.11) type defs predate the
-// 0.4.0 redesign and omit PageNode.layout / SectionNode.variant. Those fields are
-// part of the 0.4.0 wire contract the .NET controller emits, so parity REQUIRES
-// them on the wire. These forward-compat aliases let us emit the real shape with
-// full type-checking instead of `any`. (Constraint: only server.ts is editable —
-// can't bump the dependency.)
-type PageNodeV04    = Extract<ViewNode, { type: "page" }>    & { layout?: string };
-type SectionNodeV04 = Extract<ViewNode, { type: "section" }> & { variant?: string };
 
 interface RetroCard {
   id: string;
@@ -90,7 +83,7 @@ function buildCardItem(card: RetroCard, isActionItems: boolean): ViewNode {
 
 function buildSectionNode(label: string, sectionId: string, cards: RetroCard[], isActionItems: boolean): ViewNode {
   // C# SectionNode(Heading: $"{label} ({cards.Count})", Variant:"card", Children:[Form, List]).
-  const section: SectionNodeV04 = {
+  const section: SectionNode = {
     type: "section",
     heading: `${label} (${cards.length})`,
     variant: "card",
@@ -125,7 +118,7 @@ function buildSectionNode(label: string, sectionId: string, cards: RetroCard[], 
 
 function buildVm(state: RetroState): ViewNode {
   // C# PageNode(Title:"Retro Board", Layout:"cards", Children:[3 sections]). No StatBar.
-  const page: PageNodeV04 = {
+  const page: PageNode = {
     type: "page",
     title: "Retro Board",
     layout: "cards",

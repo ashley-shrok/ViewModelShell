@@ -47,6 +47,14 @@ rule, token, node, or preset was added** to preserve any of these.
 - **0.4.0 expression:** none — no scroll-container / max-height affordance on `list` in the wire; custom scrollbar chrome is exactly the hand-rolled per-demo CSS D-15 removes.
 - **Disposition:** deferred; a constrained-scroll list region is a candidate future framework idea, usage-driven (not speculative; not in a closeout phase).
 
+## Post-0.4.1 (bun-demo local-source debt fix)
+
+### RESOLVED: `FeatureProbe-bun` strict-`tsc` TS5097 (`./handler.ts`)
+
+- **Found during:** the bun-demo stale-pin debt fix (repoint `*-bun` from npm `^0.3.11` → `link:` local source; per-demo `tsc --noEmit` sweep proving the now-current types).
+- **Symptom (pre-existing, unrelated to the pin):** `demo/FeatureProbe-bun` was the only `*-bun` demo failing `bunx tsc --noEmit`: `server.ts(5,30): error TS5097: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled` — from `import { fetchHandler } from "./handler.ts"` (the split-entrypoint pattern `server.ts`/`server-node.ts` share, deliberately keeping the explicit `.ts` so `node --experimental-strip-types server-node.ts` resolves at runtime). Structurally independent of the framework dependency: a *local relative* import, `server.ts` byte-unchanged by the debt fix, identical at the `^0.3.11` baseline. CI (`parity.yml`) never typechecks the bun demos (`grep -c tsc parity.yml` = 0) so demo `tsc` cleanliness was never a gated invariant.
+- **Resolution (same session, user-directed "fix and commit all"):** added `"allowImportingTsExtensions": true` to `demo/FeatureProbe-bun/tsconfig.json` (it already had the prerequisite `noEmit: true`). One-line, demo-local, zero runtime/wire surface. All 7 `*-bun` demos now `bunx tsc --noEmit` clean; full parity unchanged (7/7 byte-identical). No longer deferred — recorded here for the rationale trail.
+
 ### ExpenseTracker serif section-heading + number-spinner-strip + over-budget progress tint
 
 - **Found during:** Plan 05-03 Task 1.

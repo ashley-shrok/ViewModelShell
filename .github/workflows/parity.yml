@@ -76,6 +76,12 @@ jobs:
 
       - name: Install Bun deps
         run: |
+          # The *-bun demos consume the framework from local source (live symlink),
+          # the bun analog of the .NET ProjectReference / frontend Vite alias — not
+          # the npm registry. Their lockfiles pin "link:@ashley-shrok/viewmodel-shell",
+          # so the package must be bun-link-registered before the frozen installs can
+          # resolve it. dist/ already exists (built in the AGNOSTIC-03 step above).
+          (cd viewmodel-shell && bun link)
           for dir in demo/*-bun; do
             (cd "$dir" && bun install --frozen-lockfile)
           done
