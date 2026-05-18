@@ -54,6 +54,7 @@
     "./themes/dark-rose.css": "./styles/themes/dark-rose.css",
     "./themes/dark-amber.css": "./styles/themes/dark-amber.css",
     "./themes/dark-teal.css": "./styles/themes/dark-teal.css",
+    "./themes/dark-purple.css": "./styles/themes/dark-purple.css",
     "./themes/light-purple.css": "./styles/themes/light-purple.css",
     "./themes/light-blue.css": "./styles/themes/light-blue.css",
     "./themes/light-green.css": "./styles/themes/light-green.css",

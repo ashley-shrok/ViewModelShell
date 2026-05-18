@@ -1,0 +1,24 @@
+/* Dark-purple theme — the pre-0.4.0 shipped default, preserved verbatim.
+   import "@ashley-shrok/viewmodel-shell/styles.css";
+   import "@ashley-shrok/viewmodel-shell/themes/dark-purple.css";
+*/
+:root {
+  --vms-bg:          #0f0f11;
+  --vms-surface:     #18181c;
+  --vms-surface-2:   #222228;
+  --vms-border:      #2e2e38;
+  --vms-accent:      #7c6af7;
+  --vms-accent-glow: rgba(124, 106, 247, 0.18);
+  --vms-accent-dim:  rgba(124, 106, 247, 0.35);
+  --vms-text:        #e8e8f0;
+  --vms-text-muted:  #9090a8;
+  --vms-done-bg:     #3a3a48;
+  --vms-done-text:   #5a5a6e;
+  --vms-error:       #e05a5a;
+  --vms-error-glow:  rgba(224, 90, 90, 0.12);
+  --vms-warning:       #e0a823;
+  --vms-priority-high: #e07015;
+  --vms-success:       #4dd17a;
+  --vms-info:          #4a9eff;
+  --vms-color-scheme: dark;
+}
