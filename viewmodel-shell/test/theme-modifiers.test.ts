@@ -70,3 +70,43 @@ describe("THEME-04 — section card variant emission (D-04 idiom)", () => {
     expect(el.className).toBe("vms-section");
   });
 });
+
+describe("LAYOUT-02/03 — page layout preset modifier emission (D-02 idiom)", () => {
+  it('layout: "split" => root className contains vms-page--split', () => {
+    const el = renderPage({ type: "page", children: [], layout: "split" });
+    expect(el.classList.contains("vms-page")).toBe(true);
+    expect(el.classList.contains("vms-page--split")).toBe(true);
+  });
+  it('layout: "cards" => root className contains vms-page--cards', () => {
+    const el = renderPage({ type: "page", children: [], layout: "cards" });
+    expect(el.classList.contains("vms-page--cards")).toBe(true);
+  });
+  it('layout: "stack" => className === "vms-page" (NO modifier — byte-identical, LAYOUT-01)', () => {
+    const el = renderPage({ type: "page", children: [], layout: "stack" });
+    expect(el.className).toBe("vms-page");
+  });
+  it('layout omitted => className === "vms-page" (byte-identical to pre-change)', () => {
+    const el = renderPage({ type: "page", children: [] });
+    expect(el.className).toBe("vms-page");
+  });
+});
+
+describe("LAYOUT-02/03 — section layout preset modifier emission (D-02 idiom)", () => {
+  it('layout: "split" => section className contains vms-section--split', () => {
+    const el = renderSection({ type: "section", children: [], layout: "split" });
+    expect(el.classList.contains("vms-section")).toBe(true);
+    expect(el.classList.contains("vms-section--split")).toBe(true);
+  });
+  it('layout: "cards" => section className contains vms-section--cards', () => {
+    const el = renderSection({ type: "section", children: [], layout: "cards" });
+    expect(el.classList.contains("vms-section--cards")).toBe(true);
+  });
+  it('layout: "stack" => className === "vms-section" (NO modifier — byte-identical, LAYOUT-01)', () => {
+    const el = renderSection({ type: "section", children: [], layout: "stack" });
+    expect(el.className).toBe("vms-section");
+  });
+  it('layout omitted => className === "vms-section" (byte-identical to pre-change)', () => {
+    const el = renderSection({ type: "section", children: [] });
+    expect(el.className).toBe("vms-section");
+  });
+});
