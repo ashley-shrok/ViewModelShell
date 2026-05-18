@@ -1,10 +1,11 @@
 ---
 phase: 5
 slug: canonical-examples-0-4-0-release-closeout
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-05-17
+reviewed_at: 2026-05-17
 ---
 
 # Phase 5 — UI Design Contract
@@ -208,11 +209,11 @@ Per `<autonomous_mode>`, defaults chosen where CONTEXT left discretion, consiste
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** APPROVED (gsd-ui-checker, 2026-05-17 — 6/6 dimensions PASS; all D-01..D-26 reflected, no deferred ideas leaked)
