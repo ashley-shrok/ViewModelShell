@@ -494,7 +494,7 @@ const shell = new ViewModelShell({
   endpoint: `/api/your-feature`,
   actionEndpoint: `/api/your-feature/action`,
   adapter: new BrowserAdapter(container),
-  onLoading: (loading) => document.body.classList.toggle("is-loading", loading),
+  onLoading: (loading) => { /* app-level hook — e.g. toggle a spinner. No shipped dim affordance. */ },
   onError: (err) => { /* show error banner */ },
 });
 
