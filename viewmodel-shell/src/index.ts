@@ -94,6 +94,8 @@ export interface FormNode {
   type: "form";
   submitAction: ActionEvent;
   submitLabel?: string;
+  /** Layout preset for the form's controls. Omitted or "stack" = fields stacked (current, no modifier class). "inline" = field row + submit on one line (add/search bar) — emits .vms-form--inline. Closed union (D-29). */
+  layout?: "stack" | "inline";
   children: ViewNode[];
 }
 

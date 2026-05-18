@@ -124,7 +124,8 @@ public record ListItemNode(
 public record FormNode(
     ActionDescriptor SubmitAction,
     string? SubmitLabel,
-    IReadOnlyList<ViewNode> Children
+    IReadOnlyList<ViewNode> Children,
+    string? Layout = null
 ) : ViewNode;
 
 public record FieldOption(string Value, string Label);

@@ -138,6 +138,7 @@ public class TasksController : ControllerBase
             new FormNode(
                 SubmitAction: new ActionDescriptor("add"),
                 SubmitLabel:  "Add",
+                Layout:       "inline",
                 Children: [new FieldNode("title", "text", null, "Add a task…", null)]),
             new ListNode(taskItems),
         ]);

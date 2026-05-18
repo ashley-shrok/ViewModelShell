@@ -207,6 +207,16 @@ body {
 
 /* ── Form ── */
 .vms-form { display: flex; flex-direction: column; gap: var(--vms-space-sm); align-items: stretch; }
+/* Form layout preset: inline (D-29) — field row + submit on one line (the
+   add/search-bar pattern). flex-direction:row over the column base; the
+   field grows, submit hugs; bottom-aligned so submit lines up with the
+   input (label sits above). Wraps on very narrow — zero media queries. */
+.vms-form--inline {
+  flex-direction: row;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.vms-form--inline > .vms-field { flex: 1 1 12rem; }
 .vms-field { display: flex; flex-direction: column; gap: var(--vms-space-2xs); }
 .vms-field__label { font-size: var(--vms-text-sm); color: var(--vms-text-muted); }
 .vms-field__input {

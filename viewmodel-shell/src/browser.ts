@@ -237,7 +237,7 @@ export class BrowserAdapter implements Adapter {
 
   private form(n: FormNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const form = document.createElement("form");
-    form.className = "vms-form";
+    form.className = `vms-form${n.layout && n.layout !== "stack" ? ` vms-form--${n.layout}` : ""}`;
     form.noValidate = true;
     this.kids(n.children, form, on);
     const submit = document.createElement("button");
