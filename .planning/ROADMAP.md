@@ -57,7 +57,11 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
   3. The "cards" preset auto-fits children from a single min-item-width value and collapses to one column on narrow screens (LAYOUT-03).
   4. The wire carries only the layout-preset enum — no spans, tracks, or named areas cross the contract (LAYOUT-04).
   5. The layout-preset field is present in `src/index.ts`, `src/server.ts`, all 5 demo `ViewModels.cs` copies + the NuGet source, and a new parity fixture exercises it with .NET/Bun/Node byte-identical (LAYOUT-05).
-**Plans**: TBD
+**Plans**: 4 plans
+  - [ ] 04-01-PLAN.md — Additive `layout?` closed-union field on PageNode/SectionNode, TS + .NET (LAYOUT-04, LAYOUT-05)
+  - [ ] 04-02-PLAN.md — Renderer emission + split/cards CSS + `--vms-card-min` + jsdom tests, zero media queries (LAYOUT-01, LAYOUT-02, LAYOUT-03)
+  - [ ] 04-03-PLAN.md — Widen FeatureProbe VM (TS+.NET) for layout/density/card; cross-backend parity green (closes D-05) (LAYOUT-01, LAYOUT-05)
+  - [ ] 04-04-PLAN.md — AGENTS.md node + CSS-class tables accurate-only for the `layout` field (LAYOUT-05)
 **UI hint**: yes
 
 ### Phase 5: Canonical Examples + 0.4.0 Release Closeout
@@ -83,5 +87,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Capability Seam Refactor | 0.3.13 | 3/3 | Complete | 2026-05-15 |
 | 2. Upload Progress + Closeout | 0.3.13 | 3/3 | Complete | 2026-05-15 |
 | 3. Default Design System | 0.4.0 | 3/3 | Complete    | 2026-05-17 |
-| 4. Preset-Grid Layout | 0.4.0 | 0/TBD | Not started | - |
+| 4. Preset-Grid Layout | 0.4.0 | 0/4 | Not started | - |
 | 5. Canonical Examples + 0.4.0 Closeout | 0.4.0 | 0/TBD | Not started | - |
