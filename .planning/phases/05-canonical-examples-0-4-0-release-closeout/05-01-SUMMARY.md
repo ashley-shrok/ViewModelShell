@@ -94,7 +94,23 @@ These literals do **not** "visibly assume a dark backdrop": at 4–6% alpha they
 
 ## WCAG-AA ratio table + verdict
 
-_(Populated by Task 3 — see below.)_
+Research item 2: WCAG-AA re-verification of the new light default (the `light-purple.css` value set adopted by D-01, never AA-audited in Phase 3 which only verified the dark default). Measured by `viewmodel-shell/scripts/check-aa-contrast.mjs` (WCAG 2.x relative luminance, contrast `(L1+0.05)/(L2+0.05)`; thresholds: text pairs ≥ 4.5:1 SC 1.4.3, semantic-on-surface ≥ 3.0:1 SC 1.4.11). Script math cross-checked against the WCAG reference value `#767676` on `#fff` = 4.54:1 (matches the published reference).
+
+| Pair | Ratio | Threshold | Result |
+|------|-------|-----------|--------|
+| `--vms-text` on `--vms-bg` | 16.16:1 | 4.5:1 | PASS |
+| `--vms-text` on `--vms-surface` | 17.29:1 | 4.5:1 | PASS |
+| `--vms-text` on `--vms-surface-2` | 15.21:1 | 4.5:1 | PASS |
+| `--vms-text-muted` on `--vms-bg` | 4.79:1 | 4.5:1 | PASS |
+| `--vms-text-muted` on `--vms-surface` | 5.13:1 | 4.5:1 | PASS |
+| `--vms-text-muted` on `--vms-surface-2` | 4.51:1 | 4.5:1 | PASS |
+| `--vms-error` on `--vms-surface` | 4.99:1 | 3.0:1 | PASS |
+| `--vms-success` on `--vms-surface` | 3.23:1 | 3.0:1 | PASS |
+| **`--vms-warning` on `--vms-surface`** | **2.68:1** | **3.0:1** | **FAIL** |
+| `--vms-info` on `--vms-surface` | 4.42:1 | 3.0:1 | PASS |
+| `--vms-priority-high` on `--vms-surface` | 3.67:1 | 3.0:1 | PASS |
+
+**Verdict: the new light default does NOT pass WCAG-AA on all required pairs.** `--vms-warning` `#c89610` on `--vms-surface` `#ffffff` is **2.68:1**, below the 3.0:1 AA non-text/graphical floor (SC 1.4.11). It is also 2.51:1 on `--vms-bg` and 2.36:1 on `--vms-surface-2`. Body and muted text all pass (lowest: muted on surface-2 = 4.51:1, comfortably ≥ 4.5:1). This is a **phase blocker per the plan's explicit instruction** ("a failing default is a phase blocker, NOT a silent pass; do not adjust :root values to force a pass without escalating, since :root values are locked to the light-purple set by D-01"). The conflict is between two locked decisions — D-01 (use the `light-purple.css` value set verbatim) and D-07 (WCAG-AA must hold, CI-enforced). Escalated as a checkpoint (Rule 4 — locked-decision conflict requiring a user decision). Task 3 is paused; the AA guard is NOT yet gated in parity.yml (gating a known-failing check would break CI).
 
 ## Task Commits
 

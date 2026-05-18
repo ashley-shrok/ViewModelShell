@@ -27,6 +27,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check:core-globals": "node scripts/check-core-platform-globals.mjs",
+    "check:aa-contrast": "node scripts/check-aa-contrast.mjs",
     "test": "vitest run",
     "prepublishOnly": "npm run build"
   },
