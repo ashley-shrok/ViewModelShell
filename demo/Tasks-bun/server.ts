@@ -1,6 +1,13 @@
 // Tasks demo — TypeScript backend mirror of demo/Tasks/AspNetCore/.
 // Faithful port: same wire format, same action semantics, same vm shape.
 // Used as one half of the parity test harness (parity/run.ts).
+//
+// THE .NET CONTROLLER (demo/Tasks/AspNetCore/TasksController.cs) IS THE
+// AUTHORITATIVE SOURCE OF TRUTH. This file mirrors it byte-for-byte (post
+// parity/normalize.ts). Layout redesigned in 0.4.0 ("realistic-demo pass"):
+// PageNode("Tasks",[rail,main],layout:"sidebar"); rail is a "Views" card
+// section with a nav ListNode; main has progress text, progress bar, an
+// inline add form, and the task list.
 
 import {
   createAction,
@@ -11,7 +18,7 @@ interface TaskRecord {
   id: string;
   title: string;
   completed: boolean;
-  createdAt: string; // ISO timestamp
+  createdAt: string; // ISO timestamp — neutralized by parity normalize()
 }
 
 interface TasksState {
@@ -20,6 +27,10 @@ interface TasksState {
 }
 
 function initialState(): TasksState {
+  // Mirrors TasksState.Initial(): ids "1","2","3", exact titles/completed.
+  // createdAt is volatile under parity normalize() so only ordering matters;
+  // the controller orders the rendered list by CreatedAt ascending, so the
+  // seed timestamps here must keep the same relative order (1 < 2 < 3).
   const now = Date.now();
   return {
     items: [
@@ -32,73 +43,112 @@ function initialState(): TasksState {
 }
 
 function buildVm(state: TasksState): ViewNode {
+  const total     = state.items.length;
+  const completed = state.items.filter(t => t.completed).length;
+  const active    = total - completed;
+  const pct       = total === 0 ? 0 : Math.round((100 * completed) / total);
+
   const filtered =
     state.filter === "active"    ? state.items.filter(t => !t.completed)
     : state.filter === "completed" ? state.items.filter(t =>  t.completed)
     :                                state.items;
 
-  const total     = state.items.length;
-  const completed = state.items.filter(t => t.completed).length;
-  const pct       = total === 0 ? 0 : Math.round(100 * completed / total);
-
-  return {
-    type: "page",
-    title: "Tasks",
+  // LEFT RAIL — Todoist-style view nav; current view = active variant.
+  // ListItemNode(id, filter==id ? "active" : null, [ButtonNode("{label} ({count})", filter)])
+  const navItem = (id: string, label: string, count: number): ViewNode => ({
+    type: "list-item",
+    id,
+    variant: state.filter === id ? "active" : undefined,
     children: [
       {
-        type: "stat-bar",
-        stats: [{ label: "complete", value: `${completed} of ${total}` }],
+        type: "button",
+        label: `${label} (${count})`,
+        action: { name: "filter", context: { value: id } },
+        // ButtonNode.Variant is null here → omitted under normalize().
       },
+    ],
+  });
+
+  const rail: ViewNode = {
+    type: "section",
+    heading: "Views",
+    children: [
+      {
+        type: "list",
+        children: [
+          navItem("all",       "All",       total),
+          navItem("active",    "Active",    active),
+          navItem("completed", "Completed", completed),
+        ],
+      },
+    ],
+    variant: "card",
+  };
+
+  // MAIN — progress text, progress bar, inline add form, the task list.
+  const taskItems: ViewNode[] = filtered
+    .slice()
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
+    .map<ViewNode>(t => ({
+      type: "list-item",
+      id: t.id,
+      variant: t.completed ? "done" : undefined,
+      children: [
+        {
+          type: "checkbox",
+          name: "completed",
+          checked: t.completed,
+          action: { name: "toggle", context: { id: t.id } },
+        },
+        {
+          type: "text",
+          value: t.title,
+          style: t.completed ? "strikethrough" : undefined,
+        },
+        {
+          type: "button",
+          label: "✕",
+          action: { name: "delete", context: { id: t.id } },
+          variant: "danger",
+        },
+      ],
+    }));
+  if (taskItems.length === 0) {
+    taskItems.push({ type: "text", value: "Nothing here.", style: "muted" });
+  }
+
+  const main: ViewNode = {
+    type: "section",
+    // SectionNode heading is null → omitted under normalize().
+    children: [
+      { type: "text", value: `${completed} of ${total} complete`, style: "muted" },
+      { type: "progress", value: pct },
       {
         type: "form",
         submitAction: { name: "add" },
         submitLabel: "Add",
         children: [
-          { type: "field", name: "title", inputType: "text", placeholder: "Add a task…", required: false },
+          {
+            type: "field",
+            name: "title",
+            inputType: "text",
+            placeholder: "Add a task…",
+            // FieldNode.Label and .Value are null → omitted.
+            // FieldNode.Required is non-nullable bool → MUST emit required:false.
+            required: false,
+          },
         ],
+        layout: "inline",
       },
-      {
-        type: "tabs",
-        selected: state.filter,
-        action: { name: "filter" },
-        tabs: [
-          { value: "all",       label: "All" },
-          { value: "active",    label: "Active" },
-          { value: "completed", label: "Completed" },
-        ],
-      },
-      {
-        type: "list",
-        children: filtered
-          .slice()
-          .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
-          .map<ViewNode>(t => ({
-            type: "list-item",
-            id: t.id,
-            variant: t.completed ? "done" : undefined,
-            children: [
-              {
-                type: "checkbox",
-                name: "completed",
-                checked: t.completed,
-                action: { name: "toggle", context: { id: t.id } },
-              },
-              {
-                type: "text",
-                value: t.title,
-                style: t.completed ? "strikethrough" : undefined,
-              },
-              {
-                type: "button",
-                label: "Delete",
-                action: { name: "delete", context: { id: t.id } },
-                variant: "danger",
-              },
-            ],
-          })),
-      },
-      { type: "progress", value: pct },
+      { type: "list", children: taskItems },
     ],
+  };
+
+  return {
+    type: "page",
+    title: "Tasks",
+    children: [rail, main],
+    layout: "sidebar",
   };
 }
 

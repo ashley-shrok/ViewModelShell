@@ -221,82 +221,77 @@ function formatDate(iso: string): string {
 }
 
 // ─── Agent controller ───────────────────────────────────────────────────────
+// Mirrors AgentController.cs: a full-width filterable ticket queue
+// (TableNode; whole-row click opens the ticket) → a dedicated full
+// ticket PageNode. The navigate pattern real ticketing actually uses.
 
-function agentBuildQueueView(state: AgentState): ViewNode {
+function agentBuildQueuePage(state: AgentState): ViewNode {
   const counts = dbGetCounts();
   const tickets = dbGetAll(state.filter === "all" ? null : state.filter);
 
-  const items: ViewNode[] = tickets.map(t => {
-    const children: ViewNode[] = [
-      { type: "text", value: t.title, style: "subheading" },
-      { type: "text", value: `${typeLabel(t.type)} · ${priorityLabel(t.priority)}`, style: "muted" },
-      { type: "text", value: statusLabel(t.status), style: "muted" },
-    ];
-    if (t.dueDate) children.push({ type: "text", value: `Due ${t.dueDate}`, style: "muted" });
-    if (t.status === "open") {
-      children.push({
-        type: "button", label: "Take",
-        action: { name: "start-ticket", context: { id: String(t.id) } },
-        variant: "primary",
-      });
-    }
-    children.push({
-      type: "button", label: "View",
-      action: { name: "select-ticket", context: { id: String(t.id) } },
-      variant: "secondary",
-    });
-    return {
-      type: "list-item",
+  const rows = tickets.map(t => {
+    const variant = ticketVariant(t);
+    const row: {
+      cells: Record<string, string>;
+      id?: string;
+      action?: { name: string; context?: Record<string, unknown> };
+      variant?: string;
+    } = {
+      cells: {
+        title:    t.title,
+        type:     typeLabel(t.type),
+        priority: priorityLabel(t.priority),
+        status:   statusLabel(t.status),
+        due:      !t.dueDate ? "—" : t.dueDate,
+      },
       id: String(t.id),
-      variant: ticketVariant(t),
-      children,
+      action: { name: "select-ticket", context: { id: String(t.id) } },
     };
+    if (variant !== undefined) row.variant = variant;
+    return row;
   });
 
-  if (items.length === 0) {
-    items.push({ type: "text", value: "No tickets in queue.", style: "muted" });
-  }
+  const children: ViewNode[] = [
+    {
+      type: "text",
+      value: `${counts.open} open · ${counts.inProgress} in progress · ${counts.resolved} resolved`,
+      style: "muted",
+    },
+    {
+      type: "tabs",
+      selected: state.filter,
+      action: { name: "filter" },
+      tabs: [
+        { value: "all",         label: "All" },
+        { value: "open",        label: "Open" },
+        { value: "in-progress", label: "In Progress" },
+        { value: "resolved",    label: "Resolved" },
+      ],
+    },
+    rows.length === 0
+      ? { type: "text", value: "No tickets in queue.", style: "muted" }
+      : {
+          type: "table",
+          columns: [
+            { key: "title",    label: "Title",    sortable: false, filterable: false, linkExternal: false },
+            { key: "type",     label: "Type",     sortable: false, filterable: false, linkExternal: false },
+            { key: "priority", label: "Priority", sortable: false, filterable: false, linkExternal: false },
+            { key: "status",   label: "Status",   sortable: false, filterable: false, linkExternal: false },
+            { key: "due",      label: "Due",      sortable: false, filterable: false, linkExternal: false },
+          ],
+          rows,
+        },
+  ];
 
-  return {
-    type: "page",
-    title: "Agent Queue",
-    children: [
-      {
-        type: "stat-bar",
-        stats: [
-          { label: "open",        value: String(counts.open) },
-          { label: "in progress", value: String(counts.inProgress) },
-          { label: "resolved",    value: String(counts.resolved) },
-          { label: "total",       value: String(counts.open + counts.inProgress + counts.resolved) },
-        ],
-      },
-      {
-        type: "tabs",
-        selected: state.filter,
-        action: { name: "filter" },
-        tabs: [
-          { value: "all",         label: "All" },
-          { value: "open",        label: "Open" },
-          { value: "in-progress", label: "In Progress" },
-          { value: "resolved",    label: "Resolved" },
-        ],
-      },
-      { type: "list", children: items },
-    ],
-  };
+  return { type: "page", title: "Help Desk — Agent", children };
 }
 
-function agentBuildDetailView(state: AgentState): ViewNode {
-  const ticket = dbGetById(state.selectedTicketId!);
-  if (!ticket) {
-    return agentBuildQueueView({ ...state, view: "queue", selectedTicketId: null });
-  }
-
+function agentBuildTicketPage(ticket: Ticket, state: AgentState): ViewNode {
   const info: ViewNode[] = [
-    { type: "text", value: `Status: ${statusLabel(ticket.status)}`,     style: "muted" },
-    { type: "text", value: `Type: ${typeLabel(ticket.type)}`,           style: "muted" },
+    { type: "text", value: `Status: ${statusLabel(ticket.status)}`,      style: "muted" },
+    { type: "text", value: `Type: ${typeLabel(ticket.type)}`,            style: "muted" },
     { type: "text", value: `Priority: ${priorityLabel(ticket.priority)}`, style: "muted" },
-    { type: "text", value: `Submitted: ${formatDate(ticket.createdAt)}`,   style: "muted" },
+    { type: "text", value: `Submitted: ${formatDate(ticket.createdAt)}`,  style: "muted" },
   ];
 
   if (ticket.type === "hardware" && ticket.deviceModel) {
@@ -341,10 +336,12 @@ function agentBuildDetailView(state: AgentState): ViewNode {
       break;
   }
 
-  const notesChildren: ViewNode[] = [
-    { type: "field", name: "agent_notes", inputType: "textarea", placeholder: "Add notes…",
-      value: ticket.agentNotes ?? undefined, required: false },
-  ];
+  const notesField: ViewNode = {
+    type: "field", name: "agent_notes", inputType: "textarea",
+    placeholder: "Add notes…", required: false,
+  };
+  if (ticket.agentNotes != null) (notesField as { value?: string }).value = ticket.agentNotes;
+  const notesChildren: ViewNode[] = [notesField];
   if (state.notesSaved) {
     notesChildren.push({ type: "text", value: "Notes saved.", style: "muted" });
   }
@@ -373,7 +370,11 @@ function agentBuildDetailView(state: AgentState): ViewNode {
 }
 
 function agentBuildVm(state: AgentState): ViewNode {
-  return state.view === "detail" ? agentBuildDetailView(state) : agentBuildQueueView(state);
+  if (state.view === "detail" && state.selectedTicketId != null) {
+    const sel = dbGetById(state.selectedTicketId);
+    if (sel) return agentBuildTicketPage(sel, state);
+  }
+  return agentBuildQueuePage(state);
 }
 
 const agentHandler = createAction<AgentState>(async (payload) => {

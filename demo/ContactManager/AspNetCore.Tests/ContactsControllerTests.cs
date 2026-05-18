@@ -8,6 +8,18 @@ using ContactManager.Controllers;
 using ContactManager.State;
 using ViewModelShell;
 
+// 0.4.0 redesign: ONE persistent page with a split master/detail layout.
+//   PageNode(Title:"Contacts", Density:"compact", Layout:"split",
+//            Children:[ master SectionNode, detail SectionNode ])
+//   master  = SectionNode(Heading:"All Contacts (N[ of M])",
+//                          Children:[ search FormNode, "+ Add Contact" ButtonNode,
+//                                     "contact-list" ListNode ])
+//             selected row's ListItemNode has Variant "active".
+//   detail  = SectionNode(Variant:"card"):
+//                add view      → Heading "New Contact"  + create FormNode + Cancel
+//                no selection  → Heading "Details"      + muted hint TextNode
+//                selection     → Heading <contact.Name> + save FormNode + Delete
+// The page title stays "Contacts" on every view (no per-contact navigation).
 public class ContactsControllerTests
 {
     private static ContactsController CreateController()
@@ -45,18 +57,42 @@ public class ContactsControllerTests
     private static ShellResponse<ContactsState> Ok(ActionResult<ShellResponse<ContactsState>> result) =>
         result.Value ?? throw new Xunit.Sdk.XunitException("Expected a value, got " + result.Result?.GetType().Name);
 
+    // ── tree navigation helpers (master/detail split) ────────────────────────────
+
     private static PageNode Page(ViewNode vm) => Assert.IsType<PageNode>(vm);
-    private static ListNode ContactList(PageNode page) => page.Children.OfType<ListNode>().Single();
-    private static StatBarNode StatBar(PageNode page) => page.Children.OfType<StatBarNode>().Single();
-    private static FormNode GetForm(PageNode page) => page.Children.OfType<FormNode>().Single();
+
+    /// The two top-level sections: [0] master (list), [1] detail (card panel).
+    private static SectionNode Master(PageNode page) =>
+        Assert.IsType<SectionNode>(page.Children[0]);
+
+    private static SectionNode Detail(PageNode page) =>
+        Assert.IsType<SectionNode>(page.Children[1]);
+
+    private static ListNode ContactList(PageNode page) =>
+        Master(page).Children.OfType<ListNode>().Single();
+
+    private static FormNode SearchForm(PageNode page) =>
+        Master(page).Children.OfType<FormNode>().Single();
+
+    private static ButtonNode AddButton(PageNode page) =>
+        Master(page).Children.OfType<ButtonNode>().Single();
+
+    private static FormNode DetailForm(PageNode page) =>
+        Detail(page).Children.OfType<FormNode>().Single();
+
+    private static FieldNode Field(FormNode form, string name) =>
+        form.Children.OfType<FieldNode>().Single(f => f.Name == name);
 
     // ── GET /api/contacts ────────────────────────────────────────────────────────
 
     [Fact]
-    public void Get_ReturnsPageNodeWithTitle()
+    public void Get_ReturnsSplitPageWithTitleDensityLayout()
     {
         var page = Page(CreateController().Get().Vm);
         Assert.Equal("Contacts", page.Title);
+        Assert.Equal("compact", page.Density);
+        Assert.Equal("split", page.Layout);
+        Assert.Equal(2, page.Children.Count);
     }
 
     [Fact]
@@ -71,60 +107,115 @@ public class ContactsControllerTests
         var resp = CreateController().Get();
         Assert.Equal(12, resp.State.Contacts.Count);
         Assert.Equal("list", resp.State.CurrentView);
+        Assert.Null(resp.State.SelectedId);
+        Assert.Equal("", resp.State.SearchQuery);
     }
 
     [Fact]
-    public void Get_ListView_StatBarShowsTotal()
+    public void Get_Master_HeadingShowsTotalCount()
     {
-        var stat = StatBar(Page(CreateController().Get().Vm)).Stats.Single();
-        Assert.Equal("12", stat.Value);
-        Assert.Equal("contacts", stat.Label);
+        Assert.Equal("All Contacts (12)", Master(Page(CreateController().Get().Vm)).Heading);
     }
 
     [Fact]
-    public void Get_ListView_HasAddContactButton()
+    public void Get_Master_ContactListHasStableId()
     {
-        var addBtn = Page(CreateController().Get().Vm).Children
-            .OfType<ButtonNode>()
-            .Single(b => b.Label == "Add Contact");
+        Assert.Equal("contact-list", ContactList(Page(CreateController().Get().Vm)).Id);
+    }
+
+    [Fact]
+    public void Get_Master_HasAddContactButton()
+    {
+        var addBtn = AddButton(Page(CreateController().Get().Vm));
+        Assert.Equal("+ Add Contact", addBtn.Label);
         Assert.Equal("navigate-to-add", addBtn.Action.Name);
+        Assert.Equal("primary", addBtn.Variant);
     }
 
     [Fact]
-    public void Get_ListView_HasSearchField()
+    public void Get_Master_HasSearchField()
     {
-        var form = GetForm(Page(CreateController().Get().Vm));
-        Assert.Contains(form.Children, c => c is FieldNode f && f.Name == "query");
+        Assert.Contains(SearchForm(Page(CreateController().Get().Vm)).Children,
+            c => c is FieldNode f && f.Name == "query");
     }
 
     [Fact]
-    public void Get_ListView_SearchField_HasInputAction()
+    public void Get_Master_SearchField_HasInputActionAndPlaceholder()
     {
-        var form = GetForm(Page(CreateController().Get().Vm));
-        var field = form.Children.OfType<FieldNode>().Single(f => f.Name == "query");
+        var field = Field(SearchForm(Page(CreateController().Get().Vm)), "query");
         Assert.NotNull(field.Action);
-        Assert.Equal("search", field.Action.Name);
+        Assert.Equal("search", field.Action!.Name);
+        Assert.Equal("Search by name or email…", field.Placeholder);
+        Assert.False(field.Required);
     }
 
     [Fact]
-    public void Get_ListView_EachItem_HasNameAndViewButton()
+    public void Get_Master_SearchForm_SubmitsSearch()
+    {
+        var form = SearchForm(Page(CreateController().Get().Vm));
+        Assert.Equal("search", form.SubmitAction.Name);
+        Assert.Equal("Search", form.SubmitLabel);
+    }
+
+    [Fact]
+    public void Get_Master_ContactsSortedByName()
+    {
+        var list = ContactList(Page(CreateController().Get().Vm));
+        var names = list.Children.Cast<ListItemNode>()
+            .Select(i => i.Children.OfType<TextNode>().First().Value)
+            .ToList();
+        Assert.Equal(names.OrderBy(n => n, StringComparer.Ordinal), names);
+    }
+
+    [Fact]
+    public void Get_Master_EachItem_HasNameEmailAndOpenButton()
     {
         var list = ContactList(Page(CreateController().Get().Vm));
         foreach (var item in list.Children.Cast<ListItemNode>())
         {
-            Assert.Contains(item.Children, c => c is TextNode);
-            Assert.Contains(item.Children, c => c is ButtonNode b && b.Label == "View");
+            Assert.Equal(2, item.Children.OfType<TextNode>().Count());
+            Assert.Contains(item.Children, c => c is ButtonNode b && b.Label == "Open");
+            var openBtn = item.Children.OfType<ButtonNode>().Single();
+            Assert.Equal("navigate-to-detail", openBtn.Action.Name);
         }
+    }
+
+    [Fact]
+    public void Get_Master_NoRowHasActiveVariant_WhenNoSelection()
+    {
+        var list = ContactList(Page(CreateController().Get().Vm));
+        Assert.All(list.Children.Cast<ListItemNode>(), i => Assert.Null(i.Variant));
+    }
+
+    [Fact]
+    public void Get_Detail_ShowsEmptyState()
+    {
+        var detail = Detail(Page(CreateController().Get().Vm));
+        Assert.Equal("Details", detail.Heading);
+        Assert.Equal("card", detail.Variant);
+        var hint = Assert.IsType<TextNode>(detail.Children.Single());
+        Assert.Equal("Select a contact to view details, or add a new one.", hint.Value);
+        Assert.Equal("muted", hint.Style);
     }
 
     // ── action: navigate-to-detail ───────────────────────────────────────────────
 
     [Fact]
-    public void Action_NavigateToDetail_ShowsContactName()
+    public void Action_NavigateToDetail_KeepsPageTitleContacts()
     {
         var ctrl = CreateController();
         var resp = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-detail", Ctx(new { id = "c1" })));
-        Assert.Equal("Alice Johnson", Page(resp.Vm).Title);
+        Assert.Equal("Contacts", Page(resp.Vm).Title);
+    }
+
+    [Fact]
+    public void Action_NavigateToDetail_DetailCardHeadingIsContactName()
+    {
+        var ctrl = CreateController();
+        var resp = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-detail", Ctx(new { id = "c1" })));
+        var detail = Detail(Page(resp.Vm));
+        Assert.Equal("Alice Johnson", detail.Heading);
+        Assert.Equal("card", detail.Variant);
     }
 
     [Fact]
@@ -132,24 +223,46 @@ public class ContactsControllerTests
     {
         var ctrl = CreateController();
         var resp = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-detail", Ctx(new { id = "c1" })));
-        var nameField = GetForm(Page(resp.Vm)).Children.OfType<FieldNode>().Single(f => f.Name == "name");
-        Assert.Equal("Alice Johnson", nameField.Value);
+        Assert.Equal("Alice Johnson", Field(DetailForm(Page(resp.Vm)), "name").Value);
+        Assert.Equal("alice@example.com", Field(DetailForm(Page(resp.Vm)), "email").Value);
+        Assert.True(Field(DetailForm(Page(resp.Vm)), "name").Required);
     }
 
     [Fact]
-    public void Action_NavigateToDetail_HasBackButton()
+    public void Action_NavigateToDetail_DetailFormSubmitsSaveWithId()
     {
         var ctrl = CreateController();
         var resp = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-detail", Ctx(new { id = "c1" })));
-        Assert.Contains(Page(resp.Vm).Children, c => c is ButtonNode b && b.Action.Name == "navigate-to-list");
+        var form = DetailForm(Page(resp.Vm));
+        Assert.Equal("save-contact", form.SubmitAction.Name);
+        Assert.Equal("Save", form.SubmitLabel);
+        Assert.NotNull(form.SubmitAction.Context);
+        Assert.Equal("c1", form.SubmitAction.Context!["id"]);
     }
 
     [Fact]
-    public void Action_NavigateToDetail_HasDeleteButton()
+    public void Action_NavigateToDetail_SelectedRowHasActiveVariant()
     {
         var ctrl = CreateController();
         var resp = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-detail", Ctx(new { id = "c1" })));
-        Assert.Contains(Page(resp.Vm).Children, c => c is ButtonNode b && b.Variant == "danger");
+        var list = ContactList(Page(resp.Vm));
+        var active = list.Children.Cast<ListItemNode>().Where(i => i.Variant == "active").ToList();
+        Assert.Single(active);
+        Assert.Equal("c1", active[0].Id);
+        Assert.All(list.Children.Cast<ListItemNode>().Where(i => i.Id != "c1"),
+            i => Assert.Null(i.Variant));
+    }
+
+    [Fact]
+    public void Action_NavigateToDetail_HasDeleteButtonInDetail()
+    {
+        var ctrl = CreateController();
+        var resp = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-detail", Ctx(new { id = "c1" })));
+        var del = Detail(Page(resp.Vm)).Children.OfType<ButtonNode>()
+            .Single(b => b.Variant == "danger");
+        Assert.Equal("Delete", del.Label);
+        Assert.Equal("delete-contact", del.Action.Name);
+        Assert.Equal("c1", del.Action.Context!["id"]);
     }
 
     [Fact]
@@ -163,19 +276,30 @@ public class ContactsControllerTests
     // ── action: navigate-to-add ──────────────────────────────────────────────────
 
     [Fact]
-    public void Action_NavigateToAdd_ShowsNewContactTitle()
+    public void Action_NavigateToAdd_DetailCardShowsNewContactForm()
     {
         var ctrl = CreateController();
         var resp = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-add"));
-        Assert.Equal("New Contact", Page(resp.Vm).Title);
+        Assert.Equal("Contacts", Page(resp.Vm).Title);
+        var detail = Detail(Page(resp.Vm));
+        Assert.Equal("New Contact", detail.Heading);
+        Assert.Equal("card", detail.Variant);
+        var form = DetailForm(Page(resp.Vm));
+        Assert.Equal("save-contact", form.SubmitAction.Name);
+        Assert.Null(form.SubmitAction.Context);
+        Assert.Equal("Create Contact", form.SubmitLabel);
     }
 
     [Fact]
-    public void Action_NavigateToAdd_FormFieldsAreEmpty()
+    public void Action_NavigateToAdd_FormFieldsAreEmptyWithPlaceholders()
     {
         var ctrl = CreateController();
         var resp = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-add"));
-        Assert.All(GetForm(Page(resp.Vm)).Children.OfType<FieldNode>(), f => Assert.Null(f.Value));
+        var form = DetailForm(Page(resp.Vm));
+        Assert.All(form.Children.OfType<FieldNode>(), f => Assert.Null(f.Value));
+        Assert.Equal("Full name", Field(form, "name").Placeholder);
+        Assert.True(Field(form, "name").Required);
+        Assert.False(Field(form, "email").Required);
     }
 
     [Fact]
@@ -183,25 +307,38 @@ public class ContactsControllerTests
     {
         var ctrl = CreateController();
         var resp = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-add"));
-        Assert.Contains(Page(resp.Vm).Children, c => c is ButtonNode b && b.Action.Name == "navigate-to-list");
+        var cancel = Detail(Page(resp.Vm)).Children.OfType<ButtonNode>().Single();
+        Assert.Equal("Cancel", cancel.Label);
+        Assert.Equal("navigate-to-list", cancel.Action.Name);
+        Assert.Null(cancel.Variant);
+    }
+
+    [Fact]
+    public void Action_NavigateToAdd_MasterListStillPresent()
+    {
+        var ctrl = CreateController();
+        var resp = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-add"));
+        Assert.Equal(12, ContactList(Page(resp.Vm)).Children.Count);
     }
 
     // ── action: navigate-to-list ─────────────────────────────────────────────────
 
     [Fact]
-    public void Action_NavigateToList_ReturnsToListView()
+    public void Action_NavigateToList_ReturnsToEmptyDetailState()
     {
         var ctrl = CreateController();
         var step1 = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-detail", Ctx(new { id = "c1" })));
         var step2 = Ok(Act(ctrl, step1.State, "navigate-to-list"));
         Assert.Equal("Contacts", Page(step2.Vm).Title);
         Assert.Equal(12, ContactList(Page(step2.Vm)).Children.Count);
+        Assert.Equal("Details", Detail(Page(step2.Vm)).Heading);
+        Assert.Null(step2.State.SelectedId);
     }
 
     // ── action: save-contact (add) ───────────────────────────────────────────────
 
     [Fact]
-    public void Action_SaveContact_Add_NavigatesToListAndShowsThirteenContacts()
+    public void Action_SaveContact_Add_SelectsNewContactInDetail()
     {
         var ctrl = CreateController();
         var step1 = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-add"));
@@ -209,6 +346,9 @@ public class ContactsControllerTests
             Ctx(new { name = "Dave Wilson", email = "dave@example.com", phone = "555-0199", notes = "" })));
         Assert.Equal("Contacts", Page(step2.Vm).Title);
         Assert.Equal(13, ContactList(Page(step2.Vm)).Children.Count);
+        Assert.Equal("detail", step2.State.CurrentView);
+        Assert.Equal("Dave Wilson", Detail(Page(step2.Vm)).Heading);
+        Assert.NotNull(step2.State.SelectedId);
     }
 
     [Fact]
@@ -237,15 +377,32 @@ public class ContactsControllerTests
     // ── action: save-contact (edit) ──────────────────────────────────────────────
 
     [Fact]
-    public void Action_SaveContact_Edit_ReturnsToDetailWithUpdatedValues()
+    public void Action_SaveContact_Edit_StaysInDetailWithUpdatedValues()
     {
         var ctrl = CreateController();
         var step1 = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-detail", Ctx(new { id = "c1" })));
         var step2 = Ok(Act(ctrl, step1.State, "save-contact",
             Ctx(new { id = "c1", name = "Alice Updated", email = "alice_new@example.com", phone = "555-9999", notes = "Updated" })));
-        Assert.Equal("Alice Updated", Page(step2.Vm).Title);
-        var nameField = GetForm(Page(step2.Vm)).Children.OfType<FieldNode>().Single(f => f.Name == "name");
-        Assert.Equal("Alice Updated", nameField.Value);
+        Assert.Equal("Contacts", Page(step2.Vm).Title);
+        Assert.Equal("Alice Updated", Detail(Page(step2.Vm)).Heading);
+        Assert.Equal("Alice Updated", Field(DetailForm(Page(step2.Vm)), "name").Value);
+        Assert.Equal("detail", step2.State.CurrentView);
+        Assert.Equal("c1", step2.State.SelectedId);
+    }
+
+    [Fact]
+    public void Action_SaveContact_Edit_UpdatedNameShowsInMasterList()
+    {
+        var ctrl = CreateController();
+        var step1 = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-detail", Ctx(new { id = "c1" })));
+        var step2 = Ok(Act(ctrl, step1.State, "save-contact",
+            Ctx(new { id = "c1", name = "Alice Updated", email = "alice_new@example.com", phone = "555-9999", notes = "Updated" })));
+        var texts = ContactList(Page(step2.Vm)).Children
+            .Cast<ListItemNode>()
+            .SelectMany(i => i.Children.OfType<TextNode>())
+            .Select(t => t.Value);
+        Assert.Contains("Alice Updated", texts);
+        Assert.DoesNotContain("Alice Johnson", texts);
     }
 
     [Fact]
@@ -261,13 +418,16 @@ public class ContactsControllerTests
     // ── action: delete-contact ───────────────────────────────────────────────────
 
     [Fact]
-    public void Action_DeleteContact_RemovesContactAndNavigatesToList()
+    public void Action_DeleteContact_RemovesContactAndClearsSelection()
     {
         var ctrl = CreateController();
         var step1 = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-detail", Ctx(new { id = "c1" })));
         var step2 = Ok(Act(ctrl, step1.State, "delete-contact", Ctx(new { id = "c1" })));
         Assert.Equal("Contacts", Page(step2.Vm).Title);
         Assert.Equal(11, ContactList(Page(step2.Vm)).Children.Count);
+        Assert.Equal("Details", Detail(Page(step2.Vm)).Heading);
+        Assert.Null(step2.State.SelectedId);
+        Assert.Equal("list", step2.State.CurrentView);
     }
 
     [Fact]
@@ -301,11 +461,19 @@ public class ContactsControllerTests
     }
 
     [Fact]
-    public void Action_Search_UpdatesStatBar()
+    public void Action_Search_UpdatesMasterHeadingCount()
     {
         var ctrl = CreateController();
         var resp = Ok(Act(ctrl, ContactsState.Initial(), "search", Ctx(new { query = "alice" })));
-        Assert.Equal("1 of 12", StatBar(Page(resp.Vm)).Stats.Single().Value);
+        Assert.Equal("All Contacts (1 of 12)", Master(Page(resp.Vm)).Heading);
+    }
+
+    [Fact]
+    public void Action_Search_PreservesQueryInSearchField()
+    {
+        var ctrl = CreateController();
+        var resp = Ok(Act(ctrl, ContactsState.Initial(), "search", Ctx(new { query = "alice" })));
+        Assert.Equal("alice", Field(SearchForm(Page(resp.Vm)), "query").Value);
     }
 
     [Fact]
@@ -315,7 +483,16 @@ public class ContactsControllerTests
         var step1 = Ok(Act(ctrl, ContactsState.Initial(), "search", Ctx(new { query = "alice" })));
         var step2 = Ok(Act(ctrl, step1.State, "search", Ctx(new { query = "" })));
         Assert.Equal(12, ContactList(Page(step2.Vm)).Children.Count);
-        Assert.Equal("12", StatBar(Page(step2.Vm)).Stats.Single().Value);
+        Assert.Equal("All Contacts (12)", Master(Page(step2.Vm)).Heading);
+    }
+
+    [Fact]
+    public void Action_Search_NoMatches_ShowsEmptyList()
+    {
+        var ctrl = CreateController();
+        var resp = Ok(Act(ctrl, ContactsState.Initial(), "search", Ctx(new { query = "zzzzz-no-match" })));
+        Assert.Empty(ContactList(Page(resp.Vm)).Children);
+        Assert.Equal("All Contacts (0 of 12)", Master(Page(resp.Vm)).Heading);
     }
 
     [Fact]

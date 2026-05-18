@@ -1,6 +1,11 @@
 // ContactManager demo — TypeScript backend mirror of demo/ContactManager/AspNetCore/.
 // Faithful port: same wire format, same action semantics, same vm shape.
 // Used as part of the parity test harness in ../../parity/.
+//
+// Realistic CRM / Google-Contacts shape (0.4.0 redesign): ONE persistent page
+// with a split master/detail layout. Left = searchable contact list (master);
+// right = a card panel showing the selected contact / add form / empty state.
+// Mirrors ContactsController.BuildVm exactly.
 
 import {
   createAction,
@@ -49,26 +54,25 @@ function initialState(): ContactsState {
 }
 
 function filtered(state: ContactsState): ContactRecord[] {
-  const q = state.searchQuery.trim();
-  if (!q) return state.contacts;
-  const needle = q.toLowerCase();
+  if (!state.searchQuery || !state.searchQuery.trim()) return state.contacts;
+  const needle = state.searchQuery.toLowerCase();
   return state.contacts.filter(c =>
     c.name.toLowerCase().includes(needle) ||
     c.email.toLowerCase().includes(needle)
   );
 }
 
-function buildListView(state: ContactsState): ViewNode {
+// LEFT — searchable contact list (master).
+function buildMaster(state: ContactsState): ViewNode {
   const list = filtered(state);
-  const statText = list.length === state.contacts.length
+  const count = list.length === state.contacts.length
     ? `${state.contacts.length}`
     : `${list.length} of ${state.contacts.length}`;
 
   return {
-    type: "page",
-    title: "Contacts",
+    type: "section",
+    heading: `All Contacts (${count})`,
     children: [
-      { type: "stat-bar", stats: [{ label: "contacts", value: statText }] },
       {
         type: "form",
         submitAction: { name: "search" },
@@ -87,7 +91,7 @@ function buildListView(state: ContactsState): ViewNode {
       },
       {
         type: "button",
-        label: "Add Contact",
+        label: "+ Add Contact",
         action: { name: "navigate-to-add" },
         variant: "primary",
       },
@@ -100,13 +104,15 @@ function buildListView(state: ContactsState): ViewNode {
           .map<ViewNode>(c => ({
             type: "list-item",
             id: c.id,
+            // D-27: the shipped .vms-list-item--active default marks the
+            // current master-detail selection.
+            ...(c.id === state.selectedId ? { variant: "active" } : {}),
             children: [
               { type: "text", value: c.name },
               { type: "text", value: c.email, style: "muted" },
-              { type: "text", value: c.phone, style: "muted" },
               {
                 type: "button",
-                label: "View",
+                label: "Open",
                 action: { name: "navigate-to-detail", context: { id: c.id } },
               },
             ],
@@ -116,25 +122,56 @@ function buildListView(state: ContactsState): ViewNode {
   };
 }
 
-function buildDetailView(state: ContactsState): ViewNode {
+// RIGHT — detail card: selected contact / add form / empty state.
+function buildDetail(state: ContactsState): ViewNode {
+  if (state.currentView === "add") {
+    return {
+      type: "section",
+      heading: "New Contact",
+      variant: "card",
+      children: [
+        {
+          type: "form",
+          submitAction: { name: "save-contact" },
+          submitLabel: "Create Contact",
+          children: [
+            { type: "field", name: "name",  inputType: "text",     label: "Name",  placeholder: "Full name",          required: true  },
+            { type: "field", name: "email", inputType: "email",    label: "Email", placeholder: "email@example.com",  required: false },
+            { type: "field", name: "phone", inputType: "text",     label: "Phone", placeholder: "555-0100",           required: false },
+            { type: "field", name: "notes", inputType: "textarea", label: "Notes", placeholder: "Any notes…",         required: false },
+          ],
+        },
+        { type: "button", label: "Cancel", action: { name: "navigate-to-list" } },
+      ],
+    };
+  }
+
   const contact = state.selectedId
     ? state.contacts.find(c => c.id === state.selectedId)
     : null;
+
   if (!contact) {
-    return buildListView({ ...state, currentView: "list", selectedId: null });
+    return {
+      type: "section",
+      heading: "Details",
+      variant: "card",
+      children: [
+        { type: "text", value: "Select a contact to view details, or add a new one.", style: "muted" },
+      ],
+    };
   }
 
   return {
-    type: "page",
-    title: contact.name,
+    type: "section",
+    heading: contact.name,
+    variant: "card",
     children: [
-      { type: "button", label: "← Back", action: { name: "navigate-to-list" } },
       {
         type: "form",
         submitAction: { name: "save-contact", context: { id: contact.id } },
         submitLabel: "Save",
         children: [
-          { type: "field", name: "name",  inputType: "text",     label: "Name",  value: contact.name,  required: true },
+          { type: "field", name: "name",  inputType: "text",     label: "Name",  value: contact.name,  required: true  },
           { type: "field", name: "email", inputType: "email",    label: "Email", value: contact.email, required: false },
           { type: "field", name: "phone", inputType: "text",     label: "Phone", value: contact.phone, required: false },
           { type: "field", name: "notes", inputType: "textarea", label: "Notes", value: contact.notes, required: false },
@@ -150,33 +187,17 @@ function buildDetailView(state: ContactsState): ViewNode {
   };
 }
 
-function buildAddView(): ViewNode {
+function buildVm(state: ContactsState): ViewNode {
   return {
     type: "page",
-    title: "New Contact",
+    title: "Contacts",
+    density: "compact",
+    layout: "split",
     children: [
-      { type: "button", label: "← Cancel", action: { name: "navigate-to-list" } },
-      {
-        type: "form",
-        submitAction: { name: "save-contact" },
-        submitLabel: "Create Contact",
-        children: [
-          { type: "field", name: "name",  inputType: "text",     label: "Name",  placeholder: "Full name",          required: true },
-          { type: "field", name: "email", inputType: "email",    label: "Email", placeholder: "email@example.com",  required: false },
-          { type: "field", name: "phone", inputType: "text",     label: "Phone", placeholder: "555-0100",           required: false },
-          { type: "field", name: "notes", inputType: "textarea", label: "Notes", placeholder: "Any notes…",         required: false },
-        ],
-      },
+      buildMaster(state),
+      buildDetail(state),
     ],
   };
-}
-
-function buildVm(state: ContactsState): ViewNode {
-  switch (state.currentView) {
-    case "detail": return buildDetailView(state);
-    case "add":    return buildAddView();
-    default:       return buildListView(state);
-  }
 }
 
 function generateId(): string {
@@ -230,7 +251,12 @@ const actionHandler = createAction<ContactsState>(async (payload) => {
           notes,
           createdAt: new Date().toISOString(),
         };
-        state = { ...state, contacts: [...state.contacts, added], currentView: "list" };
+        state = {
+          ...state,
+          contacts: [...state.contacts, added],
+          selectedId: added.id,
+          currentView: "detail",
+        };
       }
       break;
     }
