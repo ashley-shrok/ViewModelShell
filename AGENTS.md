@@ -155,7 +155,58 @@ Every dispatch is `multipart/form-data`. The action JSON travels in `_action`; t
 | table | `.vms-table-wrapper`, `.vms-table`, `.vms-table__th`, `.vms-table__th--sortable`, `.vms-table__th--asc`, `.vms-table__th--desc`, `.vms-table__filter-row`, `.vms-table__filter-input`, `.vms-table__row`, `.vms-table__row--{variant}`, `.vms-table__row--clickable`, `.vms-table__td`, `.vms-table__link` |
 | copy-button | `.vms-button` |
 
-The framework emits class names; the app owns the CSS. Reference dark-theme stylesheets: `demo/Tasks/frontend/index.html` and `demo/HelpDesk/frontend/requester.html`.
+The framework emits class names; the shipped `viewmodel-shell/styles/default.css` styles them. Apps import `styles.css` (+ optionally one theme) and author zero page CSS — see *Design system* below for how, when to reach for each layout preset, and the only sanctioned override seam.
+
+---
+
+## Design system
+
+The framework ships a serviceable look. The app does **not** hand-roll page CSS — it imports the stylesheet, optionally pins a theme, and (rarely) overrides a token. The live `demo/Showcase/` is the single source of truth for this section; every demo under `demo/` is a worked example of the real-app pattern below.
+
+### Serviceable by default
+
+Import the shipped stylesheet plus, optionally, one theme. The `.vms-page` shell + the `default.css` body rule own reset, centering, `--vms-page-max` width, background, and font — no app CSS, no `<style>` block, zero `@media`:
+
+```typescript
+import "@ashley-shrok/viewmodel-shell/styles.css";
+import "@ashley-shrok/viewmodel-shell/themes/dark-purple.css"; // optional — pick one
+```
+
+12 shipped themes (one import each): `dark-blue`, `dark-green`, `dark-rose`, `dark-amber`, `dark-teal`, `dark-purple`, `light-purple`, `light-blue`, `light-green`, `light-rose`, `light-amber`, `light-teal`. The shipped **default** (no theme import) is the `light-purple` value set. The prior dark default is exactly one import away — `import "@ashley-shrok/viewmodel-shell/themes/dark-purple.css";` reproduces it byte-for-byte. A theme is one static import in your entrypoint (see `demo/ContactManager/frontend/src/main.ts`); multi-role apps import a distinct theme per role through the same seam (see `demo/HelpDesk/frontend/src/agent.ts` vs `requester.ts`).
+
+### The `--vms-*` override seam — override the token, don't hand-roll
+
+The **only** sanctioned per-app deviation: a tiny per-app stylesheet with a single `:root{}` setting `--vms-*` tokens, imported in your entrypoint **after** the theme — **never** an HTML `<style>` block. Use it for a width retune (`--vms-page-max`), branded fonts (`--vms-font-body` / `--vms-font-head` / `--vms-font-mono`), or any `--vms-*` color var for a full reskin. The 12 theme files are the reskin reference; this seam is additive — never remove or rename a `--vms-*` var.
+
+```typescript
+import "@ashley-shrok/viewmodel-shell/styles.css";
+import "@ashley-shrok/viewmodel-shell/themes/light-amber.css";
+import "./app-tokens.css"; // :root{ --vms-page-max: 1280px; } — after the theme, never <style>
+```
+
+Live example: `demo/RetroBoard/frontend/src/app-tokens.css` (a single `:root{ --vms-page-max }` retune, imported after the pinned theme in `main.ts`).
+
+### When to use which layout preset / density / card
+
+Layout *arrangement* is server intent on the existing `page`/`section` nodes (appearance is 100% CSS). Decide from the tree, not the browser:
+
+- **`stack`** (default — omit the field): vertical flow. Forms, single-column content. Byte-identical to today's output.
+- **`split`**: two equal columns on wide, collapses to stacked on narrow with **zero app breakpoints**. List ↔ detail, content + aside.
+- **`cards`**: auto-fit grid from `--vms-card-min` (default 16rem), collapses to one column intrinsically. Dashboards, tile/summary grids.
+- **`density: "compact"`** on `page`: tightens the spacing rhythm tokens globally — no app CSS.
+- **`section variant:"card"`**: a grouped surface (background / border / padding / radius). Dashboard tiles, detail panes.
+
+### The canonical worked example (single source of truth)
+
+The Showcase's three archetype views are the locked teaching mapping — point an agent at the live `demo/Showcase/frontend/src/main.ts`, do not re-invent snippets:
+
+| Archetype | Layout preset | Bootstrap benchmark |
+|---|---|---|
+| Dashboard | `cards` (stat/summary tiles via `section variant:"card"`) | "Dashboard" |
+| Form-heavy | `stack` (default vertical; multi-section form) | "Checkout" |
+| List/detail | `split` (list ↔ detail pane, collapses on narrow) | "Album" |
+
+These three views render the fixed shipped light default; the gallery view keeps the runtime 12-theme switcher. Docs and the Showcase reinforce each other — they cannot drift.
 
 ---
 
