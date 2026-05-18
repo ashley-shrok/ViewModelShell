@@ -30,6 +30,7 @@
     "check:aa-contrast": "node scripts/check-aa-contrast.mjs",
     "check:no-demo-style": "node scripts/check-no-demo-style.mjs",
     "check:theme-byte-identity": "node scripts/check-theme-byte-identity.mjs",
+    "check:theme-function": "node scripts/check-theme-function.mjs",
     "test": "vitest run",
     "prepublishOnly": "npm run build"
   },

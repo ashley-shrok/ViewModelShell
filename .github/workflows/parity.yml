@@ -45,10 +45,15 @@ jobs:
           cd viewmodel-shell
           npm run check:no-demo-style
 
-      - name: Enforce theme byte-identity (D-03)
+      - name: Enforce theme byte-identity (D-03/D-26)
         run: |
           cd viewmodel-shell
           npm run check:theme-byte-identity
+
+      - name: Enforce theme function — each theme renders its named scheme (D-26)
+        run: |
+          cd viewmodel-shell
+          npm run check:theme-function
 
       - name: Framework adapter-seam tests (D-12.2 relocation proof)
         run: cd viewmodel-shell && npx vitest run

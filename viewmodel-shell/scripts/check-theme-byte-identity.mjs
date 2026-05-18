@@ -1,22 +1,27 @@
 #!/usr/bin/env node
-// D-03 guard: THEME-05 is mechanism-invariant. The override seam is sacred:
-// the 11 pre-existing theme files must stay BYTE-IDENTICAL to their
-// pre-Phase-5 blob, AND the new themes/dark-purple.css must be a BYTE-EXACT
-// capture of the prior default.css :root dark COLOR block (so
-// `import ".../themes/dark-purple.css"` reproduces the pre-0.4.0 default
-// pixel-for-pixel — the one-line restore the MIGRATION/CHANGELOG cites,
-// D-02/D-05). Static repo-scan, zero deps, zero jsdom — a standalone Node
-// script gated in parity.yml beside check:core-globals / check:aa-contrast
-// (D-25: jsdom is the wrong tool for a static repo invariant).
+// D-03/D-26 guard: THEME-05 is mechanism-invariant — the override seam is
+// sacred, but "byte-frozen" only ever protected files that were CORRECT.
+// D-26: the 5 non-purple dark themes shipped as accent-only partials that
+// silently relied on the pre-0.4.0 dark default; the D-01 light re-base
+// removed that base, leaving them rendering LIGHT. THEME-05's *purpose* is a
+// working seam, not frozen bytes — so (same means-vs-goal principle as
+// D-17 / D-01↔D-07) they were corrected to self-sufficient full dark
+// overrides. This guard now baselines the CORRECTED files (still catches
+// *accidental* future drift); the real dark/light correctness is enforced
+// functionally by check-theme-function.mjs (the guard that should have
+// existed — byte-identity guards file bytes, not seam behavior).
 //
-// (1) THE 11 FROZEN THEME FILES — SHA-256 manifest. The CI-stable approach
-//     (over `git show <ref>:file`): the 11 files were verified byte-identical
-//     to their pre-Phase-5 git blob (commit cb97ebb, the last Phase-4 commit;
-//     `git diff cb97ebb HEAD -- styles/themes/` shows ONLY the new
-//     dark-purple.css added — every pre-existing theme file 0 changes). The
-//     SHAs below are computed from those frozen files and embedded as the
-//     expected manifest. THEME-05 / D-03 freeze these: any future edit to a
-//     pre-existing theme file changes its SHA and trips this guard.
+// Still genuinely frozen: the 6 light-* files (FULL, correct as-is) and the
+// dark-purple.css byte-exact capture of the prior default (the one-line
+// restore the MIGRATION/CHANGELOG cites — D-02/D-05). Static repo-scan,
+// zero deps, zero jsdom — gated in parity.yml beside check:core-globals /
+// check:aa-contrast (D-25: jsdom is the wrong tool for a static invariant).
+//
+// (1) THEME-FILE SHA-256 manifest. light-* (6) baseline their genuinely
+//     byte-frozen pre-Phase-5 blob (commit cb97ebb); dark-* (5) baseline
+//     their D-26-corrected form. Any future edit to ANY of these 11 trips
+//     this guard — intentional drift is re-baselined deliberately + recorded
+//     (D-26 precedent), accidental drift is caught.
 //
 // (2) DARK-PURPLE BYTE-EXACT CAPTURE — themes/dark-purple.css :root must
 //     declare exactly the prior default.css :root dark COLOR block (the 18
@@ -36,18 +41,24 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const THEMES_DIR = resolve(__dirname, "../styles/themes");
 const DEFAULT_DARKPURPLE = resolve(THEMES_DIR, "dark-purple.css");
 
-// ── (1) The 11 frozen-by-D-03 theme files: SHA-256 manifest ──────────────
-// Computed from the pre-Phase-5 byte-frozen files (== git blob @ cb97ebb,
-// verified). dark-purple.css is NOT here — it is a NEW file (D-02), asserted
-// separately in (2). light-purple.css IS here and stays byte-unchanged even
-// though its value set became the new default (editing it would be a
-// THEME-05 seam behavior change — D-02/D-03).
+// ── (1) Theme-file SHA-256 manifest (11 files) ───────────────────────────
+// light-* (6): SHAs of the genuinely byte-frozen pre-Phase-5 blob (git
+// blob @ cb97ebb — these were FULL, correct, unchanged). dark-* (5): SHAs
+// of the D-26-CORRECTED full overrides (their pre-0.4.0 accent-only form
+// was broken by the D-01 re-base). dark-purple.css is NOT here — NEW file
+// (D-02), asserted byte-exact separately in (2). light-purple.css IS here
+// and stays byte-unchanged even though its value set became the new
+// default (editing it would be a THEME-05 seam behavior change — D-02/D-03).
 const THEME_SHA256 = {
-  "dark-blue.css":    "9ee4d4db9178a46efcb485264a342f89dee5a10f7572150c18fd6bb2f8ffc1b9",
-  "dark-green.css":   "8ad1b4e6f49a7810f0c87a09843afd725c9d100b9bfed63ff3a2ccb5ce0c8ae1",
-  "dark-rose.css":    "61a76c83f2a3ea9fbbfd348fb0b320b021be4341078d7eb099c08e1fb83f91ff",
-  "dark-amber.css":   "8f1ba7c304d61d2d618fe1d006f39d81b3324ed9a9d256647e95c5b633d205c3",
-  "dark-teal.css":    "782cd67e46dd11298ee50ba813869e096ce27546027dc20123c9a3d3c9d2ed1b",
+  // dark-* (5): D-26 — corrected from broken accent-only partials to
+  // self-sufficient full dark overrides (the D-01 light re-base removed the
+  // dark default they used to inherit). SHAs baseline the CORRECTED files;
+  // functional dark/light correctness is enforced by check-theme-function.mjs.
+  "dark-blue.css":    "580be9a7ecc715d7ae47632ebe81e56c046a74973c7dcebd9643a156c9561f6e",
+  "dark-green.css":   "1c28ae63c34b53f5e3b1a4ff32c119c1c94a95e49398fdec9efc19d20d8082ea",
+  "dark-rose.css":    "1df08e356a902d562172572810388893f1bd762148ffc66144f99b8f15f85f6c",
+  "dark-amber.css":   "99f2015f8393d38ff2f80c66b721fad4075be829cf695ccf01c96e8260d8cc63",
+  "dark-teal.css":    "7eda81edc92a3968f21e96f256a32e59e4bb71918f2077e6ae99b4c70e125244",
   "light-purple.css": "1ba8f21da2a5d08800dbb13e1fcaff49936f70d2ae4c903b720cd7ac65bcc39d",
   "light-blue.css":   "15d9a05140437e43890a3a2be046f35a288a6f63a7902708a05330a149785e6a",
   "light-green.css":  "bd5947f24f99a35776346bc892daa1b7eeabf9f5598c8109f08e8f12d195e727",
@@ -95,8 +106,9 @@ for (const [name, expected] of Object.entries(THEME_SHA256)) {
   const actual = createHash("sha256").update(readFileSync(abs)).digest("hex");
   if (actual !== expected) {
     violations.push(
-      `${name}: byte-changed — SHA-256 ${actual} != frozen ${expected}. ` +
-      `THEME-05/D-03: the 11 pre-existing theme files must stay byte-identical (the override seam is sacred).`
+      `${name}: byte-changed — SHA-256 ${actual} != recorded baseline ${expected}. ` +
+      `THEME-05/D-03/D-26: theme files must match their recorded baseline; ` +
+      `intentional changes are re-baselined deliberately + recorded (D-26 precedent), not silently.`
     );
   }
 }
@@ -151,7 +163,8 @@ if (violations.length > 0) {
 }
 
 console.log(
-  `✓ D-03/D-02: all ${Object.keys(THEME_SHA256).length} pre-existing theme files byte-identical (SHA-256), ` +
+  `✓ D-03/D-26: all ${Object.keys(THEME_SHA256).length} theme files match their recorded baseline ` +
+  `(SHA-256; light-* frozen pre-Phase-5, dark-* D-26-corrected), ` +
   `and themes/dark-purple.css :root is a byte-exact capture of the prior default dark color block (${Object.keys(PRIOR_DEFAULT_DARK).length} declarations).`
 );
 process.exit(0);
