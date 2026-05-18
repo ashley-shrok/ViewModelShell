@@ -102,10 +102,10 @@ export interface Adapter {
 
 | Type | Notes |
 |---|---|
-| `page` | Root container with optional title; optional `density`: `"comfortable"` \| `"compact"` (compact emits `.vms-page--compact`; omitted/comfortable = no modifier, byte-identical); optional `layout`: `"stack"` \| `"split"` \| `"cards"` (`split`/`cards` emit `.vms-page--split`/`.vms-page--cards`; omitted/`stack` = no modifier, byte-identical vertical flow) |
-| `section` | Grouped content with optional heading; optional `variant`: `"card"` → `.vms-section--card` (grouped surface; omitted = no modifier, byte-identical); optional `layout`: `"stack"` \| `"split"` \| `"cards"` (`split`/`cards` emit `.vms-section--split`/`.vms-section--cards`; omitted/`stack` = no modifier, byte-identical vertical flow) |
-| `list`, `list-item` | Containers; `variant` on item becomes `vms-list-item--{variant}` |
-| `form` | Form with submit action; collects all input/textarea/select/file values on submit |
+| `page` | Root container with optional title; optional `density`: `"comfortable"` \| `"compact"` (compact emits `.vms-page--compact`; omitted/comfortable = no modifier, byte-identical); optional `layout`: `"stack"` \| `"split"` \| `"cards"` \| `"sidebar"` (`split`=equal 2-up, `cards`=uniform auto-fit grid, `sidebar`=thin+wide app shell that wraps to stacked on narrow; each emits `.vms-page--{value}`; omitted/`stack` = no modifier, byte-identical vertical flow) |
+| `section` | Grouped content with optional heading; optional `variant`: `"card"` → `.vms-section--card` (grouped surface; omitted = no modifier, byte-identical); optional `layout`: `"stack"` \| `"split"` \| `"cards"` \| `"sidebar"` (same presets as `page`; each emits `.vms-section--{value}`; omitted/`stack` = no modifier, byte-identical) |
+| `list`, `list-item` | Containers; `variant` on item becomes `vms-list-item--{variant}`. Shipped variant defaults: status hints `done`/`critical`/`high`/`warning`/`success`/`info`, and `active` (master-detail / nav selection highlight, themable via accent seam vars — D-27) |
+| `form` | Form with submit action; collects all input/textarea/select/file values on submit. Optional `layout`: `"stack"` (default, fields stacked) \| `"inline"` (field row + submit on one line — add/search bar; emits `.vms-form--inline`, wraps on narrow — D-29) |
 | `field` | `inputType`: `text`, `email`, `password`, `number`, `date`, `time`, `datetime-local`, `textarea`, `hidden`, `file`, `select`, `select-multiple`, `checkbox`, `code`. Selects use `options: [{ value, label }]`. Multi-select submits comma-joined. Field-checkboxes are form-collected: `value: "true"`/`"false"` round-trips with the form submission as a boolean (use `Bool(name)` server-side). For per-toggle dispatch, use `CheckboxNode` instead. `code` renders a monospaced, tab-aware textarea — pass an optional `language` ("sql", "javascript", etc.) which becomes a `.vms-field--code-{language}` class for apps to attach a syntax-highlighter library to. The framework only ships the editable monospaced surface; coloring is the app's choice. |
 | `checkbox` | (`CheckboxNode`) Dispatches immediately on change with `{ checked: bool }` merged into context. For checkboxes that should be submitted with a form, use `FieldNode(inputType: "checkbox")` instead. |
 | `button` | `variant`: `primary`, `secondary`, `danger` |
@@ -138,11 +138,11 @@ Every dispatch is `multipart/form-data`. The action JSON travels in `_action`; t
 
 | Node | Classes |
 |---|---|
-| page | `.vms-page`, `.vms-page__title`, `.vms-page--compact`, `.vms-page--split`, `.vms-page--cards` |
-| section | `.vms-section`, `.vms-section__heading`, `.vms-section--card`, `.vms-section--split`, `.vms-section--cards` |
+| page | `.vms-page`, `.vms-page__title`, `.vms-page--compact`, `.vms-page--split`, `.vms-page--cards`, `.vms-page--sidebar` |
+| section | `.vms-section`, `.vms-section__heading`, `.vms-section--card`, `.vms-section--split`, `.vms-section--cards`, `.vms-section--sidebar` |
 | list | `.vms-list` |
-| list-item | `.vms-list-item`, `.vms-list-item--{variant}` |
-| form | `.vms-form` |
+| list-item | `.vms-list-item`, `.vms-list-item--{variant}` (shipped defaults incl. `.vms-list-item--active` selection highlight) |
+| form | `.vms-form`, `.vms-form--inline` |
 | field | `.vms-field`, `.vms-field__label`, `.vms-field__input` (hidden fields render bare) |
 | checkbox | `.vms-checkbox`, `.vms-checkbox__input`, `.vms-checkbox__mark`, `.vms-checkbox__label` |
 | button | `.vms-button`, `.vms-button--{variant}` |

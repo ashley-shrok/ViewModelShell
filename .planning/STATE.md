@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 05-06-PLAN.md (0.4.0 milestone closed — Phase 05 ready for verification)
-last_updated: "2026-05-18T05:56:12.416Z"
+status: complete
+stopped_at: "0.4.0 complete. Post-Phase-05 realistic-demo stress-test rebuilt all 5 demos as real apps; surfaced+closed D-26 (5 dark themes broke on the light re-base; +check:theme-function guard), D-27 (.vms-list-item--active), D-28 (sidebar preset), D-29 (FormNode inline). Commits 0fa9a7a/7f24c55/5a499df + doc closeout. Explicit deferrals (not silent): HelpDesk requester realistic redesign; FeatureProbe value-level parity for sidebar/inline (field-level parity holds); .vms-list-item fixed-horizontal-row finding; LAYOUT-F1 stays deferred. Full record: CHANGELOG.md 0.4.0. Local-only, nothing pushed."
+last_updated: "2026-05-18T07:00:00.000Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 3
