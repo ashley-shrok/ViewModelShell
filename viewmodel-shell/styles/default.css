@@ -550,9 +550,17 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-table__row:not(:last-child) .vms-table__td { border-bottom: 1px solid var(--vms-border); }
 .vms-table__row--clickable { cursor: pointer; }
 .vms-table__row--clickable:hover { background: var(--vms-surface); }
+/* Row status variants — tints derive from theme vars (color-mix), so a
+   custom :root theme recolors them automatically; no app CSS, no literals. */
 .vms-table__row--done     { opacity: 0.6; }
-.vms-table__row--warning  { background: rgba(212, 130, 26, 0.06); }
-.vms-table__row--critical { background: rgba(224, 90, 90, 0.06); }
+.vms-table__row--disabled { opacity: 0.55; color: var(--vms-text-muted); }
+.vms-table__row--disabled.vms-table__row--clickable { cursor: default; }
+.vms-table__row--disabled.vms-table__row--clickable:hover { background: transparent; }
+.vms-table__row--success  { background: color-mix(in srgb, var(--vms-success) 8%, transparent); }
+.vms-table__row--running  { background: color-mix(in srgb, var(--vms-accent) 8%, transparent); }
+.vms-table__row--warning  { background: color-mix(in srgb, var(--vms-warning) 9%, transparent); }
+.vms-table__row--critical,
+.vms-table__row--danger   { background: color-mix(in srgb, var(--vms-error) 9%, transparent); }
 .vms-table__td { padding: var(--vms-space-sm) var(--vms-space-md); vertical-align: middle; }
 .vms-table__link { color: var(--vms-accent); text-decoration: none; }
 .vms-table__link:hover { text-decoration: underline; }

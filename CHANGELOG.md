@@ -6,6 +6,21 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.4.1 — Table row status variants styled (no app-CSS shim)
+
+**npm:** `0.4.1` (PATCH — stylesheet only) · **NuGet:** unchanged (no .NET/wire change — same as the `0.3.12` CSS-only precedent)
+
+### Fixed
+- **`vms-table__row--<variant>` was a styled-only-for-some passthrough.** `browser.ts` emits `vms-table__row--${variant}` for *any* `TableRow.Variant`, but `default.css` shipped rules for only `clickable/done/warning/critical`. `disabled`, `success`, `danger`, and `running` were **emitted-but-unstyled** — forcing consuming apps to keep an app-local CSS shim to mute/tint those rows, which contradicts the "apps shouldn't roll their own CSS" goal. (The original report flagged only `--disabled`; full audit found `success`/`danger`/`running` equally unstyled — all four are now closed, so *every* such shim can be deleted, not just the disabled one.) Added, mirroring the `.vms-list-item--*` precedent:
+  - `--disabled` — `opacity` + `var(--vms-text-muted)`; also neutralises the `--clickable` cursor/hover when a row is both.
+  - `--success` / `--running` / `--danger` — subtle full-row status tints.
+- **`--warning`/`--critical` re-based onto theme vars.** They previously hardcoded non-themeable `rgba()` literals that ignored a custom `:root`; now `color-mix(in srgb, var(--vms-…) 8–9%, transparent)` like the new variants, so all row tints recolor automatically under any theme (latent bug fixed). `--danger` is a `--critical` alias (shared `--vms-error` tint), matching `.vms-button--danger`/`.vms-list-item--critical`.
+
+### Consumer action
+- **Bump npm to `^0.4.1`.** CSS-only — no wire/API/ViewNode change, NuGet unchanged, cross-backend parity unaffected, existing apps render unchanged unless they used these variants. Delete any app-local `.vms-table__row--{disabled,success,danger,running}` shim. Tints now track whatever theme/`:root` you ship (`color-mix()` is Baseline-2023; the shipped default already requires modern-CSS — `clamp()` etc.).
+
+---
+
 ## 0.4.0 — Design system: theme + layout + canonical examples
 
 **npm:** `0.4.0` (MINOR) · **NuGet:** `0.4.0` (MINOR — wire-format change, aligned)
