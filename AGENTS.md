@@ -102,8 +102,8 @@ export interface Adapter {
 
 | Type | Notes |
 |---|---|
-| `page` | Root container with optional title; optional `density`: `"comfortable"` \| `"compact"` (compact emits `.vms-page--compact`; omitted/comfortable = no modifier, byte-identical) |
-| `section` | Grouped content with optional heading; optional `variant`: `"card"` → `.vms-section--card` (grouped surface; omitted = no modifier, byte-identical) |
+| `page` | Root container with optional title; optional `density`: `"comfortable"` \| `"compact"` (compact emits `.vms-page--compact`; omitted/comfortable = no modifier, byte-identical); optional `layout`: `"stack"` \| `"split"` \| `"cards"` (`split`/`cards` emit `.vms-page--split`/`.vms-page--cards`; omitted/`stack` = no modifier, byte-identical vertical flow) |
+| `section` | Grouped content with optional heading; optional `variant`: `"card"` → `.vms-section--card` (grouped surface; omitted = no modifier, byte-identical); optional `layout`: `"stack"` \| `"split"` \| `"cards"` (`split`/`cards` emit `.vms-section--split`/`.vms-section--cards`; omitted/`stack` = no modifier, byte-identical vertical flow) |
 | `list`, `list-item` | Containers; `variant` on item becomes `vms-list-item--{variant}` |
 | `form` | Form with submit action; collects all input/textarea/select/file values on submit |
 | `field` | `inputType`: `text`, `email`, `password`, `number`, `date`, `time`, `datetime-local`, `textarea`, `hidden`, `file`, `select`, `select-multiple`, `checkbox`, `code`. Selects use `options: [{ value, label }]`. Multi-select submits comma-joined. Field-checkboxes are form-collected: `value: "true"`/`"false"` round-trips with the form submission as a boolean (use `Bool(name)` server-side). For per-toggle dispatch, use `CheckboxNode` instead. `code` renders a monospaced, tab-aware textarea — pass an optional `language` ("sql", "javascript", etc.) which becomes a `.vms-field--code-{language}` class for apps to attach a syntax-highlighter library to. The framework only ships the editable monospaced surface; coloring is the app's choice. |
@@ -138,8 +138,8 @@ Every dispatch is `multipart/form-data`. The action JSON travels in `_action`; t
 
 | Node | Classes |
 |---|---|
-| page | `.vms-page`, `.vms-page__title`, `.vms-page--compact` |
-| section | `.vms-section`, `.vms-section__heading`, `.vms-section--card` |
+| page | `.vms-page`, `.vms-page__title`, `.vms-page--compact`, `.vms-page--split`, `.vms-page--cards` |
+| section | `.vms-section`, `.vms-section__heading`, `.vms-section--card`, `.vms-section--split`, `.vms-section--cards` |
 | list | `.vms-list` |
 | list-item | `.vms-list-item`, `.vms-list-item--{variant}` |
 | form | `.vms-form` |
