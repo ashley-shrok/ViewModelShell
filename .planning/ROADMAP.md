@@ -58,10 +58,10 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
   4. The wire carries only the layout-preset enum — no spans, tracks, or named areas cross the contract (LAYOUT-04).
   5. The layout-preset field is present in `src/index.ts`, `src/server.ts`, all 5 demo `ViewModels.cs` copies + the NuGet source, and a new parity fixture exercises it with .NET/Bun/Node byte-identical (LAYOUT-05).
 **Plans**: 4 plans
-  - [ ] 04-01-PLAN.md — Additive `layout?` closed-union field on PageNode/SectionNode, TS + .NET (LAYOUT-04, LAYOUT-05)
-  - [ ] 04-02-PLAN.md — Renderer emission + split/cards CSS + `--vms-card-min` + jsdom tests, zero media queries (LAYOUT-01, LAYOUT-02, LAYOUT-03)
-  - [ ] 04-03-PLAN.md — Widen FeatureProbe VM (TS+.NET) for layout/density/card; cross-backend parity green (closes D-05) (LAYOUT-01, LAYOUT-05)
-  - [ ] 04-04-PLAN.md — AGENTS.md node + CSS-class tables accurate-only for the `layout` field (LAYOUT-05)
+  - [x] 04-01-PLAN.md — Additive `layout?` closed-union field on PageNode/SectionNode, TS + .NET (LAYOUT-04, LAYOUT-05)
+  - [x] 04-02-PLAN.md — Renderer emission + split/cards CSS + `--vms-card-min` + jsdom tests, zero media queries (LAYOUT-01, LAYOUT-02, LAYOUT-03)
+  - [x] 04-03-PLAN.md — Widen FeatureProbe VM (TS+.NET) for layout/density/card; cross-backend parity green (closes D-05) (LAYOUT-01, LAYOUT-05)
+  - [x] 04-04-PLAN.md — AGENTS.md node + CSS-class tables accurate-only for the `layout` field (LAYOUT-05)
 **UI hint**: yes
 
 ### Phase 5: Canonical Examples + 0.4.0 Release Closeout
