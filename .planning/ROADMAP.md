@@ -74,7 +74,13 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
   3. AGENTS.md documents the layout presets, density control, and card variant with the node table + CSS-class table updated, usable from docs alone (EXAMPLES-03).
   4. npm `@ashley-shrok/viewmodel-shell` and NuGet `AshleyShrok.ViewModelShell` ship aligned at `0.4.0`, and MIGRATION.md + CHANGELOG document the additive layout preset (default = prior behavior, non-breaking) + theme/density/card additions + "existing apps render unchanged unless they opt in" (RELEASE-01, RELEASE-03).
   5. The full cross-backend parity suite is green across all fixtures + backends including the new layout-preset fixture, existing unit tests stay green, and new jsdom unit tests cover layout presets / density / card variant with no browser runtime (RELEASE-02, RELEASE-04).
-**Plans**: TBD
+**Plans**: 6 plans
+  - [ ] 05-01-PLAN.md — Palette re-baseline (light) + dark-purple.css capture + literals audit + WCAG-AA CI guard
+  - [ ] 05-02-PLAN.md — Showcase canonical reference set (gallery + Dashboard/Form-heavy/List-detail) + switcher remap/scope
+  - [ ] 05-03-PLAN.md — De-chrome every demo onto the shipped stylesheet + distinct pinned themes
+  - [ ] 05-04-PLAN.md — AGENTS.md Design system section + bounded accuracy pass
+  - [ ] 05-05-PLAN.md — Aligned 0.4.0 npm+NuGet bump + consolidated MIGRATION/CHANGELOG + README accuracy
+  - [ ] 05-06-PLAN.md — Closeout gate: parity 7/7 + inherited jsdom + static CI guards + reviewer sign-off
 **UI hint**: yes
 
 ## Progress
@@ -88,4 +94,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Upload Progress + Closeout | 0.3.13 | 3/3 | Complete | 2026-05-15 |
 | 3. Default Design System | 0.4.0 | 3/3 | Complete    | 2026-05-17 |
 | 4. Preset-Grid Layout | 0.4.0 | 0/4 | Not started | - |
-| 5. Canonical Examples + 0.4.0 Closeout | 0.4.0 | 0/TBD | Not started | - |
+| 5. Canonical Examples + 0.4.0 Closeout | 0.4.0 | 0/6 | Not started | - |
