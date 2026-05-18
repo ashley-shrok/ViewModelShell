@@ -99,13 +99,15 @@ public abstract record ViewNode;
 public record PageNode(
     string? Title,
     IReadOnlyList<ViewNode> Children,
-    string? Density = null
+    string? Density = null,
+    string? Layout = null
 ) : ViewNode;
 
 public record SectionNode(
     string? Heading,
     IReadOnlyList<ViewNode> Children,
-    string? Variant = null
+    string? Variant = null,
+    string? Layout = null
 ) : ViewNode;
 
 public record ListNode(
