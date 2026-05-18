@@ -77,7 +77,7 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
 **Plans**: 6 plans
   - [x] 05-01-PLAN.md — Palette re-baseline (light) + dark-purple.css capture + literals audit + WCAG-AA CI guard
   - [x] 05-02-PLAN.md — Showcase canonical reference set (gallery + Dashboard/Form-heavy/List-detail) + switcher remap/scope
-  - [ ] 05-03-PLAN.md — De-chrome every demo onto the shipped stylesheet + distinct pinned themes
+  - [x] 05-03-PLAN.md — De-chrome every demo onto the shipped stylesheet + distinct pinned themes
   - [ ] 05-04-PLAN.md — AGENTS.md Design system section + bounded accuracy pass
   - [ ] 05-05-PLAN.md — Aligned 0.4.0 npm+NuGet bump + consolidated MIGRATION/CHANGELOG + README accuracy
   - [ ] 05-06-PLAN.md — Closeout gate: parity 7/7 + inherited jsdom + static CI guards + reviewer sign-off

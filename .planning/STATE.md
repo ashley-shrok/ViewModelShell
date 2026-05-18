@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-02-PLAN.md (canonical reference set + switcher remap/scope + index.html de-chrome)
-last_updated: "2026-05-18T04:57:18.759Z"
+stopped_at: Completed 05-03-PLAN.md
+last_updated: "2026-05-18T05:02:55.472Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 13
-  completed_plans: 9
-  percent: 69
+  completed_plans: 10
+  percent: 77
 ---
 
 # Project State: ViewModel Shell
@@ -27,7 +27,7 @@ progress:
 ## Current Position
 
 Phase: 05 (canonical-examples-0-4-0-release-closeout) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-05-18
 
@@ -49,6 +49,7 @@ Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 | Phase 03 P03 | 4min | 3 tasks | 4 files |
 | Phase 05 P01 | 15min | 3 tasks | 5 files |
 | Phase 05 P02 | 10min | 3 tasks | 2 files |
+| Phase 05 P03 | 9min | 2 tasks | 14 files |
 
 ## Phase Structure (0.4.0)
 
@@ -74,6 +75,8 @@ Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 - [05-01] D-01 ↔ D-07 locked-decision conflict resolved (user-approved, D-17 precedent): default.css :root --vms-warning #c89610 → #a37510 (ONLY this one value) so the shipped light default clears the WCAG-AA non-text floor (4.11/3.84/3.62:1 vs surface/bg/surface-2, was 2.68/2.51/2.36:1); 17 other colors + --vms-color-scheme verbatim light-purple; themes/light-purple.css + 11 theme files + dark-purple.css byte-unchanged. **Plan 05-05 (MIGRATION/CHANGELOG, D-05/D-26) MUST document this one-variable tighten alongside the dark→light flip**
 - [05-02] Showcase = navigable canonical set: top-level tabs nav (D-09) over the preserved kitchen-sink gallery + Dashboard(cards+section variant:card)/Form-heavy(stack)/List-detail(split) archetypes on the LOCKED Bootstrap-benchmarked mapping (D-10/D-13 — Dashboard↔"Dashboard", Form-heavy↔"Checkout", List/detail↔"Album"); .vms-*-only, zero per-view <style>, no new wire/node/CSS/token. EXAMPLES-01 complete
 - [05-02] Switcher remapped (real dark-purple entry → darkPurpleCss, no empty-string slot, light-purple boot — D-06) and scoped to the gallery via an explicit state.view==="components" guard (D-14 statically falsifiable); Form-heavy=stack (UI-SPEC default, NOT split-aside); Showcase index.html de-chromed to the minimal zero-<style> scaffold adopting the shipped 1080px shell with NO per-app token file (D-15) — this is the canonical minimal-scaffold shape Plan 05-03 replicates for the 7 non-Showcase demo HTML files (disjoint file sets). Pre-existing *.css?inline tsc declaration gap logged to deferred-items.md (out of scope, D-21; candidate for Plan 06 hygiene pass)
+- [05-03] 7 non-bun demo HTML de-chromed to zero-<style> scaffolds (mirrors 05-02 Showcase pattern); each pins one distinct shipped theme via its TS entrypoint (Tasks=dark-purple the demoted file, CM=light-blue, ET=light-green, RB=light-amber, HelpDesk agent=dark-blue/requester=light-teal via the seam — no inline :root); RB sole sanctioned --vms-page-max retune in src/app-tokens.css after the theme (D-08/D-15/D-17/D-18/D-19). EXAMPLES-02 complete
+- [05-03] HelpDesk landing kept a static HTML page (no JS ViewModelShell entrypoint for a static 2-link picker — disproportionate); re-expressed via only shipped .vms-* classes + a one-line inline module script importing styles.css+light-teal, zero <style>/zero non-vms vars. Dropped functional overrides (horizontal forms, dispatch-dim, CM scrollbar, ET heading/spinner/tint) render shipped default and logged deferred in deferred-items.md — explicitly NO new wire (D-16)
 
 ### Architectural Notes (0.4.0 Design System)
 
@@ -104,8 +107,8 @@ Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 
 ## Session Continuity
 
-**Last session:** 2026-05-18T04:57:18.757Z
-**Stopped at:** Completed 05-02-PLAN.md (canonical reference set + switcher remap/scope + index.html de-chrome)
+**Last session:** 2026-05-18T05:02:55.443Z
+**Stopped at:** Completed 05-03-PLAN.md
 **Next action:** Execute Plan 05-02 (Phase 5, plan 2 of 6).
 
 ---
