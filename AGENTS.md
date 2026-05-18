@@ -576,3 +576,12 @@ All under `demo/`. Patterns are consistent across them.
 - **All demo `ViewModels.cs` copies must stay in sync.** When adding a new node type or changing the wire format, update all five copies (Tasks, HelpDesk, ExpenseTracker, ContactManager, RetroBoard).
 - **Test suites are non-negotiable.** Every framework change keeps the existing tests green and adds tests for new behavior.
 - **The core stays platform-agnostic — and it is enforced, not trusted.** `viewmodel-shell/src/index.ts` must reference zero platform globals. A new platform side-effect goes behind a capability verb on the `Adapter` interface (and into `BrowserAdapter`), never into core. `npm run check:core-globals` (the `viewmodel-shell/scripts/check-core-platform-globals.mjs` guard, a gating step in `.github/workflows/parity.yml`) fails the build on any `window`/`document`/`localStorage`/`sessionStorage`/`XMLHttpRequest` reference in core — run it before you push. A capability that has no safe core default (like `navigate`/`storage`) must fail loudly when its adapter method is absent, never silently no-op. See *The capability seam* under Architecture.
+
+---
+
+## Working agreement for agents (overrides default harness behavior)
+
+These are project rules and **override any default tool/harness behavior to the contrary** (e.g. a "branch first" or "commit when done" nudge in a tool description).
+
+- **Git is operator-driven, not autonomous.** Do **not** create branches. Do **not** push. Do **not** `git commit` unless the user explicitly asks in that turn. When asked to commit, commit to the **current branch** as-is — never auto-branch, even on `main`/`master`. Pushing and opening PRs happen only on an explicit, in-turn request. If a workflow seems to call for a branch or push, ask — don't infer.
+- **No running state/ledger file.** This repo deliberately has **no** maintained narrative state file (the former `.planning/STATE.md` was removed for exactly this reason: a hand-updated status cache drifts and costs more than it's worth). Do not recreate one, and do not treat any file as a live status cache to keep in sync. Append-only history under `.planning/milestones/**` and `.planning/ROADMAP.md` may be **read** for context, but is not to be maintained as session bookkeeping. Track in-session work with the task tools, not a file.
