@@ -29,7 +29,7 @@ Requirements for milestone 0.4.0. Each maps to exactly one roadmap phase (number
 
 - [x] **EXAMPLES-01**: Showcase renders a canonical reference set (at least: dashboard, form-heavy page, list/detail) using only `.vms-*` nodes + the shipped stylesheet, visually serviceable benchmarked against Bootstrap's example pages.
 - [x] **EXAMPLES-02**: Every demo app imports the shipped stylesheet and contains no hand-rolled per-demo `<style>` page chrome.
-- [ ] **EXAMPLES-03**: AGENTS.md documents the layout presets, density control, and card variant (node table + CSS-class table updated) so an agent can use them from docs alone.
+- [x] **EXAMPLES-03**: AGENTS.md documents the layout presets, density control, and card variant (node table + CSS-class table updated) so an agent can use them from docs alone.
 
 ### Release
 
@@ -75,7 +75,7 @@ Which phases cover which requirements. Phase numbering continues from 0.3.13 (Ph
 | LAYOUT-05 | Phase 4 | Pending |
 | EXAMPLES-01 | Phase 5 | Complete |
 | EXAMPLES-02 | Phase 5 | Complete |
-| EXAMPLES-03 | Phase 5 | Pending |
+| EXAMPLES-03 | Phase 5 | Complete |
 | RELEASE-01 | Phase 5 | Pending |
 | RELEASE-02 | Phase 5 | Pending |
 | RELEASE-03 | Phase 5 | Pending |
