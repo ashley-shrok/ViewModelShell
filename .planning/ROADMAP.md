@@ -76,7 +76,7 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
   5. The full cross-backend parity suite is green across all fixtures + backends including the new layout-preset fixture, existing unit tests stay green, and new jsdom unit tests cover layout presets / density / card variant with no browser runtime (RELEASE-02, RELEASE-04).
 **Plans**: 6 plans
   - [x] 05-01-PLAN.md — Palette re-baseline (light) + dark-purple.css capture + literals audit + WCAG-AA CI guard
-  - [ ] 05-02-PLAN.md — Showcase canonical reference set (gallery + Dashboard/Form-heavy/List-detail) + switcher remap/scope
+  - [x] 05-02-PLAN.md — Showcase canonical reference set (gallery + Dashboard/Form-heavy/List-detail) + switcher remap/scope
   - [ ] 05-03-PLAN.md — De-chrome every demo onto the shipped stylesheet + distinct pinned themes
   - [ ] 05-04-PLAN.md — AGENTS.md Design system section + bounded accuracy pass
   - [ ] 05-05-PLAN.md — Aligned 0.4.0 npm+NuGet bump + consolidated MIGRATION/CHANGELOG + README accuracy

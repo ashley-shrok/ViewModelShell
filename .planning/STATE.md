@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-01-PLAN.md (D-01↔D-07 conflict resolved; 11/11 WCAG-AA PASS; AA guard gated in parity.yml)
-last_updated: "2026-05-18T04:47:27.768Z"
-last_activity: 2026-05-18 -- Plan 05-01 completed (--vms-warning AA tighten, parity.yml AA gate)
+stopped_at: Completed 05-02-PLAN.md (canonical reference set + switcher remap/scope + index.html de-chrome)
+last_updated: "2026-05-18T04:57:18.759Z"
+last_activity: 2026-05-18
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 13
-  completed_plans: 8
-  percent: 62
+  completed_plans: 9
+  percent: 69
 ---
 
 # Project State: ViewModel Shell
@@ -27,9 +27,9 @@ progress:
 ## Current Position
 
 Phase: 05 (canonical-examples-0-4-0-release-closeout) — EXECUTING
-Plan: 2 of 6
-Status: Plan 05-01 complete (D-01↔D-07 resolved); ready to execute Plan 05-02
-Last activity: 2026-05-18 -- Plan 05-01 completed (--vms-warning AA tighten, parity.yml AA gate)
+Plan: 3 of 6
+Status: Ready to execute
+Last activity: 2026-05-18
 
 Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 
@@ -48,6 +48,7 @@ Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 | Phase 03 P02 | 13min | 2 tasks | 2 files |
 | Phase 03 P03 | 4min | 3 tasks | 4 files |
 | Phase 05 P01 | 15min | 3 tasks | 5 files |
+| Phase 05 P02 | 10min | 3 tasks | 2 files |
 
 ## Phase Structure (0.4.0)
 
@@ -71,6 +72,8 @@ Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 - [03-02] PageNode.density?/SectionNode.variant? added as additive optional CLOSED unions (D-03) on TS index.ts + .NET ViewModels.cs, structurally aligned (D-05); omitted ⇒ byte-identical wire proven by parity 7/7 (D-01 non-breaking); no version bump (Phase 5 RELEASE-01 owns the aligned 0.4.0); no renderer/CSS here (Plan 03 owns emission)
 - [05-01] default.css :root re-based dark→light onto the light-purple value set (D-01); prior dark default captured byte-exact in themes/dark-purple.css (D-02); 11 prior theme files byte-identical (D-03); standalone check-aa-contrast.mjs WCAG-AA CI guard gated in parity.yml beside core-globals (D-07/D-25); color-literal audit verdict = pure :root swap (D-16)
 - [05-01] D-01 ↔ D-07 locked-decision conflict resolved (user-approved, D-17 precedent): default.css :root --vms-warning #c89610 → #a37510 (ONLY this one value) so the shipped light default clears the WCAG-AA non-text floor (4.11/3.84/3.62:1 vs surface/bg/surface-2, was 2.68/2.51/2.36:1); 17 other colors + --vms-color-scheme verbatim light-purple; themes/light-purple.css + 11 theme files + dark-purple.css byte-unchanged. **Plan 05-05 (MIGRATION/CHANGELOG, D-05/D-26) MUST document this one-variable tighten alongside the dark→light flip**
+- [05-02] Showcase = navigable canonical set: top-level tabs nav (D-09) over the preserved kitchen-sink gallery + Dashboard(cards+section variant:card)/Form-heavy(stack)/List-detail(split) archetypes on the LOCKED Bootstrap-benchmarked mapping (D-10/D-13 — Dashboard↔"Dashboard", Form-heavy↔"Checkout", List/detail↔"Album"); .vms-*-only, zero per-view <style>, no new wire/node/CSS/token. EXAMPLES-01 complete
+- [05-02] Switcher remapped (real dark-purple entry → darkPurpleCss, no empty-string slot, light-purple boot — D-06) and scoped to the gallery via an explicit state.view==="components" guard (D-14 statically falsifiable); Form-heavy=stack (UI-SPEC default, NOT split-aside); Showcase index.html de-chromed to the minimal zero-<style> scaffold adopting the shipped 1080px shell with NO per-app token file (D-15) — this is the canonical minimal-scaffold shape Plan 05-03 replicates for the 7 non-Showcase demo HTML files (disjoint file sets). Pre-existing *.css?inline tsc declaration gap logged to deferred-items.md (out of scope, D-21; candidate for Plan 06 hygiene pass)
 
 ### Architectural Notes (0.4.0 Design System)
 
@@ -101,8 +104,8 @@ Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 
 ## Session Continuity
 
-**Last session:** 2026-05-18T04:46:00Z
-**Stopped at:** Completed 05-01-PLAN.md (D-01↔D-07 conflict resolved; 11/11 WCAG-AA PASS; AA guard gated in parity.yml)
+**Last session:** 2026-05-18T04:57:18.757Z
+**Stopped at:** Completed 05-02-PLAN.md (canonical reference set + switcher remap/scope + index.html de-chrome)
 **Next action:** Execute Plan 05-02 (Phase 5, plan 2 of 6).
 
 ---
