@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 05-05-PLAN.md
-last_updated: "2026-05-18T05:14:59.251Z"
+status: verifying
+stopped_at: Completed 05-06-PLAN.md (0.4.0 milestone closed — Phase 05 ready for verification)
+last_updated: "2026-05-18T05:40:21.833Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 13
-  completed_plans: 12
-  percent: 92
+  completed_plans: 13
+  percent: 100
 ---
 
 # Project State: ViewModel Shell
@@ -28,7 +28,7 @@ progress:
 
 Phase: 05 (canonical-examples-0-4-0-release-closeout) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-05-18
 
 Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
@@ -52,6 +52,7 @@ Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 | Phase 05 P03 | 9min | 2 tasks | 14 files |
 | Phase 05 P04 | 2min | 2 tasks | 1 files |
 | Phase 05 P05 | 3min | 2 tasks | 6 files |
+| Phase 05 P06 | 9min | 3 tasks | 7 files |
 
 ## Phase Structure (0.4.0)
 
@@ -82,6 +83,8 @@ Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 - [05-05] npm package.json+package-lock.json (2 spots) + NuGet .csproj <Version> bumped to **aligned 0.4.0** — the layout enum is the wire-format change forcing the minor per the AGENTS.md major.minor rule; rule TEXT byte-unchanged (only numbers moved; `git status --short AGENTS.md` empty), symmetric to the 0.3.13 why-PATCH. RELEASE-01 complete
 - [05-05] One consolidated CHANGELOG ## 0.4.0 + MIGRATION ## Upgrading to 0.4.0 (D-26, whole milestone: theme/density/card + layout enum + palette re-baseline + de-chrome); dark→light flip AND the --vms-warning #c89610→#a37510 shipped-default AA tighten (05-01 forward-note, honored with exact 2.68/2.51/2.36→4.11/3.84/3.62:1 ratios) framed as intentional default changes NOT wire/API/ViewNode breaks, prior look one line away via themes/dark-purple.css, light-purple.css byte-unchanged stated (D-05). README accuracy-fixed (D-22, no false "ships a dark-purple theme"; all 12 themes listed). RELEASE-03 complete
 - [05-05] Research item 3: package-lock.json surfaced as an authoritative npm version-string location BEYOND the plan's <interfaces> list and bumped in sync (Rule 2 completeness — a stale lockfile is the classic missed-location closeout failure); demo/*/frontend lockfiles verified zero version-string hits (local Vite alias, not a release surface); bin/obj excluded with Plan 06 rebuild-refresh note
+- [05-06] Two static repo-scan CI guards added + gated in parity.yml beside core-globals/AA (D-25, additive only, no existing step weakened): check-no-demo-style.mjs (8 hand-edited frontend HTML + Showcase main.ts; wwwroot/** HARD-EXCLUDED — Vite build output, .NET parity diffs wire JSON not CSS per D-24, literal 8-file allow-list, documented header rationale, FIXED branch (b), NO wwwroot rebuild step) + check-theme-byte-identity.mjs (11 themes SHA-256 byte-identical + dark-purple.css :root byte-exact == prior default dark block, 18 decls — D-03/D-02). Full regression gate green: parity 7/7 byte-identical .NET/Bun/Node (zero new fixture, backends.json unchanged — D-24), inherited jsdom 31/31 (zero new test files — D-25), all 4 static guards exit 0. Rule-3 fix: missing /themes/ Vite alias added to 5 demo vite.config.ts (closeout build surfaced a real cross-demo integration defect Plans 02/03 left in disjoint configs; build-config only, zero wire/CSS/test/parity surface). RELEASE-02 + RELEASE-04 complete
+- [05-06] D-12 reviewer sign-off recorded — EXPLICIT, OWNED, DATED genuine HUMAN review (reviewer: ahbarnum, 2026-05-18), NEVER pretended-automated: the canonical Showcase set is visually serviceable benchmarked side-by-side against the LOCKED Bootstrap pages on the new shipped light default (Dashboard/cards↔Bootstrap "Dashboard", Form-heavy/stack↔"Checkout", List-detail/split↔"Album" — D-13), no visual issues. D-12's irreducibly-subjective dimension satisfied as designed (visual quality cannot be browser-unit-tested — the framework's no-browser-test promise); the sign-off is a first-class acceptance artifact, present and explicit in 05-06-SUMMARY.md, never silently skipped. **0.4.0 milestone (Phases 3–5) CLOSED**
 
 ### Architectural Notes (0.4.0 Design System)
 
@@ -112,8 +115,8 @@ Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 
 ## Session Continuity
 
-**Last session:** 2026-05-18T05:14:59.248Z
-**Stopped at:** Completed 05-05-PLAN.md
+**Last session:** 2026-05-18T05:40:21.830Z
+**Stopped at:** Completed 05-06-PLAN.md (0.4.0 milestone closed — Phase 05 ready for verification)
 **Next action:** Execute Plan 05-02 (Phase 5, plan 2 of 6).
 
 ---

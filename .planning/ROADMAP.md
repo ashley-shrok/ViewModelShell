@@ -80,7 +80,7 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
   - [x] 05-03-PLAN.md — De-chrome every demo onto the shipped stylesheet + distinct pinned themes
   - [x] 05-04-PLAN.md — AGENTS.md Design system section + bounded accuracy pass
   - [x] 05-05-PLAN.md — Aligned 0.4.0 npm+NuGet bump + consolidated MIGRATION/CHANGELOG + README accuracy
-  - [ ] 05-06-PLAN.md — Closeout gate: parity 7/7 + inherited jsdom + static CI guards + reviewer sign-off
+  - [x] 05-06-PLAN.md — Closeout gate: parity 7/7 + inherited jsdom + static CI guards + reviewer sign-off
 **UI hint**: yes
 
 ## Progress
