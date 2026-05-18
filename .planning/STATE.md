@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-04-PLAN.md
-last_updated: "2026-05-18T05:08:49.946Z"
+stopped_at: Completed 05-05-PLAN.md
+last_updated: "2026-05-18T05:14:59.251Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 13
-  completed_plans: 11
-  percent: 85
+  completed_plans: 12
+  percent: 92
 ---
 
 # Project State: ViewModel Shell
@@ -27,7 +27,7 @@ progress:
 ## Current Position
 
 Phase: 05 (canonical-examples-0-4-0-release-closeout) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-05-18
 
@@ -51,6 +51,7 @@ Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 | Phase 05 P02 | 10min | 3 tasks | 2 files |
 | Phase 05 P03 | 9min | 2 tasks | 14 files |
 | Phase 05 P04 | 2min | 2 tasks | 1 files |
+| Phase 05 P05 | 3min | 2 tasks | 6 files |
 
 ## Phase Structure (0.4.0)
 
@@ -78,6 +79,9 @@ Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 - [05-02] Switcher remapped (real dark-purple entry → darkPurpleCss, no empty-string slot, light-purple boot — D-06) and scoped to the gallery via an explicit state.view==="components" guard (D-14 statically falsifiable); Form-heavy=stack (UI-SPEC default, NOT split-aside); Showcase index.html de-chromed to the minimal zero-<style> scaffold adopting the shipped 1080px shell with NO per-app token file (D-15) — this is the canonical minimal-scaffold shape Plan 05-03 replicates for the 7 non-Showcase demo HTML files (disjoint file sets). Pre-existing *.css?inline tsc declaration gap logged to deferred-items.md (out of scope, D-21; candidate for Plan 06 hygiene pass)
 - [05-03] 7 non-bun demo HTML de-chromed to zero-<style> scaffolds (mirrors 05-02 Showcase pattern); each pins one distinct shipped theme via its TS entrypoint (Tasks=dark-purple the demoted file, CM=light-blue, ET=light-green, RB=light-amber, HelpDesk agent=dark-blue/requester=light-teal via the seam — no inline :root); RB sole sanctioned --vms-page-max retune in src/app-tokens.css after the theme (D-08/D-15/D-17/D-18/D-19). EXAMPLES-02 complete
 - [05-03] HelpDesk landing kept a static HTML page (no JS ViewModelShell entrypoint for a static 2-link picker — disproportionate); re-expressed via only shipped .vms-* classes + a one-line inline module script importing styles.css+light-teal, zero <style>/zero non-vms vars. Dropped functional overrides (horizontal forms, dispatch-dim, CM scrollbar, ET heading/spinner/tint) render shipped default and logged deferred in deferred-items.md — explicitly NO new wire (D-16)
+- [05-05] npm package.json+package-lock.json (2 spots) + NuGet .csproj <Version> bumped to **aligned 0.4.0** — the layout enum is the wire-format change forcing the minor per the AGENTS.md major.minor rule; rule TEXT byte-unchanged (only numbers moved; `git status --short AGENTS.md` empty), symmetric to the 0.3.13 why-PATCH. RELEASE-01 complete
+- [05-05] One consolidated CHANGELOG ## 0.4.0 + MIGRATION ## Upgrading to 0.4.0 (D-26, whole milestone: theme/density/card + layout enum + palette re-baseline + de-chrome); dark→light flip AND the --vms-warning #c89610→#a37510 shipped-default AA tighten (05-01 forward-note, honored with exact 2.68/2.51/2.36→4.11/3.84/3.62:1 ratios) framed as intentional default changes NOT wire/API/ViewNode breaks, prior look one line away via themes/dark-purple.css, light-purple.css byte-unchanged stated (D-05). README accuracy-fixed (D-22, no false "ships a dark-purple theme"; all 12 themes listed). RELEASE-03 complete
+- [05-05] Research item 3: package-lock.json surfaced as an authoritative npm version-string location BEYOND the plan's <interfaces> list and bumped in sync (Rule 2 completeness — a stale lockfile is the classic missed-location closeout failure); demo/*/frontend lockfiles verified zero version-string hits (local Vite alias, not a release surface); bin/obj excluded with Plan 06 rebuild-refresh note
 
 ### Architectural Notes (0.4.0 Design System)
 
@@ -108,8 +112,8 @@ Progress: [█░░░░░░░░░] 1 of 6 plans (Phase 05)
 
 ## Session Continuity
 
-**Last session:** 2026-05-18T05:08:49.918Z
-**Stopped at:** Completed 05-04-PLAN.md
+**Last session:** 2026-05-18T05:14:59.248Z
+**Stopped at:** Completed 05-05-PLAN.md
 **Next action:** Execute Plan 05-02 (Phase 5, plan 2 of 6).
 
 ---

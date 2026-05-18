@@ -33,9 +33,9 @@ Requirements for milestone 0.4.0. Each maps to exactly one roadmap phase (number
 
 ### Release
 
-- [ ] **RELEASE-01**: npm `@ashley-shrok/viewmodel-shell` and NuGet `AshleyShrok.ViewModelShell` ship aligned at `0.4.0` (wire-format change per the AGENTS.md major.minor-alignment rule).
+- [x] **RELEASE-01**: npm `@ashley-shrok/viewmodel-shell` and NuGet `AshleyShrok.ViewModelShell` ship aligned at `0.4.0` (wire-format change per the AGENTS.md major.minor-alignment rule).
 - [ ] **RELEASE-02**: The full cross-backend parity suite is green (all fixtures, all backends agree) including the new layout-preset field.
-- [ ] **RELEASE-03**: MIGRATION.md + CHANGELOG document 0.4.0 — the additive layout preset (default = prior behavior, non-breaking), the theme/density/card additions, and that existing apps render unchanged unless they opt in.
+- [x] **RELEASE-03**: MIGRATION.md + CHANGELOG document 0.4.0 — the additive layout preset (default = prior behavior, non-breaking), the theme/density/card additions, and that existing apps render unchanged unless they opt in.
 - [ ] **RELEASE-04**: Existing unit tests stay green and new behavior (layout presets, density, card variant) has jsdom unit tests (no browser runtime).
 
 ## v2 Requirements
@@ -76,9 +76,9 @@ Which phases cover which requirements. Phase numbering continues from 0.3.13 (Ph
 | EXAMPLES-01 | Phase 5 | Complete |
 | EXAMPLES-02 | Phase 5 | Complete |
 | EXAMPLES-03 | Phase 5 | Complete |
-| RELEASE-01 | Phase 5 | Pending |
+| RELEASE-01 | Phase 5 | Complete |
 | RELEASE-02 | Phase 5 | Pending |
-| RELEASE-03 | Phase 5 | Pending |
+| RELEASE-03 | Phase 5 | Complete |
 | RELEASE-04 | Phase 5 | Pending |
 
 **Coverage:**
