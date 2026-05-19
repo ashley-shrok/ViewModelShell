@@ -51,14 +51,19 @@ interface RCtx {
    *  (`renderTree` → NO_CTX) is false, so no `<TextInput>` is ever mounted
    *  and the field render stays byte-identical to Phase 1/2. */
   interactive: boolean;
-  /** 0.4.6 — true when the App is filling a real terminal viewport (the
-   *  0.4.5 alt-screen path). Gates width propagation down the layout spine
-   *  (page container → layoutContainer panes) so content scales with the
-   *  terminal. false on the static `renderTree`/NO_CTX and non-TTY paths, so
-   *  those stay byte-identical (the 0.4.5 root box already does nothing
-   *  there). Without this, 0.4.5's terminal-sized root is filled by an
-   *  intrinsic-width subtree — the surface grows, the content doesn't. */
+  /** True when the App is filling a real terminal viewport (the 0.4.5
+   *  alt-screen path). false on static `renderTree`/NO_CTX/non-TTY ⇒ those
+   *  stay byte-identical. */
   fill: boolean;
+  /** 0.4.7 — terminal column count when filling, else undefined. The page
+   *  container + the TOP layoutContainer set an EXPLICIT NUMERIC width from
+   *  this (NOT "100%": that resolves fragilely against an uncertain parent
+   *  and content-falls-back on a flexShrink rail — proven via the
+   *  real-adapter oracle: `page>sidebar` stayed 39 at cols 80 AND 160).
+   *  Everything below the numeric anchors fills via Yoga align-stretch
+   *  (proven to propagate from a numeric-width ancestor: a top-level card
+   *  section scaled 80→160). Undefined ⇒ no width prop ⇒ byte-identical. */
+  fillCols?: number;
   /** Effective draft for a focus key — the user-typed value when it should
    *  win, else undefined (caller falls back to the server `value`). Mirrors
    *  BrowserAdapter's draft-preservation rule (see App). */
@@ -1186,6 +1191,7 @@ function App(props: {
     focusKey: (o: object) => map.get(o),
     interactive,
     fill: fillViewport,
+    fillCols: fillViewport ? vp.cols : undefined,
     draft: (k: string) => draftFor(k),
     onFieldChange: (k, v) => setDraft((s) => ({ ...s, [k]: v })),
     onFieldSubmit,
@@ -1510,18 +1516,21 @@ export class TuiAdapter implements Adapter {
     children: ViewNode[],
     density: Density,
     rctx: RCtx,
+    topLevel = false,
   ): ReactElement {
     const sp = this.spacing(density);
     const kids = (children ?? []).map((c, i) =>
       this.renderNode(c, this.keyOf(c, i), density, undefined, rctx),
     );
-    // 0.4.6 — when filling a real terminal, the layout spine must carry the
-    // terminal width into the panes. Probed fact: Yoga align-stretch ALONE
-    // does NOT fill here; an explicit width:"100%" on the content wrapper
-    // does. `cards` is intentionally excluded (a uniform small-tile grid by
-    // design — force-filling defeats the preset). fill=false on the static /
-    // non-TTY path ⇒ {} ⇒ byte-identical to pre-0.4.6.
-    const fillW = rctx.fill ? { width: "100%" as const } : {};
+    // 0.4.7 — numeric width ONLY at the page's TOP layout container (it IS
+    // the full terminal width). Everything below fills via Yoga align-stretch
+    // from this numeric anchor (proven on the real-adapter oracle). NESTED
+    // layoutContainer calls (a section's own children) pass topLevel=false ⇒
+    // no width ⇒ they get the correct PANE-relative width via stretch (a
+    // global numeric cols here would overflow a narrower pane). `cards` never
+    // gets it (uniform small-tile grid by design). Not top-level / not
+    // filling ⇒ {} ⇒ byte-identical.
+    const fillW = topLevel && rctx.fillCols ? { width: rctx.fillCols } : {};
 
     switch (layout) {
       case "split":
@@ -1529,13 +1538,7 @@ export class TuiAdapter implements Adapter {
           <Box flexDirection="row" gap={sp.gap || 1} {...fillW}>
             {kids.map((el, i) => (
               <Box key={i} flexGrow={1} flexShrink={1} flexBasis={0}>
-                {rctx.fill ? (
-                  <Box width="100%" flexDirection="column">
-                    {el}
-                  </Box>
-                ) : (
-                  el
-                )}
+                {el}
               </Box>
             ))}
           </Box>
@@ -1561,23 +1564,58 @@ export class TuiAdapter implements Adapter {
       case "sidebar": {
         if (kids.length === 0) return <Box />;
         const [rail, ...rest] = kids;
+        // Deterministic NUMERIC split when filling. `flexGrow` does NOT
+        // distribute reliably past a flexShrink:0 fixed-basis rail (real-
+        // adapter oracle: sidebar stayed 34 at cols 80 AND 160, while `split`
+        // — symmetric flexGrow — scaled). So when filling: fixed numeric rail
+        // + the exact remaining width on the main pane (it then carries the
+        // terminal width to its section via align-stretch). Not filling ⇒ the
+        // ORIGINAL flex props, byte-identical.
+        const cols = topLevel && rctx.fillCols ? rctx.fillCols : 0;
+        const filling = cols > 0;
+        const RAIL = 24;
+        const g = sp.gap || 1;
+        const mw = Math.max(1, cols - RAIL - g);
         if (rest.length === 0) {
-          return (
+          return filling ? (
+            // flexDirection:column ⇒ the lone section align-stretches to the
+            // numeric width (a default-row box would not width-stretch it).
+            <Box flexDirection="column" flexShrink={0} {...fillW}>
+              {rail}
+            </Box>
+          ) : (
             <Box flexShrink={0} flexBasis={24} minWidth={18}>
               {rail}
             </Box>
           );
         }
         return (
-          <Box flexDirection="row" gap={sp.gap || 1} {...fillW}>
-            <Box flexShrink={0} flexBasis={24} minWidth={18}>
-              {rail}
-            </Box>
-            <Box flexGrow={1} flexShrink={1} flexBasis={0}>
-              <Box flexDirection="column" gap={sp.gap} {...fillW}>
+          <Box flexDirection="row" gap={g} {...fillW}>
+            {filling ? (
+              <Box flexShrink={0} width={RAIL}>
+                {rail}
+              </Box>
+            ) : (
+              <Box flexShrink={0} flexBasis={24} minWidth={18}>
+                {rail}
+              </Box>
+            )}
+            {filling ? (
+              // Single numeric-width column directly holding the detail
+              // sections — exactly the `stack` shape the oracle proves scales
+              // (a card section align-stretches to a numeric-width parent).
+              // The extra auto-width wrapper that used to sit here broke that
+              // align-stretch chain (oracle: card detail stuck at 38).
+              <Box flexDirection="column" gap={sp.gap} flexShrink={1} width={mw}>
                 {rest}
               </Box>
-            </Box>
+            ) : (
+              <Box flexGrow={1} flexShrink={1} flexBasis={0}>
+                <Box flexDirection="column" gap={sp.gap}>
+                  {rest}
+                </Box>
+              </Box>
+            )}
           </Box>
         );
       }
@@ -1609,7 +1647,7 @@ export class TuiAdapter implements Adapter {
             key={key}
             flexDirection="column"
             gap={sp.gap}
-            {...(rctx.fill ? { width: "100%" as const, flexGrow: 1 } : {})}
+            {...(rctx.fillCols ? { width: rctx.fillCols, flexGrow: 1 } : {})}
           >
             {node.title ? (
               <Box>
@@ -1618,7 +1656,7 @@ export class TuiAdapter implements Adapter {
                 </Text>
               </Box>
             ) : null}
-            {this.layoutContainer(node.layout, node.children ?? [], d, rctx)}
+            {this.layoutContainer(node.layout, node.children ?? [], d, rctx, true)}
           </Box>
         );
       }

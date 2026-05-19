@@ -6,6 +6,29 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `0.4.7` (Terminal fill reaches section content — npm only)
+
+**Nothing to do** beyond taking the patch. Completes `0.4.5`/`0.4.6`:
+section-wrapped content (the idiomatic norm — e.g. a sidebar with card
+sections) now scales with the terminal instead of rendering at a fixed
+width inside an otherwise-filled surface. NuGet unchanged at `0.4.2`;
+major.minor stays `0.4`.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.4.6` | **`0.4.7`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.4.2` | `0.4.2` (unchanged) |
+
+- **Browser / server consumers:** nothing to do — no wire/type/API change.
+- **Terminal consumers:** `sidebar`/`split`/`stack` and section content now
+  fill and re-flow with the terminal. `cards` stays a uniform small-tile
+  grid by design. Opt-out unchanged:
+  `new TuiAdapter({ viewport: "content" })`.
+- **Non-interactive (pipe / CI / agent / `</dev/null`) & static render:**
+  byte-identical to `0.4.4`–`0.4.6`.
+
+---
+
 ## Upgrading to npm `0.4.6` (Terminal viewport fill reaches the content — npm only)
 
 **Nothing to do** beyond taking the patch. `0.4.6` completes `0.4.5`: the

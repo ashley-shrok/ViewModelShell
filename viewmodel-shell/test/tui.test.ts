@@ -2073,34 +2073,57 @@ describe("0.4.5 — viewport fill + opt-out + resize", () => {
     expect(offW).toBe(outW);
   });
 
-  // 0.4.6 — content must scale with terminal width, not just the invisible
-  // root. Card sections draw a full-width border, so the laid-out width is
-  // observable past Ink's trailing-whitespace trim.
-  const sidebarCards = {
-    type: "page",
-    layout: "sidebar",
-    children: [
-      { type: "section", variant: "card", heading: "Nav", children: [{ type: "text", value: "N" }] },
-      { type: "section", variant: "card", heading: "Detail", children: [{ type: "text", value: "D" }] },
-    ],
-  } as unknown as ViewNode;
+  // 0.4.7 — fill must reach SECTION-wrapped content (the idiomatic norm),
+  // not just the page/pane containers. Drives the REAL adapter (the only
+  // trustworthy oracle — hand-built Ink approximations diverged from the
+  // real renderNode every time). Card sections draw a full-width border, so
+  // width is observable past Ink's trailing-whitespace trim. Thresholds have
+  // wide margins vs the oracle (sidebar/stack 80→160, split 49→89, cards 37→37).
+  const card7 = (h: string): ViewNode =>
+    ({
+      type: "section",
+      variant: "card",
+      heading: h,
+      children: [{ type: "text", value: "x" }],
+    }) as unknown as ViewNode;
+  const page7 = (layout: string | undefined, kids: ViewNode[]): ViewNode =>
+    ({
+      type: "page",
+      ...(layout ? { layout } : {}),
+      children: kids,
+    }) as unknown as ViewNode;
 
-  it("0.4.6 — content width scales with terminal width (sidebar fills)", async () => {
+  async function widthAt(vm: ViewNode, cols: number): Promise<number> {
     forceTTY();
     const r = render(
-      new TuiAdapter().createApp(sidebarCards, () => {}, { requestExit: () => {} }),
+      new TuiAdapter().createApp(vm, () => {}, { requestExit: () => {} }),
     );
     await tick(20);
-    setSize(r, 100, 30);
+    setSize(r, cols, 30);
     await tick(20);
-    const w100 = widthOf(String(r.lastFrame() ?? ""));
-    setSize(r, 160, 30);
-    await tick(20);
-    const w160 = widthOf(String(r.lastFrame() ?? ""));
+    const w = widthOf(String(r.lastFrame() ?? ""));
     r.unmount();
+    return w;
+  }
 
-    expect(w160).toBeGreaterThan(w100); // tracks terminal width (the fix)
-    expect(w100).toBeGreaterThanOrEqual(80); // ~ fills the 100-col terminal
-    expect(w160).toBeGreaterThanOrEqual(140); // ~ fills the 160-col terminal
+  it("0.4.7 — section content scales with terminal (sidebar/split/stack)", async () => {
+    for (const [name, vm] of [
+      ["sidebar", page7("sidebar", [card7("Nav"), card7("Detail")])],
+      ["split", page7("split", [card7("A"), card7("B")])],
+      ["stack", page7(undefined, [card7("S")])],
+    ] as [string, ViewNode][]) {
+      const w100 = await widthAt(vm, 100);
+      const w160 = await widthAt(vm, 160);
+      expect(w160, `${name} must scale 100→160`).toBeGreaterThan(w100 + 15);
+      expect(w100, `${name} fills non-trivially @100`).toBeGreaterThan(30);
+    }
+  });
+
+  it("0.4.7 — cards stays a bounded small-tile grid (not terminal-wide)", async () => {
+    const vm = page7("cards", [card7("c1"), card7("c2"), card7("c3")]);
+    const w100 = await widthAt(vm, 100);
+    const w160 = await widthAt(vm, 160);
+    expect(w160 - w100, "cards must NOT track terminal width").toBeLessThan(15);
+    expect(w160, "cards bounded under terminal width").toBeLessThan(110);
   });
 });

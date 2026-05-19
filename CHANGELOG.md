@@ -6,6 +6,22 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.4.7 — Terminal fill reaches section-wrapped content (npm only)
+
+**npm:** `0.4.7` (PATCH — client-only fix) · **NuGet:** unchanged at `0.4.2`
+
+Completes the `0.4.5`/`0.4.6` viewport-fill work. No wire, type, or API change; NuGet untouched; major.minor stays `0.4`.
+
+### Fixed
+
+- **Section-wrapped content now scales with the terminal.** `0.4.6` propagated fill through the `page`/`layoutContainer` boxes but not into `section` — the idiomatic content container (e.g. the shipped Tasks shape: `page(sidebar)` › `section(card)` rail + `section` detail) — so `sidebar`-laid content still rendered at a fixed intrinsic width while the surrounding surface filled. Root cause: the `width:"100%"` strategy resolved fragilely against an uncertain parent and content-fell-back on the flexShrink rail, and `flexGrow` did not distribute past it. Reworked to **explicit numeric-width threading**: the page container and the page's top layout container take a real numeric width derived from the terminal; the sidebar splits into a fixed numeric rail + an exact-remainder main pane (a single numeric-width column directly holding the sections); everything below fills via Yoga align-stretch from those numeric anchors. `sidebar`, `split`, `stack`, and nested sections now scale and re-flow with terminal size (verified end-to-end against the real adapter at multiple widths). `cards` is intentionally still a uniform small-tile grid.
+
+### Consumers
+
+- **None required.** Client-only; gated on the same real-TTY/alt-screen condition, so static (`renderTree`) and non-interactive (pipe/CI/agent/`</dev/null`) output is byte-identical (verified: core dist + the 143 existing + conformance tests unchanged). Opt-out unchanged: `new TuiAdapter({ viewport: "content" })`. Alt-screen + Ctrl-C/SIGINT/SIGTERM/crash restore re-verified.
+
+---
+
 ## 0.4.6 — Terminal viewport fill now reaches the content (npm only)
 
 **npm:** `0.4.6` (PATCH — client-only fix) · **NuGet:** unchanged at `0.4.2`

@@ -851,3 +851,52 @@ before doing anything in a fresh-context resume.
   no `?1049[hl]`, exit 0. **tui-cli.ts UNCHANGED** (render-only; teardown
   rides the existing dispose funnel). Shipped npm `0.4.6` PATCH
   (client-only; NuGet untouched `0.4.2`); commit `fix(tui): …`.
+
+## 0.4.7 — fill must reach section-wrapped content (0.4.5/0.4.6 completion)
+
+- **0.4.6's `width:"100%"` strategy was fundamentally fragile.** It resolves
+  against an uncertain parent and CONTENT-falls-back when a `flexShrink:0`
+  fixed-basis rail is present; `flexGrow` does not distribute past such a
+  rail. The reporter's proposed "add width:100% to `case section`" was
+  DISPROVEN on the real path. REWORK = **explicit numeric-width threading**
+  via `RCtx.fillCols` (terminal cols when filling; undefined otherwise).
+- **Hand-built Ink probes LIED every single time** (≥4 rounds). The ONLY
+  trustworthy oracle is the REAL adapter: `render(new
+  TuiAdapter().createApp(vm,…))` under ink-testing-library with forced
+  `process.std*.isTTY` + a `columns` getter override + `emit("resize")`,
+  measuring `widthOf(lastFrame)` at two widths. ALWAYS iterate layout fixes
+  against the real renderNode, never an approximation. (Built into
+  `test/tui.test.ts` as the 0.4.7 multi-preset scaling test.)
+- **The oracle-proven lever map:** (1) page container + the page's TOP
+  `layoutContainer` get an explicit NUMERIC `width` (= cols). (2) NESTED
+  `layoutContainer` (a section's own children) gets NO width — a global
+  numeric cols there overflows a narrower pane; it fills via align-stretch
+  from the now-numeric ancestors (proven: a top-level card scales via pure
+  align-stretch). (3) sidebar = fixed numeric rail (24) + main pane =
+  `Math.max(1, cols-24-gap)` as a SINGLE numeric-width column directly
+  holding the detail sections — an extra auto-width wrapper between the
+  sized pane and the section BREAKS the align-stretch chain (oracle: card
+  detail stuck at 38 until the wrapper was collapsed). (4) single-child
+  sidebar needs `flexDirection:"column"` so the lone section
+  width-stretches (a default-row box won't). (5) `cards` NEVER gets numeric
+  width — uniform small-tile grid by design (oracle: stays ~37 at 80 & 160).
+- **Measurement landmine reaffirmed:** Ink trims trailing whitespace, so
+  ONLY bordered (`variant:"card"`) content reveals width. A plain section
+  looks unchanged even when correctly filled — do NOT conclude "broken"
+  from a plain-section measurement (it cost a wrong diagnosis here). Use
+  card sections or the PTY to observe.
+- **Stray-temp-test hygiene (NEW):** a leftover `test/_probe.test.ts` with
+  a print-via-assertion hack false-failed the whole suite once. Any
+  `_probe`/`_real`/`_fix` scratch file in `test/` or a demo dir MUST be
+  removed before the gate; the commit step greps for `_probe|_real|_fix`.
+- All gated on `rctx.fillCols` (undefined ⇒ no width prop ⇒ byte-identical
+  static/non-TTY). **tui-cli.ts UNCHANGED** ⇒ teardown safe by construction
+  (PTY re-verified anyway). **Verification:** core dist byte-identical 6/6;
+  **148 vitest** (replaced the misleading 0.4.6 width test with a
+  real-adapter multi-preset scaling + cards-bounded test; 143 + 3 0.4.5 +
+  conformance unchanged); core-globals; web-bundle hashes unchanged. PTY
+  (ephemeral reporter-shape fixture: `page sidebar density:compact`,
+  `section card` rail + detail): content SCALES 100→160, alt-screen
+  enter/leave + Ctrl-C→130 + cursor restored, non-TTY no `?1049[hl]`.
+  Shipped npm `0.4.7` PATCH (client-only; NuGet untouched `0.4.2`); commit
+  `fix(tui): …`.

@@ -47,6 +47,14 @@ hardcoded — completed phases are read from git:
   fixed-width (Ink align-stretch ≠ fill here; explicit `width:"100%"` on the
   gated layout spine is the lever). Client-only PATCH; NuGet still `0.4.2`;
   tui-cli.ts UNCHANGED. See `.planning/TUI-NOTES.md` "0.4.6".
+- POST-RELEASE — npm **`0.4.7`** (committed; `git log --grep='fix(tui)'`):
+  completes 0.4.5/0.4.6 — fill now reaches SECTION-wrapped content (the
+  idiomatic norm; 0.4.6 stopped at page/layoutContainer). Reworked the
+  fragile `width:"100%"` strategy to explicit numeric-width threading
+  (`RCtx.fillCols`); sidebar/split/stack + sections scale, `cards` stays a
+  small-tile grid. Iterated against a REAL-adapter oracle (hand probes lied
+  every round). Client-only PATCH; NuGet still `0.4.2`; tui-cli.ts
+  UNCHANGED. See `.planning/TUI-NOTES.md` "0.4.7".
 
 (Each finishing phase updates this line in its own commit.)
 
