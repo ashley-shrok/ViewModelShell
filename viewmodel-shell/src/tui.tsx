@@ -785,7 +785,16 @@ function App(props: {
   const { vm, renderWith } = props;
   const { isRawModeSupported } = useStdin();
   const { write } = useStdout();
-  const interactive = isRawModeSupported;
+  // `=== true` is LOAD-BEARING, not defensive. Ink's App.isRawModeSupported()
+  // returns `this.props.stdin.isTTY`, which is `true` on a TTY but `undefined`
+  // (never `false`) on a non-TTY stdin (pipe / </dev/null / agent / CI). Ink's
+  // useInput skips raw mode ONLY when `options.isActive === false` (strict).
+  // So passing the raw `undefined` as isActive does NOT skip → Ink calls
+  // setRawMode → throws "Raw mode is not supported" and dumps a react error
+  // frame on the non-TTY path. Coercing to a real boolean makes the gate
+  // `{ isActive: false }`, which Ink honors → clean static render. (A TTY
+  // gives `true`; ink-testing-library gives `true` → tests unchanged.)
+  const interactive = isRawModeSupported === true;
 
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);

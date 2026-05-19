@@ -56,7 +56,13 @@ const shell = new ViewModelShell({
 shell.load();
 ```
 
-The TUI is built on [Ink](https://github.com/vadimdemedes/ink), declared as an **optional** dependency: CLI/`npx` use installs it automatically, while web and server consumers are unaffected — it is never imported by the browser, server, or core entrypoints. See [AGENTS.md](https://github.com/ashley-shrok/ViewModelShell/blob/main/AGENTS.md) for what the terminal renders.
+The TUI is built on [Ink](https://github.com/vadimdemedes/ink) and friends, declared as **optional** dependencies (`ink`, `react`, `ink-text-input`, `ink-select-input`) so web and server consumers are unaffected — they are never imported by the browser, server, or core entrypoints. `npx vms-tui` installs them automatically. **Project consumers using `TuiAdapter` programmatically must add all four explicitly** — optional dependencies are *not* pulled transitively when another project depends on this package (notably with `bun install`):
+
+```bash
+npm i @ashley-shrok/viewmodel-shell ink react ink-text-input ink-select-input
+```
+
+See [AGENTS.md](https://github.com/ashley-shrok/ViewModelShell/blob/main/AGENTS.md) for what the terminal renders.
 
 ## Themes
 

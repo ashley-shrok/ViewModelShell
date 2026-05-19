@@ -26,6 +26,12 @@ hardcoded — completed phases are read from git:
   a TUI node). The fail-loud string remains `phase 5` (Phase 6 added no
   node). npm `0.4.3` / CHANGELOG / MIGRATION were *prepared* here; the
   actual `npm publish` is a manual, credentialed step — never automated.
+- POST-RELEASE — npm **`0.4.4`** hotfix (committed; `git log --grep='fix(tui)'`):
+  non-TTY stdin raw-mode crash in the 0.4.3 terminal adapter (Ink reports
+  `isRawModeSupported` as `undefined` not `false`; gate now strict-boolean
+  coerced; CLI also treats non-TTY stdin as non-interactive). Client-only
+  PATCH; NuGet still `0.4.2`; effort remains COMPLETE — this is maintenance,
+  not a new phase. See `.planning/TUI-NOTES.md` "Post-0.4.3 hotfix".
 
 (Each finishing phase updates this line in its own commit.)
 

@@ -6,6 +6,25 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `0.4.4` (Terminal non-TTY crash fix — npm only)
+
+**Nothing to do** beyond taking the patch. `0.4.4` fixes a `0.4.3` bug where
+`vms-tui` crashed (Ink "Raw mode is not supported") on non-TTY stdin (pipes,
+`</dev/null`, CI, agent shells) instead of rendering one static frame and
+exiting. NuGet unchanged at `0.4.2`; major.minor stays `0.4`.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.4.3` | **`0.4.4`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.4.2` | `0.4.2` (unchanged) |
+
+No wire, type, API, or behavior change for browser/server consumers. If you
+drive an app from a terminal in a non-interactive shell (agents, CI, cron),
+`0.4.4` is required — `0.4.3` errors there. `npx vms-tui@latest <url>` picks
+it up automatically.
+
+---
+
 ## Upgrading to npm `0.4.3` (Terminal/TUI front-end — npm only)
 
 **Nothing to do.** This is an additive, client-only npm release. NuGet

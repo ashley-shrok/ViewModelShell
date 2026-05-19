@@ -6,6 +6,23 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.4.4 — Terminal non-TTY crash fix (npm only)
+
+**npm:** `0.4.4` (PATCH — client-only bug fix) · **NuGet:** unchanged at `0.4.2`
+
+Patches a `0.4.3` regression in the new terminal adapter. No wire, type, or API change; NuGet untouched; major.minor stays `0.4`.
+
+### Fixed
+
+- **`vms-tui` no longer crashes on non-TTY stdin.** Run with a non-interactive stdin (pipe, `</dev/null`, CI/cron, an agent shell), the adapter dumped a React/Ink "Raw mode is not supported" error frame instead of degrading to the intended one-shot static render. Root cause: Ink reports `isRawModeSupported` as `undefined` (not `false`) on a non-TTY stdin, and Ink's `useInput` skips raw mode only when `isActive === false` *strictly* — so the gate passed `undefined` and Ink still enabled raw mode. The adapter now coerces the gate to a strict boolean; the CLI additionally treats a non-TTY *stdin* (not only stdout) as non-interactive, preventing a hang when stdout is a TTY but stdin is piped. Interactive terminals are unchanged (Ctrl-C / SIGINT → 130, SIGTERM → 143, cursor restored — re-verified).
+- **Missing-optional-deps hint corrected.** `vms-tui`'s hint listed only `ink react`; the adapter also imports `ink-text-input` and `ink-select-input`. The hint now lists all four, and the README documents that programmatic / `bun install` consumers must add them explicitly (optional deps are not pulled transitively).
+
+### Consumers
+
+- **None required.** Client-only bug fix — no wire/type/behavior change for browser or server consumers, no NuGet change. Terminal users in non-interactive shells must take `0.4.4` (`0.4.3` errors there); `npx vms-tui@latest` picks it up automatically.
+
+---
+
 ## 0.4.3 — Terminal (TUI) front-end (npm only)
 
 **npm:** `0.4.3` (PATCH — additive, client-only) · **NuGet:** unchanged at `0.4.2`

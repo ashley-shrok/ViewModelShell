@@ -49,8 +49,9 @@ async function main(): Promise<void> {
     ({ TuiAdapter, openExternal, classify } = await import("./tui.js"));
   } catch (err) {
     process.stderr.write(
-      "vms-tui requires the optional 'ink' and 'react' packages.\n" +
-        "Install them:  npm i ink react\n" +
+      "vms-tui requires its optional peer packages: 'ink', 'react', " +
+        "'ink-text-input', 'ink-select-input'.\n" +
+        "Install them:  npm i ink react ink-text-input ink-select-input\n" +
         `(load error: ${(err as Error).message})\n`,
     );
     process.exitCode = 1;
@@ -130,6 +131,15 @@ async function main(): Promise<void> {
   let redirectFailed = false;
   let currentShell: ViewModelShell;
 
+  // Non-interactive iff EITHER stream is not a TTY. Checking stdin too (not
+  // just stdout) is load-bearing: with the tui.tsx isActive fix the App's
+  // useInput is correctly inert on non-TTY stdin, so nothing holds the event
+  // loop — if stdout were a TTY but stdin a pipe (`vms-tui url </dev/null`
+  // from an interactive shell), a stdout-only guard would fall through to the
+  // keep-alive + waitUntilExit() and HANG forever (no input can ever arrive).
+  // One static frame + exit is the only correct behavior when stdin is dead.
+  const nonInteractive = !process.stdout.isTTY || !process.stdin.isTTY;
+
   const handleRedirect = (url: string, fromEndpoint: string): void => {
     const c = classify(url, fromEndpoint);
     if (c.kind === "same-origin") {
@@ -138,9 +148,9 @@ async function main(): Promise<void> {
       void currentShell.load(); // failures flow through the shared onError
       return;
     }
-    if (!process.stdout.isTTY) {
-      // Non-TTY: never spawn a browser; loud stderr + nonzero exit via the
-      // SINGLE shutdown funnel (redirectFailed is read at the exit site).
+    if (nonInteractive) {
+      // Non-interactive: never spawn a browser; loud stderr + nonzero exit via
+      // the SINGLE shutdown funnel (redirectFailed is read at the exit site).
       process.stderr.write(
         `vms-tui: cannot follow redirect (${c.kind}): ${url}\n`,
       );
@@ -187,9 +197,9 @@ async function main(): Promise<void> {
     process.stderr.write(`vms-tui: ${(err as Error).message}\n`);
   }
 
-  if (!process.stdout.isTTY) {
-    // Non-TTY (piped / CI): nothing to interact with — emit one static frame
-    // and exit instead of hanging on a Ctrl-C that can never come. The delay
+  if (nonInteractive) {
+    // Non-interactive (piped / CI / dead stdin): nothing to interact with —
+    // emit one static frame and exit instead of hanging forever. The delay
     // lets Ink flush its throttled render. (Redirects can't fire here: load()
     // ignores response.redirect and non-TTY performs no dispatch — so
     // redirectFailed stays false unless a future code path dispatches.)

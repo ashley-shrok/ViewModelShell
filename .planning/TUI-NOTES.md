@@ -702,3 +702,58 @@ before doing anything in a fresh-context resume.
   change.** 6 core dist byte-identical; web-bundle hashes unchanged;
   **143 vitest** (121→143, +22 conformance) + core-globals green. The TUI
   effort is COMPLETE: no further phases, no rewind.
+
+## Post-0.4.3 hotfix — npm 0.4.4 (non-TTY raw-mode crash)
+
+- **Ink `isRawModeSupported` is `true | undefined`, NEVER `false`
+  (LOAD-BEARING; the canonical "read the dep's source, the obvious fix is
+  wrong" case).** `node_modules/ink/build/components/App.js:35`:
+  `isRawModeSupported() { return this.props.stdin.isTTY }` → on a non-TTY
+  stdin (pipe / `</dev/null` / CI / agent) that is **`undefined`**, not
+  `false`. `node_modules/ink/build/hooks/use-input.js:33`: useInput skips
+  raw mode ONLY `if (options.isActive === false)` — a STRICT `=== false`.
+  So `{ isActive: undefined }` is NOT skipped → Ink `setRawMode(true)` →
+  `App.js:108` throws `Raw mode is not supported` → a react-reconciler
+  error frame on the non-TTY path. The App's gate was ALREADY
+  `{ isActive: interactive }` with `interactive = isRawModeSupported`, so
+  it passed `undefined` and crashed anyway. **Fix = strict-boolean coercion
+  at the source: `const interactive = isRawModeSupported === true;`
+  (tui.tsx).** The bug-reporter's proposed
+  `useInput(h,{isActive:isRawModeSupported})` would NOT have fixed it
+  (same `undefined`). Instrument/read source — do not trust the obvious fix.
+- **CLI `nonInteractive = !process.stdout.isTTY || !process.stdin.isTTY`
+  (stdin too).** After the isActive fix, App's useInput is correctly inert
+  on non-TTY stdin → nothing holds the event loop. If stdout were a TTY but
+  stdin a pipe (`vms-tui url </dev/null` from an interactive shell), a
+  stdout-only guard falls through to keep-alive + `waitUntilExit()` and
+  HANGS forever. Both `!process.stdout.isTTY` sites (handleRedirect + the
+  run-body static guard) now use the `nonInteractive` const.
+- **Optional deps are NOT transitive.** `tui.tsx` statically imports
+  `ink-text-input` + `ink-select-input` too, so the missing-deps hint must
+  list all four (`npm i ink react ink-text-input ink-select-input`), and
+  the README must say programmatic / `bun install` consumers add all four
+  explicitly (npm pulls optionalDependencies for `npx`, but they are not
+  fetched transitively when another project depends on the package).
+- **PTY-harness gotcha (NEW; same class as the ICRNL discovery — the
+  harness lied, not the code).** On a pty *master*, child exit surfaces as
+  `OSError(EIO)` (or an empty read) — that IS the exit signal. A drain loop
+  that `break`s on `OSError` and then `SIGKILL`s before a blocking
+  `waitpid` reports a false **"HANG"** even though the buffer already
+  contains `^C` + `ESC[?25h` (teardown DID run). Correct recipe: drain to
+  EOF (EIO/empty), THEN blocking `os.waitpid(pid,0)` for the real status,
+  THEN evaluate exit code + cursor-restore. Cost two wrong "still broken"
+  reads before fixing the harness.
+- **Verification (0.4.4).** Byte-identity core 6/6 (fix is leaf
+  `tui.tsx`/`tui-cli.ts` only — core dist UNCHANGED; invariant 5 holds —
+  tui *behavior* legitimately changes, that is the bugfix). **143 vitest**
+  green (ink-testing-library `isRawModeSupported===true` ⇒ `=== true` ⇒
+  `true` ⇒ every interaction test unchanged — no test edits needed).
+  PTY **3/3** (Ctrl-C→130, SIGINT→130, SIGTERM→143, cursor restored every
+  exit) — proves a real pty's `stdin.isTTY===true` ⇒ `interactive` true ⇒
+  useInput stays ACTIVE ⇒ teardown topology fully preserved. non-TTY
+  **5/5** (`</dev/null`→0, `| cat`→0, unreachable→1, no-arg→2, bad-url→2).
+  Web-bundle Vite hashes unchanged (`index-UzlLPlgm.css` +
+  `index-B7l5XdRz.js`). Shipped npm **`0.4.4`** PATCH (client-only bugfix;
+  NuGet UNCHANGED `0.4.2`; major.minor `0.4`). Commit is `fix(tui): …`
+  (NOT a phase — the `feat(tui): Phase` ledger intentionally does not match
+  it; the ROADMAP STATUS records the hotfix instead).
