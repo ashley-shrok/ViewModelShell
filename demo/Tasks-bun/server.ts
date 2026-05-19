@@ -14,19 +14,25 @@ import {
   type ViewNode,
 } from "@ashley-shrok/viewmodel-shell/server";
 
-interface TaskRecord {
+// The pure handlers (initialState / buildVm / actionHandler) are exported so
+// other hosts can reuse this exact, parity-verified Tasks backend without
+// re-implementing it (see demo/Tasks-fullstack-bun, which wraps them with a
+// static file server). The standalone Bun.serve at the bottom is guarded by
+// `import.meta.main`, so importing this file does NOT start a second listener.
+
+export interface TaskRecord {
   id: string;
   title: string;
   completed: boolean;
   createdAt: string; // ISO timestamp — neutralized by parity normalize()
 }
 
-interface TasksState {
+export interface TasksState {
   items: TaskRecord[];
   filter: string;
 }
 
-function initialState(): TasksState {
+export function initialState(): TasksState {
   // Mirrors TasksState.Initial(): ids "1","2","3", exact titles/completed.
   // createdAt is volatile under parity normalize() so only ordering matters;
   // the controller orders the rendered list by CreatedAt ascending, so the
@@ -42,7 +48,7 @@ function initialState(): TasksState {
   };
 }
 
-function buildVm(state: TasksState): ViewNode {
+export function buildVm(state: TasksState): ViewNode {
   const total     = state.items.length;
   const completed = state.items.filter(t => t.completed).length;
   const active    = total - completed;
@@ -159,7 +165,7 @@ function generateId(): string {
   ).join("");
 }
 
-const actionHandler = createAction<TasksState>(async (payload) => {
+export const actionHandler = createAction<TasksState>(async (payload) => {
   const ctx = payload.context ?? {};
   const str  = (k: string): string | null  => (typeof ctx[k] === "string"  ? (ctx[k] as string)  : null);
   const bool = (k: string): boolean | null => (typeof ctx[k] === "boolean" ? (ctx[k] as boolean) : null);
@@ -213,21 +219,27 @@ const actionHandler = createAction<TasksState>(async (payload) => {
   return { vm: buildVm(state), state };
 });
 
-const port = Number(process.env.PORT ?? "3001");
+// Standalone server: only when this file is the process entrypoint
+// (`bun run server.ts`, as the parity harness invokes it). When this module
+// is imported instead, the guard is false and no listener starts — the
+// importer composes the exported handlers itself.
+if (import.meta.main) {
+  const port = Number(process.env.PORT ?? "3001");
 
-Bun.serve({
-  port,
-  async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname === "/api/tasks" && request.method === "GET") {
-      const state = initialState();
-      return Response.json({ vm: buildVm(state), state });
-    }
-    if (url.pathname === "/api/tasks/action" && request.method === "POST") {
-      return actionHandler(request);
-    }
-    return new Response("Not Found", { status: 404 });
-  },
-});
+  Bun.serve({
+    port,
+    async fetch(request: Request): Promise<Response> {
+      const url = new URL(request.url);
+      if (url.pathname === "/api/tasks" && request.method === "GET") {
+        const state = initialState();
+        return Response.json({ vm: buildVm(state), state });
+      }
+      if (url.pathname === "/api/tasks/action" && request.method === "POST") {
+        return actionHandler(request);
+      }
+      return new Response("Not Found", { status: 404 });
+    },
+  });
 
-console.log(`Tasks Bun backend listening on http://localhost:${port}`);
+  console.log(`Tasks Bun backend listening on http://localhost:${port}`);
+}
