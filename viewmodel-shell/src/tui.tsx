@@ -9,6 +9,7 @@ import {
   useStdout,
 } from "ink";
 import TextInput from "ink-text-input";
+import SelectInput from "ink-select-input";
 import type {
   Adapter,
   ActionEvent,
@@ -200,14 +201,10 @@ function collectFocusables(vm: ViewNode): {
       }
       case "field": {
         const it = node.inputType;
-        if (
-          it === "hidden" ||
-          it === "select" ||
-          it === "select-multiple" ||
-          it === "file"
-        )
-          return; // invisible / deferred → not focusable (textarea/code are
-        // focusable as of Phase 5a — multi-line editor)
+        if (it === "hidden" || it === "file") return;
+        // invisible (hidden) / deferred (file) → not focusable. textarea/code
+        // focusable since Phase 5a (multi-line editor); select/select-multiple
+        // focusable since Phase 5b (pickers).
         const k = uniq(node.name ?? "field");
         map.set(node, k);
         list.push({ key: k, kind: "field", node, form });
@@ -254,9 +251,12 @@ function collectForm(
     if (node.type === "field") {
       const f = node as FieldNode;
       const it = f.inputType;
-      if (it === "select" || it === "select-multiple" || it === "file") {
-        return; // deferred input types — not collected
+      if (it === "file") {
+        return; // deferred input type — not collected
       }
+      // select → chosen value; select-multiple → comma-joined values
+      // (AGENTS.md "Multi-select submits comma-joined"); both round-trip the
+      // draft-aware `resolve` (Phase 5b), exactly like the text family.
       if (it === "checkbox") out[f.name] = isTruthyFormValue(resolve(f)) ? "true" : "false";
       else out[f.name] = resolve(f);
       return;
@@ -299,6 +299,16 @@ function isEditableSingleLine(it: string | undefined): boolean {
  *  input-arbitration invariant). */
 function isEditableMultiLine(it: string | undefined): boolean {
   return it === "textarea" || it === "code";
+}
+
+/** Phase 5b: the `field` input types that become an interactive picker when
+ *  focused on a TTY — `select` (single, via `ink-select-input`) and
+ *  `select-multiple` (multi, via the contained `MultiSelectInput`). Not a text
+ *  editor (so deliberately NOT in isEditableSingleLine); it joins the editing
+ *  gate so the focused picker owns Up/Down/Enter/Space while App keeps Tab/
+ *  Shift-Tab (ring) + Ctrl-C (teardown). */
+function isSelect(it: string | undefined): boolean {
+  return it === "select" || it === "select-multiple";
 }
 
 /** Reconcile the focused key against a (possibly new) focusable list — the
@@ -506,6 +516,99 @@ function MultilineEditor(props: {
   );
 }
 
+/**
+ * Phase 5b contained multi-select picker for `select-multiple`. Built ONLY on
+ * Ink's already-vetted primitives — `ink-select-input` (the locked, mature
+ * Ink-5/React-18 lib used for single `select`) is single-select only, and no
+ * mature Ink-5/React-18 multi-select lib documents the Tab/Shift-Tab/Ctrl-C
+ * pass-through this codebase's input-arbitration depends on (`ink-multi-select`
+ * is dead — ink^3/react^16; `@inkjs/ui` MultiSelect's key handling is
+ * undocumented). Same precedent + rationale as Phase-5a's `MultilineEditor`:
+ * contained component, zero new deps, exact known keyboard contract.
+ *
+ * CONTROLLED by `value` (comma-joined, the wire shape — AGENTS.md "Multi-select
+ * submits comma-joined"; Showcase emits `value:"a,c"`). The selected SET is
+ * derived from `value` every render, so it is server-authoritative by
+ * construction: when App drops the select draft on a server re-render (selects
+ * are excluded from draft preservation — AGENTS.md), `value` becomes the server
+ * value and the rendered selection follows. Only the highlight index is
+ * internal (a cursor, not a value — fine to persist across re-renders, like
+ * MultilineEditor's caret).
+ *
+ * Input contract MIRRORS MultilineEditor/ink-text-input: EARLY-RETURNS Ctrl-C
+ * (App owns teardown → requestExit(130)) and Tab/Shift-Tab (App owns ring
+ * traversal — locked); owns Up/Down (move highlight) and Space (toggle the
+ * highlighted option). Enter is inert here (App's editing branch also returns
+ * on Enter) — submission stays the ring's submit button (the user Tabs out),
+ * exactly like a browser multi-select element.
+ */
+function MultiSelectInput(props: {
+  options: Array<{ value: string; label: string }>;
+  value: string;
+  onChange: (v: string) => void;
+  focus: boolean;
+}): ReactElement {
+  const parse = (s: string): string[] =>
+    s
+      .split(",")
+      .map((x) => x.trim())
+      .filter((x) => x.length > 0);
+  const opts = props.options;
+  const [hi, setHi] = useState(0);
+  const selected = new Set(parse(props.value));
+
+  useInput(
+    (input, key) => {
+      // App owns these — never consume them (Ink calls every useInput; no
+      // bubbling, so a plain return cedes the key).
+      if (key.ctrl && input === "c") return; // → App requestExit(130)
+      if (key.tab) return; // Tab / Shift-Tab → App ring traversal (locked)
+      if (key.upArrow) {
+        setHi((h) => (opts.length ? (h - 1 + opts.length) % opts.length : 0));
+        return;
+      }
+      if (key.downArrow) {
+        setHi((h) => (opts.length ? (h + 1) % opts.length : 0));
+        return;
+      }
+      if (input === " ") {
+        const o = opts[hi];
+        if (!o) return;
+        const next = new Set(parse(props.value));
+        if (next.has(o.value)) next.delete(o.value);
+        else next.add(o.value);
+        // Preserve option order in the comma-joined wire value.
+        const joined = opts
+          .filter((x) => next.has(x.value))
+          .map((x) => x.value)
+          .join(",");
+        props.onChange(joined);
+        return;
+      }
+      // Enter / anything else: inert (App's editing branch also returns).
+    },
+    { isActive: props.focus },
+  );
+
+  if (opts.length === 0) return <Text dimColor> </Text>;
+  return (
+    <Box flexDirection="column">
+      {opts.map((o, i) => {
+        const on = selected.has(o.value);
+        const cur = i === hi;
+        // ONE flat <Text> per row — a nested styled span mid-string corrupts
+        // Ink/Yoga width measurement inside the live focusWrap+border tree
+        // (the Phase-1/5a mixed-<Text> width lesson).
+        return (
+          <Text key={o.value} color={cur ? "cyan" : undefined}>
+            {(cur ? "▸ " : "  ") + (on ? "[x] " : "[ ] ") + o.label}
+          </Text>
+        );
+      })}
+    </Box>
+  );
+}
+
 /** The stateful root. Mounted ONCE; the shell's poll/dispatch re-renders
  *  reconcile the SAME component instance (React preserves its focus state) —
  *  this is why a stable root component, not a bare tree. */
@@ -566,6 +669,22 @@ function App(props: {
   for (const d of fieldDescs)
     fieldServerNow[d.key] = (d.node as FieldNode).value ?? "";
   const prevServerRef = useRef<Record<string, string>>({});
+  // Phase 5b: focus keys of select/select-multiple fields. Selects are
+  // EXCLUDED from draft preservation (AGENTS.md: can't distinguish
+  // "server set this" from "user changed it") — so a select draft is
+  // server-authoritative the moment a SERVER re-render arrives, even if that
+  // field's value is unchanged (the inverse of the text draft-survival rule).
+  const selectKeysNow = new Set(
+    fieldDescs
+      .filter((d) => isSelect((d.node as FieldNode).inputType))
+      .map((d) => d.key),
+  );
+  // A server re-render is observable as a new `vm` object identity (the shell
+  // passes a freshly-parsed vm each render(); a local setState re-render keeps
+  // the SAME vm prop). First render: undefined → not a "server" render.
+  const prevVmRef = useRef<ViewNode | undefined>(undefined);
+  const isServerRender =
+    prevVmRef.current !== undefined && prevVmRef.current !== vm;
 
   /** Effective draft for a focus key: the typed value when it should still
    *  win — i.e. there IS a draft, the field still exists, and the server
@@ -575,6 +694,7 @@ function App(props: {
     if (!(k in draft)) return undefined;
     if (!fieldKeysNow.has(k)) return undefined; // field gone
     if (prevServerRef.current[k] !== fieldServerNow[k]) return undefined; // server changed → authoritative
+    if (selectKeysNow.has(k) && isServerRender) return undefined; // selects: server-authoritative across ANY server re-render (AGENTS.md — excluded from draft preservation)
     return draft[k];
   };
 
@@ -589,7 +709,8 @@ function App(props: {
     interactive &&
     focusedDesc?.kind === "field" &&
     (isEditableSingleLine((focusedDesc.node as FieldNode).inputType) ||
-      isEditableMultiLine((focusedDesc.node as FieldNode).inputType));
+      isEditableMultiLine((focusedDesc.node as FieldNode).inputType) ||
+      isSelect((focusedDesc.node as FieldNode).inputType));
   const editingRef = useRef(editing);
   editingRef.current = editing;
 
@@ -606,7 +727,9 @@ function App(props: {
       const next: Record<string, string> = {};
       for (const k of Object.keys(prev)) {
         const stale =
-          !fieldKeysNow.has(k) || prevServerRef.current[k] !== fieldServerNow[k];
+          !fieldKeysNow.has(k) ||
+          prevServerRef.current[k] !== fieldServerNow[k] ||
+          (selectKeysNow.has(k) && isServerRender); // selects never survive a server re-render
         if (stale) {
           changed = true;
           continue;
@@ -616,6 +739,7 @@ function App(props: {
       return changed ? next : prev;
     });
     prevServerRef.current = fieldServerNow;
+    prevVmRef.current = vm;
   });
   useEffect(
     () => () => {
@@ -762,7 +886,7 @@ function App(props: {
 }
 
 /**
- * Phase 5a terminal adapter — single-line + multi-line field editors.
+ * Phase 5b terminal adapter — single-line + multi-line editors + selects.
  *
  * Every node renders byte-identically to Phase 1/2 when UNFOCUSED and on the
  * pure `renderTree`/non-TTY path (NO_CTX → interactive:false → no editor). On
@@ -772,12 +896,16 @@ function App(props: {
  * form-submit. The focused single-line `field` is an editable
  * `ink-text-input`; the focused `textarea`/`code` field is the contained
  * `MultilineEditor` (Enter→newline; submit via the ring's submit button;
- * `code` adds a dim language label, no literal-tab). Typed drafts survive
- * poll/dispatch re-renders unless the field disappears or the server changes
- * its value — mirroring BrowserAdapter; password is masked; form-`checkbox`
- * toggles on Space. The still-deferred tier (`select`/`select-multiple`/
- * `file`/`modal`/`table`) arrives in later phases and still renders a visible
- * fail-loud placeholder — never blank, never silent.
+ * `code` adds a dim language label, no literal-tab). The focused `select` is
+ * an `ink-select-input` list; the focused `select-multiple` is the contained
+ * `MultiSelectInput` (Space toggles; comma-joined wire value; submit via the
+ * ring's submit button). Typed drafts survive poll/dispatch re-renders unless
+ * the field disappears or the server changes its value — mirroring
+ * BrowserAdapter; selects are additionally server-authoritative on ANY server
+ * re-render (excluded from draft preservation); password is masked;
+ * form-`checkbox` toggles on Space. The still-deferred tier (`file`/`modal`/
+ * `table`) arrives in later phases and still renders a visible fail-loud
+ * placeholder — never blank, never silent.
  *
  * LEAF MODULE: never imported by src/index.ts / src/browser.ts /
  * src/server.ts, so `ink`/`react` never enter the web or server dependency
@@ -1411,12 +1539,90 @@ export class TuiAdapter implements Adapter {
             key,
           );
         }
-        if (
-          it === "select" ||
-          it === "select-multiple" ||
-          it === "file"
-        ) {
+        if (it === "file") {
           return this.unsupported(`field(${it})`, key);
+        }
+        if (it === "select" || it === "select-multiple") {
+          // Phase 5b — interactive picker. `select` → ink-select-input (its
+          // useInput owns Up/Down/Enter/digits and does NOT consume Tab/
+          // Shift-Tab/Ctrl-C — verified — so App keeps ring + teardown).
+          // `select-multiple` → the contained MultiSelectInput (same keyboard
+          // contract). Editor mounts ONLY when focused on a TTY; otherwise
+          // (and on the pure NO_CTX/non-TTY path) a static label box,
+          // byte-identical when no draft exists.
+          const opts = node.options ?? [];
+          const multi = it === "select-multiple";
+          const current = dval ?? node.value ?? "";
+          const labelText = node.label ?? "";
+          if (rctx.interactive && focused && fk != null) {
+            if (multi) {
+              return this.focusWrap(
+                <Box key={key} flexDirection="column">
+                  {labelText ? <Text dimColor>{labelText}</Text> : null}
+                  <Box borderStyle="single" paddingX={1} minWidth={20}>
+                    <MultiSelectInput
+                      key="input"
+                      focus
+                      options={opts}
+                      value={current}
+                      onChange={(v: string) => rctx.onFieldChange?.(fk, v)}
+                    />
+                  </Box>
+                </Box>,
+                focused,
+                key,
+              );
+            }
+            const items = opts.map((o) => ({ label: o.label, value: o.value }));
+            const idx = items.findIndex((i) => i.value === current);
+            return this.focusWrap(
+              <Box key={key} flexDirection="column">
+                {labelText ? <Text dimColor>{labelText}</Text> : null}
+                <Box borderStyle="single" paddingX={1} minWidth={20}>
+                  {/* Keyed by the resolved value: a fresh pick or a server
+                      re-render (draft dropped → server-authoritative)
+                      remounts the list at the correct index; pure navigation
+                      (no value change until Enter) does NOT remount. */}
+                  <SelectInput
+                    key={`sel:${current}`}
+                    isFocused
+                    items={items}
+                    initialIndex={idx < 0 ? 0 : idx}
+                    onSelect={(i) => rctx.onFieldChange?.(fk, String(i.value))}
+                  />
+                </Box>
+              </Box>,
+              focused,
+              key,
+            );
+          }
+          // Static: selected label(s). ONE flat <Text> for the value line
+          // (Phase-1/5a nested-<Text> width pitfall).
+          const labelOf = (val: string): string =>
+            opts.find((o) => o.value === val)?.label ?? val;
+          const display = multi
+            ? current
+                .split(",")
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0)
+                .map(labelOf)
+                .join(", ")
+            : current
+              ? labelOf(current)
+              : "";
+          const hasValue = display !== "";
+          return this.focusWrap(
+            <Box key={key} flexDirection="column">
+              {labelText ? <Text dimColor>{labelText}</Text> : null}
+              <Box borderStyle="single" paddingX={1} minWidth={20}>
+                <Text dimColor={!hasValue}>
+                  {hasValue ? display : (node.placeholder ?? " ")}
+                </Text>
+              </Box>
+            </Box>,
+            focused,
+            key,
+          );
         }
 
         // Single-line text family: text|email|password|number|date|time|

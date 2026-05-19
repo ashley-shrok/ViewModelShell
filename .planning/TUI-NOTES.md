@@ -399,3 +399,86 @@ before doing anything in a fresh-context resume.
   (exit 0). The brittle 12-contact ring made scripted nav to ContactManager's
   notes impractical → the deterministic ephemeral fixture is the cleaner
   proof (Phase-4-style fixture pattern); don't fight the demo ring in 5b+.
+
+## Phase 5b learnings (read before Phase 5c)
+
+- **`ink-select-input@6.2.0` is source-verified (read `node_modules/
+  ink-select-input/build/SelectInput.js` — the HARD GATE).** Its `useInput`
+  acts on ONLY: `k`/upArrow, `j`/downArrow, digits `1-9`, `key.return`. It
+  NEVER references `key.tab`/`key.shift`/Ctrl-C → those pass through (Ink calls
+  every useInput, no bubbling — Phase-2 fact) so App keeps ring + teardown
+  with **no wrapper/contingency**. Default export `SelectInput`; props
+  `items:{label,value,key?}[]` / `isFocused` / `initialIndex` / `limit` /
+  `onSelect(item)` / `onHighlight(item)`. Internal index resets ONLY when the
+  items' VALUES deep-change (its own useEffect) — same `options` across the
+  shell's rerenders does NOT reset it.
+- **No mature Ink-5/React-18 MULTI-select lib with the required keyboard
+  contract (settled — do NOT re-research).** ink-select-input is single-only;
+  `ink-multi-select` is dead (ink^3/react^16, 2020); `@inkjs/ui` MultiSelect's
+  Tab/Ctrl-C pass-through is UNDOCUMENTED. ⇒ `select-multiple` = a contained
+  `MultiSelectInput` on Ink primitives (the exact Phase-5a `MultilineEditor`
+  precedent), **zero extra dep for the multi case** (one new dep total:
+  `ink-select-input` for single). CONTROLLED by `props.value` (comma-joined,
+  the wire shape) — selected SET derived every render ⇒ server-authoritative
+  by construction; only the highlight index is internal. Keyboard contract
+  MIRRORS MultilineEditor: early-return Ctrl-C + Tab/Shift-Tab; owns Up/Down +
+  Space(toggle); Enter inert (App editing branch also returns on Enter).
+- **THE select draft contract = the INVERSE of text/textarea (load-bearing).**
+  AGENTS.md: "Selects are excluded from draft preservation — can't tell
+  'server set this' from 'user changed it'." Mechanism: `isServerRender =
+  prevVmRef.current !== undefined && prevVmRef.current !== vm` (a server
+  re-render ⟺ a NEW vm object identity; a local setState re-render keeps the
+  SAME `vm` prop) + `selectKeysNow`. `draftFor` drops a select draft when
+  `isServerRender` **even if that field's server value is unchanged** (the
+  inverse of the text "keep unless server changed it" rule); the prune effect
+  drops them too and updates `prevVmRef.current = vm`. The pick STILL
+  round-trips because `collectForm` runs synchronously at submit BEFORE the
+  server re-render. Single `<SelectInput key={`sel:${resolvedValue}`}>`:
+  remounts at the right index on a value change (fresh pick OR server-
+  authority after the prune); pure navigation doesn't change the resolved
+  value ⇒ no mid-nav remount. The dedicated test "select draft does NOT
+  survive a server re-render" is the exact inverse of Phase-5a textarea #6 —
+  keep both; they pin the contract from both sides.
+- **Edit sites (mirrors 5a):** `isSelect(it)=select|select-multiple` added;
+  editing gate broadened `… || isSelect(it)`; `isEditableSingleLine`
+  UNCHANGED (a picker is not a text editor); App's editing branch UNCHANGED
+  (only Tab/Shift-Tab + return → correct for pickers). `collectFocusables`:
+  removed select/select-multiple from the exclusion (now focusable;
+  hidden/file still excluded). `collectForm`: removed from the skip (now
+  collected via the generic `out[name]=resolve(f)`; `file` still skipped) —
+  select = chosen value, select-multiple = comma-joined (the draft/server
+  value already IS comma-joined; no special join in collectForm).
+- **Dep phase (Phase-3 shape, NOT 5a).** `ink-select-input@^6.2.0` →
+  optionalDependencies + devDependencies; `npm install` regenerated
+  `package-lock.json` (committed; CI uses `npm install`). **Byte gate STILL
+  held** (project-references keep core a separate program — a package.json dep
+  never feeds the core compile; re-proven: 6 dist files byte-identical).
+- **Fail-loud string UNCHANGED `phase 5`** (Phase-5 rule — 5b graduated nodes,
+  did NOT bump). select/select-multiple `[unsupported]` DELETED; **`file` is
+  now the LAST still-deferred FIELD type**; still-deferred nodes =
+  `file`(field)/`modal`/`table`. Retargets: deferred-list loop →
+  `["file"]`; Phase-5a graduation test #11 `select`→`file` (title now
+  "textarea/code graduated; file remains"); "string is now phase 5" test
+  UNCHANGED (table/modal still deferred). New `describe("Phase 5b …")` = 8
+  tests incl. the inverse-draft test.
+- **`tui-cli.ts` UNCHANGED; teardown safe by construction** (pickers cede
+  Ctrl-C → App `requestExit(130)`; programmatic SIGINT/SIGTERM raw-mode
+  -immune). **PTY 15/15** vs an EPHEMERAL select fixture
+  (`demo/Tasks-bun/_fixture.ts`, created+removed in-run, first focusable =
+  `select` → deterministic auto-focus): live real-HTTP round-trip
+  (Down→Enter pick→Tab→submit → server echoed `PICKED=b`),
+  Ctrl-C-while-picker-focused→130+ESC[?25h, SIGINT→130, SIGTERM→143,
+  piped→0 (renders the select statically), unreachable→1, no-arg→2,
+  bad-url→2; cursor restored every exit. `select-multiple` is unit-proven
+  (no backend demo emits it; same as 5a `code`) — its contract is fully
+  covered by the Phase-5b unit block.
+- **Phase 5b blast radius (VCS-verified).** `git status` = ONLY `src/tui.tsx`,
+  `package.json`, `package-lock.json`, `test/tui.test.ts` (+ `.planning/*` in
+  commit) = the Phase-3 shape (dep phase), NOT 5a's. 6 core dist hashes
+  byte-identical to `/tmp/vms-baseline.txt`; web-bundle Vite hashes unchanged
+  (`index-UzlLPlgm.css` + `index-B7l5XdRz.js`); **105 vitest** (97→105, +8) +
+  core-globals green; `tui-cli.ts` untouched. For 5c (`modal`): the
+  contained-component + `isServerRender` + ephemeral-fixture-PTY patterns are
+  now well-trodden; modal needs a compositing/z-layer + focus trap (no lib —
+  contained, like 5a/5b). Don't fight demo rings; ephemeral fixture
+  (first-focusable=target, never committed) stays the live-proof tool.

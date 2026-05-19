@@ -417,8 +417,9 @@ describe("Phase 3 — TuiAdapter (Phase-1/2 render preserved; unfocused == Phase
     expect(
       frame({ type: "modal", children: [] } as unknown as ViewNode),
     ).toContain("[unsupported: modal — phase 5]");
-    // textarea/code graduated in Phase 5a — dropped from this list.
-    for (const it of ["select", "select-multiple", "file"]) {
+    // textarea/code graduated in Phase 5a; select/select-multiple in Phase 5b
+    // — dropped from this list. `file` is the last still-deferred field type.
+    for (const it of ["file"]) {
       expect(
         frame({ type: "field", name: "x", inputType: it } as unknown as ViewNode),
       ).toContain(`[unsupported: field(${it}) — phase 5]`);
@@ -1336,9 +1337,9 @@ describe("Phase 5a — textarea/code multi-line editor", () => {
     d.unmount();
   });
 
-  // 11 — graduation: textarea/code are no longer fail-loud; the still-deferred
-  //      tier remains fail-loud at the bumped phase string.
-  it("textarea/code graduated; select/file remain fail-loud (phase 5)", () => {
+  // 11 — graduation: textarea/code are no longer fail-loud; `file` (the last
+  //      still-deferred field type) remains fail-loud at the phase string.
+  it("textarea/code graduated; file remains fail-loud (phase 5)", () => {
     expect(
       frame({ type: "field", name: "t", inputType: "textarea", value: "hi" }),
     ).not.toContain("unsupported");
@@ -1351,7 +1352,234 @@ describe("Phase 5a — textarea/code multi-line editor", () => {
       } as unknown as ViewNode),
     ).not.toContain("unsupported");
     expect(
-      frame({ type: "field", name: "s", inputType: "select" } as unknown as ViewNode),
-    ).toContain("[unsupported: field(select) — phase 5]");
+      frame({ type: "field", name: "f", inputType: "file" } as unknown as ViewNode),
+    ).toContain("[unsupported: field(file) — phase 5]");
+  });
+});
+
+describe("Phase 5b — select/select-multiple picker", () => {
+  const OPTS = [
+    { value: "a", label: "Apple" },
+    { value: "b", label: "Banana" },
+    { value: "c", label: "Cherry" },
+  ];
+
+  // 1 — select static (unfocused/NO_CTX) shows the SELECTED option's LABEL
+  //     (value→label), not the raw value; placeholder when unset.
+  it("select renders statically as the selected option label", () => {
+    const out = frame({
+      type: "field",
+      name: "s",
+      inputType: "select",
+      value: "b",
+      options: OPTS,
+    } as unknown as ViewNode);
+    expect(out).toContain("Banana");
+    expect(
+      frame({
+        type: "field",
+        name: "s",
+        inputType: "select",
+        placeholder: "Pick one…",
+        options: OPTS,
+      } as unknown as ViewNode),
+    ).toContain("Pick one…");
+  });
+
+  // 2 — select-multiple static shows comma-joined selected LABELS.
+  it("select-multiple renders statically as comma-joined labels", () => {
+    const out = frame({
+      type: "field",
+      name: "m",
+      inputType: "select-multiple",
+      value: "a,c",
+      options: OPTS,
+    } as unknown as ViewNode);
+    expect(out).toContain("Apple, Cherry");
+  });
+
+  // 3 — focused select: Down then Enter picks; the chosen VALUE round-trips
+  //     through the form submit (collectForm), proving onFieldChange + collect.
+  it("picking a select option collects the chosen value on submit", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "page",
+        children: [
+          {
+            type: "form",
+            submitAction: { name: "add" },
+            children: [
+              {
+                type: "field",
+                name: "pick",
+                inputType: "select",
+                value: "a",
+                options: OPTS,
+              },
+            ],
+          },
+        ],
+      } as unknown as ViewNode,
+      onA,
+    );
+    await d.press(KEY.down); // a → b (ink-select-input owns Down)
+    await d.press(KEY.enter); // onSelect(b) → draft "b"
+    await d.press(KEY.tab); // editing → ring → form submit
+    await d.press(KEY.enter); // activate submit → collectForm
+    expect(onA).toHaveBeenCalledWith({ name: "add", context: { pick: "b" } });
+    d.unmount();
+  });
+
+  // 4 — focused select-multiple: Space toggles; comma-joined in option order;
+  //     collected on submit.
+  it("select-multiple toggles with Space and collects comma-joined", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "page",
+        children: [
+          {
+            type: "form",
+            submitAction: { name: "save" },
+            children: [
+              {
+                type: "field",
+                name: "tags",
+                inputType: "select-multiple",
+                options: OPTS,
+              },
+            ],
+          },
+        ],
+      } as unknown as ViewNode,
+      onA,
+    );
+    await d.press(KEY.space); // toggle a → "a"
+    await d.press(KEY.down); // highlight → b
+    await d.press(KEY.space); // toggle b → "a,b" (option order)
+    await d.press(KEY.tab);
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenCalledWith({
+      name: "save",
+      context: { tags: "a,b" },
+    });
+    d.unmount();
+  });
+
+  // 5 — THE select contract (inverse of Phase-5a textarea #6): a select draft
+  //     is server-authoritative — it does NOT survive a server re-render even
+  //     when the server value is unchanged (AGENTS.md: selects excluded from
+  //     draft preservation). Pick b, server re-renders (value still "a"),
+  //     submit → the SERVER value "a" is collected, never the stale pick.
+  it("select draft does NOT survive a server re-render (server-authoritative)", async () => {
+    const onA = vi.fn();
+    const adapter = new TuiAdapter();
+    const mk = (): ViewNode =>
+      ({
+        type: "page",
+        children: [
+          {
+            type: "form",
+            submitAction: { name: "go" },
+            children: [
+              {
+                type: "field",
+                name: "pick",
+                inputType: "select",
+                value: "a",
+                options: OPTS,
+              },
+            ],
+          },
+        ],
+      }) as unknown as ViewNode;
+    const r = render(adapter.createApp(mk(), onA, { requestExit: () => {} }));
+    await tick(30);
+    r.stdin.write(KEY.down);
+    await tick(20);
+    r.stdin.write(KEY.enter); // pick "b" → local draft
+    await tick(20);
+    // SERVER re-render: a NEW vm object, server value still "a" (unchanged).
+    r.rerender(adapter.createApp(mk(), onA, { requestExit: () => {} }));
+    await tick(30);
+    r.stdin.write(KEY.tab); // → form submit
+    await tick(20);
+    r.stdin.write(KEY.enter); // collectForm
+    await tick(20);
+    expect(onA).toHaveBeenCalledWith({ name: "go", context: { pick: "a" } });
+    r.unmount();
+  });
+
+  // 6 — Ctrl-C while a picker is focused → requestExit(130); not dispatched,
+  //     not inserted (ink-select-input/MultiSelectInput cede Ctrl-C to App).
+  it("Ctrl-C while a select is focused routes to requestExit(130)", async () => {
+    const onA = vi.fn();
+    const exit = vi.fn();
+    const d = await drive(
+      {
+        type: "page",
+        children: [
+          { type: "field", name: "s", inputType: "select", options: OPTS },
+        ],
+      } as unknown as ViewNode,
+      onA,
+      exit,
+    );
+    await d.press(KEY.ctrlC);
+    expect(exit).toHaveBeenCalledWith(130);
+    expect(onA).not.toHaveBeenCalled();
+    expect(stripAnsi(d.frame())).not.toContain("\x03");
+    d.unmount();
+  });
+
+  // 7 — picker is interactive-only: renderTree (NO_CTX) stays the static label
+  //     box (no useInput mounted); the live driver shows the option list.
+  it("picker is interactive-only (renderTree stays static)", async () => {
+    const vm = {
+      type: "page",
+      children: [
+        {
+          type: "field",
+          name: "s",
+          inputType: "select",
+          value: "c",
+          options: OPTS,
+        },
+      ],
+    } as unknown as ViewNode;
+    expect(
+      String(render(new TuiAdapter().renderTree(vm)).lastFrame() ?? ""),
+    ).toContain("Cherry");
+    const d = await drive(vm, vi.fn());
+    // Focused: ink-select-input renders the full option list.
+    const f = stripAnsi(d.frame());
+    expect(f).toContain("Apple");
+    expect(f).toContain("Banana");
+    d.unmount();
+  });
+
+  // 8 — graduation: select/select-multiple are no longer fail-loud (phase 5).
+  it("select/select-multiple graduated (no fail-loud placeholder)", () => {
+    expect(
+      frame({
+        type: "field",
+        name: "s",
+        inputType: "select",
+        options: OPTS,
+      } as unknown as ViewNode),
+    ).not.toContain("unsupported");
+    expect(
+      frame({
+        type: "field",
+        name: "m",
+        inputType: "select-multiple",
+        options: OPTS,
+      } as unknown as ViewNode),
+    ).not.toContain("unsupported");
+    // `file` is still deferred — the regression guard for the phase string.
+    expect(
+      frame({ type: "field", name: "f", inputType: "file" } as unknown as ViewNode),
+    ).toContain("[unsupported: field(file) — phase 5]");
   });
 });
