@@ -1,0 +1,166 @@
+// Phase 6 — cross-adapter conformance fixtures (the SHARED half).
+//
+// Goal: prove BrowserAdapter and TuiAdapter render the same *information* for
+// the same ViewNode tree — NOT the same bytes/layout. The browser adds DOM
+// tags; the TUI adds box-drawing/padding; that difference is presentation, not
+// information. So each fixture declares the short, user-visible text tokens
+// BOTH adapters must surface; two env-appropriate test files
+// (conformance.browser.test.ts in jsdom, conformance.tui.test.ts in node+Ink)
+// each assert their adapter surfaces every token. Same fixtures + same
+// declared information satisfied independently by both ⇒ information parity.
+//
+// RULES (load-bearing — heed or the suite false-fails):
+//  • Tokens are SHORT single words (no spaces, ≤ ~8 chars). The TUI side uses
+//    `renderTree` via ink-testing-library, which renders at Ink's default
+//    80 cols where long phrases WRAP and split substring matches (the Phase-1
+//    non-TTY width landmine). Single short words are wrap-proof.
+//  • Tokens are DISTINCT (no token a substring of another) so presence/order
+//    asserts are unambiguous.
+//  • Only TEXTUAL information is compared. Visual-only signals are deliberately
+//    OUT of scope here (they are presentation, and are covered elsewhere):
+//      - progress bar fill, checkbox glyph state  → tui.test.ts
+//      - layout/density/variant CSS classes        → theme-modifiers.test.ts
+//      - link href / external target               → adapter-internal
+//    A fixture therefore declares only what is genuinely shared text.
+//  • `ordered: true` ⇒ the tokens must appear in this order in BOTH adapters
+//    (list / table / sequential text). Default = presence only.
+
+import type { ViewNode } from "../src/index.js";
+
+export interface ConformanceFixture {
+  name: string;
+  vm: ViewNode;
+  /** Short, distinct, user-visible text tokens both adapters must surface. */
+  expect: string[];
+  /** When true, `expect` order must be preserved in both renders. */
+  ordered?: boolean;
+}
+
+export const FIXTURES: ConformanceFixture[] = [
+  {
+    name: "page title + section heading + every text style",
+    ordered: true,
+    vm: {
+      type: "page",
+      title: "Alfa",
+      children: [
+        {
+          type: "section",
+          heading: "Bravo",
+          children: [
+            { type: "text", value: "Charlie", style: "heading" },
+            { type: "text", value: "Delta", style: "muted" },
+            { type: "text", value: "Echo", style: "error" },
+            { type: "text", value: "Foxtrot", style: "strikethrough" },
+            { type: "text", value: "Golf", style: "pre" },
+          ],
+        },
+      ],
+    },
+    expect: ["Alfa", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf"],
+  },
+  {
+    name: "list + list-item variants (order preserved)",
+    ordered: true,
+    vm: {
+      type: "list",
+      children: [
+        { type: "list-item", children: [{ type: "text", value: "Hotel" }] },
+        { type: "list-item", variant: "done", children: [{ type: "text", value: "India" }] },
+        { type: "list-item", variant: "active", children: [{ type: "text", value: "Juliet" }] },
+      ],
+    },
+    expect: ["Hotel", "India", "Juliet"],
+  },
+  {
+    name: "button variants",
+    vm: {
+      type: "section",
+      children: [
+        { type: "button", label: "Kilo", action: { name: "a" } },
+        { type: "button", label: "Lima", action: { name: "b" }, variant: "primary" },
+        { type: "button", label: "Mike", action: { name: "c" }, variant: "danger" },
+      ],
+    },
+    expect: ["Kilo", "Lima", "Mike"],
+  },
+  {
+    name: "external link (label is the shared info; href is presentation)",
+    vm: { type: "link", label: "Oscar", href: "https://example.com/papa", external: true },
+    expect: ["Oscar"],
+  },
+  {
+    name: "tabs (labels)",
+    vm: {
+      type: "tabs",
+      selected: "r",
+      action: { name: "tab" },
+      tabs: [
+        { value: "r", label: "Romeo" },
+        { value: "s", label: "Sierra" },
+      ],
+    },
+    expect: ["Romeo", "Sierra"],
+  },
+  {
+    name: "stat-bar (label + value, incl. numeric)",
+    vm: {
+      type: "stat-bar",
+      stats: [
+        { label: "Tango", value: "Uniform" },
+        { label: "Victor", value: 7 },
+      ],
+    },
+    expect: ["Tango", "Uniform", "Victor", "7"],
+  },
+  {
+    name: "checkbox label (glyph/checked is presentation)",
+    vm: { type: "checkbox", name: "x", checked: true, label: "Whiskey", action: { name: "t" } },
+    expect: ["Whiskey"],
+  },
+  {
+    name: "copy-button label",
+    vm: { type: "copy-button", text: "payload", label: "Yankee" },
+    expect: ["Yankee"],
+  },
+  {
+    name: "table (headers then cells, order preserved)",
+    ordered: true,
+    vm: {
+      type: "table",
+      columns: [
+        { key: "a", label: "Xray" },
+        { key: "b", label: "Zulu" },
+      ],
+      rows: [
+        { cells: { a: "Alfa1", b: "Bravo1" } },
+        { cells: { a: "Echo1", b: "Golf1" } },
+      ],
+    },
+    expect: ["Xray", "Zulu", "Alfa1", "Bravo1", "Echo1", "Golf1"],
+  },
+  {
+    name: "modal (title + body + footer button)",
+    vm: {
+      type: "modal",
+      title: "Quebec",
+      children: [{ type: "text", value: "Romeo2" }],
+      footer: [{ type: "button", label: "Sierra2", action: { name: "close" } }],
+      dismissAction: { name: "x" },
+    },
+    expect: ["Quebec", "Romeo2", "Sierra2"],
+  },
+  {
+    name: "form + single-line fields (label + value, static)",
+    vm: {
+      type: "form",
+      submitAction: { name: "save" },
+      submitLabel: "Tango2",
+      children: [
+        { type: "field", name: "f1", inputType: "text", label: "Uniform2", value: "Victor2" },
+        { type: "field", name: "f2", inputType: "text", label: "Whiskey2", value: "Xray2" },
+      ],
+    },
+    expect: ["Uniform2", "Victor2", "Whiskey2", "Xray2", "Tango2"],
+  },
+];

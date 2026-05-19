@@ -6,6 +6,22 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.4.3 — Terminal (TUI) front-end (npm only)
+
+**npm:** `0.4.3` (PATCH — additive, client-only) · **NuGet:** unchanged at `0.4.2`
+
+The packages stay aligned at major.minor `0.4`: this is a client-only npm change, so per the versioning model it takes an npm patch bump while NuGet is untouched — the same independent-patch model used at `0.4.1`. **No wire, type, or API change in either package; no backend change of any kind.**
+
+### Added
+
+- **`@ashley-shrok/viewmodel-shell/tui` adapter + the `vms-tui` CLI.** Drive any ViewModel Shell backend from a terminal — `npx vms-tui <endpoint-url>`, or `new TuiAdapter()` programmatically, wired exactly like `BrowserAdapter`. Same wire, same `(state, action) → { vm, state }` contract, zero backend change: a backend that serves a browser serves a terminal unchanged. Built on [Ink](https://github.com/vadimdemedes/ink) as an **optional** dependency — installed automatically for CLI/`npx` use, never imported by the `.`/`./browser`/`./server` entrypoints, so web and server consumers are byte-unaffected (the compiled core `dist` is byte-identical, machine-verified). A cross-adapter conformance suite asserts the terminal and DOM adapters surface the same information for the same view tree.
+
+### Consumers
+
+- **None required.** Additive and client-only — no wire, type, behavior, or NuGet change; existing browser/server apps are unaffected and need not upgrade. Cross-backend parity is unchanged (the TUI is a client; it cannot affect the wire). Optional: `npx vms-tui <your-endpoint>` to drive an existing app from a terminal.
+
+---
+
 ## 0.4.2 — Documentation de-drift (npm + NuGet, docs only)
 
 **npm:** `0.4.2` (PATCH — README only) · **NuGet:** `0.4.2` (PATCH — packaged README only)

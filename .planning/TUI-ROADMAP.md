@@ -17,13 +17,15 @@ hardcoded — completed phases are read from git:
 - Phase 5b — COMPLETE (committed; `git log --grep='feat(tui): Phase 5b'`).
 - Phase 5c — COMPLETE (committed; `git log --grep='feat(tui): Phase 5c'`).
 - Phase 5d — COMPLETE (committed; `git log --grep='feat(tui): Phase 5d'`).
-- NEXT — Phase 6 (Docs, conformance, packaging — FINAL, OPTIONAL). ALL
-  deferred NODE types have graduated (`table` was the last). The ONLY
-  still-deferred type is the `file` field — intentionally permanently out
-  of scope (file upload is browser/XHR territory; the Phase-2 transport
-  seam, not a TUI node phase). No further node phases exist. Phase 6, if
-  run, adds NO node behavior, must NOT bump the fail-loud string (stays
-  `phase 5`), and must keep every standing invariant green.
+- Phase 6 — COMPLETE (committed; `git log --grep='feat(tui): Phase 6'`).
+- NEXT — none. **The TUI effort is COMPLETE.** Phase 6 was the final,
+  optional phase (docs + cross-adapter conformance suite + 0.4.3 release
+  prep). No further phases; no rewind. ALL deferred NODE types graduated
+  by 5d (`table` last); the `file` field stays permanently out of scope
+  (file upload is browser/XHR territory — the Phase-2 transport seam, not
+  a TUI node). The fail-loud string remains `phase 5` (Phase 6 added no
+  node). npm `0.4.3` / CHANGELOG / MIGRATION were *prepared* here; the
+  actual `npm publish` is a manual, credentialed step — never automated.
 
 (Each finishing phase updates this line in its own commit.)
 

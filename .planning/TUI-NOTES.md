@@ -631,3 +631,74 @@ before doing anything in a fresh-context resume.
   real oracle is the unchanged content-hash filename + a narrow
   ink/react/yoga grep). **121 vitest** (113→121, +8 Phase-5d) +
   core-globals green.
+
+## Phase 6 learnings (TUI effort COMPLETE — terminal phase, no successor)
+
+- **Conformance env conflict is real and unavoidable in one file.**
+  BrowserAdapter uses the GLOBAL `document`/`window` ~62× and does NOT accept
+  an injected doc ⇒ it needs the jsdom vitest env; Ink/ink-testing-library
+  need the node env (the `tui.test.ts` docblock). They cannot coexist in one
+  file. Solution = a SHARED `test/conformance-fixtures.ts` (`{name,vm,expect,
+  ordered?}[]`) asserted by TWO env-appropriate files:
+  `conformance.browser.test.ts` (default jsdom, mirrors theme-modifiers.test.ts
+  `freshContainer`) and `conformance.tui.test.ts` (`// @vitest-environment
+  node`, mirrors tui.test.ts `render(...renderTree).lastFrame()`). Same
+  fixtures + same declared info satisfied INDEPENDENTLY by both = info parity
+  (not bytes). 22/22 first run — the design was right; don't merge the files.
+- **"Information, not bytes" scoping (load-bearing).** Compare only TEXTUAL
+  info. Visual-only signals are DELIBERATELY out of scope (presentation, and
+  already covered elsewhere): progress fill / checkbox glyph → tui.test.ts;
+  layout/density/variant classes → theme-modifiers.test.ts; link href →
+  adapter-internal. Browser "info" = `textContent` PLUS `input/textarea.value`
+  + `placeholder` + selected `<option>` + `a[href]` — a field VALUE lives in
+  `input.value`, NOT textContent (miss this → false fail on the form fixture).
+  Tokens MUST be SHORT single distinct words: the tui half renders `renderTree`
+  via ink-testing-library at Ink's default 80 cols where long phrases WRAP
+  (the Phase-1 non-TTY landmine) and split substring matches.
+- **conformance.tui SGR/OSC-8 strip — control bytes in the regex literal are
+  CORRECT, don't "fix" them.** Typing ``/`` in file content gets
+  collapsed by the write pipeline into LITERAL ESC/BEL bytes; `cat -A` shows
+  `/^[?\[[0-9;]*m/g` and `/^[?\]8;;[^^G]*^G/g`. A JS regex literal MAY contain
+  literal control bytes and matches them; the OSC-8 pattern is BOUNDED at BEL
+  (`[^^G]*^G`) so it can NEVER swallow the frame (an early greedy `[^]*` draft
+  WOULD have — rejected). Verified with `node -e` (`"…Oscar…Echo…" → "Oscar
+  Echo"`). If you must touch it: re-verify via `cat -A` + a `node -e` strip
+  sanity; never retype `` expecting text. Presence asserts pass even if
+  the strip no-ops (labels are written literally into the frame anyway).
+- **Byte-identity held trivially (confirms the Phase-3/5b model).** Phase 6
+  compiles ZERO changed src — only docs, 3 NEW test files, and `package.json`
+  `version`. `npm pkg set version=0.4.3` + `npm install` ALSO reordered
+  `devDependencies` alphabetically (npm normalization — benign, committed).
+  6 core dist files byte-identical to `/tmp/vms-baseline.txt`. A package.json
+  change never feeds the core compile (project references) — reproven.
+- **Web-bundle oracle reaffirmed:** post-Phase-6 `bun run build` of
+  `demo/Tasks-fullstack-bun` emits the SAME `index-UzlLPlgm.css` +
+  `index-B7l5XdRz.js` content hashes ⇒ no ink/react leak by construction (the
+  authoritative oracle; the narrow `yoga-layout|react-reconciler|"ink"` grep
+  is secondary, and a broad `createElement` grep is a KNOWN false positive).
+- **Versioning model applied.** npm `0.4.2 → 0.4.3` (PATCH, client-only,
+  additive); NuGet UNCHANGED `0.4.2`; shared major.minor `0.4` preserved —
+  the documented model + the `0.4.1` npm-only-patch precedent. NOT `0.5.0`
+  (a SemVer-minor would break the shared-major.minor alignment). **CHANGELOG
+  is newest-first** (insert right after the top `---`, before `## 0.4.2`).
+  **MIGRATION is ALSO newest-first** (`## Upgrading to 0.4.0` at L9,
+  `## Upgrading to npm 0.3.13` at L115 — newest at TOP, before 0.4.0; 0.4.1/
+  0.4.2 have NO section because nothing to do — a brand-new public surface
+  still warrants a "Nothing to do" stub). `npm publish` is NEVER automated —
+  prepared here, run manually by the owner.
+- **V6 scoped by construction (plan + NOTES sanctioned).** `tui.tsx` &
+  `tui-cli.ts` are byte-unchanged vs HEAD ⇒ the Phase-5d PTY matrix (15/15)
+  holds by construction — the exact rule reused in Phases 1/4/5a/5c. Live
+  proof = NON-TTY render over REAL bun `Tasks-fullstack-bun` HTTP (`node
+  dist/tui-cli.js http://localhost:3000/api/tasks | cat` → exit 0, `Views`
+  present); the shipped 0.4.3 `dist` works end-to-end. No full PTY matrix run
+  (no input/teardown code changed). Foreground-kill of the harness-tracked
+  backend exits **144** = expected (the documented landmine), not a failure.
+- **Phase 6 blast radius (VCS-verified).** `git status` (in the commit) =
+  ONLY: `viewmodel-shell/README.md`, `AGENTS.md`, `CHANGELOG.md`,
+  `MIGRATION.md`, `viewmodel-shell/package.json` + `package-lock.json`
+  (version + dep reorder), 3 NEW `viewmodel-shell/test/conformance*.ts`,
+  `.planning/TUI-ROADMAP.md` (STATUS), `.planning/TUI-NOTES.md`. **NO `src/`
+  change.** 6 core dist byte-identical; web-bundle hashes unchanged;
+  **143 vitest** (121→143, +22 conformance) + core-globals green. The TUI
+  effort is COMPLETE: no further phases, no rewind.

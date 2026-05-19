@@ -6,6 +6,32 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `0.4.3` (Terminal/TUI front-end — npm only)
+
+**Nothing to do.** This is an additive, client-only npm release. NuGet
+`AshleyShrok.ViewModelShell` is **unchanged at `0.4.2`**; major.minor stays
+aligned at `0.4` (client-only changes take an npm-only patch — the same model
+as `0.4.1`).
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.4.2` | **`0.4.3`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.4.2` | `0.4.2` (unchanged) |
+
+No wire, type, API, or behavior change. Existing browser and server apps are
+unaffected and do not need to upgrade. The new
+`@ashley-shrok/viewmodel-shell/tui` export and the `vms-tui` bin are purely
+additive; Ink is an optional dependency that web/server consumers never load.
+
+**Optional, if you want it** — drive any existing ViewModel Shell backend from
+a terminal, no backend change:
+
+```bash
+npx vms-tui https://your-app.example/api/tasks
+```
+
+---
+
 ## Upgrading to 0.4.0 (Design system: theme + layout + canonical examples)
 
 This is **one consolidated milestone**: a serviceable shipped default look + density/card,

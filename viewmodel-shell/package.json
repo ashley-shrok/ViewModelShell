@@ -1,6 +1,6 @@
 {
   "name": "@ashley-shrok/viewmodel-shell",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "A server-driven UI framework where the wire format is structured enough that agents can build full-stack apps without ever opening a browser and all UI tests are pure unit tests with no browser runtime. Server returns a JSON tree of typed nodes; a thin TypeScript adapter renders it to DOM. Backend-agnostic — a .NET reference backend ships with the repo, but any language can produce the JSON contract.",
   "type": "module",
   "license": "MIT",
@@ -38,21 +38,21 @@
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
-    "typescript": "^5.4.0",
-    "jsdom": "^25.0.1",
-    "vitest": "^2.1.4",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.0",
     "ink": "^5.0.1",
-    "ink-text-input": "^6.0.0",
     "ink-select-input": "^6.2.0",
+    "ink-testing-library": "^4.0.0",
+    "ink-text-input": "^6.0.0",
+    "jsdom": "^25.0.1",
     "react": "^18.3.1",
-    "ink-testing-library": "^4.0.0"
+    "typescript": "^5.4.0",
+    "vitest": "^2.1.4"
   },
   "optionalDependencies": {
     "ink": "^5.0.1",
-    "ink-text-input": "^6.0.0",
     "ink-select-input": "^6.2.0",
+    "ink-text-input": "^6.0.0",
     "react": "^18.3.1"
   },
   "exports": {
