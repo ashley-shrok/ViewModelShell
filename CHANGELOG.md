@@ -6,6 +6,22 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.4.6 — Terminal viewport fill now reaches the content (npm only)
+
+**npm:** `0.4.6` (PATCH — client-only fix) · **NuGet:** unchanged at `0.4.2`
+
+Completes `0.4.5`. No wire, type, or API change; NuGet untouched; major.minor stays `0.4`.
+
+### Fixed
+
+- **Content now scales with terminal size, not just the (invisible) root.** `0.4.5` made the root surface terminal-sized + alt-screen, but the layout spine didn't propagate that width: `page` → `layoutContainer` panes stayed intrinsic-width, so `layout:"sidebar"`/`"split"`/`"stack"` content rendered at a fixed width at any terminal size (probed: identical at cols=100 and cols=160). Root cause: Ink/Yoga `align-stretch` does **not** reliably fill a nested content column here — an explicit `width:"100%"` on the spine wrappers does. The fix propagates fill (gated on the same real-TTY/alt-screen condition as `0.4.5`) through the `page` container and the sidebar/split/stack layout containers so panes occupy the terminal and re-flow with it. `cards` is intentionally left as a uniform small-tile grid (filling it would defeat the preset).
+
+### Consumers
+
+- **None required.** Client-only; no wire/type/NuGet change; static (`renderTree`) and non-interactive (pipe/CI/agent/`</dev/null`) output is byte-identical (the fill gate is off there). Opt-out unchanged: `new TuiAdapter({ viewport: "content" })`. Alt-screen + Ctrl-C/SIGINT/SIGTERM/crash restore re-verified; width now scales with terminal size (PTY: cols 100 vs 160).
+
+---
+
 ## 0.4.5 — Terminal full-viewport + alternate screen (npm only)
 
 **npm:** `0.4.5` (PATCH — additive, client-only) · **NuGet:** unchanged at `0.4.2`

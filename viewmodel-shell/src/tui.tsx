@@ -51,6 +51,14 @@ interface RCtx {
    *  (`renderTree` → NO_CTX) is false, so no `<TextInput>` is ever mounted
    *  and the field render stays byte-identical to Phase 1/2. */
   interactive: boolean;
+  /** 0.4.6 — true when the App is filling a real terminal viewport (the
+   *  0.4.5 alt-screen path). Gates width propagation down the layout spine
+   *  (page container → layoutContainer panes) so content scales with the
+   *  terminal. false on the static `renderTree`/NO_CTX and non-TTY paths, so
+   *  those stay byte-identical (the 0.4.5 root box already does nothing
+   *  there). Without this, 0.4.5's terminal-sized root is filled by an
+   *  intrinsic-width subtree — the surface grows, the content doesn't. */
+  fill: boolean;
   /** Effective draft for a focus key — the user-typed value when it should
    *  win, else undefined (caller falls back to the server `value`). Mirrors
    *  BrowserAdapter's draft-preservation rule (see App). */
@@ -70,6 +78,7 @@ const NO_CTX: RCtx = {
   copiedKey: null,
   focusKey: () => undefined,
   interactive: false,
+  fill: false,
   draft: () => undefined,
 };
 
@@ -1176,6 +1185,7 @@ function App(props: {
     copiedKey,
     focusKey: (o: object) => map.get(o),
     interactive,
+    fill: fillViewport,
     draft: (k: string) => draftFor(k),
     onFieldChange: (k, v) => setDraft((s) => ({ ...s, [k]: v })),
     onFieldSubmit,
@@ -1505,14 +1515,27 @@ export class TuiAdapter implements Adapter {
     const kids = (children ?? []).map((c, i) =>
       this.renderNode(c, this.keyOf(c, i), density, undefined, rctx),
     );
+    // 0.4.6 — when filling a real terminal, the layout spine must carry the
+    // terminal width into the panes. Probed fact: Yoga align-stretch ALONE
+    // does NOT fill here; an explicit width:"100%" on the content wrapper
+    // does. `cards` is intentionally excluded (a uniform small-tile grid by
+    // design — force-filling defeats the preset). fill=false on the static /
+    // non-TTY path ⇒ {} ⇒ byte-identical to pre-0.4.6.
+    const fillW = rctx.fill ? { width: "100%" as const } : {};
 
     switch (layout) {
       case "split":
         return (
-          <Box flexDirection="row" gap={sp.gap || 1}>
+          <Box flexDirection="row" gap={sp.gap || 1} {...fillW}>
             {kids.map((el, i) => (
               <Box key={i} flexGrow={1} flexShrink={1} flexBasis={0}>
-                {el}
+                {rctx.fill ? (
+                  <Box width="100%" flexDirection="column">
+                    {el}
+                  </Box>
+                ) : (
+                  el
+                )}
               </Box>
             ))}
           </Box>
@@ -1546,12 +1569,12 @@ export class TuiAdapter implements Adapter {
           );
         }
         return (
-          <Box flexDirection="row" gap={sp.gap || 1}>
+          <Box flexDirection="row" gap={sp.gap || 1} {...fillW}>
             <Box flexShrink={0} flexBasis={24} minWidth={18}>
               {rail}
             </Box>
             <Box flexGrow={1} flexShrink={1} flexBasis={0}>
-              <Box flexDirection="column" gap={sp.gap}>
+              <Box flexDirection="column" gap={sp.gap} {...fillW}>
                 {rest}
               </Box>
             </Box>
@@ -1561,7 +1584,7 @@ export class TuiAdapter implements Adapter {
 
       default: // "stack" / undefined
         return (
-          <Box flexDirection="column" gap={sp.gap}>
+          <Box flexDirection="column" gap={sp.gap} {...fillW}>
             {kids}
           </Box>
         );
@@ -1582,7 +1605,12 @@ export class TuiAdapter implements Adapter {
         const d: Density = node.density === "compact" ? "compact" : "comfortable";
         const sp = this.spacing(d);
         return (
-          <Box key={key} flexDirection="column" gap={sp.gap}>
+          <Box
+            key={key}
+            flexDirection="column"
+            gap={sp.gap}
+            {...(rctx.fill ? { width: "100%" as const, flexGrow: 1 } : {})}
+          >
             {node.title ? (
               <Box>
                 <Text bold underline>

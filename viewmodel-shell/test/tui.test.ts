@@ -1984,22 +1984,23 @@ describe("0.4.5 — viewport fill + opt-out + resize", () => {
     (r.stdout as unknown as { emit(e: string): void }).emit("resize");
   };
 
-  let restoreTTY: (() => void) | null = null;
-  const forceTTY = (): void => {
-    const so = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
-    const si = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
-    Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true });
-    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
-    restoreTTY = () => {
-      if (so) Object.defineProperty(process.stdout, "isTTY", so);
-      else delete (process.stdout as { isTTY?: boolean }).isTTY;
-      if (si) Object.defineProperty(process.stdin, "isTTY", si);
-      else delete (process.stdin as { isTTY?: boolean }).isTTY;
-    };
+  // process.std*.isTTY is global + shared. Capture the real descriptors ONCE
+  // (at collection, before any test mutates them) and HARD-restore after
+  // every test, so no test leaks TTY state into the next (an order-fragile
+  // per-call restore previously caused a false 100-vs-30). Tests set the
+  // flag EXPLICITLY (true or false) — never rely on ambient/order.
+  const baseOut = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
+  const baseIn = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+  const setTTY = (v: boolean): void => {
+    Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: v });
+    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: v });
   };
+  const forceTTY = (): void => setTTY(true);
   afterEach(() => {
-    restoreTTY?.();
-    restoreTTY = null;
+    if (baseOut) Object.defineProperty(process.stdout, "isTTY", baseOut);
+    else delete (process.stdout as { isTTY?: boolean }).isTTY;
+    if (baseIn) Object.defineProperty(process.stdin, "isTTY", baseIn);
+    else delete (process.stdin as { isTTY?: boolean }).isTTY;
   });
 
   // sidebar: rail (flexBasis 24) + main (flexGrow 1). The reporter's bug =
@@ -2054,9 +2055,10 @@ describe("0.4.5 — viewport fill + opt-out + resize", () => {
     r.unmount();
   });
 
-  it("non-TTY (real vitest default) does NOT fill — byte-stable path", async () => {
-    // forceTTY NOT called ⇒ process.stdout.isTTY is the real vitest value
-    // (false) ⇒ gate off ⇒ identical to the explicit opt-out.
+  it("explicitly non-TTY does NOT fill — byte-stable path", async () => {
+    // Force non-TTY EXPLICITLY (order-independent) ⇒ gate off ⇒ identical to
+    // the explicit { viewport: "content" } opt-out.
+    setTTY(false);
     const off = mk(new TuiAdapter());
     await tick(20);
     const offW = widthOf(String(off.lastFrame() ?? ""));
@@ -2069,5 +2071,36 @@ describe("0.4.5 — viewport fill + opt-out + resize", () => {
     out.unmount();
 
     expect(offW).toBe(outW);
+  });
+
+  // 0.4.6 — content must scale with terminal width, not just the invisible
+  // root. Card sections draw a full-width border, so the laid-out width is
+  // observable past Ink's trailing-whitespace trim.
+  const sidebarCards = {
+    type: "page",
+    layout: "sidebar",
+    children: [
+      { type: "section", variant: "card", heading: "Nav", children: [{ type: "text", value: "N" }] },
+      { type: "section", variant: "card", heading: "Detail", children: [{ type: "text", value: "D" }] },
+    ],
+  } as unknown as ViewNode;
+
+  it("0.4.6 — content width scales with terminal width (sidebar fills)", async () => {
+    forceTTY();
+    const r = render(
+      new TuiAdapter().createApp(sidebarCards, () => {}, { requestExit: () => {} }),
+    );
+    await tick(20);
+    setSize(r, 100, 30);
+    await tick(20);
+    const w100 = widthOf(String(r.lastFrame() ?? ""));
+    setSize(r, 160, 30);
+    await tick(20);
+    const w160 = widthOf(String(r.lastFrame() ?? ""));
+    r.unmount();
+
+    expect(w160).toBeGreaterThan(w100); // tracks terminal width (the fix)
+    expect(w100).toBeGreaterThanOrEqual(80); // ~ fills the 100-col terminal
+    expect(w160).toBeGreaterThanOrEqual(140); // ~ fills the 160-col terminal
   });
 });

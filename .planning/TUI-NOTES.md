@@ -809,3 +809,45 @@ before doing anything in a fresh-context resume.
   `</dev/null`/`|cat` emit NO `?1049[hl]`, exit 0; unreachable→1, no-arg→2,
   bad-url→2. **tui-cli.ts UNCHANGED.** Shipped npm `0.4.5` PATCH
   (client-only feature; NuGet untouched `0.4.2`); commit `feat(tui): …`.
+
+## 0.4.6 — viewport fill must reach the content (0.4.5 follow-up)
+
+- **0.4.5's terminal-sized root did NOT propagate to content (4th report,
+  correct).** Ink/Yoga `align-stretch` does NOT reliably fill a nested
+  content column in this tree. PROBED (instrument, don't guess — 2 probes
+  pinned it): the basic root→page→sidebar-row chain DOES fill at 120 in
+  isolation, but a card `section` inside the pane's inner content column
+  stays content-sized (36 @ root 120) — the break is the **pane content
+  wrapper**. **Minimal proven lever: explicit `width:"100%"` on the
+  layout-spine content wrappers** (page container `+flexGrow:1`;
+  layoutContainer split/sidebar/stack outer; sidebar main inner column;
+  split per-pane inner `width:"100%"` column wrap). `section` needs NO
+  change (it stretches once its parent column is width:100%). Gated on a
+  new `RCtx.fill` (=fillViewport; `NO_CTX`/static/non-TTY = false ⇒
+  byte-identical). `cards` DELIBERATELY excluded — a uniform small-tile
+  grid by design; filling it defeats the preset.
+- **process.std*.isTTY test isolation — 3rd time bitten, now solved
+  properly.** A per-call capture/restore of `process.stdout/stdin.isTTY`
+  is ORDER-FRAGILE: a prior test's restore left isTTY truthy → a later
+  "non-TTY" test rendered filled (false `100`-vs-`30`). FIX pattern (reuse
+  for ANY global-process-attr toggling test): capture the real descriptors
+  ONCE at describe collection, HARD-restore to that baseline in `afterEach`,
+  and have each test set the flag EXPLICITLY (true/false) — never rely on
+  ambient/order.
+- **Width observability (carried 0.4.5 fact, reaffirmed).** Ink trims
+  trailing whitespace, so a filled pane's width is observable in
+  `lastFrame()` ONLY when a full-width border is drawn ⇒ the 0.4.6
+  width-scale unit test uses `section variant:"card"`. Plain borderless
+  panes fill correctly but won't *show* width via lastFrame — measurement
+  constraint, not a bug; use card sections or the PTY to observe.
+- **Verification (0.4.6).** Core dist byte-identical 6/6 (leaf `tui.tsx` +
+  test only). **147 vitest** (146→147, +1 width-scale; the 3 0.4.5
+  viewport tests + 143 unchanged — fill gate off ⇒ byte-stable). core-
+  globals; web-bundle Vite hashes unchanged. **PTY** (ephemeral sidebar
+  card-rail+detail fixture — NOTES pattern, created+removed in-run, never
+  committed): content width SCALES with winsize (cols 100 vs 160 differ,
+  track terminal — was constant pre-fix) AND alt-screen enter/leave +
+  Ctrl-C→130 + cursor restored at BOTH sizes; non-TTY `</dev/null` emits
+  no `?1049[hl]`, exit 0. **tui-cli.ts UNCHANGED** (render-only; teardown
+  rides the existing dispose funnel). Shipped npm `0.4.6` PATCH
+  (client-only; NuGet untouched `0.4.2`); commit `fix(tui): …`.

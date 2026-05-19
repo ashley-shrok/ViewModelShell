@@ -40,6 +40,13 @@ hardcoded — completed phases are read from git:
   `new TuiAdapter({ viewport:"content" })`; non-TTY unchanged. Client-only
   PATCH; NuGet still `0.4.2`. tui-cli.ts UNCHANGED (alt-screen restore rides
   the existing dispose() funnel). See `.planning/TUI-NOTES.md` "0.4.5".
+- POST-RELEASE — npm **`0.4.6`** (committed; `git log --grep='fix(tui)'`):
+  0.4.5 follow-up — the terminal-sized root now PROPAGATES to content
+  (sidebar/split/stack panes fill + re-flow; `cards` intentionally stays a
+  small-tile grid). 0.4.5 sized only the invisible root; content stayed
+  fixed-width (Ink align-stretch ≠ fill here; explicit `width:"100%"` on the
+  gated layout spine is the lever). Client-only PATCH; NuGet still `0.4.2`;
+  tui-cli.ts UNCHANGED. See `.planning/TUI-NOTES.md` "0.4.6".
 
 (Each finishing phase updates this line in its own commit.)
 
