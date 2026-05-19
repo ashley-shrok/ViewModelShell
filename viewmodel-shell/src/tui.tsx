@@ -8,6 +8,7 @@ import {
   useStdin,
   useStdout,
 } from "ink";
+import TextInput from "ink-text-input";
 import type {
   Adapter,
   ActionEvent,
@@ -37,12 +38,26 @@ interface RCtx {
   copiedKey: string | null;
   /** object-identity → focus key, for the focused node within THIS render. */
   focusKey: (o: object) => string | undefined;
+  /** Live editor: true only on a TTY (raw mode). The pure static path
+   *  (`renderTree` → NO_CTX) is false, so no `<TextInput>` is ever mounted
+   *  and the field render stays byte-identical to Phase 1/2. */
+  interactive: boolean;
+  /** Effective draft for a focus key — the user-typed value when it should
+   *  win, else undefined (caller falls back to the server `value`). Mirrors
+   *  BrowserAdapter's draft-preservation rule (see App). */
+  draft: (key: string) => string | undefined;
+  /** Editable-field wiring (only invoked on the interactive path; App
+   *  supplies real closures, NO_CTX leaves them undefined). */
+  onFieldChange?: (key: string, value: string) => void;
+  onFieldSubmit?: (field: FieldNode) => void;
 }
 
 const NO_CTX: RCtx = {
   focusedKey: null,
   copiedKey: null,
   focusKey: () => undefined,
+  interactive: false,
+  draft: () => undefined,
 };
 
 /** A node the focus ring can land on, in tree (pre-order) order. */
@@ -156,19 +171,30 @@ function collectFocusables(vm: ViewNode): {
   return { list, map };
 }
 
-/** Collect a form's static field values (Phase 2: fields aren't editable yet,
- *  so values are the server-provided ones). Mirrors BrowserAdapter semantics. */
-function collectForm(form: FormNode): Record<string, string> {
+/** Resolves a field's *current* value — Phase 3: the user-typed draft when
+ *  present, else the server value. The default (server value) makes any
+ *  caller without drafts behave exactly as Phase 2 did. */
+type FieldValue = (field: FieldNode) => string;
+const serverValue: FieldValue = (f) => f.value ?? "";
+
+/** Collect a form's field values for submission. Mirrors BrowserAdapter:
+ *  deferred input types skipped, form-checkbox → "true"/"false", hidden
+ *  included. Values come from `resolve` (draft-aware on the interactive
+ *  path; server value otherwise — so untyped == Phase 2). */
+function collectForm(
+  form: FormNode,
+  resolve: FieldValue = serverValue,
+): Record<string, string> {
   const out: Record<string, string> = {};
   const walk = (node: ViewNode): void => {
     if (node.type === "field") {
       const f = node as FieldNode;
       const it = f.inputType;
       if (it === "textarea" || it === "code" || it === "select" || it === "select-multiple" || it === "file") {
-        return; // deferred input types — not collected in Phase 2
+        return; // deferred input types — not collected
       }
-      if (it === "checkbox") out[f.name] = isTruthyFormValue(f.value) ? "true" : "false";
-      else out[f.name] = f.value ?? "";
+      if (it === "checkbox") out[f.name] = isTruthyFormValue(resolve(f)) ? "true" : "false";
+      else out[f.name] = resolve(f);
       return;
     }
     const kids = (node as { children?: ViewNode[] }).children;
@@ -178,11 +204,27 @@ function collectForm(form: FormNode): Record<string, string> {
   return out;
 }
 
-function submitOf(form: FormNode): ActionEvent {
+function submitOf(form: FormNode, resolve: FieldValue = serverValue): ActionEvent {
   return {
     name: form.submitAction.name,
-    context: { ...(form.submitAction.context ?? {}), ...collectForm(form) },
+    context: { ...(form.submitAction.context ?? {}), ...collectForm(form, resolve) },
   };
+}
+
+/** The single-line `field` input types that become an editable `<TextInput>`
+ *  when focused on a TTY. NOT: hidden (invisible), checkbox (toggle), or the
+ *  deferred tier (textarea/code/select/select-multiple/file). Unknown types
+ *  fall through to text — same fail-soft as the renderer. */
+function isEditableSingleLine(it: string | undefined): boolean {
+  return (
+    it !== "hidden" &&
+    it !== "checkbox" &&
+    it !== "textarea" &&
+    it !== "code" &&
+    it !== "select" &&
+    it !== "select-multiple" &&
+    it !== "file"
+  );
 }
 
 /** Reconcile the focused key against a (possibly new) focusable list — the
@@ -218,6 +260,11 @@ function App(props: {
 
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  // User-typed field drafts, keyed by focus key. Mirrors BrowserAdapter's
+  // draft-preservation: a draft survives the shell's poll/dispatch
+  // re-renders unless the field disappears or the SERVER changes that
+  // field's authoritative value (then the server wins).
+  const [draft, setDraft] = useState<Record<string, string>>({});
 
   const { list, map } = collectFocusables(vm);
   const keys = list.map((d) => d.key);
@@ -243,9 +290,63 @@ function App(props: {
     undefined,
   );
 
+  // Per-render snapshot of every focusable field's server value, vs the
+  // previous render's snapshot — the change detector for "server wins".
+  const fieldDescs = list.filter((d) => d.kind === "field");
+  const fieldKeysNow = new Set(fieldDescs.map((d) => d.key));
+  const fieldServerNow: Record<string, string> = {};
+  for (const d of fieldDescs)
+    fieldServerNow[d.key] = (d.node as FieldNode).value ?? "";
+  const prevServerRef = useRef<Record<string, string>>({});
+
+  /** Effective draft for a focus key: the typed value when it should still
+   *  win — i.e. there IS a draft, the field still exists, and the server
+   *  hasn't changed that field's value since we last saw it. Otherwise
+   *  undefined → caller falls back to the server value. */
+  const draftFor = (k: string): string | undefined => {
+    if (!(k in draft)) return undefined;
+    if (!fieldKeysNow.has(k)) return undefined; // field gone
+    if (prevServerRef.current[k] !== fieldServerNow[k]) return undefined; // server changed → authoritative
+    return draft[k];
+  };
+
+  const resolve: FieldValue = (f: FieldNode) => {
+    const k = map.get(f);
+    const dv = k != null ? draftFor(k) : undefined;
+    return dv ?? f.value ?? "";
+  };
+
+  const focusedDesc = list.find((d) => d.key === effective);
+  const editing =
+    interactive &&
+    focusedDesc?.kind === "field" &&
+    isEditableSingleLine((focusedDesc.node as FieldNode).inputType);
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
+
   useEffect(() => {
     if (effective !== focusedKey) setFocusedKey(effective);
     prevRef.current = { keys, key: effective };
+  });
+  // Prune stale drafts (field gone, or server changed its value) and record
+  // this render's server snapshot for the next render's change detection.
+  // Guarded so an unchanged draft map keeps its identity → no extra render.
+  useEffect(() => {
+    setDraft((prev) => {
+      let changed = false;
+      const next: Record<string, string> = {};
+      for (const k of Object.keys(prev)) {
+        const stale =
+          !fieldKeysNow.has(k) || prevServerRef.current[k] !== fieldServerNow[k];
+        if (stale) {
+          changed = true;
+          continue;
+        }
+        next[k] = prev[k]!;
+      }
+      return changed ? next : prev;
+    });
+    prevServerRef.current = fieldServerNow;
   });
   useEffect(
     () => () => {
@@ -265,7 +366,37 @@ function App(props: {
     copyTimer.current = setTimeout(() => setCopiedKey(null), 1500);
   };
 
-  const activate = (d: Focusable): void => {
+  /** Field Enter (its own action → dispatch {[name]: current}; else submit
+   *  the enclosing form). `current` is the draft-aware resolved value. */
+  const submitField = (d: Focusable): void => {
+    const dispatch = onActionRef.current;
+    const node = d.node as FieldNode;
+    if (node.action) {
+      const cur = draftFor(d.key) ?? node.value ?? "";
+      dispatch({
+        name: node.action.name,
+        context: { ...(node.action.context ?? {}), [node.name]: cur },
+      });
+    } else if (d.form) {
+      dispatch(submitOf(d.form, resolve));
+    }
+  };
+
+  /** Space on a form-`checkbox` field → flip its draft boolean. */
+  const toggleCheckboxDraft = (d: Focusable): void => {
+    const node = d.node as FieldNode;
+    const cur = draftFor(d.key) ?? node.value ?? "";
+    const nextVal = isTruthyFormValue(cur) ? "false" : "true";
+    setDraft((s) => ({ ...s, [d.key]: nextVal }));
+  };
+
+  const onFieldSubmit = (field: FieldNode): void => {
+    const k = map.get(field);
+    const d = list.find((x) => x.key === k);
+    if (d) submitField(d);
+  };
+
+  const activate = (d: Focusable, trigger: "enter" | "space"): void => {
     const dispatch = onActionRef.current;
     switch (d.kind) {
       case "button":
@@ -287,19 +418,21 @@ function App(props: {
           context: { ...(d.node.action.context ?? {}), value: d.tab!.value },
         });
         break;
-      case "field":
-        if (d.node.action)
-          dispatch({
-            name: d.node.action.name,
-            context: {
-              ...(d.node.action.context ?? {}),
-              [d.node.name]: d.node.value ?? "",
-            },
-          });
-        else if (d.form) dispatch(submitOf(d.form));
+      case "field": {
+        const node = d.node as FieldNode;
+        if (node.inputType === "checkbox") {
+          if (trigger === "space") toggleCheckboxDraft(d);
+          else submitField(d); // Enter on a form-checkbox → submit / its action
+        } else {
+          // Editable single-line fields are driven by ink-text-input's
+          // onSubmit in editing mode and never reach here; this is a safety
+          // net (e.g. a field somehow activated in ring mode) — treat as submit.
+          submitField(d);
+        }
         break;
+      }
       case "form-submit":
-        dispatch(submitOf(d.node as FormNode));
+        dispatch(submitOf(d.node as FormNode, resolve));
         break;
       case "copy":
         doCopy(d.key, d.node.text);
@@ -320,13 +453,26 @@ function App(props: {
       if (ring.length === 0) return;
       let idx = ring.findIndex((d) => d.key === effectiveRef.current);
       if (idx < 0) idx = 0;
-      if ((key.tab && !key.shift) || key.downArrow || key.rightArrow) {
+      const goNext = (): void =>
         setFocusedKey(ring[(idx + 1) % ring.length]!.key);
-      } else if ((key.tab && key.shift) || key.upArrow || key.leftArrow) {
+      const goPrev = (): void =>
         setFocusedKey(ring[(idx - 1 + ring.length) % ring.length]!.key);
-      } else if (key.return || input === " ") {
-        activate(ring[idx]!);
+      if (editingRef.current) {
+        // Editing a field: ink-text-input owns char insert / Backspace /
+        // Delete / Left / Right and fires onSubmit on Enter. App keeps ONLY
+        // ring traversal (Tab/Shift-Tab) + Ctrl-C (handled above). Everything
+        // else is intentionally inert so the two input handlers don't collide.
+        // (ink-text-input itself early-returns Tab/Shift-Tab/Up/Down/Ctrl-C,
+        // so those reach this handler cleanly.)
+        if (key.tab && !key.shift) goNext();
+        else if (key.tab && key.shift) goPrev();
+        return;
       }
+      // Ring mode — exactly Phase-2 behavior.
+      if ((key.tab && !key.shift) || key.downArrow || key.rightArrow) goNext();
+      else if ((key.tab && key.shift) || key.upArrow || key.leftArrow) goPrev();
+      else if (key.return || input === " ")
+        activate(ring[idx]!, key.return ? "enter" : "space");
     },
     { isActive: interactive },
   );
@@ -335,22 +481,29 @@ function App(props: {
     focusedKey: effective,
     copiedKey,
     focusKey: (o: object) => map.get(o),
+    interactive,
+    draft: (k: string) => draftFor(k),
+    onFieldChange: (k, v) => setDraft((s) => ({ ...s, [k]: v })),
+    onFieldSubmit,
   };
   return renderWith(vm, rctx);
 }
 
 /**
- * Phase 2 terminal adapter — focus model + non-text interaction.
+ * Phase 3 terminal adapter — single-line field editor.
  *
- * Every phase-1 node renders as in Phase 1 when UNFOCUSED (byte-identical:
- * the pure `renderTree` path uses NO_CTX). On a TTY the shell's view becomes
- * interactive: a self-managed focus ring (Tab/Shift-Tab/arrows), Enter/Space
- * dispatch, focus continuity across re-renders; button / checkbox (immediate
- * `{checked}`) / tabs (`{value}`) / link / copy-button (OSC 52, no dispatch) /
- * form-submit (collects current static field values). The single-line field
- * editor, redirect/storage verbs, and the deferred tier arrive in later phases.
- * Deferred nodes (`modal`, `table`) and deferred field input types still
- * render a visible fail-loud placeholder — never blank, never silent.
+ * Every node renders byte-identically to Phase 1/2 when UNFOCUSED and on the
+ * pure `renderTree`/non-TTY path (NO_CTX → interactive:false → no editor). On
+ * a TTY the shell's view is interactive: a self-managed focus ring
+ * (Tab/Shift-Tab/arrows), Enter/Space dispatch, focus continuity; button /
+ * checkbox (`{checked}`) / tabs (`{value}`) / link / copy-button (OSC 52) /
+ * form-submit. The focused single-line `field` is now an editable
+ * `ink-text-input` (typed drafts survive poll/dispatch re-renders unless the
+ * field disappears or the server changes its value — mirroring
+ * BrowserAdapter); password is masked; form-`checkbox` toggles on Space.
+ * Redirect/storage verbs and the deferred tier (`textarea`/`code`/`select`/
+ * `modal`/`table`) arrive in later phases and still render a visible
+ * fail-loud placeholder — never blank, never silent.
  *
  * LEAF MODULE: never imported by src/index.ts / src/browser.ts /
  * src/server.ts, so `ink`/`react` never enter the web or server dependency
@@ -426,7 +579,7 @@ export class TuiAdapter implements Adapter {
   private unsupported(label: string, key: number | string): ReactElement {
     return (
       <Text key={key} color="yellow">
-        [unsupported: {label} — phase 2]
+        [unsupported: {label} — phase 3]
       </Text>
     );
   }
@@ -831,11 +984,13 @@ export class TuiAdapter implements Adapter {
       case "field": {
         const it = node.inputType;
         if (it === "hidden") return <Box key={key} />;
+        const fk = rctx.focusKey(node);
+        const focused = fk != null && fk === rctx.focusedKey;
+        const dval = fk != null ? rctx.draft(fk) : undefined;
+
         if (it === "checkbox") {
-          const fk = rctx.focusKey(node);
-          const focused = fk != null && fk === rctx.focusedKey;
-          const v = node.value;
-          const truthy = !!v && v !== "false" && v !== "0";
+          const cur = dval ?? node.value;
+          const truthy = !!cur && cur !== "false" && cur !== "0";
           return this.focusWrap(
             <Box key={key} flexDirection="row" gap={1}>
               <Text>{truthy ? "[x]" : "[ ]"}</Text>
@@ -854,19 +1009,40 @@ export class TuiAdapter implements Adapter {
         ) {
           return this.unsupported(`field(${it})`, key);
         }
-        // single-line text family: text|email|password|number|date|time|
-        // datetime-local (+ any other → treated as text). STATIC, no editing.
-        const fk = rctx.focusKey(node);
-        const focused = fk != null && fk === rctx.focusedKey;
-        const val = node.value ?? "";
-        const hasValue = val !== "";
+
+        // Single-line text family: text|email|password|number|date|time|
+        // datetime-local (+ any unknown → text). Editable `<TextInput>` ONLY
+        // when focused on a TTY; otherwise (and on the pure NO_CTX/non-TTY
+        // path) the Phase-2 static box, byte-identical when no draft exists.
+        const current = dval ?? node.value ?? "";
+        if (rctx.interactive && focused && fk != null) {
+          return this.focusWrap(
+            <Box key={key} flexDirection="column">
+              {node.label ? <Text dimColor>{node.label}</Text> : null}
+              <Box borderStyle="single" paddingX={1} minWidth={20}>
+                <TextInput
+                  key="input"
+                  focus
+                  value={current}
+                  placeholder={node.placeholder ?? ""}
+                  mask={it === "password" ? "•" : undefined}
+                  onChange={(v: string) => rctx.onFieldChange?.(fk, v)}
+                  onSubmit={() => rctx.onFieldSubmit?.(node as FieldNode)}
+                />
+              </Box>
+            </Box>,
+            focused,
+            key,
+          );
+        }
+        const hasValue = current !== "";
         const display =
           it === "password"
             ? hasValue
-              ? "•".repeat(val.length)
+              ? "•".repeat(current.length)
               : (node.placeholder ?? "")
             : hasValue
-              ? val
+              ? current
               : (node.placeholder ?? "");
         return this.focusWrap(
           <Box key={key} flexDirection="column">

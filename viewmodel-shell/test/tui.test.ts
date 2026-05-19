@@ -20,6 +20,10 @@ const frame = (vm: ViewNode): string =>
 const tick = (ms = 20): Promise<void> =>
   new Promise((r) => setTimeout(r, ms));
 
+// ink-text-input draws a fake cursor via chalk.inverse (\x1b[7m…\x1b[27m).
+// Strip SGR so editor-content substring asserts aren't split by cursor codes.
+const stripAnsi = (s: string): string => s.replace(/\[[0-9;]*m/g, "");
+
 interface Driver {
   stdin: { write(s: string): void };
   frame(): string;
@@ -58,7 +62,7 @@ async function drive(
   };
 }
 
-describe("Phase 2 — TuiAdapter (Phase-1 render preserved; unfocused == Phase 1)", () => {
+describe("Phase 3 — TuiAdapter (Phase-1/2 render preserved; unfocused == Phase 1/2)", () => {
   // ── scaffold/seam (carried from Phase 0) ───────────────────────────────
 
   // A — canonical: page title + text render to the frame.
@@ -81,7 +85,7 @@ describe("Phase 2 — TuiAdapter (Phase-1 render preserved; unfocused == Phase 1
   // (progress is now implemented, so B is retargeted to `table`).
   it("renders a fail-loud placeholder for deferred nodes", () => {
     const vm = { type: "table", columns: [], rows: [] } as unknown as ViewNode;
-    expect(frame(vm)).toContain("[unsupported: table — phase 2]");
+    expect(frame(vm)).toContain("[unsupported: table — phase 3]");
   });
 
   // C — core→adapter render seam: pushing a response through the shell
@@ -394,7 +398,7 @@ describe("Phase 2 — TuiAdapter (Phase-1 render preserved; unfocused == Phase 1
   it("deferred node types & field input types fail loud", () => {
     expect(
       frame({ type: "modal", children: [] } as unknown as ViewNode),
-    ).toContain("[unsupported: modal — phase 2]");
+    ).toContain("[unsupported: modal — phase 3]");
     for (const it of [
       "textarea",
       "code",
@@ -404,7 +408,7 @@ describe("Phase 2 — TuiAdapter (Phase-1 render preserved; unfocused == Phase 1
     ]) {
       expect(
         frame({ type: "field", name: "x", inputType: it } as unknown as ViewNode),
-      ).toContain(`[unsupported: field(${it}) — phase 2]`);
+      ).toContain(`[unsupported: field(${it}) — phase 3]`);
     }
   });
 
@@ -517,7 +521,7 @@ describe("Phase 2 — TuiAdapter (Phase-1 render preserved; unfocused == Phase 1
   });
 });
 
-describe("Phase 2 — focus ring + non-text interaction", () => {
+describe("Phase 3 — focus ring + non-text interaction (carried from Phase 2)", () => {
   const threeButtons: ViewNode = {
     type: "page",
     children: [
@@ -781,5 +785,191 @@ describe("Phase 2 — focus ring + non-text interaction", () => {
     expect(osc52("hi")).toBe(
       `\x1b]52;c;${Buffer.from("hi", "utf8").toString("base64")}\x07`,
     );
+  });
+});
+
+describe("Phase 3 — single-line field editor", () => {
+  const formVm = (field: Record<string, unknown>): ViewNode => ({
+    type: "page",
+    children: [
+      {
+        type: "form",
+        submitAction: { name: "add" },
+        children: [{ type: "field", ...field } as ViewNode],
+      },
+    ],
+  });
+
+  it("typing into the focused field shows the value", async () => {
+    const d = await drive(
+      { type: "page", children: [{ type: "field", name: "q", inputType: "text" }] },
+      vi.fn(),
+    );
+    await d.press("abc");
+    expect(stripAnsi(d.frame())).toContain("abc");
+    d.unmount();
+  });
+
+  it("Enter submits the typed value (form, no field action)", async () => {
+    const onA = vi.fn();
+    const d = await drive(formVm({ name: "title", inputType: "text" }), onA);
+    await d.press("Milk");
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenCalledWith({ name: "add", context: { title: "Milk" } });
+    d.unmount();
+  });
+
+  it("field with its own action dispatches {[name]: typed} on Enter", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "page",
+        children: [
+          { type: "field", name: "q", inputType: "text", action: { name: "search" } },
+        ],
+      },
+      onA,
+    );
+    await d.press("hi");
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenCalledWith({ name: "search", context: { q: "hi" } });
+    d.unmount();
+  });
+
+  it("password is masked while editing (real value still submitted)", async () => {
+    const onA = vi.fn();
+    const d = await drive(formVm({ name: "p", inputType: "password" }), onA);
+    await d.press("secret");
+    const f = stripAnsi(d.frame());
+    expect(f).toContain("•".repeat(6));
+    expect(f).not.toContain("secret");
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenCalledWith({ name: "add", context: { p: "secret" } });
+    d.unmount();
+  });
+
+  it("draft + caret survive a shell re-render when the server value is unchanged", async () => {
+    const onA = vi.fn();
+    const adapter = new TuiAdapter();
+    const vm: ViewNode = {
+      type: "page",
+      children: [{ type: "field", name: "t", inputType: "text" }],
+    };
+    const r = render(adapter.createApp(vm, onA, { requestExit: () => {} }));
+    await tick(30);
+    r.stdin.write("Mlk");
+    await tick(20);
+    r.stdin.write("\x1b[D"); // Left
+    await tick(20);
+    r.stdin.write("\x1b[D"); // Left — caret now between "M" and "l"
+    await tick(20);
+    // Shell poll/dispatch re-render with the SAME (unchanged) vm:
+    r.rerender(adapter.createApp(vm, onA, { requestExit: () => {} }));
+    await tick(30);
+    r.stdin.write("i"); // inserted AT the preserved caret → "Milk"
+    await tick(20);
+    expect(stripAnsi(String(r.lastFrame()))).toContain("Milk");
+    r.unmount();
+  });
+
+  it("server changing the field value wins over the draft", async () => {
+    const onA = vi.fn();
+    const adapter = new TuiAdapter();
+    const v1: ViewNode = {
+      type: "page",
+      children: [{ type: "field", name: "t", inputType: "text", value: "old" }],
+    };
+    const r = render(adapter.createApp(v1, onA, { requestExit: () => {} }));
+    await tick(30);
+    r.stdin.write("ZZ"); // draft = "oldZZ"
+    await tick(20);
+    expect(stripAnsi(String(r.lastFrame()))).toContain("oldZZ");
+    const v2: ViewNode = {
+      type: "page",
+      children: [{ type: "field", name: "t", inputType: "text", value: "server" }],
+    };
+    r.rerender(adapter.createApp(v2, onA, { requestExit: () => {} }));
+    await tick(30);
+    const f = stripAnsi(String(r.lastFrame()));
+    expect(f).toContain("server");
+    expect(f).not.toContain("oldZZ");
+    r.unmount();
+  });
+
+  it("Tab leaves the editor; the draft is retained on return", async () => {
+    const d = await drive(
+      {
+        type: "page",
+        children: [
+          { type: "field", name: "a", inputType: "text" },
+          { type: "button", label: "B", action: { name: "x" } },
+        ],
+      },
+      vi.fn(),
+    );
+    await d.press("hello");
+    await d.press(KEY.tab); // editing → ring next → button B
+    await d.press(KEY.tab); // ring → wrap → field a (re-editable)
+    expect(stripAnsi(d.frame())).toContain("hello");
+    d.unmount();
+  });
+
+  it("form-checkbox toggles on Space and submits on Enter", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      formVm({ name: "agree", inputType: "checkbox", value: "false", label: "Agree" }),
+      onA,
+    );
+    expect(stripAnsi(d.frame())).toContain("[ ]");
+    await d.press(KEY.space);
+    expect(stripAnsi(d.frame())).toContain("[x]");
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenCalledWith({ name: "add", context: { agree: "true" } });
+    d.unmount();
+  });
+
+  it("the editor exists ONLY on the interactive path (renderTree stays static)", async () => {
+    const vm: ViewNode = {
+      type: "page",
+      children: [{ type: "field", name: "q", inputType: "text", value: "hello" }],
+    };
+    // Static (renderTree / non-TTY / NO_CTX): the server value, immutable —
+    // there is no editor to type into (byte-identical to Phase 1/2).
+    const staticOut = String(
+      render(new TuiAdapter().renderTree(vm)).lastFrame() ?? "",
+    );
+    expect(staticOut).toContain("hello");
+    // Interactive + focused: it is a LIVE editor — typing mutates the value.
+    // (chalk is disabled under ink-testing-library, so the inverse fake cursor
+    // emits no SGR; assert the editor's behavior, not an ANSI artifact.)
+    const d = await drive(vm, vi.fn());
+    expect(stripAnsi(d.frame())).toContain("hello");
+    await d.press("X");
+    expect(stripAnsi(d.frame())).toContain("helloX");
+    d.unmount();
+  });
+
+  it("Ctrl-C while editing exits; not dispatched, not inserted", async () => {
+    const onA = vi.fn();
+    const exit = vi.fn();
+    const d = await drive(
+      { type: "page", children: [{ type: "field", name: "q", inputType: "text" }] },
+      onA,
+      exit,
+    );
+    await d.press(KEY.ctrlC);
+    expect(exit).toHaveBeenCalledWith(130);
+    expect(onA).not.toHaveBeenCalled();
+    expect(stripAnsi(d.frame())).not.toContain("\x03");
+    d.unmount();
+  });
+
+  it("a pasted multi-char burst is inserted verbatim, not submitted", async () => {
+    const onA = vi.fn();
+    const d = await drive(formVm({ name: "t", inputType: "text" }), onA);
+    await d.press("two words");
+    expect(stripAnsi(d.frame())).toContain("two words");
+    expect(onA).not.toHaveBeenCalled();
+    d.unmount();
   });
 });

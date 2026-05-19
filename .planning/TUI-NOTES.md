@@ -177,3 +177,77 @@ before doing anything in a fresh-context resume.
   vitest tests + core-globals green; PTY matrix 9/9 (filter/delete/toggle
   reflected; Ctrl-C-input→130, SIGINT→130, SIGTERM→143, piped→0,
   unreachable→1, no-arg→2, bad-url→2; cursor restored on every exit).
+
+## Phase 3 learnings (read before Phase 4)
+
+- **ink-text-input@6.0.0 source facts (read `node_modules/ink-text-input/
+  build/index.js` — they make the design trivial).** Its internal `useInput`
+  **explicitly early-returns Up/Down/Tab/Shift-Tab/Ctrl-C** (`if (key.upArrow
+  || key.downArrow || (key.ctrl && input==='c') || key.tab || (key.shift &&
+  key.tab)) return;`). So those keys reach App's root handler untouched —
+  Ctrl-C teardown + ring traversal "just work" while editing, no precedence
+  hacks. `Enter`→`onSubmit(value)`; `Left/Right`→an internal `cursorOffset`
+  (`useState`); a `useEffect` clamps it when the controlled value shrinks.
+  Multi-char input inserts verbatim (paste = accepted as-is). Peers
+  `ink>=5`/`react>=18`, ESM, ships `build/index.d.ts` (resolves under
+  NodeNext — no tsconfig change).
+- **Editing-mode gate (the Phase-3 input-arbitration core).** `editing =
+  interactive && focusedDesc.kind==="field" && isEditableSingleLine(it)`.
+  Only the focused editable field mounts `<TextInput focus>` (one
+  input-active editor; unfocused fields are the static box). App's root
+  `useInput`: Ctrl-C always → requestExit; in editing mode handle ONLY
+  Tab/Shift-Tab and `return` for everything else (ink-text-input owns
+  char/Backspace/Left/Right; Enter→its onSubmit). Ring mode = unchanged
+  Phase-2. NO_CTX/`renderTree`/non-TTY ⇒ `interactive:false` ⇒ never an
+  editor ⇒ byte-identical to P1/P2 (invariant 5 holds; all static tests
+  unmodified).
+- **Draft model = BrowserAdapter's rule, re-implemented.** App
+  `useState<Record<focusKey,string>>`. `draftFor(k)` returns the draft ONLY
+  if the key is present, the field still exists, and `prevServerRef.current[k]
+  === fieldServerNow[k]` (server hasn't changed that field's value). A
+  guarded `useEffect` prunes stale drafts + snapshots `fieldServerNow` for the
+  next render (guard returns the same map ref when nothing pruned → no extra
+  render). `collectForm`/`submitOf` take a `FieldValue` resolver (draft else
+  server, default = server) so **untyped == Phase 2** → every P2 payload test
+  passes unmodified.
+- **Caret continuity is a stable-key guarantee, and it's testable.** The
+  focused `<TextInput key="input">` under the stable App root keeps the SAME
+  instance across the shell's `instance.rerender()`, so ink-text-input's
+  internal `cursorOffset` survives — the Phase-2 "stable root" mechanism one
+  level down. Prove it by: type, **Left Left**, rerender same vm, insert a
+  char → it lands at the preserved caret (a cursor-at-end test would pass
+  even without continuity — useless).
+- **chalk is DISABLED under ink-testing-library (no TTY).** ink-text-input's
+  inverse fake-cursor therefore emits NO SGR in tests; `lastFrame()` is plain
+  text. Consequences: (1) `stripAnsi` is a harmless no-op in tests (still
+  correct/needed for real terminals — keep it); (2) you CANNOT assert "an
+  editor is mounted" via an ANSI artifact — assert **behavior** (typing
+  mutates the displayed value). This cost the only red test on first run.
+- **form-`checkbox` is ring-mode, not an editor.** Space toggles its draft
+  `"true"/"false"`; Enter submits the enclosing form. `activate(d, trigger)`
+  now takes `"enter"|"space"` to split these.
+- **package.json IS edited this phase (first time) and the byte gate still
+  held.** `ink-text-input` → optionalDependencies + devDependencies; project
+  references keep the 6 core dist files byte-identical (a package.json dep
+  never feeds the core compile). `npm install` regenerated
+  `package-lock.json` (+20 lines incl. transitive `type-fest`) — committed;
+  CI uses `npm install` so lockfile churn is fine.
+- **`tui-cli.ts` UNCHANGED; teardown safe by construction.** ink-text-input
+  early-returns Ctrl-C → still reaches App→`requestExit(130)`; programmatic
+  SIGINT/SIGTERM are raw-mode-immune. Re-verified: **PTY matrix 11/11**
+  including **Ctrl-C WHILE EDITING → 130 + ESC[?25h**, SIGINT→130,
+  SIGTERM→143, piped→0, unreachable→1, no-arg→2, bad-url→2. The headline
+  (`type a title in the inline form + Enter → new task row`) passed live
+  against `Tasks-fullstack-bun` — Tasks now operates 100% in the terminal,
+  zero backend changes.
+- **Fail-loud string bumped 2→3** (single-source `unsupported()`); test B +
+  the deferred test retargeted. **No node graduated** — the single-line
+  family was already *rendered* statically in P2; P3 only made it *editable*.
+  Phase-4 rule reaffirmed: still no graduation (modal/table/textarea/code/
+  select/select-multiple/file remain deferred); just bump 3→4 + retarget.
+- **Phase 3 blast radius (verified at VCS level).** `git status` = ONLY
+  `src/tui.tsx`, `package.json`, `package-lock.json`, `test/tui.test.ts`
+  (+ `.planning/*` in the commit). 6 core dist hashes byte-identical to
+  `/tmp/vms-baseline.txt`; web-bundle Vite hashes unchanged
+  (`index-UzlLPlgm.css` + `index-B7l5XdRz.js`); 77 vitest + core-globals
+  green; PTY matrix 11/11.
