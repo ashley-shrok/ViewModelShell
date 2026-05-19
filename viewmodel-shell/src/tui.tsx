@@ -64,6 +64,14 @@ interface RCtx {
    *  (proven to propagate from a numeric-width ancestor: a top-level card
    *  section scaled 80→160). Undefined ⇒ no width prop ⇒ byte-identical. */
   fillCols?: number;
+  /** 0.4.9 — `sidebar` rail width as a fraction of the terminal when
+   *  filling (default 1/3, clamped). Proportional, not a hardcoded 24
+   *  (unusable on wide terminals). Adapter-level (the terminal analog of a
+   *  CSS sidebar proportion / `--vms-*` token override) — deliberately NOT
+   *  a wire field: rail proportion is appearance, not layout arrangement,
+   *  so it carries no NuGet/parity blast radius. Tunable via
+   *  `new TuiAdapter({ sidebarFraction })`. */
+  railFraction?: number;
   /** Effective draft for a focus key — the user-typed value when it should
    *  win, else undefined (caller falls back to the server `value`). Mirrors
    *  BrowserAdapter's draft-preservation rule (see App). */
@@ -795,6 +803,7 @@ function App(props: {
   requestExit: (code: number) => void;
   interstitial?: string | null;
   viewport?: "fill" | "content";
+  railFraction?: number;
   renderWith: (vm: ViewNode, rctx: RCtx) => ReactElement;
 }): ReactElement {
   const { vm, renderWith } = props;
@@ -1192,6 +1201,7 @@ function App(props: {
     interactive,
     fill: fillViewport,
     fillCols: fillViewport ? vp.cols : undefined,
+    railFraction: props.railFraction,
     draft: (k: string) => draftFor(k),
     onFieldChange: (k, v) => setDraft((s) => ({ ...s, [k]: v })),
     onFieldSubmit,
@@ -1261,13 +1271,20 @@ export class TuiAdapter implements Adapter {
    *  interactive TTY; "content" = legacy intrinsic-content size, no
    *  alt-screen (the opt-out escape hatch — pre-0.4.5 behavior). */
   private readonly viewport: "fill" | "content";
+  /** `sidebar` rail width as a fraction of the terminal (fill path only).
+   *  Default 1/3; clamped to a sane [0.15, 0.6] so a bad value can't break
+   *  the layout. Adapter-level styling knob (NOT wire — appearance, not
+   *  arrangement). */
+  private readonly sidebarFraction: number;
   /** Set once ESC[?1049h was written, so dispose() emits the paired
    *  ESC[?1049l exactly once (idempotent restore — same discipline as the
    *  cursor restore Ink does on unmount). */
   private altEntered = false;
 
-  constructor(opts?: { viewport?: "fill" | "content" }) {
+  constructor(opts?: { viewport?: "fill" | "content"; sidebarFraction?: number }) {
     this.viewport = opts?.viewport ?? "fill";
+    const f = opts?.sidebarFraction ?? 1 / 3;
+    this.sidebarFraction = Math.min(0.6, Math.max(0.15, f));
   }
   /** Injected by tui-cli.ts: lets a keyboard Ctrl-C (which, under Ink's raw
    *  mode, is delivered as input 0x03 and never raises SIGINT) reach the
@@ -1337,6 +1354,7 @@ export class TuiAdapter implements Adapter {
         requestExit={opts?.requestExit ?? this.requestExit}
         interstitial={this.interstitial}
         viewport={this.viewport}
+        railFraction={this.sidebarFraction}
         renderWith={(v, rctx) =>
           this.renderNode(v, 0, "comfortable", undefined, rctx)
         }
@@ -1573,7 +1591,18 @@ export class TuiAdapter implements Adapter {
         // ORIGINAL flex props, byte-identical.
         const cols = topLevel && rctx.fillCols ? rctx.fillCols : 0;
         const filling = cols > 0;
-        const RAIL = 24;
+        // 0.4.9 — PROPORTIONAL rail (default 1/3, clamped [24,56]) instead of
+        // a hardcoded 24 (unusable on wide terminals: 24/146 ≈ 16%). Never
+        // below the old 24 on small terminals; capped so ultra-wide keeps the
+        // detail pane dominant. Tunable via `new TuiAdapter({ sidebarFraction })`.
+        // Only the filling branches use RAIL; the non-fill path keeps the
+        // literal flexBasis:24/minWidth:18 (byte-identical).
+        const RAIL = filling
+          ? Math.min(
+              56,
+              Math.max(24, Math.round(cols * (rctx.railFraction ?? 1 / 3))),
+            )
+          : 24;
         const g = sp.gap || 1;
         const mw = Math.max(1, cols - RAIL - g);
         if (rest.length === 0) {
@@ -1592,7 +1621,10 @@ export class TuiAdapter implements Adapter {
         return (
           <Box flexDirection="row" gap={g} {...fillW}>
             {filling ? (
-              <Box flexShrink={0} width={RAIL}>
+              // flexDirection:column ⇒ the rail's section align-stretches to
+              // the numeric RAIL width (a default-row box sizes it to content
+              // — same lesson as the single-child branch).
+              <Box flexDirection="column" flexShrink={0} width={RAIL}>
                 {rail}
               </Box>
             ) : (

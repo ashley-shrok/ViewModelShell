@@ -6,6 +6,22 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.4.9 — Terminal sidebar rail is proportional (npm only)
+
+**npm:** `0.4.9` (PATCH — client-only) · **NuGet:** unchanged at `0.4.2`
+
+No wire, type, or API change; NuGet untouched; major.minor stays `0.4`.
+
+### Changed
+
+- **`layout:"sidebar"`'s rail is now proportional, not a hardcoded 24 cols.** The rail was pinned to ~24 columns regardless of terminal width — ~16% of a 146-col terminal, too narrow for the idiomatic master/detail rail (a view-switcher + list), which hard-wrapped to vertical confetti; the only alternative, `split`, is a fixed 50/50 (too wide a master). On the fill path the rail is now `clamp(round(cols/3), 24, 56)` — ~⅓ on wide terminals (146 → ~49 ≈ 33%), never narrower than the legacy 24 on small terminals, capped so ultra-wide keeps the detail pane dominant — and the detail pane fills the remainder. This is adapter medium-adaptation (the terminal analog of the browser's CSS sidebar proportion); **deliberately not a wire field** — rail proportion is appearance, not layout arrangement, so it carries zero NuGet/parity blast radius. Tunable via `new TuiAdapter({ sidebarFraction: 0.3 })` (0.15–0.6; default ⅓). `split` stays 50/50 by definition; the proportional path is gated to a real interactive TTY so static/non-interactive output is byte-identical.
+
+### Consumers
+
+- **None required.** Client-only; no wire/type/NuGet change; static (`renderTree`) and non-interactive output byte-identical. Terminal master/detail apps now get a usable rail on wide terminals (tune via `{ sidebarFraction }`). Viewport fill / alt-screen / Ctrl-C·SIGINT·SIGTERM teardown re-verified.
+
+---
+
 ## 0.4.8 — Terminal link OSC 8 fix (npm only)
 
 **npm:** `0.4.8` (PATCH — client-only bug fix) · **NuGet:** unchanged at `0.4.2`

@@ -2133,4 +2133,62 @@ describe("0.4.5 — viewport fill + opt-out + resize", () => {
     expect(w160 - w100, "cards must NOT track terminal width").toBeLessThan(15);
     expect(w160, "cards bounded under terminal width").toBeLessThan(110);
   });
+
+  // 0.4.9 — sidebar rail is PROPORTIONAL (~1/3, clamped [24,56]), not the
+  // hardcoded 24 (unusable on wide terminals), and tunable via the
+  // { sidebarFraction } TuiAdapter option. Rail = a card section + a PLAIN
+  // (borderless) detail ⇒ the longest ─ run ≈ RAIL-2, isolating the rail.
+  const railVm: ViewNode = page7("sidebar", [
+    card7("V"),
+    { type: "section", children: [{ type: "text", value: "d" }] } as unknown as ViewNode,
+  ]);
+  const dashRun = (s: string): number => {
+    let m = 0;
+    for (const ln of s.split("\n")) {
+      const runs = ln.match(/─+/g);
+      if (runs) m = Math.max(m, ...runs.map((x) => x.length));
+    }
+    return m;
+  };
+  async function railWidth(
+    cols: number,
+    opts?: { sidebarFraction?: number },
+  ): Promise<number> {
+    forceTTY();
+    const r = render(
+      new TuiAdapter(opts).createApp(railVm, () => {}, { requestExit: () => {} }),
+    );
+    await tick(20);
+    setSize(r, cols, 30);
+    await tick(20);
+    const d = dashRun(String(r.lastFrame() ?? ""));
+    r.unmount();
+    return d;
+  }
+
+  it("0.4.9 — sidebar rail is proportional, clamped, and option-tunable", async () => {
+    const r80 = await railWidth(80);
+    const r146 = await railWidth(146);
+    const r240 = await railWidth(240);
+    expect(r146, "rail grows with the terminal").toBeGreaterThan(r80 + 10);
+    expect(r240, "rail capped (~clamp 56 ⇒ border ~54)").toBeLessThanOrEqual(56);
+    expect(r146, "146-col rail ≈ 1/3 (~47), not the old ~22").toBeGreaterThan(40);
+    expect(r80, "rail not narrower than the legacy ~24").toBeGreaterThanOrEqual(20);
+
+    const narrow = await railWidth(146, { sidebarFraction: 0.2 });
+    const wide = await railWidth(146, { sidebarFraction: 0.5 });
+    expect(narrow, "{0.2} ⇒ narrower than default 1/3").toBeLessThan(r146);
+    expect(wide, "{0.5} ⇒ wider (clamped at 56 ⇒ ~54)").toBeGreaterThan(r146 - 1);
+  });
+
+  it("0.4.9 — proportional rail does NOT regress main-pane fill (0.4.7)", async () => {
+    const both = (cols: number): Promise<number> =>
+      widthAt(page7("sidebar", [card7("Nav"), card7("Detail")]), cols);
+    const w100 = await both(100);
+    const w160 = await both(160);
+    expect(w160, "main still fills @160 beside the proportional rail").toBeGreaterThan(
+      w100 + 30,
+    );
+    expect(w100, "row spans ~the terminal @100").toBeGreaterThan(80);
+  });
 });

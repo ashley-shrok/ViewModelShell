@@ -932,3 +932,35 @@ before doing anything in a fresh-context resume.
   (strengthened link test; no count change — replaced an assertion);
   core-globals; web-bundle hashes unchanged. npm `0.4.8` PATCH
   (client-only; NuGet untouched `0.4.2`); commit `fix(tui): …`.
+
+## 0.4.9 — sidebar rail proportional (not hardcoded 24)
+
+- The `sidebar` rail was pinned `flexShrink:0 flexBasis:24 minWidth:18` →
+  ~16% of a 146-col terminal, unusable for master/detail (view-switcher +
+  list hard-wrapped to confetti). FIX: on the fill path RAIL =
+  `clamp(round(cols*frac), 24, 56)`, `frac` default 1/3 via a new
+  `TuiAdapter({ sidebarFraction })` (clamped 0.15–0.6) threaded as
+  `RCtx.railFraction`. **NOT a wire field** — rail proportion is
+  appearance, not layout arrangement (terminal analog of a CSS sidebar
+  proportion); declined for consistency with the viewport-arc wire-field
+  declines. Non-fill keeps literal `flexBasis:24/minWidth:18`
+  (byte-identical; gated).
+- **The rail box ALSO needed `flexDirection:"column"`** so the rail's card
+  align-stretches to the numeric RAIL width (a default-row box sizes the
+  child to CONTENT — oracle: dashRun stuck at 7 until column added).
+  RECURRING Ink fact (3rd time — single-child sidebar, main inner col, now
+  rail): a numeric-width box that must width-stretch a child needs
+  `flexDirection:"column"`.
+- Oracle-proven (real adapter): rail border 25@80 / 47@146 / 54@240(clamp) /
+  27@frac0.2 / 54@frac0.5; both-card overall W = 146@146 / 80@80 (0.4.7
+  main-fill NOT regressed). PTY @146: overall=146, rail run **47**
+  (railBand 40–56; an old hardcoded ~22 would be absent), detail run 94,
+  alt-screen enter/leave + Ctrl-C→130 + cursor, non-TTY clean.
+- byte-identity core 6/6; **150 vitest** (148 + 2 new 0.4.9); core-globals;
+  web-bundle hashes unchanged. **tui-cli.ts UNCHANGED.** npm `0.4.9` PATCH
+  (client-only; NuGet untouched `0.4.2`); commit `fix(tui): …`.
+- **Stray-cleanup reaffirmed (every round):** the bg-fixture `pkill` exits
+  **144** and SKIPS the trailing `rm`/git-status in the SAME command, so
+  `_fix`/`_lk`/`_md` scratch files leak into `?? `. ALWAYS run cleanup +
+  the `git status | grep -E '_md|_lk|_probe|_real|_fix'` guard in a
+  SEPARATE command before commit.

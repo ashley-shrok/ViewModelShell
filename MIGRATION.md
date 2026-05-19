@@ -6,6 +6,26 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `0.4.9` (Terminal sidebar rail proportional — npm only)
+
+**Nothing to do** beyond taking the patch. `layout:"sidebar"`'s rail is
+now proportional (~⅓ of the terminal, clamped [24,56]) instead of a
+hardcoded 24 cols — usable for master/detail on wide terminals. NuGet
+unchanged at `0.4.2`; major.minor stays `0.4`.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.4.8` | **`0.4.9`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.4.2` | `0.4.2` (unchanged) |
+
+- **Browser / server consumers:** nothing to do — no wire/type/API change.
+- **Terminal master/detail apps:** the sidebar rail now scales with the
+  terminal. Tune it with `new TuiAdapter({ sidebarFraction: 0.3 })`
+  (0.15–0.6; default ⅓). `split` is still a fixed 50/50.
+- **Non-interactive / static render:** byte-identical to `0.4.8`.
+
+---
+
 ## Upgrading to npm `0.4.8` (Terminal link OSC 8 fix — npm only)
 
 **Nothing to do** beyond taking the patch. `0.4.8` fixes a long-latent bug

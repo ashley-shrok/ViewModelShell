@@ -62,6 +62,13 @@ hardcoded — completed phases are read from git:
   viewport arc (link case untouched 0.4.5–0.4.7). Test gap closed (asserted
   only the `]8;;` substring → missed it). Client-only PATCH; NuGet still
   `0.4.2`; tui-cli.ts UNCHANGED. See `.planning/TUI-NOTES.md` "0.4.8".
+- POST-RELEASE — npm **`0.4.9`** (committed; `git log --grep='fix(tui)'`):
+  `layout:"sidebar"` rail is now proportional (~⅓, clamp [24,56]) instead
+  of a hardcoded 24 cols (unusable on wide terminals for master/detail);
+  detail pane fills the remainder. Adapter-level `{ sidebarFraction }`
+  option (NOT a wire field — appearance, not arrangement). Client-only
+  PATCH; NuGet still `0.4.2`; tui-cli.ts UNCHANGED. See
+  `.planning/TUI-NOTES.md` "0.4.9".
 
 (Each finishing phase updates this line in its own commit.)
 
