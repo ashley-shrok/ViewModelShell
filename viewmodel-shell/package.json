@@ -24,8 +24,11 @@
     "README.md",
     "LICENSE"
   ],
+  "bin": {
+    "vms-tui": "./dist/tui-cli.js"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -b tsconfig.tui.json",
     "check:core-globals": "node scripts/check-core-platform-globals.mjs",
     "check:aa-contrast": "node scripts/check-aa-contrast.mjs",
     "check:no-demo-style": "node scripts/check-no-demo-style.mjs",
@@ -37,7 +40,16 @@
   "devDependencies": {
     "typescript": "^5.4.0",
     "jsdom": "^25.0.1",
-    "vitest": "^2.1.4"
+    "vitest": "^2.1.4",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.0",
+    "ink": "^5.0.1",
+    "react": "^18.3.1",
+    "ink-testing-library": "^4.0.0"
+  },
+  "optionalDependencies": {
+    "ink": "^5.0.1",
+    "react": "^18.3.1"
   },
   "exports": {
     ".": {
@@ -51,6 +63,10 @@
     "./server": {
       "types": "./dist/server.d.ts",
       "default": "./dist/server.js"
+    },
+    "./tui": {
+      "types": "./dist/tui.d.ts",
+      "default": "./dist/tui.js"
     },
     "./styles.css": "./styles/default.css",
     "./themes/dark-blue.css": "./styles/themes/dark-blue.css",

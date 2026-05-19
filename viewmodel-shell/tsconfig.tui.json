@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "types": ["node", "react"],
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "references": [{ "path": "./tsconfig.json" }],
+  "include": ["src/tui.tsx", "src/tui-cli.ts"],
+  "exclude": []
+}
