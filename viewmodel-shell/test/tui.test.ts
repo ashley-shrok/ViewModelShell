@@ -414,11 +414,12 @@ describe("Phase 3 — TuiAdapter (Phase-1/2 render preserved; unfocused == Phase
   });
 
   it("deferred node types & field input types fail loud", () => {
+    // textarea/code graduated in Phase 5a; select/select-multiple in Phase 5b;
+    // modal in Phase 5c — all dropped from this list. `table` (node) and
+    // `file` (field) are the last still-deferred types, still `phase 5`.
     expect(
-      frame({ type: "modal", children: [] } as unknown as ViewNode),
-    ).toContain("[unsupported: modal — phase 5]");
-    // textarea/code graduated in Phase 5a; select/select-multiple in Phase 5b
-    // — dropped from this list. `file` is the last still-deferred field type.
+      frame({ type: "table", columns: [], rows: [] } as unknown as ViewNode),
+    ).toContain("[unsupported: table — phase 5]");
     for (const it of ["file"]) {
       expect(
         frame({ type: "field", name: "x", inputType: it } as unknown as ViewNode),
@@ -1134,12 +1135,12 @@ describe("Phase 4 — redirect/navigate + storage verbs", () => {
 
   // ── fail-loud string single-sourced, bumped 4 → 5 (B + deferred retargeted)
   it("fail-loud placeholder string is now phase 5", () => {
+    // modal graduated in Phase 5c (no longer fail-loud); `table` is the last
+    // still-deferred NODE type and stays `phase 5` (Phase-5 rule: 5c does NOT
+    // bump the single-sourced phase string).
     expect(
       frame({ type: "table", columns: [], rows: [] } as unknown as ViewNode),
     ).toContain("[unsupported: table — phase 5]");
-    expect(
-      frame({ type: "modal", children: [] } as unknown as ViewNode),
-    ).toContain("[unsupported: modal — phase 5]");
   });
 });
 
@@ -1581,5 +1582,159 @@ describe("Phase 5b — select/select-multiple picker", () => {
     expect(
       frame({ type: "field", name: "f", inputType: "file" } as unknown as ViewNode),
     ).toContain("[unsupported: field(file) — phase 5]");
+  });
+});
+
+describe("Phase 5c — modal (compositing/focus-trap/dismiss)", () => {
+  const ESC = "\x1b"; // Ink decodes a lone ESC byte as key.escape
+
+  // 1 — static (renderTree/NO_CTX): the modal box renders title + body +
+  //     footer labels, and is NOT screen-owning (a base sibling still shows;
+  //     screen-ownership is interactive-only — see test 8).
+  it("static modal renders title/body/footer; base sibling still visible", () => {
+    const out = frame({
+      type: "page",
+      children: [
+        { type: "text", value: "BASE-SIBLING" },
+        {
+          type: "modal",
+          title: "Confirm",
+          children: [{ type: "text", value: "Delete it?" }],
+          footer: [{ type: "button", label: "Yes", action: { name: "yes" } }],
+        },
+      ],
+    } as unknown as ViewNode);
+    expect(out).toContain("Confirm");
+    expect(out).toContain("Delete it?");
+    expect(out).toContain("Yes");
+    expect(out).toContain("BASE-SIBLING"); // not screen-owning on the static path
+  });
+
+  // 2 — the Esc-to-close hint appears IFF a dismissAction is present.
+  it("Esc hint shown only when dismissAction present", () => {
+    expect(
+      frame({
+        type: "modal",
+        children: [{ type: "text", value: "x" }],
+        dismissAction: { name: "close" },
+      } as unknown as ViewNode),
+    ).toContain("Esc to close");
+    expect(
+      frame({
+        type: "modal",
+        children: [{ type: "text", value: "x" }],
+      } as unknown as ViewNode),
+    ).not.toContain("Esc to close");
+  });
+
+  // 3 — interactive Esc dispatches the dismissAction VERBATIM (no merge).
+  it("Esc dispatches dismissAction verbatim", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "modal",
+        children: [{ type: "text", value: "x" }],
+        dismissAction: { name: "close", context: { id: 7 } },
+      } as unknown as ViewNode,
+      onA,
+    );
+    await d.press(ESC);
+    expect(onA).toHaveBeenCalledWith({ name: "close", context: { id: 7 } });
+  });
+
+  // 4 — non-dismissible (no dismissAction & no footer): Esc dispatches NOTHING;
+  //     the modal stays. No synthetic close (AGENTS.md rule).
+  it("non-dismissible modal: Esc is a no-op", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "modal",
+        children: [{ type: "text", value: "LOCKED" }],
+      } as unknown as ViewNode,
+      onA,
+    );
+    await d.press(ESC);
+    expect(onA).not.toHaveBeenCalled();
+    expect(d.frame()).toContain("LOCKED");
+  });
+
+  // 5 — a footer button is a normal ring focusable inside the trap; Enter
+  //     dispatches its action.
+  it("footer button dispatches its action on Enter", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "modal",
+        children: [{ type: "text", value: "body" }],
+        footer: [{ type: "button", label: "OK", action: { name: "ok" } }],
+      } as unknown as ViewNode,
+      onA,
+    );
+    await d.press(KEY.enter); // sole focusable in the trap → auto-focused
+    expect(onA).toHaveBeenLastCalledWith({ name: "ok", context: {} });
+  });
+
+  // 6 — FOCUS TRAP: a base button OUTSIDE the modal is unreachable; the ring
+  //     contains only the modal's own focusable, regardless of Tab cycling.
+  it("focus is trapped to the modal subtree", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "page",
+        children: [
+          { type: "button", label: "BASE", action: { name: "base" } },
+          {
+            type: "modal",
+            children: [
+              { type: "button", label: "MODAL", action: { name: "modal-btn" } },
+            ],
+          },
+        ],
+      } as unknown as ViewNode,
+      onA,
+    );
+    await d.press(KEY.enter);
+    await d.press(KEY.tab); // wrap within the trap (single focusable)
+    await d.press(KEY.tab);
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenCalledWith({ name: "modal-btn", context: {} });
+    expect(onA).not.toHaveBeenCalledWith({ name: "base", context: {} });
+  });
+
+  // 7 — composition: a single-line field in the modal BODY is still editable
+  //     (Phase-3 editor working inside the trap).
+  it("a modal-body field is still editable", async () => {
+    const d = await drive(
+      {
+        type: "modal",
+        children: [{ type: "field", name: "t", inputType: "text" }],
+      } as unknown as ViewNode,
+      vi.fn(),
+    );
+    await d.press("hi"); // sole focusable → auto-focused → editing
+    expect(stripAnsi(d.frame())).toContain("hi");
+  });
+
+  // 8 — SCREEN-OWNERSHIP (interactive): the App renders ONLY the modal; a base
+  //     sibling is suppressed (contrast with test 1's static path).
+  it("interactive modal owns the screen (base suppressed)", async () => {
+    const d = await drive(
+      {
+        type: "page",
+        children: [
+          { type: "text", value: "BASE-ONLY" },
+          {
+            type: "modal",
+            title: "M",
+            children: [{ type: "text", value: "INMODAL" }],
+          },
+        ],
+      } as unknown as ViewNode,
+      vi.fn(),
+    );
+    const f = d.frame();
+    expect(f).toContain("INMODAL");
+    expect(f).toContain("M");
+    expect(f).not.toContain("BASE-ONLY");
   });
 });

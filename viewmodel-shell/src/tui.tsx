@@ -16,6 +16,7 @@ import type {
   ViewNode,
   FormNode,
   FieldNode,
+  ModalNode,
 } from "./index.js";
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -217,19 +218,45 @@ function collectFocusables(vm: ViewNode): {
         list.push({ key: k, kind: "form-submit", node, form: node });
         return;
       }
+      case "modal":
+        // Walk body + footer so a modal-rooted call (the focus trap) yields
+        // the modal's own focusables. Harmless on a whole-tree walk with no
+        // modal present (there are none); the App roots this at the modal
+        // when one is open so base focusables are excluded.
+        for (const c of node.children ?? []) visit(c, form);
+        for (const c of node.footer ?? []) visit(c, form);
+        return;
       case "page":
       case "section":
       case "list":
       case "list-item":
         for (const c of node.children ?? []) visit(c, form);
         return;
-      default: // text, stat-bar, progress, modal, table → not focusable
+      default: // text, stat-bar, progress, table → not focusable
         return;
     }
   };
 
   visit(vm);
   return { list, map };
+}
+
+/** Depth-first first `modal` in the tree. Single-modal is the framework's
+ *  implied contract; nested/multiple → first wins (documented). Render-only:
+ *  no wire change. */
+function findModal(node: ViewNode): ModalNode | undefined {
+  if (node.type === "modal") return node;
+  const kids = (node as { children?: ViewNode[] }).children;
+  if (kids) for (const c of kids) {
+    const m = findModal(c);
+    if (m) return m;
+  }
+  const footer = (node as { footer?: ViewNode[] }).footer;
+  if (footer) for (const c of footer) {
+    const m = findModal(c);
+    if (m) return m;
+  }
+  return undefined;
 }
 
 /** Resolves a field's *current* value — Phase 3: the user-typed draft when
@@ -632,7 +659,12 @@ function App(props: {
   // field's authoritative value (then the server wins).
   const [draft, setDraft] = useState<Record<string, string>>({});
 
-  const { list, map } = collectFocusables(vm);
+  // Phase 5c: a modal traps focus. Detect it (interactive only — non-TTY/unit
+  // renders the whole tree inline, preserving the Phase-1 non-TTY contract +
+  // deterministic static tests) and root the focus ring at the modal subtree
+  // so base focusables are excluded while it is open.
+  const modal = interactive ? findModal(vm) : undefined;
+  const { list, map } = collectFocusables(modal ?? vm);
   const keys = list.map((d) => d.key);
   const prevRef = useRef<{ keys: string[]; key: string | null } | undefined>(
     undefined,
@@ -651,6 +683,15 @@ function App(props: {
   // shell behind a terminal notice. Mirrors the existing editingRef guard.
   const interstitialActiveRef = useRef<boolean>(props.interstitial != null);
   interstitialActiveRef.current = props.interstitial != null;
+  // Phase 5c — same single useInput (NOT a new hook): a ref-gated Esc branch,
+  // exactly mirroring interstitialActiveRef. tui-cli.ts stays unchanged ⇒
+  // teardown topology identical to Phase 4 (safe by construction; PTY-verified).
+  const modalActiveRef = useRef<boolean>(modal != null);
+  modalActiveRef.current = modal != null;
+  const dismissActionRef = useRef<ActionEvent | null>(
+    modal?.dismissAction ?? null,
+  );
+  dismissActionRef.current = modal?.dismissAction ?? null;
   const listRef = useRef(list);
   listRef.current = list;
   const effectiveRef = useRef(effective);
@@ -843,6 +884,17 @@ function App(props: {
         return;
       }
       if (interstitialActiveRef.current) return; // notice up: only Ctrl-C acts
+      if (modalActiveRef.current && key.escape) {
+        // Esc dismisses a modal IFF it carries a dismissAction (AGENTS.md:
+        // no dismissAction & no footer ⇒ non-dismissible — never synthesize a
+        // close). Placed before the ring-empty + editing branches so a
+        // text-only dismissible modal still closes, and Esc cancels even from
+        // within a body field (ink-text-input/MultilineEditor don't consume
+        // Esc). Non-Esc keys fall through to the trapped ring below.
+        if (dismissActionRef.current)
+          onActionRef.current(dismissActionRef.current);
+        return;
+      }
       const ring = listRef.current;
       if (ring.length === 0) return;
       let idx = ring.findIndex((d) => d.key === effectiveRef.current);
@@ -882,6 +934,16 @@ function App(props: {
   };
   if (props.interstitial != null)
     return <Interstitial msg={props.interstitial} />;
+  if (modal)
+    // Screen-ownership: render ONLY the modal, horizontally centered (the
+    // honest terminal "z-layer" — Ink has no z-index; base tree suppressed).
+    // Vertical centering deferred (no reliable terminal-height center in Ink;
+    // cosmetic, not load-bearing).
+    return (
+      <Box flexDirection="column" alignItems="center">
+        {renderWith(modal, rctx)}
+      </Box>
+    );
   return renderWith(vm, rctx);
 }
 
@@ -1671,8 +1733,61 @@ export class TuiAdapter implements Adapter {
         );
       }
 
+      case "modal": {
+        const sp = this.spacing(density);
+        // size → box width (cosmetic; fullscreen = full available width).
+        const boxWidth: number | string =
+          node.size === "narrow"
+            ? 40
+            : node.size === "wide"
+              ? 90
+              : node.size === "fullscreen"
+                ? "100%"
+                : 60; // medium (default)
+        return (
+          <Box
+            key={key}
+            flexDirection="column"
+            borderStyle="round"
+            paddingX={Math.max(1, sp.pad)}
+            paddingY={sp.gap ? 1 : 0}
+            gap={sp.gap}
+            width={boxWidth}
+          >
+            {node.title ? (
+              <Box>
+                <Text bold>{node.title}</Text>
+              </Box>
+            ) : null}
+            {node.dismissAction ? (
+              <Box>
+                <Text dimColor>{"✕  (Esc to close)"}</Text>
+              </Box>
+            ) : null}
+            <Box flexDirection="column" gap={sp.gap}>
+              {(node.children ?? []).map((c, i) =>
+                this.renderNode(c, this.keyOf(c, i), density, inherited, rctx),
+              )}
+            </Box>
+            {node.footer && node.footer.length > 0 ? (
+              <Box flexDirection="row" gap={1}>
+                {node.footer.map((c, i) =>
+                  this.renderNode(
+                    c,
+                    this.keyOf(c, i),
+                    density,
+                    inherited,
+                    rctx,
+                  ),
+                )}
+              </Box>
+            ) : null}
+          </Box>
+        );
+      }
+
       default:
-        // Deferred node types (modal/table) + any unknown → fail-loud.
+        // Deferred node types (table) + any unknown → fail-loud.
         return this.unsupported((node as ViewNode).type, key);
     }
   }

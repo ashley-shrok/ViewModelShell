@@ -15,13 +15,14 @@ hardcoded — completed phases are read from git:
 - Phase 4 — COMPLETE (committed; `git log --grep='feat(tui): Phase 4'`).
 - Phase 5a — COMPLETE (committed; `git log --grep='feat(tui): Phase 5a'`).
 - Phase 5b — COMPLETE (committed; `git log --grep='feat(tui): Phase 5b'`).
-- NEXT — Phase 5c (deferred node tier cont.: `modal` — compositing/z-layer
-  + focus trap + dismiss per AGENTS.md modal rules). 5c/5d independent —
-  rewind between each; commit `feat(tui): Phase 5c — …`. NOTE: the fail-loud
-  string stays `phase 5` for all of Phase 5 — 5c/5d do NOT bump it; they
-  only delete the graduated node's placeholder + retarget asserts (see
-  NOTES Phase-5a #7 / Phase-5b learnings). Still-deferred after 5b:
-  `file` (field) / `modal` / `table`.
+- Phase 5c — COMPLETE (committed; `git log --grep='feat(tui): Phase 5c'`).
+- NEXT — Phase 5d (deferred node tier cont.: `table` — Unicode-width column
+  solver, sortable headers, per-column filter row, clickable rows, link
+  cells). 5d is the LAST deferred node; commit `feat(tui): Phase 5d — …`.
+  NOTE: the fail-loud string stays `phase 5` for all of Phase 5 — 5d does
+  NOT bump it; it only deletes `table`'s `[unsupported]` placeholder +
+  retargets asserts (see NOTES Phase-5a #7 / Phase-5b/5c learnings).
+  Still-deferred after 5c: `file` (field) / `table`.
 
 (Each finishing phase updates this line in its own commit.)
 

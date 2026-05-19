@@ -482,3 +482,77 @@ before doing anything in a fresh-context resume.
   now well-trodden; modal needs a compositing/z-layer + focus trap (no lib —
   contained, like 5a/5b). Don't fight demo rings; ephemeral fixture
   (first-focusable=target, never committed) stays the live-proof tool.
+
+## Phase 5c learnings (read before Phase 5d)
+
+- **PTY `ICRNL` gotcha (LOAD-BEARING, NEW — costs hours; mandatory for any
+  Enter-driven PTY proof incl. 5d sortable headers).** Under `pty.fork` the
+  slave's default termios has `ICRNL` set, so a written `\r` (CR) is
+  translated to `\n` (NL) before the child reads it; Ink decodes a bare `\n`
+  as `input="\n", key.return=false` (NOT return) → an "Enter activates a
+  focused button" PTY scenario silently no-ops while **Esc / arrows /
+  signals all work** (they contain no CR). Ink/libuv raw mode did NOT clear
+  ICRNL in this env. Fix is in the HARNESS, never the framework: after
+  `pty.fork`, `a=termios.tcgetattr(fd); a[0]&=~(termios.ICRNL|termios.INLCR|
+  termios.IGNCR); termios.tcsetattr(fd,termios.TCSANOW,a)` on the pty fd so
+  CR reaches Ink as `key.return`. Found by instrument-don't-guess: a
+  `VMS_DEBUG` stderr line at the top of App's `useInput` + child stderr→file
+  via `os.dup2` showed `input="\n" key.return:false` on the very first run
+  (the PRE-frame already proved trap+focus correct → isolated to key
+  decoding). The debug line was added, used, then REMOVED and byte-gate +
+  113 tests re-verified before commit.
+- **Modal = first STRUCTURAL node graduated** (not a `field` input-type like
+  5a/5b). Shape that worked: `renderNode` `case "modal"` (bordered box,
+  EVERY line ONE flat `<Text>` — P1/5a width pitfall) serving BOTH the
+  static (`renderTree`/`frame`) and interactive paths; App-level `findModal`
+  (interactive-only) → `collectFocusables(modal ?? vm)` IS the focus trap.
+  **A `case "modal"` had to be ADDED to `collectFocusables` (recurse
+  children+footer) — REQUIRED, else the trapped ring is empty and Tab/Enter
+  are dead.** Esc lives in a `modalActiveRef`+`dismissActionRef` ref-gated
+  branch INSIDE the existing root `useInput` (the Phase-4 interstitial
+  precedent — **NO new hook ⇒ `tui-cli.ts` UNCHANGED ⇒ teardown safe by
+  construction**, PTY-verified incl. Ctrl-C-while-modal-open→130).
+- **Screen-ownership = the honest terminal "z-layer".** App returns ONLY the
+  centered modal when `interactive && findModal(vm)`; base suppressed. The
+  non-interactive path (renderTree / non-TTY / unit) renders the whole tree
+  INLINE (modal box among siblings) → Phase-1 non-TTY contract +
+  deterministic static tests preserved. Invariant-5 byte-identity is about
+  CORE dist, NOT tui output (tui output legitimately changes as a node
+  graduates — same as 5a/5b).
+- **Esc placement (load-bearing):** after the interstitial gate, BEFORE
+  `if(ring.length===0) return;` (a text-only dismissible modal has an empty
+  trapped ring — Esc must still fire) and before the `editingRef` branch
+  (Esc cancels even from inside a modal-body field; ink-text-input /
+  MultilineEditor don't consume Esc — P3/5a). Non-dismissible honored: no
+  `dismissAction` ⇒ Esc swallowed-as-noop while the modal is open (never
+  synthesize a close — AGENTS).
+- **AGENTS reconciliation (recorded so a reviewer doesn't flag it):** AGENTS
+  "modal: no focus management — intentional" describes the *BrowserAdapter*;
+  the TUI roadmap locks a focus *trap* — a per-adapter rendering decision,
+  no wire/contract change. Not a contradiction.
+- **Phase-5 rule held (no string bump):** single-sourced `unsupported()`
+  UNCHANGED `phase 5`. `modal`'s `[unsupported]` DELETED (real `case
+  "modal"`). Test retargets: deferred-list test `modal`→`table`;
+  "fail-loud string is now phase 5" dropped the `modal` half (kept `table`);
+  "B" UNCHANGED (`table`). Still-deferred after 5c = `file`(field) /
+  `table`. **5d graduates `table` (the LAST) → still `phase 5`; delete
+  `table`'s placeholder + retarget the remaining asserts to `field(file)`.**
+- **Zero new deps** — `package.json`/`package-lock.json`/`tui-cli.ts`
+  UNCHANGED (Phase-4/5a shape, NOT 3/5b). Byte gate held (project-references;
+  `tui.tsx`-only change). **113 vitest** (105→113, +8) + core-globals green;
+  web-bundle Vite hashes unchanged (`index-UzlLPlgm.css` +
+  `index-B7l5XdRz.js`). **PTY 9/9** vs an ephemeral /tmp modal fixture (GET
+  returns an OPEN modal — deterministic, no nav: footer `Close`→{close},
+  `dismissAction` {dismiss}; action endpoint echoes `CLOSED=<which>`):
+  footer-Close round-trip (`CLOSED=close`), Esc-dismiss round-trip
+  (`CLOSED=dismiss`), Ctrl-C-while-modal-open→130+ESC[?25h, SIGINT→130,
+  SIGTERM→143, piped→0 (modal inline), unreachable→1, no-arg→2, bad-url→2;
+  cursor restored every exit.
+- **Phase 5c blast radius (VCS-verified).** `git status` = ONLY
+  `src/tui.tsx`, `test/tui.test.ts` (+ `.planning/*` in commit). 6 core
+  dist hashes byte-identical to `/tmp/vms-baseline.txt`; fixture + PTY
+  harness in `/tmp` (never committed). For 5d (`table`): contained-render +
+  ephemeral-fixture-PTY patterns hold; table adds Unicode-width column
+  solving (the flat-`<Text>`-per-cell discipline applies) + sortable-header
+  / filter-row / clickable-row Enter — the ICRNL harness fix above is
+  MANDATORY for that Enter-driven live proof.
