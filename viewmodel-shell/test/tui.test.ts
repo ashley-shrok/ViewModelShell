@@ -100,10 +100,10 @@ describe("Phase 3 — TuiAdapter (Phase-1/2 render preserved; unfocused == Phase
   });
 
   // B — fail-loud: a still-deferred node shows a visible placeholder
-  // (progress is now implemented, so B is retargeted to `table`).
+  // (`table` is still deferred; phase string bumped 4 → 5 in Phase 5a).
   it("renders a fail-loud placeholder for deferred nodes", () => {
     const vm = { type: "table", columns: [], rows: [] } as unknown as ViewNode;
-    expect(frame(vm)).toContain("[unsupported: table — phase 4]");
+    expect(frame(vm)).toContain("[unsupported: table — phase 5]");
   });
 
   // C — core→adapter render seam: pushing a response through the shell
@@ -416,17 +416,12 @@ describe("Phase 3 — TuiAdapter (Phase-1/2 render preserved; unfocused == Phase
   it("deferred node types & field input types fail loud", () => {
     expect(
       frame({ type: "modal", children: [] } as unknown as ViewNode),
-    ).toContain("[unsupported: modal — phase 4]");
-    for (const it of [
-      "textarea",
-      "code",
-      "select",
-      "select-multiple",
-      "file",
-    ]) {
+    ).toContain("[unsupported: modal — phase 5]");
+    // textarea/code graduated in Phase 5a — dropped from this list.
+    for (const it of ["select", "select-multiple", "file"]) {
       expect(
         frame({ type: "field", name: "x", inputType: it } as unknown as ViewNode),
-      ).toContain(`[unsupported: field(${it}) — phase 4]`);
+      ).toContain(`[unsupported: field(${it}) — phase 5]`);
     }
   });
 
@@ -1136,13 +1131,227 @@ describe("Phase 4 — redirect/navigate + storage verbs", () => {
     expect(classify("   ", ep).kind).toBe("invalid");
   });
 
-  // ── fail-loud string single-sourced, bumped 3 → 4 (B + deferred retargeted)
-  it("fail-loud placeholder string is now phase 4", () => {
+  // ── fail-loud string single-sourced, bumped 4 → 5 (B + deferred retargeted)
+  it("fail-loud placeholder string is now phase 5", () => {
     expect(
       frame({ type: "table", columns: [], rows: [] } as unknown as ViewNode),
-    ).toContain("[unsupported: table — phase 4]");
+    ).toContain("[unsupported: table — phase 5]");
     expect(
       frame({ type: "modal", children: [] } as unknown as ViewNode),
-    ).toContain("[unsupported: modal — phase 4]");
+    ).toContain("[unsupported: modal — phase 5]");
+  });
+});
+
+describe("Phase 5a — textarea/code multi-line editor", () => {
+  const LEFT = "\x1b[D"; // Ink decodes CSI-D as key.leftArrow (Phase-3 proven)
+
+  // 1 — textarea static (unfocused/NO_CTX) preserves newlines + placeholder.
+  it("textarea renders statically, preserving newlines", () => {
+    const out = frame({
+      type: "field",
+      name: "n",
+      inputType: "textarea",
+      value: "line1\nline2",
+    });
+    expect(out).toContain("line1");
+    expect(out).toContain("line2");
+    expect(
+      frame({
+        type: "field",
+        name: "n",
+        inputType: "textarea",
+        placeholder: "notes…",
+      }),
+    ).toContain("notes…");
+  });
+
+  // 2 — code static shows its value + a dim language-hint label.
+  it("code renders statically with its language hint", () => {
+    const out = frame({
+      type: "field",
+      name: "q",
+      inputType: "code",
+      language: "sql",
+      value: "SELECT 1",
+    } as unknown as ViewNode);
+    expect(out).toContain("SELECT 1");
+    expect(out).toContain("sql");
+  });
+
+  // 3 — typing into a focused textarea shows the value.
+  it("typing into a focused textarea shows the value", async () => {
+    const d = await drive(
+      { type: "page", children: [{ type: "field", name: "q", inputType: "textarea" }] },
+      vi.fn(),
+    );
+    await d.press("hello");
+    expect(stripAnsi(d.frame())).toContain("hello");
+    d.unmount();
+  });
+
+  // 4 — Enter inserts a newline (does NOT submit); the multi-line value is
+  //     collected when the user Tabs out to the form's submit button.
+  it("Enter inserts a newline; submit collects the multi-line value", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "page",
+        children: [
+          {
+            type: "form",
+            submitAction: { name: "add" },
+            children: [{ type: "field", name: "body", inputType: "textarea" }],
+          },
+        ],
+      },
+      onA,
+    );
+    await d.press("ab");
+    await d.press(LEFT); // caret between a and b
+    await d.press(KEY.enter); // split → "a\nb" (NOT a submit)
+    expect(onA).not.toHaveBeenCalled();
+    await d.press(KEY.tab); // editing → ring → form submit
+    await d.press(KEY.enter); // activate submit
+    expect(onA).toHaveBeenCalledWith({
+      name: "add",
+      context: { body: "a\nb" },
+    });
+    d.unmount();
+  });
+
+  // 5 — caret continuity: move then insert lands at the caret (not appended).
+  it("arrows move the caret; insert lands at the caret", async () => {
+    const d = await drive(
+      { type: "page", children: [{ type: "field", name: "q", inputType: "textarea" }] },
+      vi.fn(),
+    );
+    await d.press("abc");
+    await d.press(LEFT);
+    await d.press(LEFT); // caret between "a" and "b"
+    await d.press("X");
+    expect(stripAnsi(d.frame())).toContain("aXbc");
+    d.unmount();
+  });
+
+  // 6 — draft + caret survive a shell re-render when server value unchanged.
+  it("draft + caret survive a shell re-render (unchanged server value)", async () => {
+    const onA = vi.fn();
+    const adapter = new TuiAdapter();
+    const vm: ViewNode = {
+      type: "page",
+      children: [{ type: "field", name: "t", inputType: "textarea" }],
+    };
+    const r = render(adapter.createApp(vm, onA, { requestExit: () => {} }));
+    await tick(30);
+    r.stdin.write("Mlk");
+    await tick(20);
+    r.stdin.write(LEFT);
+    await tick(20);
+    r.stdin.write(LEFT); // caret between "M" and "l"
+    await tick(20);
+    r.rerender(adapter.createApp(vm, onA, { requestExit: () => {} }));
+    await tick(30);
+    r.stdin.write("i"); // inserted AT the preserved caret → "Milk"
+    await tick(20);
+    expect(stripAnsi(String(r.lastFrame()))).toContain("Milk");
+    r.unmount();
+  });
+
+  // 7 — server changing the value wins over the draft (BrowserAdapter rule).
+  it("server value change wins over the textarea draft", async () => {
+    const onA = vi.fn();
+    const adapter = new TuiAdapter();
+    const v1: ViewNode = {
+      type: "page",
+      children: [{ type: "field", name: "t", inputType: "textarea", value: "old" }],
+    };
+    const r = render(adapter.createApp(v1, onA, { requestExit: () => {} }));
+    await tick(30);
+    r.stdin.write("ZZ"); // caret starts at end → draft "oldZZ"
+    await tick(20);
+    expect(stripAnsi(String(r.lastFrame()))).toContain("oldZZ");
+    const v2: ViewNode = {
+      type: "page",
+      children: [{ type: "field", name: "t", inputType: "textarea", value: "server" }],
+    };
+    r.rerender(adapter.createApp(v2, onA, { requestExit: () => {} }));
+    await tick(30);
+    const f = stripAnsi(String(r.lastFrame()));
+    expect(f).toContain("server");
+    expect(f).not.toContain("oldZZ");
+    r.unmount();
+  });
+
+  // 8 — Ctrl-C while editing a textarea exits; not inserted, not dispatched.
+  it("Ctrl-C while editing a textarea routes to requestExit(130)", async () => {
+    const onA = vi.fn();
+    const exit = vi.fn();
+    const d = await drive(
+      { type: "page", children: [{ type: "field", name: "q", inputType: "textarea" }] },
+      onA,
+      exit,
+    );
+    await d.press(KEY.ctrlC);
+    expect(exit).toHaveBeenCalledWith(130);
+    expect(onA).not.toHaveBeenCalled();
+    expect(stripAnsi(d.frame())).not.toContain("\x03");
+    d.unmount();
+  });
+
+  // 9 — the editor exists ONLY on the interactive path (renderTree static).
+  it("textarea editor is interactive-only (renderTree stays static)", async () => {
+    const vm: ViewNode = {
+      type: "page",
+      children: [
+        { type: "field", name: "q", inputType: "textarea", value: "hello" },
+      ],
+    };
+    expect(
+      String(render(new TuiAdapter().renderTree(vm)).lastFrame() ?? ""),
+    ).toContain("hello");
+    const d = await drive(vm, vi.fn());
+    expect(stripAnsi(d.frame())).toContain("hello");
+    await d.press("X"); // caret starts at end → "helloX"
+    expect(stripAnsi(d.frame())).toContain("helloX");
+    d.unmount();
+  });
+
+  // 10 — locked Q2: Tab always traverses the ring, even from a `code` field
+  //      (it does NOT insert a literal tab — code is not tab-aware here).
+  it("code: Tab traverses the ring (does not insert)", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "page",
+        children: [
+          { type: "field", name: "q", inputType: "code", language: "js" },
+          { type: "button", label: "B", action: { name: "x" } },
+        ],
+      },
+      onA,
+    );
+    await d.press(KEY.tab); // code editing → ring next → button
+    await d.press(KEY.enter); // activate button (proves focus left the code field)
+    expect(onA).toHaveBeenCalledWith({ name: "x", context: {} });
+    d.unmount();
+  });
+
+  // 11 — graduation: textarea/code are no longer fail-loud; the still-deferred
+  //      tier remains fail-loud at the bumped phase string.
+  it("textarea/code graduated; select/file remain fail-loud (phase 5)", () => {
+    expect(
+      frame({ type: "field", name: "t", inputType: "textarea", value: "hi" }),
+    ).not.toContain("unsupported");
+    expect(
+      frame({
+        type: "field",
+        name: "c",
+        inputType: "code",
+        value: "SELECT",
+      } as unknown as ViewNode),
+    ).not.toContain("unsupported");
+    expect(
+      frame({ type: "field", name: "s", inputType: "select" } as unknown as ViewNode),
+    ).toContain("[unsupported: field(select) — phase 5]");
   });
 });

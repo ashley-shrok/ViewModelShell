@@ -330,3 +330,72 @@ before doing anything in a fresh-context resume.
   130 / SIGINT 130; live headline add via real bun `All(3)→All(4)`→Ctrl-C
   130. Tasks emits no redirect/sideEffects ⇒ Phase-4 paths are dormant for it
   (no-regression by construction + the live headline).
+
+## Phase 5a learnings (read before Phase 5b)
+
+- **No mature Ink-5/React-18 multi-line editor exists (settled — do NOT
+  re-research).** Registry-vetted: `ink-multiline-input@0.1.0` (peer
+  ink≥6/react≥19), `react-ink-textarea@0.1.2` (ink^7) — both force the
+  forbidden Ink/React major bump; `ink-text-area@0.0.1` (single 2024 release,
+  abandoned, hard-pins ink/react → dep-dup trap); `@inkjs/ui@2.0.0` has NO
+  multiline. ⇒ Phase 5a is a CONTAINED `MultilineEditor` (tui.tsx) on Ink
+  primitives only, ZERO new deps. **For 5b: `ink-select-input@6.2.0`
+  (2025-04-29) IS the mature Ink-5/React-18 pick the roadmap locks — confirm
+  its peer range at 5b time, but it is a real maintained lib (unlike the
+  multiline options).**
+- **Nested-`<Text>` caret-split layout bug (LOAD-BEARING — the only red).**
+  A focused line as `<Text>{a}<Text inverse>{c}</Text>{b}</Text>` renders
+  fine IN ISOLATION but inside the LIVE focusWrap + bordered-box + gap-column
+  tree corrupts Ink/Yoga width measurement → wraps the line char-per-char
+  (`hello`→`h`/`e`/…). Same class as Phase-1 OSC8/string-width over-count.
+  **Fix: every editor line is ONE flat `<Text>`; no nested styled span
+  mid-string.** ⇒ NO rendered caret glyph (focus = focusWrap's `▸`; caret
+  tracked internally only). An inline caret glyph also fragments the
+  value-substring test asserts — double reason to omit (documented deferred
+  polish; any future caret must be non-nesting AND re-verified in the LIVE
+  adapter tree). **Isolation repros LIED**; a `VMS_DEBUG` stderr line in the
+  component + an adapter-level repro found it (instrument, don't guess —
+  three wrong theories first).
+- **`stdin.write("hello")` = ONE `useInput` call** (`input="hello"`,
+  verified) — not 5. Printable branch handles multi-char + splits embedded
+  `\n` (paste). Per-char and burst both correct.
+- **Editing-gate broadened**: `editing = … && (isEditableSingleLine(it) ||
+  isEditableMultiLine(it))` (new `isEditableMultiLine` = textarea|code).
+  App's editing branch already only acts on Tab/Shift-Tab + returns → correct
+  for multi-line UNCHANGED. `MultilineEditor`'s own useInput MIRRORS
+  ink-text-input: early-return Ctrl-C + Tab + Shift-Tab (App owns
+  teardown+ring), owns char / Enter→`\n` / Backspace+Delete / Left/Right /
+  Up/Down. Ink calls EVERY useInput (no bubbling) → collision-free; teardown
+  unaffected (`tui-cli.ts` UNCHANGED, PTY-verified).
+- **Caret inits at END of value** (lazy `useState` initializer — once at
+  mount, NOT on rerenders → continuity; mirrors ink-text-input UX; makes the
+  server-wins / draft-survival tests analogous to Phase-3).
+- **collectFocusables/collectForm: textarea+code REMOVED from the
+  exclusion/skip lists** (now focusable & collected); `isEditableSingleLine`
+  still excludes them. Tab-always-traverses (locked Q2): `code` == textarea
+  editor + a dim ` [<language>]` label; literal-tab deferred & documented.
+- **Fail-loud string bumped 4→5 ONCE in 5a; it STAYS `phase 5` for ALL of
+  Phase 5.** PATTERN CHANGE vs Phases 0–4 (each integer phase bumped). 5b/5c/
+  5d MUST NOT bump to `phase 6` — only DELETE the graduated node's
+  `[unsupported]` placeholder + retarget the deferred-list / "string is now
+  phase 5" / "B" asserts to a still-deferred node, all still `phase 5`. 5a
+  graduated textarea+code (dropped from the deferred-list test);
+  still-deferred = select / select-multiple / file / modal / table.
+- **Zero new deps** — `package.json`/`package-lock.json` UNCHANGED
+  (Phase-4-like, NOT Phase-3). `code` has no backend demo (only the
+  backend-less Showcase) ⇒ `code` is unit-test-only (Phase-4-style); textarea
+  is live-proven. Don't hunt a `code` backend in 5b+.
+- **Phase 5a blast radius (VCS-verified).** `git status` = ONLY `src/tui.tsx`,
+  `test/tui.test.ts` (+ `.planning/*` in commit). 6 core dist hashes
+  byte-identical to `/tmp/vms-baseline.txt`; web-bundle Vite hashes unchanged
+  (`index-UzlLPlgm.css` + `index-B7l5XdRz.js`); **97 vitest** (86→97, +11) +
+  core-globals green; `tui-cli.ts` untouched. **PTY 12/12** vs an EPHEMERAL
+  textarea fixture (`demo/ContactManager-bun/_fixture.ts`, created+removed
+  in-run; first focusable = textarea → deterministic auto-focus, no nav):
+  real-HTTP multi-line round-trip (`AAA`⏎`BBB`→Tab→submit→server echoed
+  `SAVED=[AAA\nBBB]`), Ctrl-C-while-editing-textarea→130+ESC[?25h,
+  SIGINT→130, SIGTERM→143, piped→0, unreachable→1, no-arg→2, bad-url→2. Real
+  `ContactManager-bun` non-TTY smoke renders its textarea over real wire
+  (exit 0). The brittle 12-contact ring made scripted nav to ContactManager's
+  notes impractical → the deterministic ephemeral fixture is the cleaner
+  proof (Phase-4-style fixture pattern); don't fight the demo ring in 5b+.

@@ -13,8 +13,13 @@ hardcoded — completed phases are read from git:
 - Phase 2 — COMPLETE (committed; `git log --grep='feat(tui): Phase 2'`).
 - Phase 3 — COMPLETE (committed; `git log --grep='feat(tui): Phase 3'`).
 - Phase 4 — COMPLETE (committed; `git log --grep='feat(tui): Phase 4'`).
-- NEXT — Phase 5 (deferred node tier; 5a/5b/5c/5d are independent
-  sub-milestones — rewind between each; commit `feat(tui): Phase 5a — …`).
+- Phase 5a — COMPLETE (committed; `git log --grep='feat(tui): Phase 5a'`).
+- NEXT — Phase 5b (deferred node tier cont.: `select`/`select-multiple`
+  picker via `ink-select-input` — mature & Ink-5/React-18-compatible, see
+  NOTES). 5b/5c/5d independent — rewind between each; commit
+  `feat(tui): Phase 5b — …`. NOTE: the fail-loud string stays `phase 5`
+  for all of Phase 5 — 5b/5c/5d do NOT bump it; they only delete the
+  graduated node's placeholder + retarget asserts (see NOTES Phase-5a #7).
 
 (Each finishing phase updates this line in its own commit.)
 

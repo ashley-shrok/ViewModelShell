@@ -202,13 +202,12 @@ function collectFocusables(vm: ViewNode): {
         const it = node.inputType;
         if (
           it === "hidden" ||
-          it === "textarea" ||
-          it === "code" ||
           it === "select" ||
           it === "select-multiple" ||
           it === "file"
         )
-          return; // invisible / deferred → not focusable in Phase 2
+          return; // invisible / deferred → not focusable (textarea/code are
+        // focusable as of Phase 5a — multi-line editor)
         const k = uniq(node.name ?? "field");
         map.set(node, k);
         list.push({ key: k, kind: "field", node, form });
@@ -255,7 +254,7 @@ function collectForm(
     if (node.type === "field") {
       const f = node as FieldNode;
       const it = f.inputType;
-      if (it === "textarea" || it === "code" || it === "select" || it === "select-multiple" || it === "file") {
+      if (it === "select" || it === "select-multiple" || it === "file") {
         return; // deferred input types — not collected
       }
       if (it === "checkbox") out[f.name] = isTruthyFormValue(resolve(f)) ? "true" : "false";
@@ -277,9 +276,10 @@ function submitOf(form: FormNode, resolve: FieldValue = serverValue): ActionEven
 }
 
 /** The single-line `field` input types that become an editable `<TextInput>`
- *  when focused on a TTY. NOT: hidden (invisible), checkbox (toggle), or the
- *  deferred tier (textarea/code/select/select-multiple/file). Unknown types
- *  fall through to text — same fail-soft as the renderer. */
+ *  when focused on a TTY. NOT: hidden (invisible), checkbox (toggle),
+ *  textarea/code (multi-line — handled by isEditableMultiLine + the
+ *  MultilineEditor), or the still-deferred tier (select/select-multiple/file).
+ *  Unknown types fall through to text — same fail-soft as the renderer. */
 function isEditableSingleLine(it: string | undefined): boolean {
   return (
     it !== "hidden" &&
@@ -290,6 +290,15 @@ function isEditableSingleLine(it: string | undefined): boolean {
     it !== "select-multiple" &&
     it !== "file"
   );
+}
+
+/** Phase 5a: the multi-line `field` input types that become an editable
+ *  `<MultilineEditor>` when focused on a TTY. `code` is rendered identically
+ *  to `textarea` plus a dim language-hint label; literal-tab insertion is
+ *  intentionally deferred (Tab always traverses the focus ring — the locked
+ *  input-arbitration invariant). */
+function isEditableMultiLine(it: string | undefined): boolean {
+  return it === "textarea" || it === "code";
 }
 
 /** Reconcile the focused key against a (possibly new) focusable list — the
@@ -326,6 +335,173 @@ function Interstitial({ msg }: { msg: string }): ReactElement {
       <Box marginTop={1}>
         <Text dimColor>Press Ctrl-C to quit.</Text>
       </Box>
+    </Box>
+  );
+}
+
+/**
+ * Phase 5a contained multi-line editor for `textarea`/`code`. Built ONLY on
+ * Ink's already-vetted primitives (useInput key-decode, Box, Text) — there is
+ * no mature Ink-5/React-18-compatible multi-line lib (every option is pre-1.0
+ * and either abandoned or forces a forbidden Ink 6/7 + React 19 bump), so a
+ * contained editor is the only path respecting the locked toolkit + the
+ * zero-blast-radius invariant. Zero new dependencies.
+ *
+ * Controlled (value/onChange — the App draft map is the single source of
+ * truth, exactly like the single-line `<TextInput>`). Internal {row,col}
+ * caret in useState, held in the stable component instance (key="input" under
+ * the stable App root) so it survives the shell's instance.rerender() — the
+ * Phase-3 caret-continuity mechanism, one level down.
+ *
+ * Input contract MIRRORS ink-text-input so the two-handler arbitration with
+ * App's root useInput stays collision-free: this editor EARLY-RETURNS Ctrl-C
+ * (App owns teardown → requestExit(130)) and Tab/Shift-Tab (App owns ring
+ * traversal — the locked invariant; `code` is therefore NOT literal-tab
+ * aware, by design), and owns char insert / Enter→newline / Backspace+Delete
+ * / Left/Right (wrapping across lines) / Up/Down (clamped). A multi-char paste
+ * burst is inserted verbatim; embedded CR/LF split lines (Phase-3 paste rule).
+ * Form submission stays the focus ring's submit button (the user Tabs out) —
+ * Enter never submits a multi-line field; field `action`/Enter-dispatch is
+ * N/A for multi-line.
+ */
+function MultilineEditor(props: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  focus: boolean;
+}): ReactElement {
+  const split = (s: string): string[] => (s.length === 0 ? [""] : s.split("\n"));
+  // Caret starts at the END of the initial value (focusing a pre-filled field
+  // puts the caret after the text — mirrors ink-text-input's UX). Lazy
+  // initializer runs ONCE at mount, never on the shell's rerenders, so caret
+  // continuity holds (the Phase-3 mechanism, one level down).
+  const [cursor, setCursor] = useState<{ row: number; col: number }>(() => {
+    const ls = split(props.value);
+    return { row: ls.length - 1, col: (ls[ls.length - 1] ?? "").length };
+  });
+  const lines = split(props.value);
+  // Clamp for render (value may have shrunk via server-wins before the effect
+  // below re-syncs the stored cursor).
+
+  // Re-clamp the stored caret when the controlled value shrinks (mirrors
+  // ink-text-input's clamp effect). Guarded → no extra render when unchanged.
+  useEffect(() => {
+    const ls = split(props.value);
+    setCursor((c) => {
+      const r = Math.min(c.row, ls.length - 1);
+      const col = Math.min(c.col, (ls[r] ?? "").length);
+      return r === c.row && col === c.col ? c : { row: r, col };
+    });
+  }, [props.value]);
+
+  useInput(
+    (input, key) => {
+      // App owns these — never consume them (Ink calls every useInput; no
+      // bubbling, so a plain return cedes the key).
+      if (key.ctrl && input === "c") return; // → App requestExit(130)
+      if (key.tab) return; // Tab / Shift-Tab → App ring traversal (locked)
+
+      const cur = split(props.value);
+      const r = Math.min(cursor.row, cur.length - 1);
+      const c = Math.min(cursor.col, (cur[r] ?? "").length);
+      const commit = (next: string[], nr: number, nc: number): void => {
+        props.onChange(next.join("\n"));
+        setCursor({ row: nr, col: nc });
+      };
+
+      if (key.return) {
+        const line = cur[r] ?? "";
+        const next = [
+          ...cur.slice(0, r),
+          line.slice(0, c),
+          line.slice(c),
+          ...cur.slice(r + 1),
+        ];
+        commit(next, r + 1, 0);
+        return;
+      }
+      if (key.leftArrow) {
+        if (c > 0) setCursor({ row: r, col: c - 1 });
+        else if (r > 0) setCursor({ row: r - 1, col: (cur[r - 1] ?? "").length });
+        return;
+      }
+      if (key.rightArrow) {
+        if (c < (cur[r] ?? "").length) setCursor({ row: r, col: c + 1 });
+        else if (r < cur.length - 1) setCursor({ row: r + 1, col: 0 });
+        return;
+      }
+      if (key.upArrow) {
+        if (r > 0)
+          setCursor({
+            row: r - 1,
+            col: Math.min(c, (cur[r - 1] ?? "").length),
+          });
+        return;
+      }
+      if (key.downArrow) {
+        if (r < cur.length - 1)
+          setCursor({
+            row: r + 1,
+            col: Math.min(c, (cur[r + 1] ?? "").length),
+          });
+        return;
+      }
+      if (key.backspace || key.delete) {
+        // Backspace semantics (delete the char BEFORE the caret) for both —
+        // matches ink-text-input, so single- and multi-line editing feel
+        // identical. Forward-delete is intentionally deferred.
+        if (c > 0) {
+          const line = cur[r] ?? "";
+          const next = [...cur];
+          next[r] = line.slice(0, c - 1) + line.slice(c);
+          commit(next, r, c - 1);
+        } else if (r > 0) {
+          const prev = cur[r - 1] ?? "";
+          const next = [
+            ...cur.slice(0, r - 1),
+            prev + (cur[r] ?? ""),
+            ...cur.slice(r + 1),
+          ];
+          commit(next, r - 1, prev.length);
+        }
+        return;
+      }
+      if (input && !key.ctrl && !key.meta) {
+        // Printable / paste burst. Normalize CR(LF) so a pasted multi-line
+        // block splits cleanly.
+        const text = input.replace(/\r\n?/g, "\n");
+        const line = cur[r] ?? "";
+        const parts = (line.slice(0, c) + text + line.slice(c)).split("\n");
+        const next = [...cur.slice(0, r), ...parts, ...cur.slice(r + 1)];
+        const last = parts[parts.length - 1]!;
+        commit(
+          next,
+          r + parts.length - 1,
+          parts.length === 1 ? c + text.length : last.length,
+        );
+      }
+    },
+    { isActive: props.focus },
+  );
+
+  const empty = props.value.length === 0;
+  if (empty && !props.focus) {
+    return (
+      <Text dimColor>{props.placeholder ? props.placeholder : " "}</Text>
+    );
+  }
+  return (
+    <Box flexDirection="column">
+      {lines.map((ln, i) => (
+        // One flat <Text> per line. A nested in-text caret element corrupts
+        // Ink/Yoga width measurement inside the live focusWrap + bordered-box
+        // tree (the Phase-1 mixed-<Text> width lesson — verified: split caret
+        // wraps "hello" into per-char lines; one flat <Text> renders clean).
+        // Focus is signalled by focusWrap's leading ▸; the caret is tracked
+        // internally for edit logic. Rendering a caret glyph is a documented
+        // deferred polish (would also fragment the value-substring tests).
+        <Text key={i}>{ln === "" ? " " : ln}</Text>
+      ))}
     </Box>
   );
 }
@@ -412,7 +588,8 @@ function App(props: {
   const editing =
     interactive &&
     focusedDesc?.kind === "field" &&
-    isEditableSingleLine((focusedDesc.node as FieldNode).inputType);
+    (isEditableSingleLine((focusedDesc.node as FieldNode).inputType) ||
+      isEditableMultiLine((focusedDesc.node as FieldNode).inputType));
   const editingRef = useRef(editing);
   editingRef.current = editing;
 
@@ -585,19 +762,21 @@ function App(props: {
 }
 
 /**
- * Phase 3 terminal adapter — single-line field editor.
+ * Phase 5a terminal adapter — single-line + multi-line field editors.
  *
  * Every node renders byte-identically to Phase 1/2 when UNFOCUSED and on the
  * pure `renderTree`/non-TTY path (NO_CTX → interactive:false → no editor). On
  * a TTY the shell's view is interactive: a self-managed focus ring
  * (Tab/Shift-Tab/arrows), Enter/Space dispatch, focus continuity; button /
  * checkbox (`{checked}`) / tabs (`{value}`) / link / copy-button (OSC 52) /
- * form-submit. The focused single-line `field` is now an editable
- * `ink-text-input` (typed drafts survive poll/dispatch re-renders unless the
- * field disappears or the server changes its value — mirroring
- * BrowserAdapter); password is masked; form-`checkbox` toggles on Space.
- * Redirect/storage verbs and the deferred tier (`textarea`/`code`/`select`/
- * `modal`/`table`) arrive in later phases and still render a visible
+ * form-submit. The focused single-line `field` is an editable
+ * `ink-text-input`; the focused `textarea`/`code` field is the contained
+ * `MultilineEditor` (Enter→newline; submit via the ring's submit button;
+ * `code` adds a dim language label, no literal-tab). Typed drafts survive
+ * poll/dispatch re-renders unless the field disappears or the server changes
+ * its value — mirroring BrowserAdapter; password is masked; form-`checkbox`
+ * toggles on Space. The still-deferred tier (`select`/`select-multiple`/
+ * `file`/`modal`/`table`) arrives in later phases and still renders a visible
  * fail-loud placeholder — never blank, never silent.
  *
  * LEAF MODULE: never imported by src/index.ts / src/browser.ts /
@@ -770,7 +949,7 @@ export class TuiAdapter implements Adapter {
   private unsupported(label: string, key: number | string): ReactElement {
     return (
       <Text key={key} color="yellow">
-        [unsupported: {label} — phase 4]
+        [unsupported: {label} — phase 5]
       </Text>
     );
   }
@@ -1191,9 +1370,48 @@ export class TuiAdapter implements Adapter {
             key,
           );
         }
+        if (it === "textarea" || it === "code") {
+          // Phase 5a — multi-line editor. `code` == textarea + a dim language
+          // hint label (no syntax coloring: the framework only ships the
+          // editable monospaced surface; a terminal is already monospace).
+          const current = dval ?? node.value ?? "";
+          const labelText =
+            (node.label ?? "") +
+            (it === "code" && node.language ? ` [${node.language}]` : "");
+          if (rctx.interactive && focused && fk != null) {
+            return this.focusWrap(
+              <Box key={key} flexDirection="column">
+                {labelText ? <Text dimColor>{labelText}</Text> : null}
+                <Box borderStyle="single" paddingX={1} minWidth={20}>
+                  <MultilineEditor
+                    key="input"
+                    focus
+                    value={current}
+                    placeholder={node.placeholder ?? ""}
+                    onChange={(v: string) => rctx.onFieldChange?.(fk, v)}
+                  />
+                </Box>
+              </Box>,
+              focused,
+              key,
+            );
+          }
+          const hasValue = current !== "";
+          const display = hasValue ? current : (node.placeholder ?? "");
+          return this.focusWrap(
+            <Box key={key} flexDirection="column">
+              {labelText ? <Text dimColor>{labelText}</Text> : null}
+              <Box borderStyle="single" paddingX={1} minWidth={20}>
+                <Text dimColor={!hasValue}>
+                  {display === "" ? " " : display}
+                </Text>
+              </Box>
+            </Box>,
+            focused,
+            key,
+          );
+        }
         if (
-          it === "textarea" ||
-          it === "code" ||
           it === "select" ||
           it === "select-multiple" ||
           it === "file"
