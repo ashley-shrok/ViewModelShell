@@ -6,6 +6,23 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.4.8 — Terminal link OSC 8 fix (npm only)
+
+**npm:** `0.4.8` (PATCH — client-only bug fix) · **NuGet:** unchanged at `0.4.2`
+
+Long-latent terminal `link` rendering bug. No wire, type, or API change; NuGet untouched; major.minor stays `0.4`.
+
+### Fixed
+
+- **`link` nodes now emit a real OSC 8 hyperlink.** The terminal `link` renderer built its escape string with the ESC introducer and ST terminator missing — `]8;;<href><label>]8;;` instead of `ESC ]8;; <href> BEL <label> ESC ]8;; BEL` — so every `link` rendered as raw `]8;;…` garbage text (then truncated) in every terminal, in and out of tmux. Latent since the node was introduced; orthogonal to the 0.4.5–0.4.7 viewport work (the `link` case was untouched by it; `osc52()` was always correct, `link` simply lacked the escapes). Now emits a correct clickable OSC 8 hyperlink (BEL-terminated, matching `osc52()`'s proven `\x1b`/`\x07` style); terminals without OSC 8 ignore the escape and show just the label — graceful, vs. the old visible garbage. Empty/blank `href` still degrades to plain underlined text (no OSC wrapper) — unchanged.
+- **Test gap closed.** The prior assertion only checked for the `]8;;` substring, which is present even in the broken (ESC-less) form, so it never caught this. The test now asserts the full byte form (ESC introducer + URI + BEL ST + closer) — a missing-ESC regression fails loudly.
+
+### Consumers
+
+- **None required.** Client-only bug fix — no wire/type/behavior change for browser/server consumers, no NuGet change. Terminal users with `link` nodes: `0.4.8` is required to get working hyperlinks (`0.4.7` and earlier render them as garbage). Static/non-interactive output now carries a proper escape instead of literal `]8;;` text; alt-screen + Ctrl-C/SIGINT/SIGTERM teardown re-verified.
+
+---
+
 ## 0.4.7 — Terminal fill reaches section-wrapped content (npm only)
 
 **npm:** `0.4.7` (PATCH — client-only fix) · **NuGet:** unchanged at `0.4.2`

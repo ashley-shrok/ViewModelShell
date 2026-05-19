@@ -1749,10 +1749,14 @@ export class TuiAdapter implements Adapter {
             </Box>
           );
         }
-        // OSC 8 hyperlink. As the SOLE child of its own Box with no wrap, the
+        // OSC 8 hyperlink: ESC ]8;; <uri> BEL <label> ESC ]8;; BEL. The
+        // ESC introducer + BEL terminator are LOAD-BEARING — without them
+        // (a long-latent bug fixed in 0.4.8) this is plain `]8;;…` garbage
+        // text in every terminal. `\x1b`/`\x07` escapes match osc52()'s
+        // proven style. As the SOLE child of its own Box with no wrap, the
         // string-width over-count (string-width does not strip OSC 8) stays
         // contained to this line and cannot corrupt sibling layout.
-        const osc = `]8;;${node.href}${node.label}]8;;${copied ? " ✓ copied" : ""}`;
+        const osc = `\x1b]8;;${node.href}\x07${node.label}\x1b]8;;\x07${copied ? " ✓ copied" : ""}`;
         return this.focusWrap(
           <Box key={key}>
             <Text

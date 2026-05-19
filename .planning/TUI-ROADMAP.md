@@ -55,6 +55,13 @@ hardcoded — completed phases are read from git:
   small-tile grid. Iterated against a REAL-adapter oracle (hand probes lied
   every round). Client-only PATCH; NuGet still `0.4.2`; tui-cli.ts
   UNCHANGED. See `.planning/TUI-NOTES.md` "0.4.7".
+- POST-RELEASE — npm **`0.4.8`** (committed; `git log --grep='fix(tui)'`):
+  long-latent `link` bug — OSC-8 was built without the ESC introducer/ST
+  (`]8;;…` garbage text in every terminal); now emits a real BEL-terminated
+  OSC-8 hyperlink (osc52's proven `\x1b`/`\x07` style). Orthogonal to the
+  viewport arc (link case untouched 0.4.5–0.4.7). Test gap closed (asserted
+  only the `]8;;` substring → missed it). Client-only PATCH; NuGet still
+  `0.4.2`; tui-cli.ts UNCHANGED. See `.planning/TUI-NOTES.md` "0.4.8".
 
 (Each finishing phase updates this line in its own commit.)
 

@@ -6,6 +6,28 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `0.4.8` (Terminal link OSC 8 fix — npm only)
+
+**Nothing to do** beyond taking the patch. `0.4.8` fixes a long-latent bug
+where terminal `link` nodes emitted `]8;;…` garbage text (the ESC
+introducer + ST terminator were missing) instead of a real OSC 8
+hyperlink — broken in every terminal. NuGet unchanged at `0.4.2`;
+major.minor stays `0.4`.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.4.7` | **`0.4.8`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.4.2` | `0.4.2` (unchanged) |
+
+- **Browser / server consumers:** nothing to do — no wire/type/API change.
+- **Terminal consumers using `link` nodes:** `0.4.8` is required —
+  `0.4.7` and earlier render them as raw `]8;;…` text. Empty-href links
+  still degrade to plain text (unchanged).
+- **Non-interactive / static render:** now carries a proper OSC 8 escape
+  (terminals ignore it if unsupported) rather than literal `]8;;` text.
+
+---
+
 ## Upgrading to npm `0.4.7` (Terminal fill reaches section content — npm only)
 
 **Nothing to do** beyond taking the patch. Completes `0.4.5`/`0.4.6`:

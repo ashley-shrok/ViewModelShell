@@ -900,3 +900,35 @@ before doing anything in a fresh-context resume.
   enter/leave + Ctrl-C→130 + cursor restored, non-TTY no `?1049[hl]`.
   Shipped npm `0.4.7` PATCH (client-only; NuGet untouched `0.4.2`); commit
   `fix(tui): …`.
+
+## 0.4.8 — link OSC-8 had no ESC/ST (long-latent; test gap)
+
+- **`case "link"` built `]8;;<href><label>]8;;` with NO `\x1b` introducer
+  and NO ST** (no BEL, no `ESC\\`) → plain garbage text in EVERY terminal.
+  `cat -A src/tui.tsx` (the osc line): backtick then `]8;;`, zero `^[`.
+  Long-latent (since the node's introduction); NOT a regression from the
+  0.4.5–0.4.7 viewport work (the link case was untouched). `osc52()` was
+  always correct — it uses `\x1b`/`\x07` ESCAPE-SEQUENCE text (survives the
+  source pipeline intact); `link` simply never had them. FIX: match osc52's
+  style — `` `\x1b]8;;${href}\x07${label}\x1b]8;;\x07…` `` (BEL ST).
+- **Why it slipped 6 rounds: the test only asserted `toContain("]8;;")`** —
+  a substring of the BROKEN form too. RULE (now enforced): when asserting an
+  escape sequence, assert the **ESC byte** (`String.fromCharCode(27)` —
+  pipeline-proof) + terminator, never just the human-readable tail. The
+  strengthened test asserts `ESC]8;;<uri>BEL` opener + label + `ESC]8;;BEL`
+  closer; it FAILS the old code (gap closed).
+- **Verify-the-emitted-bytes discipline reaffirmed:** confirmed via the
+  real-adapter oracle (`esc=true bel=true uri=true label=true`), a hexdump
+  of built `dist/tui.js`, AND a PTY (`\x1b]8;;<uri>\x07` present over a real
+  terminal, no `]8;;` garbage; non-TTY also emits real `ESC]8;;`). Don't
+  trust a render "looks right" — dump the bytes.
+- **Python f-string debug gotcha:** `b'\\x1b…'` inside an f-string is a
+  LITERAL backslash, not ESC — it mis-printed an alt-leave check as False
+  while the real `ok` (using `b"\x1b…"`) was True and the exit code was 0.
+  Trust the exit code / real-byte check, never a hastily-escaped print.
+- Leaf-only (`tui.tsx` + the link test). **tui-cli.ts UNCHANGED** ⇒
+  teardown safe by construction (PTY re-verified: alt-screen enter/leave +
+  Ctrl-C→130 + cursor). byte-identity core 6/6; **148 vitest**
+  (strengthened link test; no count change — replaced an assertion);
+  core-globals; web-bundle hashes unchanged. npm `0.4.8` PATCH
+  (client-only; NuGet untouched `0.4.2`); commit `fix(tui): …`.

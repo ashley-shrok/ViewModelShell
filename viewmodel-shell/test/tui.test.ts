@@ -255,18 +255,25 @@ describe("Phase 3 — TuiAdapter (Phase-1/2 render preserved; unfocused == Phase
     expect(lines.some((l) => l.includes("lineB"))).toBe(true);
   });
 
-  it("link emits OSC 8 for a real href, degrades for an empty one", () => {
+  it("link emits a REAL OSC 8 hyperlink (ESC introducer + BEL ST), degrades for empty href", () => {
+    // The ESC introducer + BEL terminator are LOAD-BEARING. A bare `]8;;`
+    // (no ESC) is plain garbage text in EVERY terminal — the 0.4.8 bug,
+    // which the old `toContain("]8;;")` assertion did NOT catch because
+    // `]8;;` is a substring of the broken form too. Assert the full bytes.
+    const ESC = String.fromCharCode(27);
+    const BEL = String.fromCharCode(7);
     const withHref = frame({
       type: "link",
       label: "Docs",
       href: "https://example.com",
     });
-    expect(withHref).toContain("Docs");
-    expect(withHref).toContain("]8;;");
+    expect(withHref).toContain(`${ESC}]8;;https://example.com${BEL}`); // opener
+    expect(withHref).toContain("Docs"); // visible label
+    expect(withHref).toContain(`${ESC}]8;;${BEL}`); // closer
 
     const noHref = frame({ type: "link", label: "Bare", href: "" });
     expect(noHref).toContain("Bare");
-    expect(noHref).not.toContain("]8;;");
+    expect(noHref).not.toContain("]8;;"); // blank href ⇒ plain text, no OSC
   });
 
   it("stat-bar renders number + string values and labels", () => {
