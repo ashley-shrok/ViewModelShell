@@ -4,17 +4,61 @@
 // per-file docblock overrides the global jsdom environment without touching
 // the shared vitest.config.ts (the existing jsdom suites stay untouched).
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { render } from "ink-testing-library";
-import { ViewModelShell, type ViewNode } from "../src/index.js";
-import { TuiAdapter } from "../src/tui.js";
+import { ViewModelShell, type ViewNode, type ActionEvent } from "../src/index.js";
+import { TuiAdapter, osc52 } from "../src/tui.js";
 
 const frame = (vm: ViewNode): string =>
   String(render(new TuiAdapter().renderTree(vm)).lastFrame() ?? "");
 
-describe("Phase 1 — TuiAdapter read-only render", () => {
+// ink-testing-library timing (probed): Ink attaches its stdin `data` listener
+// in a post-mount effect, so a write BEFORE that attaches is dropped (raw
+// EventEmitter, no buffering). Warm up after render, settle after each key.
+const tick = (ms = 20): Promise<void> =>
+  new Promise((r) => setTimeout(r, ms));
+
+interface Driver {
+  stdin: { write(s: string): void };
+  frame(): string;
+  rerender(el: unknown): void;
+  press(seq: string): Promise<void>;
+  unmount(): void;
+}
+
+const KEY = {
+  tab: "\t",
+  shiftTab: "\x1b[Z",
+  down: "\x1b[B",
+  up: "\x1b[A",
+  enter: "\r",
+  space: " ",
+  ctrlC: "\x03",
+};
+
+async function drive(
+  vm: ViewNode,
+  onAction: (a: ActionEvent) => void,
+  requestExit: (c: number) => void = () => {},
+): Promise<Driver> {
+  const adapter = new TuiAdapter();
+  const r = render(adapter.createApp(vm, onAction, { requestExit }));
+  await tick(30); // warmup so Ink's input listener is attached + focus settles
+  return {
+    stdin: r.stdin as { write(s: string): void },
+    frame: () => String(r.lastFrame() ?? ""),
+    rerender: (el: unknown) => r.rerender(el as never),
+    async press(seq: string) {
+      r.stdin.write(seq);
+      await tick(20);
+    },
+    unmount: () => r.unmount(),
+  };
+}
+
+describe("Phase 2 — TuiAdapter (Phase-1 render preserved; unfocused == Phase 1)", () => {
   // ── scaffold/seam (carried from Phase 0) ───────────────────────────────
 
   // A — canonical: page title + text render to the frame.
@@ -37,7 +81,7 @@ describe("Phase 1 — TuiAdapter read-only render", () => {
   // (progress is now implemented, so B is retargeted to `table`).
   it("renders a fail-loud placeholder for deferred nodes", () => {
     const vm = { type: "table", columns: [], rows: [] } as unknown as ViewNode;
-    expect(frame(vm)).toContain("[unsupported: table — phase 1]");
+    expect(frame(vm)).toContain("[unsupported: table — phase 2]");
   });
 
   // C — core→adapter render seam: pushing a response through the shell
@@ -350,7 +394,7 @@ describe("Phase 1 — TuiAdapter read-only render", () => {
   it("deferred node types & field input types fail loud", () => {
     expect(
       frame({ type: "modal", children: [] } as unknown as ViewNode),
-    ).toContain("[unsupported: modal — phase 1]");
+    ).toContain("[unsupported: modal — phase 2]");
     for (const it of [
       "textarea",
       "code",
@@ -360,7 +404,7 @@ describe("Phase 1 — TuiAdapter read-only render", () => {
     ]) {
       expect(
         frame({ type: "field", name: "x", inputType: it } as unknown as ViewNode),
-      ).toContain(`[unsupported: field(${it}) — phase 1]`);
+      ).toContain(`[unsupported: field(${it}) — phase 2]`);
     }
   });
 
@@ -470,5 +514,272 @@ describe("Phase 1 — TuiAdapter read-only render", () => {
     expect(out).toContain("Set up the project");
     expect(out).toContain("[x]");
     expect(out).toContain("✓"); // done-variant marker
+  });
+});
+
+describe("Phase 2 — focus ring + non-text interaction", () => {
+  const threeButtons: ViewNode = {
+    type: "page",
+    children: [
+      { type: "button", label: "B1", action: { name: "a1" } },
+      { type: "button", label: "B2", action: { name: "a2" } },
+      { type: "button", label: "B3", action: { name: "a3" } },
+    ],
+  };
+
+  it("auto-focuses the first focusable (exactly one caret)", async () => {
+    const d = await drive(threeButtons, vi.fn());
+    const f = d.frame();
+    expect(f).toContain("▸");
+    expect(f.match(/▸/g)?.length).toBe(1);
+  });
+
+  it("Tab/Shift-Tab walk the ring (order + wrap), proven via dispatch", async () => {
+    const onA = vi.fn();
+    const d = await drive(threeButtons, onA);
+    await d.press(KEY.enter); // focus starts at B1
+    expect(onA).toHaveBeenLastCalledWith({ name: "a1", context: {} });
+    await d.press(KEY.tab);
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenLastCalledWith({ name: "a2", context: {} });
+    await d.press(KEY.tab); // B2 -> B3
+    await d.press(KEY.tab); // B3 -> wrap -> B1
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenLastCalledWith({ name: "a1", context: {} });
+    await d.press(KEY.shiftTab); // B1 -> wrap back -> B3
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenLastCalledWith({ name: "a3", context: {} });
+  });
+
+  it("arrow keys also navigate the ring", async () => {
+    const onA = vi.fn();
+    const d = await drive(threeButtons, onA);
+    await d.press(KEY.down); // B1 -> B2
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenLastCalledWith({ name: "a2", context: {} });
+    await d.press(KEY.up); // B2 -> B1
+    await d.press(KEY.up); // B1 -> wrap -> B3
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenLastCalledWith({ name: "a3", context: {} });
+  });
+
+  it("checkbox dispatches the toggled value", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "page",
+        children: [
+          {
+            type: "checkbox",
+            name: "c",
+            checked: true,
+            label: "Done",
+            action: { name: "toggle", context: { id: "7" } },
+          },
+        ],
+      },
+      onA,
+    );
+    await d.press(KEY.space);
+    expect(onA).toHaveBeenCalledWith({
+      name: "toggle",
+      context: { id: "7", checked: false },
+    });
+  });
+
+  it("tabs dispatch the focused tab value", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "page",
+        children: [
+          {
+            type: "tabs",
+            selected: "a",
+            action: { name: "tab" },
+            tabs: [
+              { value: "a", label: "A" },
+              { value: "b", label: "B" },
+            ],
+          },
+        ],
+      },
+      onA,
+    );
+    await d.press(KEY.tab); // first tab -> second tab
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenCalledWith({ name: "tab", context: { value: "b" } });
+  });
+
+  it("form submit collects current (static) field values", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "page",
+        children: [
+          {
+            type: "form",
+            submitAction: { name: "add" },
+            submitLabel: "Add",
+            layout: "inline",
+            children: [
+              {
+                type: "field",
+                name: "title",
+                inputType: "text",
+                placeholder: "Add a task…",
+              },
+            ],
+          },
+        ],
+      },
+      onA,
+    );
+    await d.press(KEY.tab); // field -> submit
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenCalledWith({ name: "add", context: { title: "" } });
+  });
+
+  it("Enter on a no-action field submits the enclosing form", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "page",
+        children: [
+          {
+            type: "form",
+            submitAction: { name: "add" },
+            children: [
+              { type: "field", name: "title", inputType: "text", value: "Milk" },
+            ],
+          },
+        ],
+      },
+      onA,
+    );
+    await d.press(KEY.enter); // focus is the field; no field.action -> submit form
+    expect(onA).toHaveBeenCalledWith({
+      name: "add",
+      context: { title: "Milk" },
+    });
+  });
+
+  it("field with its own action dispatches {[name]: value} on Enter", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "page",
+        children: [
+          {
+            type: "field",
+            name: "q",
+            inputType: "text",
+            value: "hi",
+            action: { name: "search" },
+          },
+        ],
+      },
+      onA,
+    );
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenCalledWith({
+      name: "search",
+      context: { q: "hi" },
+    });
+  });
+
+  it("copy-button writes OSC 52, no dispatch, shows transient label", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "page",
+        children: [
+          {
+            type: "copy-button",
+            text: "clip",
+            label: "Copy",
+            copiedLabel: "Copied!",
+          },
+        ],
+      },
+      onA,
+    );
+    expect(d.frame()).toContain("Copy");
+    await d.press(KEY.enter);
+    expect(onA).not.toHaveBeenCalled();
+    expect(d.frame()).toContain("Copied!");
+    d.unmount(); // clear the ~1.5s transient-revert timer
+  });
+
+  it("link copies its href (OSC 52), no dispatch, shows copied marker", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "page",
+        children: [{ type: "link", label: "Docs", href: "https://example.com" }],
+      },
+      onA,
+    );
+    await d.press(KEY.enter);
+    expect(onA).not.toHaveBeenCalled();
+    expect(d.frame()).toContain("copied");
+    d.unmount();
+  });
+
+  it("Ctrl-C routes to requestExit(130), not onAction", async () => {
+    const onA = vi.fn();
+    const exit = vi.fn();
+    const d = await drive(threeButtons, onA, exit);
+    await d.press(KEY.ctrlC);
+    expect(exit).toHaveBeenCalledWith(130);
+    expect(onA).not.toHaveBeenCalled();
+  });
+
+  it("focus continuity: removing the focused node clamps to the prior index", async () => {
+    const onA = vi.fn();
+    const adapter = new TuiAdapter();
+    const r = render(
+      adapter.createApp(threeButtons, onA, { requestExit: () => {} }),
+    );
+    await tick(30);
+    r.stdin.write(KEY.tab); // B1 -> B2
+    await tick(20);
+    r.stdin.write(KEY.tab); // B2 -> B3 (focused = a3)
+    await tick(20);
+    // Remove B3: continuity clamps min(prevIndex 2, newLen-1 1) -> idx 1 -> B2.
+    r.rerender(
+      adapter.createApp(
+        {
+          type: "page",
+          children: [
+            { type: "button", label: "B1", action: { name: "a1" } },
+            { type: "button", label: "B2", action: { name: "a2" } },
+          ],
+        } as ViewNode,
+        onA,
+        { requestExit: () => {} },
+      ),
+    );
+    await tick(30);
+    r.stdin.write(KEY.enter);
+    await tick(20);
+    expect(onA).toHaveBeenLastCalledWith({ name: "a2", context: {} });
+    r.unmount();
+  });
+
+  it("static path (renderTree / non-TTY) has no focus caret — == Phase 1", () => {
+    const out = String(
+      render(new TuiAdapter().renderTree(threeButtons)).lastFrame() ?? "",
+    );
+    expect(out).not.toContain("▸");
+    expect(out).toContain("B1");
+    expect(out).toContain("B2");
+    expect(out).toContain("B3");
+  });
+
+  it("osc52 emits the exact clipboard control sequence", () => {
+    expect(osc52("hi")).toBe(
+      `\x1b]52;c;${Buffer.from("hi", "utf8").toString("base64")}\x07`,
+    );
   });
 });

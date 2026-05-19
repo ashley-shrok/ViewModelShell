@@ -10,7 +10,8 @@ hardcoded — completed phases are read from git:
 
 - Phase 0 — COMPLETE (committed; `git log --grep='feat(tui): Phase 0'`).
 - Phase 1 — COMPLETE (committed; `git log --grep='feat(tui): Phase 1'`).
-- NEXT — Phase 2.
+- Phase 2 — COMPLETE (committed; `git log --grep='feat(tui): Phase 2'`).
+- NEXT — Phase 3.
 
 (Each finishing phase updates this line in its own commit.)
 

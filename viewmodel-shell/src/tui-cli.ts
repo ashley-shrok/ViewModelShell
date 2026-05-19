@@ -109,6 +109,17 @@ async function main(): Promise<void> {
     }
   });
 
+  // Phase 2: the adapter now uses Ink input hooks → Ink puts stdin in raw
+  // mode, which clears ISIG, so a *keyboard* Ctrl-C is delivered as input
+  // byte 0x03 and never raises SIGINT (the process.once("SIGINT") above only
+  // fires for a *programmatic* kill -INT). Route that keyboard Ctrl-C, caught
+  // in the adapter's input handler, into this same idempotent shutdown so the
+  // terminal is always restored. SIGTERM and programmatic SIGINT are
+  // unaffected by raw mode and keep working via the handlers above. (The
+  // keep-alive below is now redundant on the TTY path — Ink's resumed raw
+  // stdin holds the loop — but is harmless and kept as belt-and-suspenders.)
+  adapter.setRequestExit((code) => shutdown(code));
+
   const shell = new ViewModelShell({
     endpoint,
     actionEndpoint,

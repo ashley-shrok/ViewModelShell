@@ -118,3 +118,62 @@ before doing anything in a fresh-context resume.
   hashes are byte-identical to `/tmp/vms-baseline.txt`; all 52 vitest tests +
   core-globals guard green; `tui-cli.ts` untouched so Phase-0 PTY teardown
   holds by construction (no input hooks added — still input-free).
+
+## Phase 2 learnings (read before Phase 3)
+
+- **Raw-mode kills keyboard SIGINT (the load-bearing Phase-2 fact).** The
+  first `useInput` makes Ink call `setRawMode(true)` → ISIG cleared → a
+  *keyboard* Ctrl-C is delivered as input byte `0x03`, NOT SIGINT. With
+  `inkRender(...,{exitOnCtrlC:false})` Ink won't self-exit either, so without
+  wiring Ctrl-C hangs the terminal. Fix: `TuiAdapter.setRequestExit(fn)` (a
+  TUI-internal seam between our two leaf files, NOT the core Adapter
+  interface); the App's `useInput` maps `key.ctrl && input==="c"` →
+  `requestExit(130)` → the CLI's existing idempotent `shutdown(130)`.
+  **SIGTERM and *programmatic* `kill -INT` are unaffected by raw mode** (only
+  terminal-generated signals are) — the `process.once("SIGINT"/"SIGTERM")`
+  handlers still fire for those. The `setInterval` keep-alive is now redundant
+  on the TTY path (Ink's resumed raw stdin holds the loop) but is harmless;
+  kept as belt-and-suspenders. Re-verified the full teardown matrix.
+- **ink-testing-library input timing (every interaction test depends on it).**
+  Ink attaches its stdin `data` listener in a POST-MOUNT effect; a
+  `stdin.write` before that attaches is silently dropped (raw EventEmitter, no
+  buffering — NOT recoverable by waiting longer afterward). Recipe: `render()`
+  → `await tick(~30ms)` BEFORE the first write → `stdin.write(seq)` →
+  `await tick(~20ms)` before asserting (input→setState→rerender is async).
+  `useStdin().isRawModeSupported === true` under ink-testing-library, so
+  `useInput(h,{isActive:isRawModeSupported})` IS active in tests (no
+  force-active opt needed). Key decoding: Tab=`key.tab`,
+  Shift-Tab=`key.tab&&key.shift`, arrows=`key.downArrow/upArrow`,
+  Enter=`key.return`, Space=`input===" "` (no key flag), Ctrl-C=`key.ctrl &&
+  input==="c"`. Ink does NOT swallow Tab when `useFocus` is unused.
+- **App must be a stable root component.** `instance.rerender()` reconciles
+  the SAME `<App>` instance, so its `useState` focus survives the shell's
+  full-tree re-renders (that IS the continuity mechanism). The shell passes a
+  NEW `onAction` closure every render/poll → keep it in a ref updated each
+  render or the input handler dispatches stale.
+- **focusWrap key collision.** A focus wrapper that renders `[caret, el]` must
+  give them FIXED structural keys (`"caret"`/`"el"`), never a literal that can
+  equal a node's `keyOf` (a node named `"c"` collided → React "two children
+  with the same key" warning + possible child drop). Wrapped `el` is the sole
+  child of its own `<Box key="el">` so its own key is irrelevant there.
+- **PTY E2E: drain AFTER Ctrl-C or you’ll false-fail cursor-restore.** Ink
+  emits the cursor-restore (`ESC[?25h`) during unmount AFTER you send Ctrl-C;
+  those bytes sit unread in the pty buffer until you read them (parent never
+  closes master). The interaction sessions must `drain(master,…)` *after*
+  sending Ctrl-C (the `pty_signal` cases already drained-after, which is why
+  they passed while the first interaction-session pass false-failed). Also set
+  a wide `TIOCSWINSZ` (~140 cols) on the master — the Phase-1 wrap pitfall
+  applies under a PTY too, so long task titles wrap and break substring greps
+  at the default width.
+- **Fail-loud phase string is single-sourced** in `unsupported()`; bump it
+  every phase and retarget the test assertions. Phase 2: string is now
+  `phase 2`; test B → `table`, the deferred test → `modal`/`table`/
+  `field(<it>)`, all asserting `phase 2`. (No node graduated in Phase 2 —
+  interaction was added to already-rendered nodes.)
+- **Phase 2 blast radius (verified).** `git status` shows ONLY
+  `src/tui.tsx`, `src/tui-cli.ts`, `test/tui.test.ts` modified (+ `.planning/*`
+  in the commit). 6 core dist hashes byte-identical to baseline; web-bundle
+  Vite hashes unchanged (`index-UzlLPlgm.css` + `index-B7l5XdRz.js`); 66
+  vitest tests + core-globals green; PTY matrix 9/9 (filter/delete/toggle
+  reflected; Ctrl-C-input→130, SIGINT→130, SIGTERM→143, piped→0,
+  unreachable→1, no-arg→2, bad-url→2; cursor restored on every exit).
