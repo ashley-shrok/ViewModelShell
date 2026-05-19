@@ -39,13 +39,14 @@ async function main(): Promise<void> {
   }
 
   const endpoint = arg;
-  const actionEndpoint = `${endpoint.replace(/\/+$/, "")}/action`;
 
   // Guarded dynamic import: if the optional `ink`/`react` deps are absent,
   // fail loud with an install hint instead of an ESM resolution stack trace.
   let TuiAdapter: typeof import("./tui.js").TuiAdapter;
+  let openExternal: typeof import("./tui.js").openExternal;
+  let classify: typeof import("./tui.js").classify;
   try {
-    ({ TuiAdapter } = await import("./tui.js"));
+    ({ TuiAdapter, openExternal, classify } = await import("./tui.js"));
   } catch (err) {
     process.stderr.write(
       "vms-tui requires the optional 'ink' and 'react' packages.\n" +
@@ -120,30 +121,80 @@ async function main(): Promise<void> {
   // stdin holds the loop — but is harmless and kept as belt-and-suspenders.)
   adapter.setRequestExit((code) => shutdown(code));
 
-  const shell = new ViewModelShell({
-    endpoint,
-    actionEndpoint,
-    adapter,
-    onError: (err) => {
-      loadFailed = true;
-      // A stderr line guarantees visibility even before the first render.
-      process.stderr.write(`vms-tui: ${err.message}\n`);
-    },
-  });
+  // Phase 4: server-initiated redirects via the existing core onRedirect seam
+  // (no new wire). A ViewModelShell's endpoint is immutable and load() takes
+  // no URL, so a same-origin redirect is followed by building a FRESH shell
+  // that reuses the SAME single adapter (Ink rerenders in place — no remount,
+  // teardown topology unchanged). connect()'s options carry this same
+  // onRedirect, so redirects chain.
+  let redirectFailed = false;
+  let currentShell: ViewModelShell;
+
+  const handleRedirect = (url: string, fromEndpoint: string): void => {
+    const c = classify(url, fromEndpoint);
+    if (c.kind === "same-origin") {
+      currentShell.stopPolling(); // no timer armed today; defends a future one
+      currentShell = connect(c.endpoint);
+      void currentShell.load(); // failures flow through the shared onError
+      return;
+    }
+    if (!process.stdout.isTTY) {
+      // Non-TTY: never spawn a browser; loud stderr + nonzero exit via the
+      // SINGLE shutdown funnel (redirectFailed is read at the exit site).
+      process.stderr.write(
+        `vms-tui: cannot follow redirect (${c.kind}): ${url}\n`,
+      );
+      redirectFailed = true;
+      return;
+    }
+    if (c.kind === "different-origin") {
+      const detail = `This app asked to open an external URL:\n\n  ${c.url}`;
+      const fb = (): void =>
+        adapter.showInterstitial(
+          `${detail}\n\n(no browser could be launched — open it manually)`,
+        );
+      if (openExternal(c.url, fb)) {
+        adapter.showInterstitial(`${detail}\n\n(opening in your browser…)`);
+      } else {
+        fb();
+      }
+    } else {
+      adapter.showInterstitial(
+        `This app returned an invalid redirect:\n\n  ${JSON.stringify(url)}`,
+      );
+    }
+  };
+
+  const connect = (ep: string): ViewModelShell =>
+    new ViewModelShell({
+      endpoint: ep,
+      actionEndpoint: `${ep.replace(/\/+$/, "")}/action`,
+      adapter,
+      onError: (err) => {
+        loadFailed = true;
+        // A stderr line guarantees visibility even before the first render.
+        process.stderr.write(`vms-tui: ${err.message}\n`);
+      },
+      onRedirect: (url) => handleRedirect(url, ep),
+    });
+
+  currentShell = connect(endpoint);
 
   try {
-    await shell.load();
+    await currentShell.load();
   } catch (err) {
     loadFailed = true;
     process.stderr.write(`vms-tui: ${(err as Error).message}\n`);
   }
 
   if (!process.stdout.isTTY) {
-    // Non-TTY (piped / CI): Phase 0 has nothing to interact with — emit one
-    // static frame and exit instead of hanging waiting for a Ctrl-C that can
-    // never come. The delay lets Ink flush its throttled render.
+    // Non-TTY (piped / CI): nothing to interact with — emit one static frame
+    // and exit instead of hanging on a Ctrl-C that can never come. The delay
+    // lets Ink flush its throttled render. (Redirects can't fire here: load()
+    // ignores response.redirect and non-TTY performs no dispatch — so
+    // redirectFailed stays false unless a future code path dispatches.)
     await delay(80);
-    return shutdown(loadFailed ? 1 : 0);
+    return shutdown(loadFailed || redirectFailed ? 1 : 0);
   }
 
   // Load/connection failure → nothing rendered; exit now rather than wait for
@@ -152,13 +203,10 @@ async function main(): Promise<void> {
     return shutdown(1);
   }
 
-  // TTY + rendered: keep the frame up until the user quits (Ctrl-C). Phase 0's
-  // tree has no input hooks (useInput/useFocus arrive in Phase 2), so Ink does
-  // NOT hold the event loop open — without an active handle Node finds the loop
-  // empty and exits (code 0) the instant load() returns, before any signal can
-  // arrive. Hold the loop ourselves with a no-op timer; the SIGINT/SIGTERM
-  // handlers own the actual exit + terminal restore. (waitUntilExit() still
-  // wins the race if Ink unmounts for another reason, e.g. future phases.)
+  // TTY + rendered: keep the frame up until the user quits (Ctrl-C). Ink's
+  // resumed raw stdin holds the loop (Phase 2+), but the no-op timer is kept
+  // as belt-and-suspenders; the SIGINT/SIGTERM handlers own exit + restore.
+  // (waitUntilExit() wins the race if Ink unmounts for another reason.)
   const keepAlive = setInterval(() => {}, 1 << 30);
   await adapter.waitUntilExit();
   clearInterval(keepAlive);

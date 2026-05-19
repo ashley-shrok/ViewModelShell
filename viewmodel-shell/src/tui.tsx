@@ -16,6 +16,10 @@ import type {
   FormNode,
   FieldNode,
 } from "./index.js";
+import { spawn } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 type InkInstance = ReturnType<typeof inkRender>;
 
@@ -75,6 +79,67 @@ interface Focusable {
  *  deterministic unit test of the byte format. */
 export function osc52(text: string): string {
   return `\x1b]52;c;${Buffer.from(String(text), "utf8").toString("base64")}\x07`;
+}
+
+/** Hand a URL to a real browser — the terminal analog of a redirect. Zero-dep
+ *  (node:child_process). Opener order: $BROWSER → platform default. Detached +
+ *  unref so a launched browser can never hold or block the Node event loop
+ *  (teardown discipline). Returns false only if spawn threw *synchronously*
+ *  (no opener attempted); an async spawn failure (e.g. ENOENT — no xdg-open)
+ *  invokes `onSpawnError`. Callers map BOTH false and onSpawnError to the loud
+ *  interstitial, so a redirect is never silently lost. Exported so a unit test
+ *  can drive it with a stubbed node:child_process. */
+export function openExternal(url: string, onSpawnError?: () => void): boolean {
+  const br = process.env.BROWSER;
+  const [cmd, args]: [string, string[]] =
+    br && br.trim()
+      ? [br, [url]]
+      : process.platform === "darwin"
+        ? ["open", [url]]
+        : process.platform === "win32"
+          ? ["cmd", ["/c", "start", "", url]]
+          : ["xdg-open", [url]];
+  try {
+    const child = spawn(cmd, args, { stdio: "ignore", detached: true });
+    child.once("error", () => onSpawnError?.());
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** How the vms-tui CLI's default onRedirect classifies a server redirect.
+ *  No new wire — pure URL/origin analysis against the current endpoint. A
+ *  relative path resolves against the endpoint ⇒ same-origin by construction;
+ *  an absolute URL is same-origin iff its `origin` matches (origin compare,
+ *  never a string prefix — `http://evil/?x=http://good` must NOT pass). */
+export type RedirectKind =
+  | { kind: "same-origin"; endpoint: string }
+  | { kind: "different-origin"; url: string }
+  | { kind: "invalid"; url: string };
+
+export function classify(url: string, fromEndpoint: string): RedirectKind {
+  const u = (url ?? "").trim();
+  if (!u) return { kind: "invalid", url };
+  let abs: URL;
+  try {
+    abs = new URL(u); // absolute?
+  } catch {
+    try {
+      // relative → resolve against the current endpoint ⇒ same-origin.
+      return { kind: "same-origin", endpoint: new URL(u, fromEndpoint).toString() };
+    } catch {
+      return { kind: "invalid", url };
+    }
+  }
+  try {
+    return abs.origin === new URL(fromEndpoint).origin
+      ? { kind: "same-origin", endpoint: abs.toString() }
+      : { kind: "different-origin", url: abs.toString() };
+  } catch {
+    return { kind: "invalid", url };
+  }
 }
 
 const isTruthyFormValue = (v?: string): boolean =>
@@ -244,6 +309,27 @@ function reconcile(
   return keys[0]!;
 }
 
+/** Full-screen loud notice (failed/external/invalid redirect, storage I/O
+ *  failure). Pure render — NO useInput of its own: it is shown by swapping
+ *  App's rendered subtree, App's existing sole useInput stays mounted, so the
+ *  unconditional Ctrl-C → requestExit branch still quits and the Phase 0–3
+ *  teardown topology is unchanged (no new input hook). */
+function Interstitial({ msg }: { msg: string }): ReactElement {
+  return (
+    <Box flexDirection="column" borderStyle="round" paddingX={2} paddingY={1}>
+      <Text bold color="yellow">
+        ⚠  Action required
+      </Text>
+      <Box marginTop={1}>
+        <Text>{msg}</Text>
+      </Box>
+      <Box marginTop={1}>
+        <Text dimColor>Press Ctrl-C to quit.</Text>
+      </Box>
+    </Box>
+  );
+}
+
 /** The stateful root. Mounted ONCE; the shell's poll/dispatch re-renders
  *  reconcile the SAME component instance (React preserves its focus state) —
  *  this is why a stable root component, not a bare tree. */
@@ -251,6 +337,7 @@ function App(props: {
   vm: ViewNode;
   onAction: (a: ActionEvent) => void;
   requestExit: (code: number) => void;
+  interstitial?: string | null;
   renderWith: (vm: ViewNode, rctx: RCtx) => ReactElement;
 }): ReactElement {
   const { vm, renderWith } = props;
@@ -280,6 +367,11 @@ function App(props: {
   onActionRef.current = props.onAction;
   const requestExitRef = useRef(props.requestExit);
   requestExitRef.current = props.requestExit;
+  // Same single useInput — NOT a new hook. While an interstitial is shown the
+  // ring is inert (only Ctrl-C acts) so a stray key can't dispatch into the
+  // shell behind a terminal notice. Mirrors the existing editingRef guard.
+  const interstitialActiveRef = useRef<boolean>(props.interstitial != null);
+  interstitialActiveRef.current = props.interstitial != null;
   const listRef = useRef(list);
   listRef.current = list;
   const effectiveRef = useRef(effective);
@@ -449,6 +541,7 @@ function App(props: {
         requestExitRef.current(130);
         return;
       }
+      if (interstitialActiveRef.current) return; // notice up: only Ctrl-C acts
       const ring = listRef.current;
       if (ring.length === 0) return;
       let idx = ring.findIndex((d) => d.key === effectiveRef.current);
@@ -486,6 +579,8 @@ function App(props: {
     onFieldChange: (k, v) => setDraft((s) => ({ ...s, [k]: v })),
     onFieldSubmit,
   };
+  if (props.interstitial != null)
+    return <Interstitial msg={props.interstitial} />;
   return renderWith(vm, rctx);
 }
 
@@ -517,12 +612,24 @@ export class TuiAdapter implements Adapter {
    *  CLI's single idempotent shutdown. A TUI-internal seam between our two
    *  leaf files — NOT part of the core Adapter interface. */
   private requestExit: (code: number) => void = () => {};
+  /** session storage — in-memory, process lifetime (browser sessionStorage
+   *  analog for a single-process CLI). Write-only per the wire contract. */
+  private sessionStore = new Map<string, string>();
+  /** When non-null, App renders the loud Interstitial instead of the vm. */
+  private interstitial: string | null = null;
+  /** Last rendered vm/onAction — so showInterstitial can rerender through the
+   *  SAME single Ink instance (never a 2nd inkRender). */
+  private lastVm: ViewNode | undefined;
+  private lastOnAction: (a: ActionEvent) => void = () => {};
 
   setRequestExit(fn: (code: number) => void): void {
     this.requestExit = fn;
   }
 
   render(vm: ViewNode, onAction: (action: ActionEvent) => void): void {
+    this.lastVm = vm;
+    this.lastOnAction = onAction;
+    this.interstitial = null; // a fresh view supersedes any prior notice
     const app = this.createApp(vm, onAction);
     if (!this.instance) {
       // exitOnCtrlC:false — the CLI is the single owner of teardown; Ink must
@@ -546,11 +653,95 @@ export class TuiAdapter implements Adapter {
         vm={vm}
         onAction={onAction}
         requestExit={opts?.requestExit ?? this.requestExit}
+        interstitial={this.interstitial}
         renderWith={(v, rctx) =>
           this.renderNode(v, 0, "comfortable", undefined, rctx)
         }
       />
     );
+  }
+
+  /** Render a full-screen loud notice through the SINGLE existing Ink instance
+   *  (never a 2nd inkRender, never a raw stdout write that would corrupt Ink's
+   *  diff / the ESC[?25h restore). No-op once disposed — closes the
+   *  redirect-during-teardown rerender-after-unmount race. Process stays
+   *  alive; the CLI owns exit (Ctrl-C via App's existing useInput → shutdown).
+   *  Mounts the instance if a notice somehow precedes the first render (that
+   *  is still the FIRST inkRender, not a second). */
+  showInterstitial(msg: string): void {
+    if (this.disposed) return;
+    this.interstitial = msg;
+    const vm = this.lastVm ?? ({ type: "text", value: "" } as ViewNode);
+    const app = this.createApp(vm, this.lastOnAction);
+    if (this.instance) this.instance.rerender(app);
+    else this.instance = inkRender(app, { exitOnCtrlC: false });
+  }
+
+  /** Standalone redirect fallback. Only reached when a consumer wires
+   *  TuiAdapter WITHOUT ShellOptions.onRedirect — core precedence means the
+   *  vms-tui CLI's onRedirect suppresses this (proven by adapter-seam C/F).
+   *  Origin-blind (the adapter has no shell/endpoint ref): hand off to a
+   *  browser, else the loud interstitial. Never silent, never throws into
+   *  core. No-op once disposed. */
+  navigate(url: string): void {
+    if (this.disposed) return;
+    const fallback = (): void =>
+      this.showInterstitial(
+        `Open this URL to continue:\n\n  ${url}\n\n(no browser could be launched — open it manually)`,
+      );
+    if (!openExternal(url, fallback)) fallback();
+  }
+
+  /** Write-only client storage. `session` → in-memory (process lifetime).
+   *  `local` → a SYNCHRONOUS XDG state-file write — synchronous is mandatory:
+   *  the core applies side-effects before the redirect branch (adapter-seam
+   *  Case E), so the token must land before navigation. Fail-loud, never
+   *  swallow, never re-throw into core (push() has no try/catch): an I/O error
+   *  or an unparseable EXISTING store surfaces the loud interstitial + a
+   *  stderr line and does NOT clobber a possibly-unrelated user file. */
+  storage(scope: "local" | "session", key: string, value: string): void {
+    if (scope === "session") {
+      this.sessionStore.set(key, value);
+      return;
+    }
+    const xdg = process.env.XDG_STATE_HOME;
+    const base = xdg && xdg.trim() ? xdg : join(homedir(), ".local", "state");
+    const dir = join(base, "vms-tui");
+    const file = join(dir, "storage.json");
+    try {
+      mkdirSync(dir, { recursive: true });
+      let existing: string | undefined;
+      try {
+        existing = readFileSync(file, "utf8");
+      } catch {
+        existing = undefined; // ENOENT → fresh store (not a failure)
+      }
+      const obj: Record<string, string> =
+        existing !== undefined
+          ? (JSON.parse(existing) as Record<string, string>) // throw → caught: no clobber
+          : {};
+      obj[key] = value;
+      writeFileSync(file, JSON.stringify(obj));
+    } catch (err) {
+      const m = (err as Error).message;
+      try {
+        process.stderr.write(
+          `vms-tui: storage write failed (local "${key}"): ${m}\n`,
+        );
+      } catch {
+        /* stderr unavailable — the interstitial below is still loud */
+      }
+      this.showInterstitial(
+        `Storage write FAILED — your data was NOT saved.\n\n  key:   ${key}\n  error: ${m}`,
+      );
+    }
+  }
+
+  /** Test-only: read back a session value. The wire contract has no storage
+   *  read; this exists solely so a unit test can prove the write landed
+   *  (same rationale as exporting osc52 for a deterministic test). */
+  _peekSession(key: string): string | undefined {
+    return this.sessionStore.get(key);
   }
 
   /** Pure ViewNode → Ink element, UNFOCUSED (NO_CTX). Used by static unit
@@ -579,7 +770,7 @@ export class TuiAdapter implements Adapter {
   private unsupported(label: string, key: number | string): ReactElement {
     return (
       <Text key={key} color="yellow">
-        [unsupported: {label} — phase 3]
+        [unsupported: {label} — phase 4]
       </Text>
     );
   }

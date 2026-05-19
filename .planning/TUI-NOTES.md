@@ -251,3 +251,82 @@ before doing anything in a fresh-context resume.
   `/tmp/vms-baseline.txt`; web-bundle Vite hashes unchanged
   (`index-UzlLPlgm.css` + `index-B7l5XdRz.js`); 77 vitest + core-globals
   green; PTY matrix 11/11.
+
+## Phase 4 learnings (read before Phase 5)
+
+- **Core `push()` is NOT try/caught** (`index.ts:348-351`); `dispatch()` IS
+  (337-340); `load()` never calls `processResponse` and **ignores
+  `response.redirect`** (277-297). ⇒ a throwing `storage`/`navigate` is
+  uncaught on the push path. Decision (load-bearing): `TuiAdapter.storage`
+  surfaces I/O failure LOUDLY (stderr + `showInterstitial`) and **never
+  re-throws**; `navigate` never throws. A corrupt EXISTING `storage.json` is
+  surfaced loud and NOT clobbered (XDG path may collide with a user file —
+  fail-loud beats silent destruction).
+- **Core drops a falsy redirect**: `if (body.redirect)` (`index.ts:382`) —
+  `redirect:""` is treated as NO redirect (falls to vm render; with vm
+  omitted that's `render(undefined)` → Ink crash → clean exit 0, pre-existing,
+  NOT Phase 4). So the invalid-redirect interstitial branch is reachable ONLY
+  via a **truthy-but-unparseable** string. The PTY "invalid" mock MUST return
+  e.g. `{redirect:"http://"}` (truthy; `new URL("http://"[,base])` throws →
+  `classify` → invalid). A `{redirect:""}` mock tests nothing.
+- **`ViewModelShell.endpoint` is immutable, `load()` takes no URL** → a
+  same-origin redirect is followed by a NEW `ViewModelShell` reusing the ONE
+  adapter (Ink `rerender`s in place — no remount). `connect()`'s options carry
+  the same `onRedirect` so redirects chain; `currentShell.stopPolling()`
+  before the swap (no timer armed today — `grep -E 'nextPollIn|pollInterval'`
+  empty in the demo + cli — but defends a future one).
+- **Non-TTY redirect is unreachable-by-construction**: `load()` ignores
+  `response.redirect` and the non-TTY path performs no dispatch, so a redirect
+  only fires from a TTY dispatch (or `push()` in tests). The `redirectFailed`
+  funnel in `tui-cli.ts` is defensive only. Don't build a piped-redirect PTY
+  case — it can't fire; push()-driven unit tests cover that logic.
+- **Interstitial = single-Ink-instance `rerender` via an `interstitial` prop
+  on the SAME `App`** — never a 2nd `inkRender`, never raw stdout. App's sole
+  existing `useInput` stays mounted so the unconditional Ctrl-C→`requestExit
+  (130)` still quits; an added `interstitialActiveRef` guard (NOT a new hook —
+  mirrors `editingRef`) makes the ring inert so a stray key can't dispatch
+  behind the notice. NO new input hook ⇒ Phase 0-3 teardown topology
+  unchanged. `showInterstitial`/`navigate` early-return when `disposed`
+  (kills the redirect-during-teardown rerender-after-unmount race).
+- **`openExternal` failure is ASYNC**: `spawn` reports a missing opener via an
+  async `error` event, not a sync throw — so it returns `true` even when
+  `xdg-open` is absent; the caller passes an `onSpawnError` that shows the
+  interstitial. This box has NO opener + empty `$BROWSER`, so the interstitial
+  fallback is the PRIMARY exercised path (a strength — the default-tested one).
+  Zero new deps: `node:child_process/fs/os/path` only, in the two leaf files
+  (the core-globals guard scans only `index.ts`, so this is out of scope).
+- **Unit-test isolation gotcha**: `shell.push({sideEffects:[…]})` with NO
+  redirect falls through to `adapter.render()` (`index.ts:392-394`) → a real
+  Ink mount (raw-mode stderr + leaked handle) under node-env. Storage tests
+  MUST `vi.spyOn(adapter,"render").mockImplementation(()=>{})` (mirrors the
+  carried test C). Storage runs in the side-effects loop BEFORE render, so
+  stubbing render doesn't affect the assertion. `vi.mock("node:child_process",
+  spread + override spawn)` via `vi.hoisted` keeps spawn deterministic for the
+  whole file (Phase 1-3 never call spawn → harmless).
+- **PTY headline staging**: the simple one-shot-`keyA` harness CANNOT stage
+  Tab-focus-then-type (focus changes need inter-key rerenders — the Phase-2
+  timing rule); a single burst deadline-kills (`-9`, NOT a regression). Use a
+  PACED harness (`Tab; pump 0.5s` ×3, then type, then Enter). Prove the server
+  round-trip by the nav COUNT (`All (3)`→`All (4)`), NOT the typed text (it
+  shows in the editor pre-submit anyway). Tasks focus order: All, Active,
+  Completed (3 nav buttons) → the title field is the 4th focusable (3 Tabs
+  from the auto-focused "All").
+- **No node graduated** (modal/table/textarea/code/select/select-multiple/file
+  still deferred). Fail-loud string single-sourced, bumped 3→4 at
+  `tui.tsx unsupported()`; retargeted test B (`table`) + the deferred test
+  (`modal` + `field(<it>)`) to `phase 4`. **Phase-5 rule:** 5a-5d each
+  graduate a node → bump 4→5 AND DELETE that node's `[unsupported]`
+  placeholder + retarget the assertions to a still-deferred node.
+- **Phase 4 blast radius (verified at VCS level).** `git status` = ONLY
+  `src/tui.tsx`, `src/tui-cli.ts`, `test/tui.test.ts` (+ `.planning/*` in the
+  commit). **NO `package.json`/`package-lock.json` change — zero new deps**
+  (Node builtins only; distinct from Phase 3 which added `ink-text-input`). 6
+  core dist hashes byte-identical to `/tmp/vms-baseline.txt`; web-bundle Vite
+  hashes unchanged (`index-UzlLPlgm.css` + `index-B7l5XdRz.js`); **86 vitest**
+  (77→86, +9) + core-globals green. **PTY matrix (all cursor-restored):**
+  standard vs LIVE `:3000` SIGINT→130 / SIGTERM→143 / Ctrl-C→130;
+  no-arg→2, bad-url→2, unreachable→1, piped→0; NEW diff-origin→interstitial→
+  SIGINT 130 / SIGTERM 143; invalid(truthy-unparseable)→interstitial→Ctrl-C
+  130 / SIGINT 130; live headline add via real bun `All(3)→All(4)`→Ctrl-C
+  130. Tasks emits no redirect/sideEffects ⇒ Phase-4 paths are dormant for it
+  (no-regression by construction + the live headline).

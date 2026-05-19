@@ -4,12 +4,30 @@
 // per-file docblock overrides the global jsdom environment without touching
 // the shared vitest.config.ts (the existing jsdom suites stay untouched).
 
-import { describe, it, expect, vi } from "vitest";
-import { readFileSync } from "node:fs";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdtempSync,
+  rmSync,
+  existsSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { render } from "ink-testing-library";
 import { ViewModelShell, type ViewNode, type ActionEvent } from "../src/index.js";
-import { TuiAdapter, osc52 } from "../src/tui.js";
+import { TuiAdapter, osc52, classify } from "../src/tui.js";
+
+// Phase 4: openExternal() spawns the browser via node:child_process. Mock ONLY
+// `spawn` (keep every other real export) so a redirect's navigate path is
+// deterministic + side-effect-free in unit tests. Only the Phase-4 tests that
+// trigger a redirect ever call spawn; Phase 1/2/3 never do.
+const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return { ...actual, spawn: spawnMock };
+});
 
 const frame = (vm: ViewNode): string =>
   String(render(new TuiAdapter().renderTree(vm)).lastFrame() ?? "");
@@ -85,7 +103,7 @@ describe("Phase 3 — TuiAdapter (Phase-1/2 render preserved; unfocused == Phase
   // (progress is now implemented, so B is retargeted to `table`).
   it("renders a fail-loud placeholder for deferred nodes", () => {
     const vm = { type: "table", columns: [], rows: [] } as unknown as ViewNode;
-    expect(frame(vm)).toContain("[unsupported: table — phase 3]");
+    expect(frame(vm)).toContain("[unsupported: table — phase 4]");
   });
 
   // C — core→adapter render seam: pushing a response through the shell
@@ -398,7 +416,7 @@ describe("Phase 3 — TuiAdapter (Phase-1/2 render preserved; unfocused == Phase
   it("deferred node types & field input types fail loud", () => {
     expect(
       frame({ type: "modal", children: [] } as unknown as ViewNode),
-    ).toContain("[unsupported: modal — phase 3]");
+    ).toContain("[unsupported: modal — phase 4]");
     for (const it of [
       "textarea",
       "code",
@@ -408,7 +426,7 @@ describe("Phase 3 — TuiAdapter (Phase-1/2 render preserved; unfocused == Phase
     ]) {
       expect(
         frame({ type: "field", name: "x", inputType: it } as unknown as ViewNode),
-      ).toContain(`[unsupported: field(${it}) — phase 3]`);
+      ).toContain(`[unsupported: field(${it}) — phase 4]`);
     }
   });
 
@@ -971,5 +989,160 @@ describe("Phase 3 — single-line field editor", () => {
     expect(stripAnsi(d.frame())).toContain("two words");
     expect(onA).not.toHaveBeenCalled();
     d.unmount();
+  });
+});
+
+describe("Phase 4 — redirect/navigate + storage verbs", () => {
+  type PushArg = Parameters<ViewModelShell["push"]>[0];
+  type ShellOpts = ConstructorParameters<typeof ViewModelShell>[0];
+  const PUSH = (extra: Record<string, unknown>): PushArg =>
+    ({ vm: { type: "text", value: "" }, state: {}, ...extra }) as PushArg;
+  const mkShell = (
+    adapter: ShellOpts["adapter"],
+    opts: Partial<ShellOpts> = {},
+  ): ViewModelShell =>
+    new ViewModelShell({
+      endpoint: "http://localhost:3000/api/tasks",
+      actionEndpoint: "http://localhost:3000/api/tasks/action",
+      adapter,
+      ...opts,
+    });
+
+  afterEach(() => {
+    spawnMock.mockReset();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  // ── redirect: precedence + browser fallback + fail-loud floor
+  //    (mirrors adapter-seam.test.ts Cases C / B / D-F) ───────────────────────
+  it("onRedirect set wins over adapter.navigate (no fail-loud)", () => {
+    const adapter = new TuiAdapter();
+    const navSpy = vi.spyOn(adapter, "navigate");
+    const onRedirect = vi.fn();
+    const onError = vi.fn();
+    mkShell(adapter, { onRedirect, onError }).push(PUSH({ redirect: "/x" }));
+    expect(onRedirect).toHaveBeenCalledWith("/x");
+    expect(navSpy).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("no onRedirect → adapter.navigate hands the URL to a browser (spawn)", () => {
+    spawnMock.mockReturnValue({ once: vi.fn(), unref: vi.fn() } as never);
+    mkShell(new TuiAdapter()).push(
+      PUSH({ redirect: "https://other.example/oauth" }),
+    );
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    const args = spawnMock.mock.calls[0]![1] as string[];
+    expect(args).toContain("https://other.example/oauth");
+  });
+
+  it("neither onRedirect nor navigate → fail loud via onError", () => {
+    const onError = vi.fn();
+    mkShell({ render() {} }, { onError }).push(PUSH({ redirect: "/x" }));
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect((onError.mock.calls[0]![0] as Error).message).toContain("navigate");
+  });
+
+  // ── storage: local file / session memory / fail-loud
+  //    (mirrors adapter-seam.test.ts Cases A / D) ─────────────────────────────
+  it("storage local writes the XDG state file", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "vms-xdg-"));
+    vi.stubEnv("XDG_STATE_HOME", tmp);
+    try {
+      const adapter = new TuiAdapter();
+      // push() with no redirect falls through to adapter.render(); stub it so
+      // the storage unit test never mounts a real Ink instance (pure unit —
+      // storage runs in the side-effects loop, BEFORE render, regardless).
+      vi.spyOn(adapter, "render").mockImplementation(() => {});
+      mkShell(adapter).push(
+        PUSH({
+          sideEffects: [{ type: "set-local-storage", key: "k", value: "v" }],
+        }),
+      );
+      const file = join(tmp, "vms-tui", "storage.json");
+      expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ k: "v" });
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("storage session is in-memory only — no file written", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "vms-xdg-"));
+    vi.stubEnv("XDG_STATE_HOME", tmp);
+    try {
+      const adapter = new TuiAdapter();
+      vi.spyOn(adapter, "render").mockImplementation(() => {}); // pure: no Ink
+      mkShell(adapter).push(
+        PUSH({
+          sideEffects: [{ type: "set-session-storage", key: "s", value: "v" }],
+        }),
+      );
+      expect(adapter._peekSession("s")).toBe("v");
+      expect(existsSync(join(tmp, "vms-tui", "storage.json"))).toBe(false);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("missing storage capability → fail loud via onError", () => {
+    const onError = vi.fn();
+    mkShell({ render() {} }, { onError }).push(
+      PUSH({
+        sideEffects: [{ type: "set-local-storage", key: "k", value: "v" }],
+      }),
+    );
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect((onError.mock.calls[0]![0] as Error).message).toContain("storage");
+  });
+
+  it("storage I/O failure is loud (interstitial) and never thrown into core", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "vms-xdg-"));
+    const asFile = join(tmp, "not-a-dir");
+    writeFileSync(asFile, "x"); // XDG base is a FILE → mkdir under it = ENOTDIR
+    vi.stubEnv("XDG_STATE_HOME", asFile);
+    try {
+      const adapter = new TuiAdapter();
+      vi.spyOn(adapter, "render").mockImplementation(() => {}); // pure: no Ink
+      const spy = vi
+        .spyOn(adapter, "showInterstitial")
+        .mockImplementation(() => {});
+      expect(() =>
+        mkShell(adapter).push(
+          PUSH({
+            sideEffects: [{ type: "set-local-storage", key: "k", value: "v" }],
+          }),
+        ),
+      ).not.toThrow();
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  // ── classify(): the same-origin reconnect decision (pure) ──────────────────
+  it("classify resolves relative / abs-same / abs-diff / invalid", () => {
+    const ep = "http://localhost:3000/api/tasks";
+    expect(classify("/dash", ep)).toEqual({
+      kind: "same-origin",
+      endpoint: "http://localhost:3000/dash",
+    });
+    expect(classify("http://localhost:3000/x", ep).kind).toBe("same-origin");
+    expect(classify("https://other.example/x", ep)).toEqual({
+      kind: "different-origin",
+      url: "https://other.example/x",
+    });
+    expect(classify("", ep).kind).toBe("invalid");
+    expect(classify("   ", ep).kind).toBe("invalid");
+  });
+
+  // ── fail-loud string single-sourced, bumped 3 → 4 (B + deferred retargeted)
+  it("fail-loud placeholder string is now phase 4", () => {
+    expect(
+      frame({ type: "table", columns: [], rows: [] } as unknown as ViewNode),
+    ).toContain("[unsupported: table — phase 4]");
+    expect(
+      frame({ type: "modal", children: [] } as unknown as ViewNode),
+    ).toContain("[unsupported: modal — phase 4]");
   });
 });

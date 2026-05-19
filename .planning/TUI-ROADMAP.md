@@ -12,7 +12,9 @@ hardcoded — completed phases are read from git:
 - Phase 1 — COMPLETE (committed; `git log --grep='feat(tui): Phase 1'`).
 - Phase 2 — COMPLETE (committed; `git log --grep='feat(tui): Phase 2'`).
 - Phase 3 — COMPLETE (committed; `git log --grep='feat(tui): Phase 3'`).
-- NEXT — Phase 4.
+- Phase 4 — COMPLETE (committed; `git log --grep='feat(tui): Phase 4'`).
+- NEXT — Phase 5 (deferred node tier; 5a/5b/5c/5d are independent
+  sub-milestones — rewind between each; commit `feat(tui): Phase 5a — …`).
 
 (Each finishing phase updates this line in its own commit.)
 
