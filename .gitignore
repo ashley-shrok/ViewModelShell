@@ -16,8 +16,10 @@ demo/*/AspNetCore/wwwroot/
 # NuGet pack output — build artifacts, never commit
 viewmodel-shell-dotnet/nupkg/
 
-# npm auth tokens — never commit
+# Secrets / auth — NEVER commit
 .npmrc
+.env
+.env.*
 
 # SQLite DBs created at runtime by demos / parity runs
 demo/HelpDesk/AspNetCore/helpdesk.db
