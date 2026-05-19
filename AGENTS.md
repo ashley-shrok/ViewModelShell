@@ -511,7 +511,7 @@ For DB-backed apps, use a named in-memory SQLite connection shared across test m
 
 ## Demo apps
 
-Worked, runnable examples live under `demo/` — read the ones nearest your app's shape before writing new code; the patterns are consistent across them, and each demo's source/entrypoint shows what it exercises. No catalog here on purpose: the demo set grows and a list would drift — `ls demo/` is the current, authoritative set (the `*-bun` mirrors are the TypeScript-backend twins of the same demos).
+Worked, runnable examples live under `demo/` — read the ones nearest your app's shape before writing new code; the patterns are consistent across them, and each demo's source/entrypoint shows what it exercises. No catalog here on purpose: the demo set grows and a list would drift discover them yourself instead: `ls demo/` is the live set (`<Name>-bun/` is the TypeScript-backend twin of `<Name>/`), and `parity/backends.json` is the machine-checked registry of every backend — it *can't* go stale, because CI fails the moment it drifts from reality.
 
 ---
 
