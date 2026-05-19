@@ -1956,3 +1956,118 @@ describe("Phase 5d — table (sortable headers / per-column filter / clickable r
     r.unmount();
   });
 });
+
+// ── 0.4.5 — viewport fill + alternate-screen opt-out ────────────────────────
+// The fill gate keys off the REAL process TTYs, NOT Ink's isRawModeSupported
+// (which ink-testing-library forces true). Under vitest process.stdout.isTTY
+// is false ⇒ gate off ⇒ every other suite is byte-unchanged by construction.
+// These tests force (and restore) the real TTY flags to drive the interactive
+// branch. ink-testing-library's fake stdout has columns=100 and is an
+// EventEmitter, so a "resize" can be simulated. Bordered card sections make
+// the laid-out width unambiguous in the frame.
+describe("0.4.5 — viewport fill + opt-out + resize", () => {
+  const widthOf = (s: string): number =>
+    Math.max(0, ...stripAnsi(s).split("\n").map((l) => l.length));
+  // Ink trims trailing whitespace per line, so a wider parent Box is NOT
+  // observable via frame width when children don't stretch — but it DOES emit
+  // blank lines for a fixed `height` (probed). So height/line-count is the
+  // robust signal for "fills the viewport". ink-testing-library's fake stdout
+  // has columns=100 but NO rows; we install both as getters + fire "resize".
+  const lineCount = (s: string): number => stripAnsi(s).split("\n").length;
+  const setSize = (
+    r: ReturnType<typeof render>,
+    cols: number,
+    rows: number,
+  ): void => {
+    Object.defineProperty(r.stdout, "columns", { configurable: true, get: () => cols });
+    Object.defineProperty(r.stdout, "rows", { configurable: true, get: () => rows });
+    (r.stdout as unknown as { emit(e: string): void }).emit("resize");
+  };
+
+  let restoreTTY: (() => void) | null = null;
+  const forceTTY = (): void => {
+    const so = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
+    const si = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+    Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true });
+    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
+    restoreTTY = () => {
+      if (so) Object.defineProperty(process.stdout, "isTTY", so);
+      else delete (process.stdout as { isTTY?: boolean }).isTTY;
+      if (si) Object.defineProperty(process.stdin, "isTTY", si);
+      else delete (process.stdin as { isTTY?: boolean }).isTTY;
+    };
+  };
+  afterEach(() => {
+    restoreTTY?.();
+    restoreTTY = null;
+  });
+
+  // sidebar: rail (flexBasis 24) + main (flexGrow 1). The reporter's bug =
+  // main can't expand with no terminal-sized ancestor. Card variant ⇒ each
+  // pane draws a full-width border, so frame width is unambiguous.
+  const sidebar = {
+    type: "page",
+    layout: "sidebar",
+    children: [
+      { type: "section", variant: "card", heading: "Nav", children: [{ type: "text", value: "N" }] },
+      { type: "section", variant: "card", children: [{ type: "text", value: "M" }] },
+    ],
+  } as unknown as ViewNode;
+  const mk = (a: TuiAdapter) =>
+    render(a.createApp(sidebar, () => {}, { requestExit: () => {} }));
+
+  it("fills the terminal height by default on a real TTY (vs opt-out)", async () => {
+    forceTTY();
+    const fill = mk(new TuiAdapter());
+    await tick(20);
+    setSize(fill, 80, 24);
+    await tick(20);
+    const fillH = lineCount(String(fill.lastFrame() ?? ""));
+    fill.unmount();
+
+    forceTTY();
+    const content = mk(new TuiAdapter({ viewport: "content" }));
+    await tick(20);
+    setSize(content, 80, 24); // same stdout; opt-out must IGNORE it
+    await tick(20);
+    const contentH = lineCount(String(content.lastFrame() ?? ""));
+    content.unmount();
+
+    expect(fillH).toBeGreaterThanOrEqual(20); // ~ filled the 24-row terminal
+    expect(contentH).toBeLessThan(12); // intrinsic content only
+    expect(fillH).toBeGreaterThan(contentH);
+  });
+
+  it("re-measures on stdout 'resize' (24 → 10 rows ⇒ shorter)", async () => {
+    forceTTY();
+    const r = mk(new TuiAdapter());
+    await tick(20);
+    setSize(r, 80, 24);
+    await tick(20);
+    const tall = lineCount(String(r.lastFrame() ?? ""));
+    setSize(r, 80, 10);
+    await tick(20);
+    const short = lineCount(String(r.lastFrame() ?? ""));
+    expect(tall).toBeGreaterThanOrEqual(20);
+    expect(short).toBeLessThan(tall);
+    expect(short).toBeLessThanOrEqual(12);
+    r.unmount();
+  });
+
+  it("non-TTY (real vitest default) does NOT fill — byte-stable path", async () => {
+    // forceTTY NOT called ⇒ process.stdout.isTTY is the real vitest value
+    // (false) ⇒ gate off ⇒ identical to the explicit opt-out.
+    const off = mk(new TuiAdapter());
+    await tick(20);
+    const offW = widthOf(String(off.lastFrame() ?? ""));
+    off.unmount();
+
+    forceTTY();
+    const out = mk(new TuiAdapter({ viewport: "content" }));
+    await tick(20);
+    const outW = widthOf(String(out.lastFrame() ?? ""));
+    out.unmount();
+
+    expect(offW).toBe(outW);
+  });
+});

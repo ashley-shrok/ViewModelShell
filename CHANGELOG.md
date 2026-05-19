@@ -6,6 +6,24 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.4.5 — Terminal full-viewport + alternate screen (npm only)
+
+**npm:** `0.4.5` (PATCH — additive, client-only) · **NuGet:** unchanged at `0.4.2`
+
+Client-only terminal-adapter enhancement; per the versioning model an npm patch bump while NuGet is untouched (major.minor stays `0.4`). No wire, type, or API change; no backend change.
+
+### Added / Changed
+
+- **The terminal adapter now fills the viewport.** On an interactive TTY `TuiAdapter` occupies the whole terminal via the alternate-screen buffer (vim/htop-style takeover; prior scrollback restored verbatim on exit) and re-flows on `resize`, so `layout: "sidebar"` and any `flexGrow` content expand instead of rendering a small box in a corner — the terminal analog of `BrowserAdapter` filling the browser viewport. Root cause of the old behavior: Ink does not size its root to the terminal, so `flexGrow` had no terminal-sized ancestor to expand into. **This changes the default look on an interactive terminal** (previously intrinsic content size).
+- **Opt-out:** `new TuiAdapter({ viewport: "content" })` keeps the prior content-size behavior with no screen takeover.
+- **Non-interactive runs are unaffected.** Pipe / CI / agent / `</dev/null` keep the `0.4.4` behavior exactly: one static frame, exit, **no alternate-screen escape emitted**. The fill/alt-screen gate keys off the real `process.stdout`/`process.stdin` TTYs; alternate-screen restore is funnelled through the same idempotent teardown as the cursor restore (re-verified Ctrl-C/SIGINT/SIGTERM/crash).
+
+### Consumers
+
+- **None required for browser/server consumers** — client-only, no wire/type/NuGet change. **Terminal consumers:** the default is now full-screen on an interactive TTY; pass `new TuiAdapter({ viewport: "content" })` if you need the old intrinsic size. Non-TTY/CI behavior is unchanged.
+
+---
+
 ## 0.4.4 — Terminal non-TTY crash fix (npm only)
 
 **npm:** `0.4.4` (PATCH — client-only bug fix) · **NuGet:** unchanged at `0.4.2`

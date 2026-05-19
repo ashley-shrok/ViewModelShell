@@ -32,6 +32,14 @@ hardcoded — completed phases are read from git:
   coerced; CLI also treats non-TTY stdin as non-interactive). Client-only
   PATCH; NuGet still `0.4.2`; effort remains COMPLETE — this is maintenance,
   not a new phase. See `.planning/TUI-NOTES.md` "Post-0.4.3 hotfix".
+- POST-RELEASE — npm **`0.4.5`** (committed; `git log --grep='feat(tui)'`):
+  terminal full-viewport + alternate-screen (interactive TTY fills the
+  screen like vim/htop, restored on every exit; re-flows on resize). Fixes
+  the "small box in a corner" — Ink doesn't size its root to the terminal so
+  `flexGrow`/`sidebar` had no space. Default-on for interactive TTY; opt out
+  `new TuiAdapter({ viewport:"content" })`; non-TTY unchanged. Client-only
+  PATCH; NuGet still `0.4.2`. tui-cli.ts UNCHANGED (alt-screen restore rides
+  the existing dispose() funnel). See `.planning/TUI-NOTES.md` "0.4.5".
 
 (Each finishing phase updates this line in its own commit.)
 

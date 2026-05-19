@@ -6,6 +6,29 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `0.4.5` (Terminal full-viewport + alternate screen — npm only)
+
+**Behavior change on an interactive terminal only.** `TuiAdapter` /
+`vms-tui` now fill the screen via the alternate-screen buffer (vim/htop
+style; your terminal is restored verbatim on every exit — quit, Ctrl-C,
+SIGTERM, crash) and re-flow on resize, instead of rendering at intrinsic
+content size. NuGet unchanged at `0.4.2`; major.minor stays `0.4`.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.4.4` | **`0.4.5`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.4.2` | `0.4.2` (unchanged) |
+
+- **Browser / server consumers:** nothing to do — no wire, type, or API
+  change.
+- **Terminal consumers who want the old look:**
+  `new TuiAdapter({ viewport: "content" })` — intrinsic content size, no
+  screen takeover (pre-`0.4.5` behavior).
+- **Non-interactive (pipe / CI / agent / `</dev/null`):** unchanged from
+  `0.4.4` — one static frame, no alternate screen.
+
+---
+
 ## Upgrading to npm `0.4.4` (Terminal non-TTY crash fix — npm only)
 
 **Nothing to do** beyond taking the patch. `0.4.4` fixes a `0.4.3` bug where

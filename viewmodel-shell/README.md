@@ -56,6 +56,8 @@ const shell = new ViewModelShell({
 shell.load();
 ```
 
+On an interactive terminal the app **fills the screen** via the alternate-screen buffer — a vim/htop-style takeover that re-flows on resize and restores your prior terminal verbatim on exit (every exit path: quit, Ctrl-C, SIGTERM, crash). Opt out with `new TuiAdapter({ viewport: "content" })` for intrinsic content size and no screen takeover. Non-interactive runs (pipe / CI / agent / `</dev/null`) are unaffected — one static frame, no alternate screen.
+
 The TUI is built on [Ink](https://github.com/vadimdemedes/ink) and friends, declared as **optional** dependencies (`ink`, `react`, `ink-text-input`, `ink-select-input`) so web and server consumers are unaffected — they are never imported by the browser, server, or core entrypoints. `npx vms-tui` installs them automatically. **Project consumers using `TuiAdapter` programmatically must add all four explicitly** — optional dependencies are *not* pulled transitively when another project depends on this package (notably with `bun install`):
 
 ```bash

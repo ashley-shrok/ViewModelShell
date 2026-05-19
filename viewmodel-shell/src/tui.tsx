@@ -780,11 +780,12 @@ function App(props: {
   onAction: (a: ActionEvent) => void;
   requestExit: (code: number) => void;
   interstitial?: string | null;
+  viewport?: "fill" | "content";
   renderWith: (vm: ViewNode, rctx: RCtx) => ReactElement;
 }): ReactElement {
   const { vm, renderWith } = props;
   const { isRawModeSupported } = useStdin();
-  const { write } = useStdout();
+  const { write, stdout } = useStdout();
   // `=== true` is LOAD-BEARING, not defensive. Ink's App.isRawModeSupported()
   // returns `this.props.stdin.isTTY`, which is `true` on a TTY but `undefined`
   // (never `false`) on a non-TTY stdin (pipe / </dev/null / agent / CI). Ink's
@@ -795,6 +796,33 @@ function App(props: {
   // `{ isActive: false }`, which Ink honors → clean static render. (A TTY
   // gives `true`; ink-testing-library gives `true` → tests unchanged.)
   const interactive = isRawModeSupported === true;
+
+  // Viewport fill (0.4.5). On a real interactive terminal, occupy the whole
+  // window so layout presets — especially `sidebar`'s flexGrow main pane —
+  // can expand: the terminal analog of BrowserAdapter filling the viewport
+  // via CSS. Gated on the REAL process TTYs, NOT Ink's isRawModeSupported
+  // (which ink-testing-library forces `true`): under vitest
+  // `process.stdout.isTTY` is false ⇒ no wrap ⇒ every existing App and
+  // conformance frame stays byte-identical by construction (and the pure
+  // `renderTree` path never reaches here). Opt out with
+  // `new TuiAdapter({ viewport: "content" })`.
+  const realTTY =
+    process.stdout.isTTY === true && process.stdin.isTTY === true;
+  const fillViewport = realTTY && props.viewport !== "content";
+  const [vp, setVp] = useState<{ cols?: number; rows?: number }>(() => ({
+    cols: stdout?.columns,
+    rows: stdout?.rows,
+  }));
+  useEffect(() => {
+    if (!fillViewport || !stdout) return;
+    const onResize = (): void =>
+      setVp({ cols: stdout.columns, rows: stdout.rows });
+    onResize(); // sync to the live size on (re)mount
+    stdout.on("resize", onResize);
+    return () => {
+      stdout.off("resize", onResize);
+    };
+  }, [fillViewport, stdout]);
 
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -1153,19 +1181,35 @@ function App(props: {
     onFieldSubmit,
     onTableFilter: tableFilter,
   };
-  if (props.interstitial != null)
-    return <Interstitial msg={props.interstitial} />;
-  if (modal)
-    // Screen-ownership: render ONLY the modal, horizontally centered (the
-    // honest terminal "z-layer" — Ink has no z-index; base tree suppressed).
-    // Vertical centering deferred (no reliable terminal-height center in Ink;
-    // cosmetic, not load-bearing).
-    return (
+  const content: ReactElement =
+    props.interstitial != null ? (
+      <Interstitial msg={props.interstitial} />
+    ) : modal ? (
+      // Screen-ownership: render ONLY the modal, horizontally centered (the
+      // honest terminal "z-layer" — Ink has no z-index; base tree suppressed).
+      // Vertical centering deferred (no reliable terminal-height center in Ink;
+      // cosmetic, not load-bearing).
       <Box flexDirection="column" alignItems="center">
         {renderWith(modal, rctx)}
       </Box>
+    ) : (
+      renderWith(vm, rctx)
     );
-  return renderWith(vm, rctx);
+  // Fill the terminal so flexGrow children (the sidebar main pane) have a
+  // terminal-sized parent to expand into. `width` is the load-bearing dim
+  // (horizontal sidebar fill); `height` makes it a true full-screen surface
+  // (paired with the adapter's alternate-screen). `cols` is always present on
+  // a real TTY; if a host omits `rows`, height falls back to auto without
+  // breaking width. When !fillViewport (every test; non-TTY; opt-out) this
+  // returns `content` unchanged ⇒ byte-identical to pre-0.4.5.
+  if (fillViewport && typeof vp.cols === "number" && vp.cols > 0) {
+    return (
+      <Box width={vp.cols} height={vp.rows} flexDirection="column">
+        {content}
+      </Box>
+    );
+  }
+  return content;
 }
 
 /**
@@ -1197,6 +1241,18 @@ function App(props: {
 export class TuiAdapter implements Adapter {
   private instance: InkInstance | undefined;
   private disposed = false;
+  /** "fill" (default) = occupy the terminal + alternate-screen on a real
+   *  interactive TTY; "content" = legacy intrinsic-content size, no
+   *  alt-screen (the opt-out escape hatch — pre-0.4.5 behavior). */
+  private readonly viewport: "fill" | "content";
+  /** Set once ESC[?1049h was written, so dispose() emits the paired
+   *  ESC[?1049l exactly once (idempotent restore — same discipline as the
+   *  cursor restore Ink does on unmount). */
+  private altEntered = false;
+
+  constructor(opts?: { viewport?: "fill" | "content" }) {
+    this.viewport = opts?.viewport ?? "fill";
+  }
   /** Injected by tui-cli.ts: lets a keyboard Ctrl-C (which, under Ink's raw
    *  mode, is delivered as input 0x03 and never raises SIGINT) reach the
    *  CLI's single idempotent shutdown. A TUI-internal seam between our two
@@ -1222,6 +1278,26 @@ export class TuiAdapter implements Adapter {
     this.interstitial = null; // a fresh view supersedes any prior notice
     const app = this.createApp(vm, onAction);
     if (!this.instance) {
+      // Enter the alternate-screen buffer BEFORE the first mount so every
+      // frame draws there and the user's prior scrollback is untouched
+      // (restored verbatim by dispose()'s paired ESC[?1049l). Gated on the
+      // REAL process TTYs — the exact complement of the CLI's `nonInteractive`
+      // — so the 0.4.4 non-TTY static one-shot (pipe/CI/agent) emits NO
+      // escape, and unit tests (process.stdout.isTTY false under vitest)
+      // never enter it. "content" opts out entirely.
+      if (
+        this.viewport !== "content" &&
+        process.stdout.isTTY === true &&
+        process.stdin.isTTY === true &&
+        !this.altEntered
+      ) {
+        try {
+          process.stdout.write("\x1b[?1049h");
+          this.altEntered = true;
+        } catch {
+          /* if the enter write fails, dispose() must not emit the leave */
+        }
+      }
       // exitOnCtrlC:false — the CLI is the single owner of teardown; Ink must
       // not race it. Ctrl-C is handled in App and routed via requestExit.
       this.instance = inkRender(app, { exitOnCtrlC: false });
@@ -1244,6 +1320,7 @@ export class TuiAdapter implements Adapter {
         onAction={onAction}
         requestExit={opts?.requestExit ?? this.requestExit}
         interstitial={this.interstitial}
+        viewport={this.viewport}
         renderWith={(v, rctx) =>
           this.renderNode(v, 0, "comfortable", undefined, rctx)
         }
@@ -2184,6 +2261,20 @@ export class TuiAdapter implements Adapter {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.instance?.unmount();
+    this.instance?.unmount(); // Ink restores cursor/raw mode on the alt screen
+    if (this.altEntered) {
+      // THEN leave the alternate-screen buffer → the user's prior terminal
+      // (scrollback, cursor) is restored verbatim. Reached on EVERY exit
+      // path: the CLI funnels shutdown / SIGINT / SIGTERM / uncaught /
+      // unhandledRejection / process 'exit' all through dispose(), so a
+      // crash or kill cannot strand the user on the alt screen. Idempotent
+      // (disposed guard + altEntered cleared).
+      this.altEntered = false;
+      try {
+        process.stdout.write("\x1b[?1049l");
+      } catch {
+        /* stdout gone during teardown — nothing more we can do */
+      }
+    }
   }
 }

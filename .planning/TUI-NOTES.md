@@ -757,3 +757,55 @@ before doing anything in a fresh-context resume.
   NuGet UNCHANGED `0.4.2`; major.minor `0.4`). Commit is `fix(tui): …`
   (NOT a phase — the `feat(tui): Phase` ledger intentionally does not match
   it; the ROADMAP STATUS records the hotfix instead).
+
+## 0.4.5 — terminal full-viewport + alternate screen
+
+- **Ink does NOT size its root to the terminal (the reporter was right).**
+  Ink uses `stdout.columns` only as a TEXT-WRAP bound; a `<Box>` with no
+  width is content-sized, so `flexGrow` children (e.g. `layout:"sidebar"`
+  main) have no space to grow → "small box in the corner". Fix: wrap App's
+  interactive return in `<Box width={cols} height={rows}>` + alt-screen.
+  This is adapter medium-adaptation — the terminal analog of BrowserAdapter
+  filling the viewport via CSS — NOT a wire concern. A `page` wire field was
+  offered and DECLINED: it would force NuGet/parity/all-backend churn for a
+  terminal-only presentation flag (wrong layer; appearance≠arrangement).
+- **Gate on the REAL `process.stdout.isTTY && process.stdin.isTTY`, NOT
+  Ink's `isRawModeSupported`.** ink-testing-library forces
+  `isRawModeSupported` true AND its fake Stdout has `isTTY=true` — neither
+  distinguishes test from prod. The real `process.stdout.isTTY` is false
+  under vitest ⇒ gate off ⇒ all existing App + conformance frames
+  byte-identical BY CONSTRUCTION (renderTree never reaches the wrap). Same
+  "not a real interactive TTY ⇒ static" invariant every phase relied on.
+- **ink-testing-library fake Stdout:** `columns` getter = 100 (fixed), **NO
+  `rows`**, `isTTY=true`, EventEmitter. `render()` returns `.stdout` (the
+  instance) → `Object.defineProperty(r.stdout,'columns'|'rows',{get})` +
+  `r.stdout.emit('resize')` simulates a resize. `rows` absent ⇒ height auto
+  until you install a getter.
+- **Ink trims trailing whitespace per line ⇒ frame WIDTH is NOT
+  unit-observable** (a wider parent Box → same trailing-trimmed width when
+  children don't stretch). **Height IS: Ink emits blank lines for a fixed
+  `height`** (probed: `<Box height=20>` → 20 lines, maxWidth=2). Assert
+  LINE-COUNT, not width, for "fills the viewport". (Two red tests on the
+  width approach first — instrument/probe, don't guess. Again.)
+- **Alt-screen lifecycle (teardown-critical, ZERO tui-cli.ts change).**
+  ENTER `ESC[?1049h` in `render()` first-mount, BEFORE `inkRender`, gated
+  (realTTY && viewport!=="content" && !altEntered). LEAVE `ESC[?1049l` in
+  `dispose()` AFTER `instance.unmount()`, idempotent (`altEntered` +
+  `disposed` guards). `dispose()` is the CLI's single funnel (shutdown /
+  SIGINT / SIGTERM / uncaught / unhandledRejection / process 'exit' all call
+  it) ⇒ restore on EVERY exit incl. crash, with tui-cli.ts UNTOUCHED.
+  Non-TTY never enters ⇒ never leaves ⇒ 0.4.4 static one-shot stays
+  byte-clean (no escape emitted). PTY harness extended to assert
+  `?1049h`+`?1049l` presence per exit (mandatory for any alt-screen change;
+  reuse the 0.4.4 drain-to-EOF-then-blocking-waitpid recipe).
+- **`viewport` option = the FIRST TuiAdapter constructor** (there was none).
+  `new TuiAdapter({ viewport?: "fill" | "content" })` default `"fill"`;
+  existing `new TuiAdapter()` unchanged (non-breaking); threaded as an
+  `<App viewport>` prop.
+- **Verification (0.4.5).** Byte-identity core 6/6 (leaf-only: `tui.tsx` +
+  the test). **146 vitest** (143→146, +3 viewport). core-globals; web-bundle
+  hashes unchanged. **Extended PTY 3/3**: Ctrl-C→130 / SIGINT→130 /
+  SIGTERM→143, each `altEnter=altLeave=cursor=True`. Non-TTY
+  `</dev/null`/`|cat` emit NO `?1049[hl]`, exit 0; unreachable→1, no-arg→2,
+  bad-url→2. **tui-cli.ts UNCHANGED.** Shipped npm `0.4.5` PATCH
+  (client-only feature; NuGet untouched `0.4.2`); commit `feat(tui): …`.
