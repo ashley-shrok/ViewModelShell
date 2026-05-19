@@ -17,6 +17,9 @@ import type {
   FormNode,
   FieldNode,
   ModalNode,
+  TableNode,
+  TableColumn,
+  TableRow,
 } from "./index.js";
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -56,6 +59,10 @@ interface RCtx {
    *  supplies real closures, NO_CTX leaves them undefined). */
   onFieldChange?: (key: string, value: string) => void;
   onFieldSubmit?: (field: FieldNode) => void;
+  /** Phase 5d — a table per-column filter's Enter (its focused <TextInput>'s
+   *  onSubmit). App builds the {column,value,filters} payload (browser parity)
+   *  and dispatches `filterAction`. Undefined on the static/NO_CTX path. */
+  onTableFilter?: (table: TableNode, col: TableColumn) => void;
 }
 
 const NO_CTX: RCtx = {
@@ -69,11 +76,24 @@ const NO_CTX: RCtx = {
 /** A node the focus ring can land on, in tree (pre-order) order. */
 interface Focusable {
   key: string;
-  kind: "button" | "checkbox" | "tabs-tab" | "copy" | "link" | "field" | "form-submit";
+  kind:
+    | "button"
+    | "checkbox"
+    | "tabs-tab"
+    | "copy"
+    | "link"
+    | "field"
+    | "form-submit"
+    | "table-sort"
+    | "table-filter"
+    | "table-row";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   node: any;
   form?: FormNode;
   tab?: { value: string; label: string };
+  /** Phase 5d table sub-focusables. */
+  col?: TableColumn;
+  row?: TableRow;
 }
 
 /** OSC 52 clipboard write — the terminal-native analog of the clipboard API.
@@ -146,6 +166,62 @@ export function classify(url: string, fromEndpoint: string): RedirectKind {
 
 const isTruthyFormValue = (v?: string): boolean =>
   !!v && v !== "false" && v !== "0";
+
+/** A per-column-filter identity. A `TableColumn` object is reused for the
+ *  sortable header's focus mapping, so its filter input needs a DISTINCT,
+ *  stable-within-a-render identity for `map`/`rctx.focusKey`. WeakMap keyed by
+ *  the column object → the same sentinel in collectFocusables and the renderer
+ *  of one render pass; a fresh column object each server re-render makes a new
+ *  sentinel (focus continuity is by key string + reconcile(), never object
+ *  identity — same as every other focusable). */
+const _filterIdent = new WeakMap<object, object>();
+function filterIdent(col: object): object {
+  let o = _filterIdent.get(col);
+  if (!o) {
+    o = {};
+    _filterIdent.set(col, o);
+  }
+  return o;
+}
+
+/** Terminal display width, Unicode-aware enough for table column alignment.
+ *  Strips CSI/OSC escapes (incl. OSC 8) so a measured cell never includes
+ *  hyperlink bytes — the Phase-1 string-width over-count, here avoided by not
+ *  depending on string-width at all (zero new deps). Cells are width-bounded
+ *  Boxes, so a misestimate of an exotic glyph is at worst cosmetic, never the
+ *  Phase-1/5a layout corruption. */
+function dispWidth(s: string): number {
+  const clean = s
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1b\[[0-9;]*m/g, "");
+  let w = 0;
+  for (const ch of clean) {
+    const cp = ch.codePointAt(0)!;
+    if (cp === 0) continue;
+    if (
+      (cp >= 0x300 && cp <= 0x36f) ||
+      cp === 0x200d ||
+      (cp >= 0xfe00 && cp <= 0xfe0f)
+    )
+      continue; // combining / ZWJ / variation selectors → width 0
+    if (
+      (cp >= 0x1100 && cp <= 0x115f) ||
+      (cp >= 0x2e80 && cp <= 0xa4cf) ||
+      (cp >= 0xac00 && cp <= 0xd7a3) ||
+      (cp >= 0xf900 && cp <= 0xfaff) ||
+      (cp >= 0xfe30 && cp <= 0xfe4f) ||
+      (cp >= 0xff00 && cp <= 0xff60) ||
+      (cp >= 0xffe0 && cp <= 0xffe6) ||
+      (cp >= 0x1f300 && cp <= 0x1faff) ||
+      (cp >= 0x20000 && cp <= 0x3fffd)
+    )
+      w += 2; // wide (CJK / fullwidth / emoji)
+    else w += 1;
+  }
+  return w;
+}
 
 /** Pure pre-pass: every focusable in tree order + an object→key map used by
  *  the renderer to highlight the focused node. Same identity heuristic the
@@ -226,13 +302,45 @@ function collectFocusables(vm: ViewNode): {
         for (const c of node.children ?? []) visit(c, form);
         for (const c of node.footer ?? []) visit(c, form);
         return;
+      case "table": {
+        // Phase 5d. Visual/tab order mirrors the browser DOM: sortable
+        // headers L→R, then filterable filter inputs L→R, then action rows
+        // T→B. Header maps off the `col` object; the filter input maps off a
+        // DISTINCT per-column sentinel (filterIdent) so a sortable+filterable
+        // column has two unambiguous focus targets. Keys via uniq() keep
+        // global uniqueness across multiple tables (the established pattern).
+        const t = node as TableNode;
+        const cols = t.columns ?? [];
+        if (t.sortAction)
+          for (const col of cols)
+            if (col.sortable) {
+              const k = uniq(`tbl-sort:${col.key}`);
+              map.set(col, k);
+              list.push({ key: k, kind: "table-sort", node: t, col, form });
+            }
+        if (t.filterAction)
+          for (const col of cols)
+            if (col.filterable) {
+              const k = uniq(`tbl-filter:${col.key}`);
+              map.set(filterIdent(col), k);
+              list.push({ key: k, kind: "table-filter", node: t, col, form });
+            }
+        (t.rows ?? []).forEach((row, ri) => {
+          if (row.action) {
+            const k = uniq(`tbl-row:${row.id ?? ri}`);
+            map.set(row, k);
+            list.push({ key: k, kind: "table-row", node: t, row, form });
+          }
+        });
+        return;
+      }
       case "page":
       case "section":
       case "list":
       case "list-item":
         for (const c of node.children ?? []) visit(c, form);
         return;
-      default: // text, stat-bar, progress, table → not focusable
+      default: // text, stat-bar, progress → not focusable
         return;
     }
   };
@@ -636,6 +744,34 @@ function MultiSelectInput(props: {
   );
 }
 
+/**
+ * Phase 5d — table per-column filter editor. A thin wrapper over
+ * `ink-text-input` (already a dependency since Phase 3 — ZERO new deps),
+ * mounted ONLY when its filter cell is focused on a TTY (the select/multiline
+ * precedent). ink-text-input@6 early-returns Tab/Shift-Tab/Up/Down/Ctrl-C, so
+ * App keeps ring traversal + teardown; it owns char/Backspace/Left/Right and
+ * fires `onSubmit` on Enter → the filterAction dispatch (browser.ts parity).
+ * A focused table-filter also joins App's `editing` gate (kind
+ * "table-filter") so ring-mode arrow handling can't collide with the editor's
+ * cursor — the two input handlers never fight.
+ */
+function TableFilterInput(props: {
+  value: string;
+  onChange: (v: string) => void;
+  onSubmit: () => void;
+  focus: boolean;
+}): ReactElement {
+  return (
+    <TextInput
+      focus={props.focus}
+      value={props.value}
+      placeholder="filter…"
+      onChange={props.onChange}
+      onSubmit={props.onSubmit}
+    />
+  );
+}
+
 /** The stateful root. Mounted ONCE; the shell's poll/dispatch re-renders
  *  reconcile the SAME component instance (React preserves its focus state) —
  *  this is why a stable root component, not a bare tree. */
@@ -702,13 +838,22 @@ function App(props: {
     undefined,
   );
 
-  // Per-render snapshot of every focusable field's server value, vs the
+  // Per-render snapshot of every DRAFTABLE focusable's server value, vs the
   // previous render's snapshot — the change detector for "server wins".
-  const fieldDescs = list.filter((d) => d.kind === "field");
-  const fieldKeysNow = new Set(fieldDescs.map((d) => d.key));
+  // Draftable = `field` (Phase 3/5a/5b) + Phase-5d `table-filter` inputs
+  // (server value = the column's `filterValue`). The field path is
+  // byte-identical to Phase 5b — table-filter rows are purely ADDITIVE, so
+  // every existing field/draft test is unaffected.
+  const draftableDescs = list.filter(
+    (d) => d.kind === "field" || d.kind === "table-filter",
+  );
+  const serverValOf = (d: Focusable): string =>
+    d.kind === "table-filter"
+      ? ((d.col as TableColumn).filterValue ?? "")
+      : ((d.node as FieldNode).value ?? "");
+  const fieldKeysNow = new Set(draftableDescs.map((d) => d.key));
   const fieldServerNow: Record<string, string> = {};
-  for (const d of fieldDescs)
-    fieldServerNow[d.key] = (d.node as FieldNode).value ?? "";
+  for (const d of draftableDescs) fieldServerNow[d.key] = serverValOf(d);
   const prevServerRef = useRef<Record<string, string>>({});
   // Phase 5b: focus keys of select/select-multiple fields. Selects are
   // EXCLUDED from draft preservation (AGENTS.md: can't distinguish
@@ -716,8 +861,11 @@ function App(props: {
   // server-authoritative the moment a SERVER re-render arrives, even if that
   // field's value is unchanged (the inverse of the text draft-survival rule).
   const selectKeysNow = new Set(
-    fieldDescs
-      .filter((d) => isSelect((d.node as FieldNode).inputType))
+    draftableDescs
+      .filter(
+        (d) =>
+          d.kind === "field" && isSelect((d.node as FieldNode).inputType),
+      )
       .map((d) => d.key),
   );
   // A server re-render is observable as a new `vm` object identity (the shell
@@ -733,7 +881,7 @@ function App(props: {
    *  undefined → caller falls back to the server value. */
   const draftFor = (k: string): string | undefined => {
     if (!(k in draft)) return undefined;
-    if (!fieldKeysNow.has(k)) return undefined; // field gone
+    if (!fieldKeysNow.has(k)) return undefined; // field / table-filter gone
     if (prevServerRef.current[k] !== fieldServerNow[k]) return undefined; // server changed → authoritative
     if (selectKeysNow.has(k) && isServerRender) return undefined; // selects: server-authoritative across ANY server re-render (AGENTS.md — excluded from draft preservation)
     return draft[k];
@@ -748,10 +896,18 @@ function App(props: {
   const focusedDesc = list.find((d) => d.key === effective);
   const editing =
     interactive &&
-    focusedDesc?.kind === "field" &&
-    (isEditableSingleLine((focusedDesc.node as FieldNode).inputType) ||
-      isEditableMultiLine((focusedDesc.node as FieldNode).inputType) ||
-      isSelect((focusedDesc.node as FieldNode).inputType));
+    ((focusedDesc?.kind === "field" &&
+      (isEditableSingleLine((focusedDesc.node as FieldNode).inputType) ||
+        isEditableMultiLine((focusedDesc.node as FieldNode).inputType) ||
+        isSelect((focusedDesc.node as FieldNode).inputType))) ||
+      // Phase 5d: a focused table FILTER input is an editable <TextInput>; it
+      // joins the editing gate so App cedes char/Left/Right/Enter to it and
+      // keeps ONLY Tab/Shift-Tab (ring) + Ctrl-C (teardown). Without this,
+      // ring-mode arrow handling would collide with the editor's cursor and
+      // Down/Right would jump focus mid-type. The `field` disjunct above is
+      // byte-identical → zero field/form behavior change. table-sort /
+      // table-row stay ring-mode (Enter/Space → activate).
+      focusedDesc?.kind === "table-filter");
   const editingRef = useRef(editing);
   editingRef.current = editing;
 
@@ -830,6 +986,32 @@ function App(props: {
     if (d) submitField(d);
   };
 
+  /** Phase 5d — a table per-column filter's Enter. Mirrors BrowserAdapter
+   *  (browser.ts): dispatch `filterAction` merged with { column, value,
+   *  filters }, where `filters` is EVERY filterable column's current text
+   *  (draft else server `filterValue`) and `value` is this column's. */
+  const tableFilter = (table: TableNode, col: TableColumn): void => {
+    const fa = table.filterAction;
+    if (!fa) return;
+    const textOf = (c: TableColumn): string => {
+      const fk = map.get(filterIdent(c));
+      const dv = fk != null ? draftFor(fk) : undefined;
+      return dv ?? c.filterValue ?? "";
+    };
+    const filters: Record<string, string> = {};
+    for (const c of table.columns ?? [])
+      if (c.filterable) filters[c.key] = textOf(c);
+    onActionRef.current({
+      name: fa.name,
+      context: {
+        ...(fa.context ?? {}),
+        column: col.key,
+        value: textOf(col),
+        filters,
+      },
+    });
+  };
+
   const activate = (d: Focusable, trigger: "enter" | "space"): void => {
     const dispatch = onActionRef.current;
     switch (d.kind) {
@@ -873,6 +1055,35 @@ function App(props: {
         break;
       case "link":
         doCopy(d.key, d.node.href);
+        break;
+      case "table-sort": {
+        // browser.ts parity: toggle asc↔desc only when this column is the
+        // current sortColumn AND was asc; otherwise default to asc.
+        const t = d.node as TableNode;
+        const col = d.col;
+        const sa = t.sortAction;
+        if (!col || !sa) break;
+        const isSorted = t.sortColumn === col.key;
+        const nextDir =
+          isSorted && t.sortDirection === "asc" ? "desc" : "asc";
+        dispatch({
+          name: sa.name,
+          context: {
+            ...(sa.context ?? {}),
+            column: col.key,
+            direction: nextDir,
+          },
+        });
+        break;
+      }
+      case "table-row":
+        // Verbatim, no merge — mirrors BrowserAdapter `on(rowAction)`.
+        if (d.row?.action) dispatch(d.row.action);
+        break;
+      case "table-filter":
+        // Editable: the focused <TextInput>'s onSubmit (→ rctx.onTableFilter)
+        // owns the dispatch. Unreachable while editing (App returns before the
+        // ring-activate line); a defensive no-op for any edge path.
         break;
     }
   };
@@ -931,6 +1142,7 @@ function App(props: {
     draft: (k: string) => draftFor(k),
     onFieldChange: (k, v) => setDraft((s) => ({ ...s, [k]: v })),
     onFieldSubmit,
+    onTableFilter: tableFilter,
   };
   if (props.interstitial != null)
     return <Interstitial msg={props.interstitial} />;
@@ -1786,8 +1998,165 @@ export class TuiAdapter implements Adapter {
         );
       }
 
+      case "table": {
+        // Phase 5d. Serves BOTH the static (renderTree/non-TTY/unit) and
+        // interactive paths — interactive only adds the focus tint + mounts
+        // the focused filter <TextInput>. DISCIPLINE: a flex-row of
+        // independent fixed-width <Box> cells (the standard Ink table) is
+        // SAFE — distinct from the Phase-5a bug (a styled <Text> nested INSIDE
+        // one <Text>). Every cell is ONE flat <Text>; a link cell is OSC 8 as
+        // the SOLE child of its own width-bounded Box (the Phase-1
+        // string-width over-count, contained to that cell). Focus is a
+        // whole-cell colour (cyan) — NOT focusWrap (its external "▸ " caret
+        // would break fixed-column alignment); same approach as
+        // MultiSelectInput's highlight.
+        const t = node as TableNode;
+        const cols = t.columns ?? [];
+        const rows = t.rows ?? [];
+        const canSort = !!t.sortAction;
+        const canFilter = !!t.filterAction;
+        const anyFilter = canFilter && cols.some((c) => c.filterable);
+        const MINW = 3,
+          MAXW = 40,
+          MINFILTER = 8,
+          IND = 2;
+        const cellText = (c: TableColumn, r: TableRow): string => {
+          const v = r.cells?.[c.key] ?? "";
+          // Measure the LABEL, never the OSC/href (Phase-1 over-count).
+          return c.linkLabel && v ? c.linkLabel : v;
+        };
+        const widths = new Map<string, number>();
+        for (const c of cols) {
+          let w =
+            dispWidth(c.label) +
+            ((canSort && c.sortable) || t.sortColumn === c.key ? IND : 0);
+          for (const r of rows) w = Math.max(w, dispWidth(cellText(c, r)));
+          if (canFilter && c.filterable) w = Math.max(w, MINFILTER);
+          widths.set(c.key, Math.max(MINW, Math.min(MAXW, w)));
+        }
+        const w = (c: TableColumn): number => widths.get(c.key) ?? MINW;
+
+        return (
+          <Box key={key} flexDirection="column">
+            <Box flexDirection="row" gap={1}>
+              {cols.map((c, ci) => {
+                const sortable = canSort && !!c.sortable;
+                const ind =
+                  t.sortColumn === c.key
+                    ? t.sortDirection === "desc"
+                      ? " ▼"
+                      : " ▲"
+                    : "";
+                const hk = sortable ? rctx.focusKey(c) : undefined;
+                const hfoc = hk != null && hk === rctx.focusedKey;
+                return (
+                  <Box key={c.key ?? ci} width={w(c)}>
+                    <Text
+                      bold
+                      color={hfoc ? "cyan" : undefined}
+                      wrap="truncate-end"
+                    >
+                      {c.label + ind}
+                    </Text>
+                  </Box>
+                );
+              })}
+            </Box>
+            {anyFilter ? (
+              <Box flexDirection="row" gap={1}>
+                {cols.map((c, ci) => {
+                  if (!c.filterable)
+                    return (
+                      <Box key={c.key ?? ci} width={w(c)}>
+                        <Text> </Text>
+                      </Box>
+                    );
+                  const fk = rctx.focusKey(filterIdent(c));
+                  const ffoc = fk != null && fk === rctx.focusedKey;
+                  const cur =
+                    (fk != null ? rctx.draft(fk) : undefined) ??
+                    c.filterValue ??
+                    "";
+                  return (
+                    <Box
+                      key={c.key ?? ci}
+                      width={w(c)}
+                      borderStyle="single"
+                    >
+                      {rctx.interactive && ffoc && fk != null ? (
+                        <TableFilterInput
+                          key="input"
+                          focus
+                          value={cur}
+                          onChange={(v: string) =>
+                            rctx.onFieldChange?.(fk, v)
+                          }
+                          onSubmit={() => rctx.onTableFilter?.(t, c)}
+                        />
+                      ) : (
+                        <Text dimColor={cur === ""}>
+                          {cur === "" ? "filter…" : cur}
+                        </Text>
+                      )}
+                    </Box>
+                  );
+                })}
+              </Box>
+            ) : null}
+            {rows.map((r, ri) => {
+              const tint = this.listItemStyle(r.variant).child;
+              const rk = r.action ? rctx.focusKey(r) : undefined;
+              const rfoc = rk != null && rk === rctx.focusedKey;
+              return (
+                <Box key={r.id ?? ri} flexDirection="row" gap={1}>
+                  {cols.map((c, ci) => {
+                    const v = r.cells?.[c.key] ?? "";
+                    if (c.linkLabel && v) {
+                      // Link cell. A standalone `link` node emits OSC 8, but a
+                      // table cell is WIDTH-BOUNDED for column alignment, and
+                      // OSC 8 here would be truncate-mangled — string-width
+                      // over-counts the escape, so `wrap:"truncate-end"` at a
+                      // fixed column width corrupts it (the Phase-1/5a width
+                      // landmine is fundamentally incompatible with a fixed
+                      // column width). So show the linkLabel as underlined
+                      // text — information-honest and aligned; standalone
+                      // `link` nodes keep full OSC 8. (TUI-NOTES Phase 5d.)
+                      return (
+                        <Box key={c.key ?? ci} width={w(c)}>
+                          <Text
+                            wrap="truncate-end"
+                            underline
+                            color={rfoc ? "cyan" : tint?.color}
+                          >
+                            {c.linkLabel}
+                          </Text>
+                        </Box>
+                      );
+                    }
+                    return (
+                      <Box key={c.key ?? ci} width={w(c)}>
+                        <Text
+                          wrap="truncate-end"
+                          color={rfoc ? "cyan" : tint?.color}
+                          bold={tint?.bold}
+                          dimColor={tint?.dim}
+                        >
+                          {v === "" ? " " : v}
+                        </Text>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              );
+            })}
+            {rows.length === 0 ? <Text dimColor>(no rows)</Text> : null}
+          </Box>
+        );
+      }
+
       default:
-        // Deferred node types (table) + any unknown → fail-loud.
+        // field(file) is handled in the field case; any unknown node type
+        // (or a still-deferred one) → fail-loud, never blank.
         return this.unsupported((node as ViewNode).type, key);
     }
   }

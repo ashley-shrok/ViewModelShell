@@ -99,11 +99,16 @@ describe("Phase 3 — TuiAdapter (Phase-1/2 render preserved; unfocused == Phase
     expect(out).toContain("an error");
   });
 
-  // B — fail-loud: a still-deferred node shows a visible placeholder
-  // (`table` is still deferred; phase string bumped 4 → 5 in Phase 5a).
-  it("renders a fail-loud placeholder for deferred nodes", () => {
-    const vm = { type: "table", columns: [], rows: [] } as unknown as ViewNode;
-    expect(frame(vm)).toContain("[unsupported: table — phase 5]");
+  // B — fail-loud: a still-deferred type shows a visible placeholder.
+  // `table` graduated in Phase 5d; `field(file)` is the LAST still-deferred
+  // type and stays `phase 5` (Phase-5 rule: 5a-5d never bump the string).
+  it("renders a fail-loud placeholder for the last deferred type", () => {
+    const vm = {
+      type: "field",
+      name: "f",
+      inputType: "file",
+    } as unknown as ViewNode;
+    expect(frame(vm)).toContain("[unsupported: field(file) — phase 5]");
   });
 
   // C — core→adapter render seam: pushing a response through the shell
@@ -413,13 +418,10 @@ describe("Phase 3 — TuiAdapter (Phase-1/2 render preserved; unfocused == Phase
     ).toContain("[ ]");
   });
 
-  it("deferred node types & field input types fail loud", () => {
+  it("deferred field input types fail loud", () => {
     // textarea/code graduated in Phase 5a; select/select-multiple in Phase 5b;
-    // modal in Phase 5c — all dropped from this list. `table` (node) and
-    // `file` (field) are the last still-deferred types, still `phase 5`.
-    expect(
-      frame({ type: "table", columns: [], rows: [] } as unknown as ViewNode),
-    ).toContain("[unsupported: table — phase 5]");
+    // modal in Phase 5c; `table` (node) in Phase 5d — all dropped from this
+    // list. `field(file)` is the LAST still-deferred type, still `phase 5`.
     for (const it of ["file"]) {
       expect(
         frame({ type: "field", name: "x", inputType: it } as unknown as ViewNode),
@@ -1133,14 +1135,18 @@ describe("Phase 4 — redirect/navigate + storage verbs", () => {
     expect(classify("   ", ep).kind).toBe("invalid");
   });
 
-  // ── fail-loud string single-sourced, bumped 4 → 5 (B + deferred retargeted)
-  it("fail-loud placeholder string is now phase 5", () => {
-    // modal graduated in Phase 5c (no longer fail-loud); `table` is the last
-    // still-deferred NODE type and stays `phase 5` (Phase-5 rule: 5c does NOT
-    // bump the single-sourced phase string).
+  // ── fail-loud string single-sourced, STILL phase 5 (Phase-5 rule: 5a-5d
+  //    never bump it — they graduate nodes + retarget the asserts)
+  it("fail-loud placeholder string is still phase 5", () => {
+    // `table` graduated in Phase 5d; `field(file)` is the LAST still-deferred
+    // type and stays `phase 5` (5d does NOT bump to phase 6).
     expect(
-      frame({ type: "table", columns: [], rows: [] } as unknown as ViewNode),
-    ).toContain("[unsupported: table — phase 5]");
+      frame({
+        type: "field",
+        name: "f",
+        inputType: "file",
+      } as unknown as ViewNode),
+    ).toContain("[unsupported: field(file) — phase 5]");
   });
 });
 
@@ -1736,5 +1742,217 @@ describe("Phase 5c — modal (compositing/focus-trap/dismiss)", () => {
     expect(f).toContain("INMODAL");
     expect(f).toContain("M");
     expect(f).not.toContain("BASE-ONLY");
+  });
+});
+
+describe("Phase 5d — table (sortable headers / per-column filter / clickable rows / link cells)", () => {
+  // 1 — static (renderTree/NO_CTX): headers, cells, the active sort indicator,
+  //     and a link cell shown as its linkLabel (aligned text, no OSC 8 in a
+  //     width-bounded cell — the Phase-5d link-cell decision).
+  it("renders columns, rows, sort indicator and link cells statically", () => {
+    const out = frame({
+      type: "table",
+      columns: [
+        { key: "name", label: "Name", sortable: true },
+        { key: "site", label: "Site", linkLabel: "open" },
+      ],
+      rows: [{ cells: { name: "Alice", site: "https://a.example" } }],
+      sortColumn: "name",
+      sortDirection: "asc",
+      sortAction: { name: "sort" },
+    } as unknown as ViewNode);
+    expect(out).toContain("Name");
+    expect(out).toContain("Alice");
+    expect(out).toContain("▲"); // asc indicator on the sorted column
+    expect(out).toContain("open"); // linkLabel rendered as the cell text
+  });
+
+  // 2 — negative: a plain table (no sortAction/filterAction, no row.action)
+  //     injects ZERO focusables → not clickable, dispatches nothing.
+  it("a plain table yields no focusables", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "table",
+        columns: [{ key: "a", label: "A" }],
+        rows: [{ cells: { a: "1" } }],
+      } as unknown as ViewNode,
+      onA,
+    );
+    expect(d.frame()).toContain("1");
+    await d.press(KEY.enter);
+    await d.press(KEY.space);
+    expect(onA).not.toHaveBeenCalled();
+    d.unmount();
+  });
+
+  // 3 — sortable header Enter on an UNSORTED column → direction "asc"
+  //     (browser.ts parity: { column, direction }, base context merged).
+  it("sortable header Enter dispatches sort asc when unsorted", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "table",
+        columns: [{ key: "name", label: "Name", sortable: true }],
+        rows: [{ cells: { name: "x" } }],
+        sortAction: { name: "sort" },
+      } as unknown as ViewNode,
+      onA,
+    );
+    await d.press(KEY.enter); // first focusable = the sortable header
+    expect(onA).toHaveBeenCalledWith({
+      name: "sort",
+      context: { column: "name", direction: "asc" },
+    });
+    d.unmount();
+  });
+
+  // 4 — toggles asc → desc when the column is already the sortColumn (asc),
+  //     and merges the base sortAction.context.
+  it("sortable header Enter toggles asc → desc", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "table",
+        columns: [{ key: "name", label: "Name", sortable: true }],
+        rows: [{ cells: { name: "x" } }],
+        sortColumn: "name",
+        sortDirection: "asc",
+        sortAction: { name: "sort", context: { grid: "g1" } },
+      } as unknown as ViewNode,
+      onA,
+    );
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenCalledWith({
+      name: "sort",
+      context: { grid: "g1", column: "name", direction: "desc" },
+    });
+    d.unmount();
+  });
+
+  // 5 — per-column filter: type then Enter → filterAction with
+  //     { column, value, filters } where `filters` covers EVERY filterable
+  //     column (this one's draft + another's server filterValue); a
+  //     non-filterable column is absent. The load-bearing browser.ts parity.
+  it("filter Enter dispatches { column, value, filters } over all filterable cols", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "table",
+        columns: [
+          { key: "q", label: "Q", filterable: true },
+          { key: "r", label: "R", filterable: true, filterValue: "pre" },
+          { key: "x", label: "X" }, // not filterable → absent from `filters`
+        ],
+        rows: [{ cells: { q: "1", r: "2", x: "3" } }],
+        filterAction: { name: "filter" },
+      } as unknown as ViewNode,
+      onA,
+    );
+    // No sortable columns → first focusable is the `q` filter input
+    // (auto-focused via reconcile in drive()'s warmup); editing gate active.
+    await d.press("foo");
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenCalledWith({
+      name: "filter",
+      context: { column: "q", value: "foo", filters: { q: "foo", r: "pre" } },
+    });
+    d.unmount();
+  });
+
+  // 6 — clickable row: Enter dispatches the row's action VERBATIM (no merge).
+  it("clickable row Enter dispatches row.action verbatim", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "table",
+        columns: [{ key: "a", label: "A" }],
+        rows: [
+          {
+            id: "r1",
+            cells: { a: "v" },
+            action: { name: "open", context: { id: "r1" } },
+          },
+        ],
+      } as unknown as ViewNode,
+      onA,
+    );
+    await d.press(KEY.enter); // only focusable = the action row
+    expect(onA).toHaveBeenCalledWith({
+      name: "open",
+      context: { id: "r1" },
+    });
+    d.unmount();
+  });
+
+  // 7 — focus ring ORDER = sortable headers → filter inputs → action rows.
+  //     header(Enter→sort) → Tab → filter(type mutates the cell, NOT a focus
+  //     jump — proves editing gate) → Tab → action row(Enter→row.action).
+  it("focus ring is header → filter → row in order", async () => {
+    const onA = vi.fn();
+    const d = await drive(
+      {
+        type: "table",
+        columns: [{ key: "n", label: "N", sortable: true, filterable: true }],
+        rows: [
+          { id: "x", cells: { n: "v" }, action: { name: "open", context: { rid: "x" } } },
+        ],
+        sortAction: { name: "sort" },
+        filterAction: { name: "filter" },
+      } as unknown as ViewNode,
+      onA,
+    );
+    await d.press(KEY.enter); // 1st focusable = header → sort asc
+    expect(onA).toHaveBeenLastCalledWith({
+      name: "sort",
+      context: { column: "n", direction: "asc" },
+    });
+    await d.press(KEY.tab); // → filter input (editing)
+    await d.press("ab");
+    expect(stripAnsi(d.frame())).toContain("ab"); // typed into the cell, not a focus jump
+    await d.press(KEY.tab); // → the action row
+    await d.press(KEY.enter);
+    expect(onA).toHaveBeenLastCalledWith({
+      name: "open",
+      context: { rid: "x" },
+    });
+    d.unmount();
+  });
+
+  // 8 — filter draft: survives a LOCAL re-render (same vm), is server-
+  //     authoritative when the server changes that column's filterValue
+  //     (the Phase-3 text rule, reused via the generalized draftable set —
+  //     proves table-filter joined draft preservation without touching it).
+  it("filter draft survives a local rerender; server wins on filterValue change", async () => {
+    const adapter = new TuiAdapter();
+    const onA = vi.fn();
+    const v1 = {
+      type: "table",
+      columns: [{ key: "q", label: "Q", filterable: true }],
+      rows: [{ cells: { q: "1" } }],
+      filterAction: { name: "filter" },
+    } as unknown as ViewNode;
+    const r = render(adapter.createApp(v1, onA, { requestExit: () => {} }));
+    await tick(30);
+    r.stdin.write("ab");
+    await tick(20);
+    expect(stripAnsi(String(r.lastFrame() ?? ""))).toContain("ab");
+    // local-style rerender (SAME vm object) → draft survives
+    r.rerender(adapter.createApp(v1, onA, { requestExit: () => {} }));
+    await tick(20);
+    expect(stripAnsi(String(r.lastFrame() ?? ""))).toContain("ab");
+    // server re-render (NEW vm) that changed the column's filterValue → wins
+    const v2 = {
+      type: "table",
+      columns: [{ key: "q", label: "Q", filterable: true, filterValue: "srv" }],
+      rows: [{ cells: { q: "1" } }],
+      filterAction: { name: "filter" },
+    } as unknown as ViewNode;
+    r.rerender(adapter.createApp(v2, onA, { requestExit: () => {} }));
+    await tick(20);
+    const f = stripAnsi(String(r.lastFrame() ?? ""));
+    expect(f).toContain("srv");
+    expect(f).not.toContain("ab");
+    r.unmount();
   });
 });

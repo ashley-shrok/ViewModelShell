@@ -16,13 +16,14 @@ hardcoded — completed phases are read from git:
 - Phase 5a — COMPLETE (committed; `git log --grep='feat(tui): Phase 5a'`).
 - Phase 5b — COMPLETE (committed; `git log --grep='feat(tui): Phase 5b'`).
 - Phase 5c — COMPLETE (committed; `git log --grep='feat(tui): Phase 5c'`).
-- NEXT — Phase 5d (deferred node tier cont.: `table` — Unicode-width column
-  solver, sortable headers, per-column filter row, clickable rows, link
-  cells). 5d is the LAST deferred node; commit `feat(tui): Phase 5d — …`.
-  NOTE: the fail-loud string stays `phase 5` for all of Phase 5 — 5d does
-  NOT bump it; it only deletes `table`'s `[unsupported]` placeholder +
-  retargets asserts (see NOTES Phase-5a #7 / Phase-5b/5c learnings).
-  Still-deferred after 5c: `file` (field) / `table`.
+- Phase 5d — COMPLETE (committed; `git log --grep='feat(tui): Phase 5d'`).
+- NEXT — Phase 6 (Docs, conformance, packaging — FINAL, OPTIONAL). ALL
+  deferred NODE types have graduated (`table` was the last). The ONLY
+  still-deferred type is the `file` field — intentionally permanently out
+  of scope (file upload is browser/XHR territory; the Phase-2 transport
+  seam, not a TUI node phase). No further node phases exist. Phase 6, if
+  run, adds NO node behavior, must NOT bump the fail-loud string (stays
+  `phase 5`), and must keep every standing invariant green.
 
 (Each finishing phase updates this line in its own commit.)
 

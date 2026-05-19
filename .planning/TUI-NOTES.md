@@ -556,3 +556,78 @@ before doing anything in a fresh-context resume.
   solving (the flat-`<Text>`-per-cell discipline applies) + sortable-header
   / filter-row / clickable-row Enter — the ICRNL harness fix above is
   MANDATORY for that Enter-driven live proof.
+
+## Phase 5d learnings (final node phase — read before Phase 6)
+
+- **Link-cell = plain underlined `linkLabel`, NO OSC 8 (plan DEVIATION,
+  load-bearing).** The plan said "table link cell = OSC 8 as sole child of
+  its own fixed-width Box+truncate" — that is WRONG: the cell box HAS a fixed
+  width (column alignment), so `wrap:"truncate-end"` fires, and string-width
+  over-counts the OSC 8 escape → the hyperlink is truncate-mangled (the
+  Phase-1/5a width landmine is fundamentally incompatible with a fixed column
+  width). Fix: render `col.linkLabel` as underlined TEXT (information-honest,
+  aligned). Standalone `link` nodes keep full OSC 8 (their Box is
+  content-sized, not width-bounded — that's why Phase-1's discipline works
+  THERE and not here). Do NOT re-add OSC 8 to table cells.
+- **`editing` gate EXTENDED to `kind==="table-filter"` (plan DEVIATION,
+  load-bearing).** The plan asserted the filter input could stay a
+  contained component with App in ring mode (kind≠field ⇒ gate untouched).
+  WRONG: in ring mode App maps Left/Right→goPrev/goNext and Down/Right→focus
+  jump, colliding with the text editor's cursor mid-type. Correct fix: the
+  `editing` predicate gained `|| focusedDesc?.kind==="table-filter"`; the
+  `field` disjunct is byte-identical (zero field/form behavior change — every
+  existing field/draft test unmodified). The EXISTING editing branch (only
+  Tab/Shift-Tab act; Enter inert in App; ink-text-input owns
+  char/Left/Right + fires onSubmit) is exactly right for the filter. NO new
+  input hook ⇒ `tui-cli.ts` UNCHANGED ⇒ teardown safe by construction
+  (PTY-verified incl. Ctrl-C while a filter is focused).
+- **Dual focus identity for a sortable+filterable column.** The `TableColumn`
+  object is the header's focus identity (`map.set(col,k)`); the filter input
+  needs a DISTINCT one → a module-level `filterIdent` WeakMap(col→sentinel),
+  same sentinel in collectFocusables and the renderer within one render; a
+  fresh col object each server re-render → new sentinel (continuity is
+  key-string + reconcile(), never object identity). A `case "table"` in
+  collectFocusables was REQUIRED (the 5c modal lesson) or the ring is empty.
+  Order = sortable headers L→R, filter inputs L→R, action rows T→B (browser
+  DOM order). Keys via uniq() keep multi-table global uniqueness.
+- **Draft set GENERALIZED, not duplicated.** `fieldDescs`→`draftableDescs`
+  (`field` + `table-filter`); `serverValOf` branches (filter server value =
+  `col.filterValue`); `selectKeysNow` re-narrowed to `kind==="field" &&
+  isSelect`. Field path byte-identical (purely additive). Filter draft = the
+  TEXT rule (survives a local rerender; server-wins when `filterValue`
+  changes) — NOT the select inverse. `tableFilter()` builds `filters` over
+  EVERY filterable column (draft else `filterValue`), `value`=this column's,
+  `column`=col.key, base `filterAction.context` merged — exact browser.ts
+  (599-667) parity for sort/filter/row(verbatim)/linkLabel.
+- **Phase-5 rule held: fail-loud string STILL `phase 5`** (5d did NOT bump —
+  single-sourced `unsupported()` unchanged). `table`'s `[unsupported]`
+  deleted (real `case "table"`); the 3 table asserts (test "B" /
+  deferred-list / "string is now phase 5") retargeted to `field(file)` — the
+  LAST still-deferred type. **No node phases remain after 5d**; `file` is
+  permanently out of scope (browser/XHR upload).
+- **Live proof split (the 5a/5b/5c pattern, reaffirmed).** Real shipped
+  backend = render-over-real-wire ONLY: `ExpenseTracker-bun /api/expenses`
+  (a real seeded 4-col ledger `table`; non-TTY exit 0). HelpDesk-bun
+  `/api/agent`'s queue table is NOT a good live vehicle — a fresh
+  `HELPDESK_DB` shows "No tickets in queue." (no seed-on-empty; tickets come
+  from the requester flow), and its ring has 4 `tabs` BEFORE the rows
+  (brittle — don't fight it). ALL interaction round-trips + teardown via the
+  EPHEMERAL `demo/Tasks-bun/_fixture.ts` (`createAction` echo; THREE GET
+  paths `/api/{sort,filter,row}` so each scenario's target is the FIRST
+  focusable → no Tab-pacing). Created+removed in-run, NEVER committed (the
+  commit step asserts `git status` clean of it). **PTY 15/15**: sort
+  asc→desc toggle, filter `{column,value,filters over all filterable}`, row
+  verbatim `{id}`, Ctrl-C/SIGINT→130, SIGTERM→143, piped→0, unreachable→1,
+  no-arg/bad-url→2, cursor restored (`ESC[?25h`) every exit. **ICRNL
+  termios fix MANDATORY** (every Enter scenario) — proven again.
+- **Phase 5d blast radius (VCS-verified).** `git status` = ONLY
+  `src/tui.tsx`, `test/tui.test.ts` (+ `.planning/*` in commit). NO
+  `package.json`/`package-lock.json` change — **ZERO new deps**
+  (`ink-text-input` is a Phase-3 dep; Phase-4/5a/5c shape, NOT 3/5b).
+  `tui-cli.ts` UNTOUCHED. 6 core dist hashes byte-identical to
+  `/tmp/vms-baseline.txt`; web-bundle Vite hashes unchanged
+  (`index-UzlLPlgm.css` + `index-B7l5XdRz.js` — a broad `createElement`
+  grep is a KNOWN false positive: it's the framework's own DOM code; the
+  real oracle is the unchanged content-hash filename + a narrow
+  ink/react/yoga grep). **121 vitest** (113→121, +8 Phase-5d) +
+  core-globals green.
