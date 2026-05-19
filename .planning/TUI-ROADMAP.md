@@ -9,7 +9,8 @@ hardcoded — completed phases are read from git:
 ## STATUS
 
 - Phase 0 — COMPLETE (committed; `git log --grep='feat(tui): Phase 0'`).
-- NEXT — Phase 1.
+- Phase 1 — COMPLETE (committed; `git log --grep='feat(tui): Phase 1'`).
+- NEXT — Phase 2.
 
 (Each finishing phase updates this line in its own commit.)
 

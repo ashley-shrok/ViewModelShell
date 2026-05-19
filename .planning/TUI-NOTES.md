@@ -81,3 +81,40 @@ before doing anything in a fresh-context resume.
   mode — emits `ESC[?25h`). `inkRender(tree,{exitOnCtrlC:false})` so Ink
   doesn't race the CLI's signal ownership. Subsequent `render()` calls use
   `instance.rerender()` (one instance; never re-mount).
+
+## Phase 1 learnings (read before Phase 2)
+
+- **OSC 8 vs `string-width` (load-bearing).** `string-width` does NOT strip
+  OSC 8 hyperlink escapes, so emitting `ESC]8;;href BEL label ESC]8;; BEL`
+  inside a wrapping/multi-child `<Text>` makes Ink over-count the line width
+  and corrupt Yoga layout of *siblings*. Mitigation in `tui.tsx` `link`: the
+  OSC string is the SOLE child of its own `<Box>` with
+  `<Text wrap="truncate-end">` (over-count contained to that line); empty/blank
+  href degrades to a plain `<Text>{label}</Text>` (no dangling OSC opener).
+  Verified: ink-testing-library `lastFrame()` keeps the raw `]8;;` bytes — Ink
+  writes Text content verbatim, it does not sanitize OSC.
+- **`density` is a `page`-only wire field.** It is threaded DOWN the recursion
+  (`renderNode(node,key,density,inherited)`); `section`/`list` inherit it (the
+  wire type has no `section.density`). An inherited `{color?,dim?,bold?}` tint
+  is the 4th recursion arg (list-item variant → child text/button/link).
+- **Fail-loud placeholder tests must be retargeted when a node graduates.**
+  Phase 0's test "B" fed `progress` and asserted `phase 0`; Phase 1 implements
+  `progress`, making that assertion wrong. Rule for every later phase: when you
+  implement a previously-deferred node, grep the test suite for its
+  `[unsupported: …]` assertion and retarget it to a STILL-deferred node + bump
+  the phase string. (B now targets `table`.)
+- **Web-bundle byte oracle (concrete).** Pre/post Phase 1, `cd
+  demo/Tasks-fullstack-bun && bun run build` emits the SAME Vite content
+  hashes: `assets/index-UzlLPlgm.css` + `assets/index-B7l5XdRz.js`. Future
+  phases: if either hash changes, ink/react leaked into the web graph — stop.
+- **Non-TTY render width.** Piped (`| cat`) the CLI renders the whole tree
+  ONCE at Ink's default 80 cols and exits 0. At 80 cols the sidebar + nested
+  borders fit, but long text WRAPS (not truncates) → multi-word phrases can
+  split across lines. Live-E2E greps must use short distinctive tokens
+  (`"Views"`, `"33%"`, `"[x]"`, `"✓"`), never long phrases; the unit tests use
+  a controlled fixture so phrase asserts are safe there.
+- **Phase 1 blast radius (verified at VCS level).** `git status` after Phase 1
+  shows ONLY `src/tui.tsx` + `test/tui.test.ts` modified; the 6 core dist
+  hashes are byte-identical to `/tmp/vms-baseline.txt`; all 52 vitest tests +
+  core-globals guard green; `tui-cli.ts` untouched so Phase-0 PTY teardown
+  holds by construction (no input hooks added — still input-free).
