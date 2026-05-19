@@ -98,64 +98,17 @@ export interface Adapter {
 
 ---
 
-## Node types
+## Node types, action payloads & emitted CSS classes
 
-| Type | Notes |
+The view tree is a discriminated union of typed nodes (a `type` string discriminator), shared by both backends. **This doc deliberately does not enumerate the node set, their props, the per-interaction action payloads, or the CSS classes each node emits.** A hand-copied catalog is exactly the drift that caused [issue #9](https://github.com/ashley-shrok/ViewModelShell/issues/9); the typed source is the single source of truth and cannot fall out of sync, because the build compiles it and CI parity-checks it:
+
+| When you need… | Authoritative, always-current source |
 |---|---|
-| `page` | Root container with optional title; optional `density`: `"comfortable"` \| `"compact"` (compact emits `.vms-page--compact`; omitted/comfortable = no modifier, byte-identical); optional `layout`: `"stack"` \| `"split"` \| `"cards"` \| `"sidebar"` (`split`=equal 2-up, `cards`=uniform auto-fit grid, `sidebar`=thin+wide app shell that wraps to stacked on narrow; each emits `.vms-page--{value}`; omitted/`stack` = no modifier, byte-identical vertical flow) |
-| `section` | Grouped content with optional heading; optional `variant`: `"card"` → `.vms-section--card` (grouped surface; omitted = no modifier, byte-identical); optional `layout`: `"stack"` \| `"split"` \| `"cards"` \| `"sidebar"` (same presets as `page`; each emits `.vms-section--{value}`; omitted/`stack` = no modifier, byte-identical) |
-| `list`, `list-item` | Containers; `variant` on item becomes `vms-list-item--{variant}`. Shipped variant defaults: status hints `done`/`critical`/`high`/`warning`/`success`/`info`, and `active` (master-detail / nav selection highlight, themable via accent seam vars — D-27) |
-| `form` | Form with submit action; collects all input/textarea/select/file values on submit. Optional `layout`: `"stack"` (default, fields stacked) \| `"inline"` (field row + submit on one line — add/search bar; emits `.vms-form--inline`, wraps on narrow — D-29) |
-| `field` | `inputType`: `text`, `email`, `password`, `number`, `date`, `time`, `datetime-local`, `textarea`, `hidden`, `file`, `select`, `select-multiple`, `checkbox`, `code`. Selects use `options: [{ value, label }]`. Multi-select submits comma-joined. Field-checkboxes are form-collected: `value: "true"`/`"false"` round-trips with the form submission as a boolean (use `Bool(name)` server-side). For per-toggle dispatch, use `CheckboxNode` instead. `code` renders a monospaced, tab-aware textarea — pass an optional `language` ("sql", "javascript", etc.) which becomes a `.vms-field--code-{language}` class for apps to attach a syntax-highlighter library to. The framework only ships the editable monospaced surface; coloring is the app's choice. |
-| `checkbox` | (`CheckboxNode`) Dispatches immediately on change with `{ checked: bool }` merged into context. For checkboxes that should be submitted with a form, use `FieldNode(inputType: "checkbox")` instead. |
-| `button` | `variant`: `primary`, `secondary`, `danger` |
-| `text` | `style`: `heading`, `subheading`, `body`, `muted`, `strikethrough`, `error`, `pre` (renders as `<pre>` for monospace/whitespace-preserving output) |
-| `link` | `<a class="vms-link">`; `external: true` adds `target="_blank" rel="noopener noreferrer"` |
-| `stat-bar` | Row of label/value items |
-| `tabs` | Dispatches immediately on click with `{ value: tab.value }` merged into context |
-| `progress` | 0–100 |
-| `modal` | Optional title + body children + optional `footer` (action-button row) + `dismissAction`. No backdrop-click dismissal, no focus management — these are intentional design choices. A modal with no `dismissAction` and no footer is non-dismissible by client-side interaction; the dev must include an in-body or in-footer action to close it. |
-| `table` | `columns`, `rows`, optional `sortColumn`/`sortDirection`/`sortAction`. Per-column filter via `filterable: true` + `filterValue` + `filterAction` on table. Per-row `action` makes the row clickable. Column `linkLabel` + `linkExternal` renders the cell value as an anchor. |
-| `copy-button` | `text` (required): string to copy. `label` (default: "Copy") / `copiedLabel` (default: "Copied!"): button labels. Pure adapter-side — no dispatch, no server round-trip. Clipboard write via `navigator.clipboard.writeText`; falls back to `execCommand("copy")` on insecure context; silent on both failures. |
+| The node set + every prop / enum value | `viewmodel-shell/src/index.ts` (the `ViewNode` union + per-node interfaces), mirrored 1:1 in `viewmodel-shell-dotnet/ViewModels.cs` (.NET records + `[JsonDerivedType]` discriminators) |
+| What `_action` / `_state` / file payload each interaction produces | the renderer in `viewmodel-shell/src/browser.ts`, exercised end-to-end by the fixtures under `parity/` |
+| The exact CSS classes a node emits, and how they're styled | `viewmodel-shell/src/browser.ts` (emission) + `viewmodel-shell/styles/default.css` (the shipped styling of every class) |
 
-### Action payload shapes
-
-Every dispatch is `multipart/form-data`. The action JSON travels in `_action`; the current state in `_state`; uploaded files travel as additional form entries keyed by field name.
-
-| User action | `_action` payload |
-|---|---|
-| Submit form | `{ name, context: { field1: "val", …, …baked-context } }` |
-| Click button | `{ name, context: { …button's baked-in context } }` |
-| Check/uncheck checkbox | `{ name, context: { …checkbox context, checked: true/false } }` |
-| Click tab | `{ name, context: { …action context, value: "tab-value" } }` |
-| Press Enter in field with `action` | `{ name, context: { …field context, [fieldName]: currentValue } }` |
-| Click sortable header | `{ name: sortAction.name, context: { column, direction: "asc"/"desc" } }` |
-| Press Enter in column filter | `{ name: filterAction.name, context: { column, value, filters: { col1: "...", col2: "..." } } }` |
-| Click table row with `action` | the row's `action` verbatim |
-| Click modal close | the modal's `dismissAction` verbatim |
-
-### CSS classes emitted by BrowserAdapter
-
-| Node | Classes |
-|---|---|
-| page | `.vms-page`, `.vms-page__title`, `.vms-page--compact`, `.vms-page--split`, `.vms-page--cards`, `.vms-page--sidebar` |
-| section | `.vms-section`, `.vms-section__heading`, `.vms-section--card`, `.vms-section--split`, `.vms-section--cards`, `.vms-section--sidebar` |
-| list | `.vms-list` |
-| list-item | `.vms-list-item`, `.vms-list-item--{variant}` (shipped defaults incl. `.vms-list-item--active` selection highlight) |
-| form | `.vms-form`, `.vms-form--inline` |
-| field | `.vms-field`, `.vms-field__label`, `.vms-field__input` (hidden fields render bare) |
-| checkbox | `.vms-checkbox`, `.vms-checkbox__input`, `.vms-checkbox__mark`, `.vms-checkbox__label` |
-| button | `.vms-button`, `.vms-button--{variant}` |
-| text | `.vms-text`, `.vms-text--{style}` |
-| link | `.vms-link` |
-| stat-bar | `.vms-stat-bar`, `.vms-stat-bar__item`, `.vms-stat-bar__value`, `.vms-stat-bar__label` |
-| tabs | `.vms-tabs`, `.vms-tabs__tab`, `.vms-tabs__tab--active` |
-| progress | `.vms-progress`, `.vms-progress__bar` |
-| modal | `.vms-modal-backdrop`, `.vms-modal`, `.vms-modal__header`, `.vms-modal__title`, `.vms-modal__close`, `.vms-modal__body`, `.vms-modal__footer` |
-| table | `.vms-table-wrapper`, `.vms-table`, `.vms-table__th`, `.vms-table__th--sortable`, `.vms-table__th--asc`, `.vms-table__th--desc`, `.vms-table__filter-row`, `.vms-table__filter-input`, `.vms-table__row`, `.vms-table__row--{variant}`, `.vms-table__row--clickable`, `.vms-table__td`, `.vms-table__link` |
-| copy-button | `.vms-button` |
-
-The framework emits class names; the shipped `viewmodel-shell/styles/default.css` styles them. Apps import `styles.css` (+ optionally one theme) and author zero page CSS — see *Design system* below for how, when to reach for each layout preset, and the only sanctioned override seam.
+This concern→source table is fixed: it does **not** grow when a node is added, so it cannot go stale. The two backend type sources are kept byte-aligned by the cross-backend parity suite (`parity/`, CI-gated) — a node or wire shape present in one backend and not the other fails the build. Behavior that isn't obvious from a node's type alone (immediate-dispatch vs. form-collected inputs; intentional omissions like the modal having no backdrop-dismissal) is documented at the type's definition in source and, where it cuts across nodes, in *Non-obvious framework behaviors* below. Runnable usage of every node lives in `demo/`. The wire stays multipart `_action` + `_state` + file entries (the stable contract in *Wire format* above); how to consume the emitted classes with zero app CSS is *Design system* below. **If your app needs a node / input type / text style / interaction you can't find in the source — ask; don't work around it.**
 
 ---
 
@@ -172,11 +125,11 @@ import "@ashley-shrok/viewmodel-shell/styles.css";
 import "@ashley-shrok/viewmodel-shell/themes/dark-purple.css"; // optional — pick one
 ```
 
-12 shipped themes (one import each): `dark-blue`, `dark-green`, `dark-rose`, `dark-amber`, `dark-teal`, `dark-purple`, `light-purple`, `light-blue`, `light-green`, `light-rose`, `light-amber`, `light-teal`. The shipped **default** (no theme import) is the `light-purple` value set. The prior dark default is exactly one import away — `import "@ashley-shrok/viewmodel-shell/themes/dark-purple.css";` reproduces it byte-for-byte. A theme is one static import in your entrypoint (see `demo/ContactManager/frontend/src/main.ts`); multi-role apps import a distinct theme per role through the same seam (see `demo/HelpDesk/frontend/src/agent.ts` vs `requester.ts`).
+The shipped themes are the files under `viewmodel-shell/styles/themes/` — one file = one import; that directory **is** the current, authoritative set (this doc doesn't list them, so it can't go stale as themes are added). The shipped **default** (no theme import) is the light value set; the prior dark default is preserved byte-for-byte as `themes/dark-purple.css`, one import away (`import "@ashley-shrok/viewmodel-shell/themes/dark-purple.css";`). A theme is one static import in your entrypoint (see `demo/ContactManager/frontend/src/main.ts`); multi-role apps import a distinct theme per role through the same seam (see `demo/HelpDesk/frontend/src/agent.ts` vs `requester.ts`).
 
 ### The `--vms-*` override seam — override the token, don't hand-roll
 
-The **only** sanctioned per-app deviation: a tiny per-app stylesheet with a single `:root{}` setting `--vms-*` tokens, imported in your entrypoint **after** the theme — **never** an HTML `<style>` block. Use it for a width retune (`--vms-page-max`), branded fonts (`--vms-font-body` / `--vms-font-head` / `--vms-font-mono`), or any `--vms-*` color var for a full reskin. The 12 theme files are the reskin reference; this seam is additive — never remove or rename a `--vms-*` var.
+The **only** sanctioned per-app deviation: a tiny per-app stylesheet with a single `:root{}` setting `--vms-*` tokens, imported in your entrypoint **after** the theme — **never** an HTML `<style>` block. Use it for a width retune (`--vms-page-max`), branded fonts (`--vms-font-body` / `--vms-font-head` / `--vms-font-mono`), or any `--vms-*` color var for a full reskin. The theme files under `viewmodel-shell/styles/themes/` are the reskin reference; this seam is additive — never remove or rename a `--vms-*` var.
 
 ```typescript
 import "@ashley-shrok/viewmodel-shell/styles.css";
@@ -556,24 +509,17 @@ For DB-backed apps, use a named in-memory SQLite connection shared across test m
 
 ---
 
-## Demo apps (read these before writing new code)
+## Demo apps
 
-All under `demo/`. Patterns are consistent across them.
-
-| Demo | What it demonstrates |
-|---|---|
-| `Tasks/` | Simplest full example: list, form, tabs, checkbox, progress, stat-bar |
-| `ContactManager/` | Multi-view navigation, search-on-Enter field action, email + textarea fields |
-| `ExpenseTracker/` | Multiple tab groups on one page, section grouping, number field, per-category progress bars |
-| `RetroBoard/` | Multiple forms and lists on one page, conditional checkboxes, dynamic button labels |
-| `HelpDesk/` | Two-role app (requester + agent), SQLite persistence, conditional form shape based on tab selection, `error` text style for inline validation, `secondary` button variant, persistent data + UI state separation, multi-page Vite config |
+Worked, runnable examples live under `demo/` — read the ones nearest your app's shape before writing new code; the patterns are consistent across them, and each demo's source/entrypoint shows what it exercises. No catalog here on purpose: the demo set grows and a list would drift — `ls demo/` is the current, authoritative set (the `*-bun` mirrors are the TypeScript-backend twins of the same demos).
 
 ---
 
 ## Conventions for evolving the framework
 
 - **Don't add features the framework doesn't have a clean place for.** When a request would require a workaround, that's usually a signal that the framework needs a new primitive — ask before patching around it.
-- **All demo `ViewModels.cs` copies must stay in sync.** When adding a new node type or changing the wire format, update all five copies (Tasks, HelpDesk, ExpenseTracker, ContactManager, RetroBoard).
+- **Every demo `ViewModels.cs` copy must stay in sync.** When you add a node type or change the wire format, update *all* copies — not a remembered subset. `git grep -l "record PageNode" demo` lists them at HEAD (a hand-maintained count/name list here would itself be the drift this doc avoids). The cross-backend parity suite is what actually enforces no-drift between backends — run it.
+- **`CHANGELOG.md` + `MIGRATION.md` are release-gated, not HEAD-synced.** They are append-only, version-specific history and are intentionally *not* kept in lockstep with `main` — they may lag between releases, and that's fine. The only rule: whenever you bump a package version / publish (npm or NuGet), add the matching `CHANGELOG.md` entry — and a `MIGRATION.md` note if consumers must do anything — in that same change. Never retro-edit old entries when a node is added.
 - **Test suites are non-negotiable.** Every framework change keeps the existing tests green and adds tests for new behavior.
 - **The core stays platform-agnostic — and it is enforced, not trusted.** `viewmodel-shell/src/index.ts` must reference zero platform globals. A new platform side-effect goes behind a capability verb on the `Adapter` interface (and into `BrowserAdapter`), never into core. `npm run check:core-globals` (the `viewmodel-shell/scripts/check-core-platform-globals.mjs` guard, a gating step in `.github/workflows/parity.yml`) fails the build on any `window`/`document`/`localStorage`/`sessionStorage`/`XMLHttpRequest` reference in core — run it before you push. A capability that has no safe core default (like `navigate`/`storage`) must fail loudly when its adapter method is absent, never silently no-op. See *The capability seam* under Architecture.
 

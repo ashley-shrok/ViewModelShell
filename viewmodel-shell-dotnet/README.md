@@ -54,11 +54,12 @@ public class TasksController : ControllerBase
 
 ## What's in the package
 
-- The full `ViewNode` hierarchy with `[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]` + `[JsonDerivedType(...)]`: `PageNode`, `SectionNode`, `ListNode`, `ListItemNode`, `FormNode`, `FieldNode`, `CheckboxNode`, `ButtonNode`, `TextNode`, `StatBarNode`, `TabsNode`, `ProgressNode`, `ModalNode`, `TableNode`, `LinkNode`.
-- Action/state primitives: `ActionDescriptor`, `ActionPayload<TState>` (with the `Parse(actionJson, stateJson)` helper), `ShellResponse<TState>`.
-- Supporting records: `FieldOption`, `StatItem`, `TabItem`, `TableColumn`, `TableRow`.
+The complete .NET backend type set, all under the neutral `ViewModelShell` namespace:
 
-All under the neutral `ViewModelShell` namespace.
+- The full `ViewNode` hierarchy as `record` types with `[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]` + `[JsonDerivedType(...)]` discriminators.
+- The action/state primitives needed to produce the wire contract — `ActionPayload<TState>` (with `Parse` / `ParseJson`), `ShellResponse<TState>` — plus the supporting records the nodes compose from.
+
+The single file [`viewmodel-shell-dotnet/ViewModels.cs`](https://github.com/ashley-shrok/ViewModelShell/blob/main/viewmodel-shell-dotnet/ViewModels.cs) **is** the package: it's the authoritative, always-current list of every type and prop. This README intentionally does **not** enumerate the node set, so it cannot fall out of sync with the shipped assembly — that exact mismatch (a README node list disagreeing with the DLL) was [issue #9](https://github.com/ashley-shrok/ViewModelShell/issues/9). The npm package's `dist/index.d.ts` is the matching TypeScript view of the same contract; the two are kept aligned by the repo's cross-backend parity suite.
 
 ## Versioning
 

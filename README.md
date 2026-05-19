@@ -60,7 +60,7 @@ import "@ashley-shrok/viewmodel-shell/themes/dark-blue.css";
 
 The prior (pre-0.4.0) dark default is preserved byte-exact as `themes/dark-purple.css` — one import away (`import "@ashley-shrok/viewmodel-shell/themes/dark-purple.css";`).
 
-Available themes: `dark-purple`, `dark-blue`, `dark-green`, `dark-rose`, `dark-amber`, `dark-teal`, `light-purple`, `light-blue`, `light-green`, `light-rose`, `light-amber`, `light-teal`.
+The current, authoritative theme set is the files under [`viewmodel-shell/styles/themes/`](https://github.com/ashley-shrok/ViewModelShell/tree/main/viewmodel-shell/styles/themes) — not listed here, so this README can't go stale as themes are added or renamed.
 
 ## Docs
 
