@@ -53,6 +53,21 @@ function collectText(node: ReactNode, out: string[]): void {
     // Intrinsic element (string type): title appears before children in
     // the rendered surface; bottomTitle after.
     if (typeof props.title === "string" && props.title.length > 0) out.push(props.title);
+    // B3 — input/textarea expose user-visible content through prop, not
+    // children. <input value="…"> shows that string in the terminal; the
+    // walker has to read it to maintain information parity with the
+    // BrowserAdapter (which renders <input value="…"> as a DOM node whose
+    // .textContent / .value carries the same string).
+    if (el.type === "input" && typeof props.value === "string" && props.value.length > 0) {
+      out.push(props.value);
+    }
+    if (
+      el.type === "textarea" &&
+      typeof props.initialValue === "string" &&
+      props.initialValue.length > 0
+    ) {
+      out.push(props.initialValue);
+    }
     collectText(props.children as ReactNode, out);
     if (typeof props.bottomTitle === "string" && props.bottomTitle.length > 0) {
       out.push(props.bottomTitle);

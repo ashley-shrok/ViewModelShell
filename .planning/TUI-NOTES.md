@@ -964,3 +964,74 @@ before doing anything in a fresh-context resume.
   `_fix`/`_lk`/`_md` scratch files leak into `?? `. ALWAYS run cleanup +
   the `git status | grep -E '_md|_lk|_probe|_real|_fix'` guard in a
   SEPARATE command before commit.
+
+---
+
+# OpenTUI rewrite arc (B1–B5) — phase learnings start here
+
+These sections accumulate landmines + design pivots from the Ink → OpenTUI
+rewrite (see `.planning/TUI-OPENTUI-ROADMAP.md` for the spec). Append-only;
+the roadmap explicitly says status lives in the git ledger + TaskList, not
+in this file. Each section is a "read before the next phase" cheat sheet.
+
+## B3 learnings (read before B4)
+
+- **`<input onSubmit>` is intersection-typed; callbacks must accept the
+  union.** OpenTUI's `InputProps` declares `onSubmit?: (value: string) => void`
+  on top of `InputRenderableOptions` which (via `Omit<TextareaOptions, …>`)
+  already carries `onSubmit?: (event: SubmitEvent) => void`. TypeScript
+  resolves the intersection to a function whose parameter is the UNION —
+  i.e., `string | SubmitEvent`. A handler typed `(v: string) => …` is
+  rejected. The pragmatic fix in B3: type the param as `string | object`
+  and narrow with `typeof v === "string"` before dispatch. If/when a future
+  OpenTUI release fixes the .d.ts (`Omit<…, "onSubmit">` before re-adding),
+  this can simplify back to a clean string-only handler.
+- **Draft preservation: initialization is NOT a server intent change.**
+  The natural shape `if (lastWire !== wireValue) resetEdit()` clobbers
+  user-set values on the FIRST render of a field, because `lastWire` is
+  `undefined` and any concrete wire value triggers the "intent change"
+  branch. The fix: distinguish "never seen this field" (Map.has === false →
+  initialize, preserving any pre-existing edit) from "wire actually changed"
+  (lastWire defined and differs → reset). The B3 test
+  `0.6.0 — B3 field state + form submit > form submit: collects current
+  field values …` catches this regression — keep it.
+- **Hooks-free constraint is structural, not aesthetic.** Owners are tempted
+  to reach for `useState`/`useRef` for field state. The conformance walker
+  invokes function components DIRECTLY (no reconciler) and any hook call
+  throws "useState can only be called inside the body of a function
+  component." So state MUST be lifted to the TuiAdapter class and threaded
+  via the existing RCtx props pattern. The B3 `setFieldValue` /
+  `resolveFieldValue` plumbing follows the focus-state precedent from B2.
+  When a B4/B5 component needs new state, do the same — DO NOT add hooks
+  to the renderable component tree.
+- **Conformance walker doesn't read prop-borne text by default.** OpenTUI's
+  `<input value="x">` / `<textarea initialValue="x">` show "x" to the user,
+  but the static walker only saw `<text>` children + `<box title>` /
+  `bottomTitle`. The fixture `form + single-line fields` expects both the
+  label AND the value tokens — so the walker had to learn input/textarea
+  value props. The pattern is straightforward (just extend the intrinsic-
+  element branch in `conformance.tui.test.ts`); the catch is to ONLY push
+  non-empty values, otherwise empty inputs inject empty strings that mess
+  up `ordered: true` substring matching.
+- **`renderTree`'s default ctx must be safe with no adapter.** The
+  `setFieldValue`/`resolveFieldValue` defaults in App's destructuring (no-op
+  setter, identity resolver) are what let `renderTree(vm)` work from the
+  conformance walker without a TuiAdapter instance. If a future B-phase
+  prop is added (e.g., a focus-cycle target list), default it the same way
+  or the walker will crash. Tests should construct an adapter explicitly
+  to exercise the real plumbing.
+- **Scope boundary held:** B3 deliberately stopped at "fields functional +
+  forms submittable via Enter on an input." Button activation, standalone
+  checkbox Space-toggle, and Tab-between-multiple-inputs-in-a-pane are B5
+  polish per the roadmap. The constraint forcing this: OpenTUI doesn't
+  ship a focusable `<button>` primitive, so giving buttons real keyboard
+  interactivity requires either (a) the global Enter-handler routing the
+  adapter would need to thread, or (b) hijacking an `<input>` widget as a
+  fake-button. Both are real engineering; defer to B5's unified focus
+  manager rather than half-doing them here.
+- **`fieldValues` doesn't sweep disappeared fields.** When a field's name
+  vanishes from the tree (server stopped sending it), the map entry stays.
+  Not a leak in practice (form lifetimes are short), but watch for stale
+  values being submitted in B5's polish pass if forms grow/shrink
+  dynamically across renders. Cleanup option: walk the tree per render to
+  collect active field names, sweep map entries not in that set. Deferred.

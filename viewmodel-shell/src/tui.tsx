@@ -7,7 +7,26 @@
 // reconciler. Smoke-confirmed working on Linux x64; see the roadmap
 // (.planning/TUI-OPENTUI-ROADMAP.md) for substrate decision history.
 //
-// Phase scope (B2 — additive over B1):
+// Phase scope (B3 — additive over B2):
+//   field               — real OpenTUI <input>/<textarea>/<select> for every
+//                         inputType (text/email/password/number/date/time/
+//                         datetime-local single-line, textarea/code multiline,
+//                         select/select-multiple, checkbox glyph, hidden→null,
+//                         file→placeholder until B4 misc). Wired to an
+//                         adapter-owned fieldValues map.
+//   form                — collects child field values on submit; Enter on any
+//                         child input triggers the form's submitAction with
+//                         { [name]: value } merged into context.
+//   draft preservation  — adapter tracks fieldValues + last-seen wire values
+//                         per name; user edits survive re-renders unless the
+//                         server explicitly sets a new value (the framework
+//                         contract documented in AGENTS.md).
+//   first-input focus   — the FIRST input in the focused pane receives
+//                         focused=true so the user can type into the pane
+//                         they Tab'd to. Sub-pane focus traversal (Tab between
+//                         multiple inputs in a pane, button activation,
+//                         checkbox Space-toggle) is B5 polish.
+// Phase scope (B2 — preserved):
 //   page                — layout presets stack|split|cards|sidebar
 //   section             — focus pane (scrollbox) in non-stack layouts; plain box otherwise
 //   list / list-item    — scrollbox host (overflow recoverable; wheel/keyboard scroll)
@@ -16,8 +35,8 @@
 //   focus model         — Tab/Shift-Tab cycles panes; focused border highlights;
 //                         status bar at bottom with keybind hints
 //   text / link         — unchanged from B1
-//   button/checkbox/tabs/progress/stat-bar/copy-button/modal/form/field
-//                       — still minimum-viable text surface; full widgets in B3/B4
+//   button/checkbox/tabs/progress/stat-bar/copy-button/modal
+//                       — still minimum-viable text surface; full widgets in B4/B5
 //
 // Invariants this file upholds (read .planning/TUI-OPENTUI-ROADMAP.md):
 //   - No wire change. ViewNode union, ShellSideEffect, ShellResponse untouched.
@@ -94,12 +113,55 @@ export class TuiAdapter implements Adapter {
   // conformance walker can invoke components without a reconciler.
   private focusedPaneIndex = 0;
   private lastPaneCount = 0;
+  // B3 — field state owned by the adapter. fieldValues is the live edit
+  // state (mutated by <input> onInput callbacks); fieldWireValues tracks
+  // the last-seen wire value per field so we can detect server intent
+  // changes (the AGENTS.md draft-preservation contract: user edits survive
+  // re-renders UNLESS the server explicitly sets a new value).
+  private readonly fieldValues = new Map<string, string>();
+  private readonly fieldWireValues = new Map<string, string>();
 
   constructor(opts?: TuiOpts) {
     this.viewport = opts?.viewport ?? "fill";
     const f = opts?.sidebarFraction ?? 1 / 3;
     this.sidebarFraction = Math.min(0.6, Math.max(0.15, f));
   }
+
+  // ── Field state plumbing (B3) ─────────────────────────────────────────────
+  // These are exposed on RCtx via the App's prop wiring so renderers can
+  // read/write field state without holding a reference to the adapter.
+  // setFieldValue is invoked from <input>/<textarea>/<select> change callbacks
+  // — it MUST NOT trigger a re-render (each keystroke would flicker). The map
+  // is only read on submit and on the next external re-render (server push).
+
+  private setFieldValue = (name: string, value: string): void => {
+    this.fieldValues.set(name, value);
+  };
+
+  /** Resolve a field's display value at render time. The draft-preservation
+   *  contract (AGENTS.md) is "user edits survive re-renders UNLESS the server
+   *  explicitly sets a new value for that field." Three states:
+   *    1. First time we see this field name — initialize the wire baseline
+   *       WITHOUT clobbering any pre-existing edit value (matters when a test
+   *       primes fieldValues via setFieldValue before the first render).
+   *    2. Wire value unchanged since last render — preserve the edit value.
+   *    3. Wire value differs from the prior wire baseline — server intent
+   *       change → reset the edit value to match. */
+  private resolveFieldValue = (name: string, wireValue: string): string => {
+    if (!this.fieldWireValues.has(name)) {
+      this.fieldWireValues.set(name, wireValue);
+      if (!this.fieldValues.has(name)) {
+        this.fieldValues.set(name, wireValue);
+      }
+      return this.fieldValues.get(name) ?? wireValue;
+    }
+    const lastWire = this.fieldWireValues.get(name)!;
+    if (lastWire !== wireValue) {
+      this.fieldValues.set(name, wireValue);
+      this.fieldWireValues.set(name, wireValue);
+    }
+    return this.fieldValues.get(name) ?? wireValue;
+  };
 
   // ── Adapter.render ────────────────────────────────────────────────────────
   // The shell calls this synchronously and does NOT await. OpenTUI's
@@ -169,8 +231,16 @@ export class TuiAdapter implements Adapter {
         onAction={onAction}
         focusedPaneIndex={this.focusedPaneIndex}
         sidebarFraction={this.sidebarFraction}
+        setFieldValue={this.setFieldValue}
+        resolveFieldValue={this.resolveFieldValue}
       />,
     );
+  }
+
+  /** Test-only: read the current edit value for a named field (for asserting
+   *  draft preservation across server re-renders). */
+  _peekFieldValue(name: string): string | undefined {
+    return this.fieldValues.get(name);
   }
 
   private cycleFocus(forward: boolean): void {
@@ -341,6 +411,24 @@ interface RCtx {
   sidebarFraction: number;
   /** True at the top level (direct child of page); false once we descend into a section/list. */
   isTopLevel: boolean;
+  /** True when the renderer is currently walking inside the focused pane.
+   *  Toggled by SectionView / ListView / TableView when they become the focused
+   *  pane. Read by FieldView to decide whether to auto-focus the first input. */
+  inFocusedPane: boolean;
+  /** Mutated by FieldView (and the conformance walker tolerates this side
+   *  effect, same as paneCounter): used to grant focused=true to only the FIRST
+   *  focusable input encountered inside the focused pane this render. Reset
+   *  whenever a new focused pane is entered. */
+  paneInputCounter: { current: number };
+  /** Inside a form, this submits it (collecting child field values and
+   *  dispatching the form's submitAction). FieldView wires onSubmit through
+   *  this when its parent is a form. Null when not inside a form. */
+  submitForm: (() => void) | null;
+  /** Field state plumbing — wired by App from TuiAdapter. Default no-ops keep
+   *  the static renderTree (conformance walker) path working without the
+   *  adapter. */
+  setFieldValue: (name: string, value: string) => void;
+  resolveFieldValue: (name: string, wireValue: string) => string;
 }
 
 interface AppProps {
@@ -352,15 +440,32 @@ interface AppProps {
   focusedPaneIndex?: number;
   /** Optional with sane default for the same reason. */
   sidebarFraction?: number;
+  /** Field state — provided by TuiAdapter. Optional so renderTree works. */
+  setFieldValue?: (name: string, value: string) => void;
+  resolveFieldValue?: (name: string, wireValue: string) => string;
 }
 
-function App({ vm, onAction, focusedPaneIndex = 0, sidebarFraction = 1 / 3 }: AppProps) {
+function App({
+  vm,
+  onAction,
+  focusedPaneIndex = 0,
+  sidebarFraction = 1 / 3,
+  setFieldValue,
+  resolveFieldValue,
+}: AppProps) {
   const ctx: RCtx = {
     onAction,
     focusedPaneIndex,
     paneCounter: { current: 0 },
     sidebarFraction,
     isTopLevel: true,
+    inFocusedPane: false,
+    paneInputCounter: { current: 0 },
+    submitForm: null,
+    setFieldValue: setFieldValue ?? (() => { /* no-op for conformance walker */ }),
+    // Default resolver: just return the wire value — no preservation outside
+    // the mounted adapter path (the conformance walker doesn't persist state).
+    resolveFieldValue: resolveFieldValue ?? ((_name, wireValue) => wireValue),
   };
   // App shell: content fills, status bar pinned at the bottom. height="100%"
   // means it consumes the renderer's viewport (alt-screen size).
@@ -405,7 +510,7 @@ function renderNode(node: ViewNode, ctx: RCtx, key?: string | number): React.Rea
     case "modal":        return <ModalView        key={key} node={node} ctx={ctx} />;
     case "copy-button":  return <CopyButtonView   key={key} node={node} />;
     case "form":         return <FormView         key={key} node={node} ctx={ctx} />;
-    case "field":        return <FieldView        key={key} node={node} />;
+    case "field":        return <FieldView        key={key} node={node} ctx={ctx} />;
     default:
       return <UnsupportedView key={key} type={(node as { type: string }).type} />;
   }
@@ -508,7 +613,15 @@ function SectionView({ node, ctx }: { node: SectionNode; ctx: RCtx }) {
   const paneIndex = ctx.paneCounter.current++;
   const focused = paneIndex === ctx.focusedPaneIndex;
   const border = node.variant === "card";
-  const childCtx: RCtx = { ...ctx, isTopLevel: false };
+  const childCtx: RCtx = {
+    ...ctx,
+    isTopLevel: false,
+    // Becoming a focused pane: descendant FieldViews use this to decide
+    // whether to grant focused=true to the first input encountered. The
+    // counter is per-pane so nested forms don't double up.
+    inFocusedPane: focused || ctx.inFocusedPane,
+    paneInputCounter: focused ? { current: 0 } : ctx.paneInputCounter,
+  };
   const layout = layoutProps(node.layout, ctx.sidebarFraction);
   return (
     <box flexDirection="column" gap={1} flexGrow={1} flexShrink={1}>
@@ -593,16 +706,24 @@ const LIST_ITEM_FG: Record<string, string> = {
 
 function ListView({ node, ctx }: { node: ListNode; ctx: RCtx }) {
   const isPane = ctx.isTopLevel;
-  const childCtx: RCtx = { ...ctx, isTopLevel: false };
-  const inner = (
-    <box flexDirection="column" gap={0}>
-      {node.children.map((child, i) => renderNode(child, childCtx, i))}
-    </box>
-  );
-  if (!isPane) return inner;
+  if (!isPane) {
+    // Inline list: stays inside whatever pane wraps it; inherits inFocusedPane.
+    const childCtx: RCtx = { ...ctx, isTopLevel: false };
+    return (
+      <box flexDirection="column" gap={0}>
+        {node.children.map((child, i) => renderNode(child, childCtx, i))}
+      </box>
+    );
+  }
   // Top-level list → its own focus pane.
   const paneIndex = ctx.paneCounter.current++;
   const focused = paneIndex === ctx.focusedPaneIndex;
+  const childCtx: RCtx = {
+    ...ctx,
+    isTopLevel: false,
+    inFocusedPane: focused || ctx.inFocusedPane,
+    paneInputCounter: focused ? { current: 0 } : ctx.paneInputCounter,
+  };
   return (
     <scrollbox
       focused={focused}
@@ -612,7 +733,9 @@ function ListView({ node, ctx }: { node: ListNode; ctx: RCtx }) {
       flexGrow={1}
       flexShrink={1}
     >
-      {inner}
+      <box flexDirection="column" gap={0}>
+        {node.children.map((child, i) => renderNode(child, childCtx, i))}
+      </box>
     </scrollbox>
   );
 }
@@ -784,21 +907,216 @@ function CopyButtonView({ node }: { node: CopyButtonNode }) {
   return <text>[ {node.label ?? "Copy"} ]</text>;
 }
 
+// ── form ──────────────────────────────────────────────────────────────────
+// Renders children + the submit button (decorative for B3 — Enter on any
+// child input triggers form submit via FieldView's onSubmit handler).
+// On submit: walks this form's children recursively to collect field names,
+// reads each from the adapter's fieldValues map (falling back to wire), and
+// dispatches submitAction with `{ [name]: value, ... }` merged into context.
+
 function FormView({ node, ctx }: { node: FormNode; ctx: RCtx }) {
-  const childCtx: RCtx = { ...ctx, isTopLevel: false };
+  // Snapshot the form for the closure — same-instance fine since the closure
+  // is recreated on every render (which is every server response).
+  const submitThisForm = (): void => {
+    const merged: Record<string, unknown> = {
+      ...(node.submitAction.context ?? {}),
+    };
+    const collect = (n: ViewNode): void => {
+      if (n.type === "field") {
+        const wireValue = n.value ?? "";
+        // The map may not have an entry for fields the user hasn't touched
+        // (or for hidden fields we register on render). Fall back to the
+        // wire value in that case — the resolveFieldValue plumbing keeps the
+        // two in sync for fields that DID render.
+        const v = ctx.resolveFieldValue(n.name, wireValue);
+        // Checkbox-typed fields submit as boolean, not string.
+        merged[n.name] = n.inputType === "checkbox" ? v === "true" : v;
+      }
+      const children = (n as { children?: ViewNode[] }).children;
+      if (children) for (const c of children) collect(c);
+    };
+    for (const child of node.children) collect(child);
+    ctx.onAction({ name: node.submitAction.name, context: merged });
+  };
+  const childCtx: RCtx = {
+    ...ctx,
+    isTopLevel: false,
+    submitForm: submitThisForm,
+  };
+  // Layout preset on form: "stack" (default — fields stacked) or "inline"
+  // (field row + submit on one line, the add-bar/search-bar pattern).
+  const isInline = node.layout === "inline";
   return (
-    <box flexDirection="column" gap={1}>
+    <box flexDirection={isInline ? "row" : "column"} gap={1}>
       {node.children.map((child, i) => renderNode(child, childCtx, i))}
       <text attributes={1 /* BOLD */}>[ {node.submitLabel ?? "Submit"} ]</text>
     </box>
   );
 }
 
-function FieldView({ node }: { node: FieldNode }) {
+// ── field ─────────────────────────────────────────────────────────────────
+// Real OpenTUI input/textarea/select wired to the adapter's field state.
+// Layout per inputType:
+//   hidden                    → null (still REGISTERS the wire value so form
+//                                submit picks it up).
+//   text/email/password/      → <text label> + <input value=wire ...>.
+//     number/date/time/        Single-line; onInput tracks edits;
+//     datetime-local           onSubmit→form submit or field action.
+//   textarea / code           → <text label> + <textarea initialValue=wire>.
+//                                Multiline; B3 doesn't ship syntax highlighting
+//                                (code-as-textarea is a deliberate B3 simplification —
+//                                OpenTUI <code> is read-only render, not editor).
+//   select / select-multiple  → <text label> + <select options=[...] >.
+//                                B3 ships single-select; select-multiple semantics
+//                                are deferred (no native OpenTUI multi-select
+//                                widget; would need a custom focusable list — B5).
+//   checkbox                  → <text "[x] label" or "[ ] label"> — decorative
+//                                for B3 (toggle interactivity in B5).
+//   file                      → <text "{label}: [file: …]"> placeholder —
+//                                upload via OpenTUI input is impractical without
+//                                native file-picker UX; targeted at B4 misc.
+//
+// Draft preservation:
+//   resolveFieldValue() is the source of truth. It checks "did the server
+//   change the wire value since last render" — if so, snap the user's edit
+//   back to the new server value. Otherwise, the user's edit survives. This
+//   matches the BrowserAdapter contract in AGENTS.md.
+//
+// Conformance:
+//   The label is always rendered as a sibling <text>, so the static walker
+//   sees it. The wire value is surfaced via <input value=…> / <textarea
+//   initialValue=…> — the conformance walker is extended in this phase to
+//   read those props as user-visible information.
+
+function FieldView({ node, ctx }: { node: FieldNode; ctx: RCtx }) {
+  const wireValue = node.value ?? "";
+  // Resolve through the adapter so draft preservation runs as a side effect
+  // even for hidden fields (the form needs their wire value at submit time).
+  const currentValue = ctx.resolveFieldValue(node.name, wireValue);
+
   if (node.inputType === "hidden") return null;
+
   const label = node.label ?? node.name;
-  const val = node.value ?? "";
-  return <text>{label}: {val}</text>;
+  // First focusable input inside the focused pane wins auto-focus. Sub-pane
+  // traversal (Tab between multiple inputs) is B5 — for B3 the user gets
+  // exactly one focused field per pane, which is enough to type into a form.
+  const inputIndex = ctx.paneInputCounter.current++;
+  const focused = ctx.inFocusedPane && inputIndex === 0;
+
+  // Submit handler — common to text/textarea/select. Wired to the parent
+  // form (if any), else dispatches the field's own action (immediate-dispatch).
+  const handleSubmit = (latestValue?: string): void => {
+    if (latestValue !== undefined) ctx.setFieldValue(node.name, latestValue);
+    if (ctx.submitForm) {
+      ctx.submitForm();
+      return;
+    }
+    if (node.action) {
+      ctx.onAction({
+        name: node.action.name,
+        context: {
+          ...(node.action.context ?? {}),
+          [node.name]: latestValue ?? ctx.resolveFieldValue(node.name, wireValue),
+        },
+      });
+    }
+  };
+
+  // ── textarea / code: multi-line editor ─────────────────────────────────
+  if (node.inputType === "textarea" || node.inputType === "code") {
+    return (
+      <box flexDirection="column" gap={0}>
+        <text fg="#888888">{label}</text>
+        <textarea
+          // Re-mount on wire change so initialValue takes effect — uncontrolled,
+          // user edits owned by the widget; we sync to adapter via onSubmit.
+          key={`${node.name}::wire::${wireValue}`}
+          initialValue={currentValue}
+          placeholder={node.placeholder ?? null}
+          focused={focused}
+          onSubmit={() => handleSubmit()}
+        />
+      </box>
+    );
+  }
+
+  // ── select / select-multiple: dropdown picker ──────────────────────────
+  if (node.inputType === "select" || node.inputType === "select-multiple") {
+    const options = (node.options ?? []).map((o) => ({
+      name: o.label,
+      description: "",
+      value: o.value,
+    }));
+    let selectedIndex = options.findIndex((o) => String(o.value) === currentValue);
+    if (selectedIndex < 0) selectedIndex = 0;
+    return (
+      <box flexDirection="column" gap={0}>
+        <text fg="#888888">{label}</text>
+        <select
+          key={`${node.name}::wire::${wireValue}`}
+          options={options}
+          selectedIndex={selectedIndex}
+          focused={focused}
+          onChange={(_idx, opt) => {
+            if (opt) ctx.setFieldValue(node.name, String(opt.value ?? opt.name));
+          }}
+          onSelect={(_idx, opt) => {
+            const next = opt ? String(opt.value ?? opt.name) : currentValue;
+            handleSubmit(next);
+          }}
+        />
+      </box>
+    );
+  }
+
+  // ── checkbox: decorative glyph for B3 (toggle wiring is B5) ───────────
+  if (node.inputType === "checkbox") {
+    // Wire contract: checkbox-typed field's value is "true" | "false".
+    const checked = currentValue === "true";
+    const glyph = checked ? "[x]" : "[ ]";
+    return (
+      <text fg={focused ? "#88aaff" : undefined}>{glyph} {label}</text>
+    );
+  }
+
+  // ── file: B4 placeholder (no native file picker in terminal) ───────────
+  if (node.inputType === "file") {
+    return (
+      <box flexDirection="column" gap={0}>
+        <text fg="#888888">{label}</text>
+        <text fg="#888888">[file upload — coming in B4 misc]</text>
+      </box>
+    );
+  }
+
+  // ── Default: single-line input (text/email/password/number/date/time/datetime-local) ──
+  // OpenTUI's <input> doesn't model these subtypes; they all map to a
+  // single-line text editor. Password masking would require either a custom
+  // renderer or post-processing — deferred to B5 polish (the framework wire
+  // exposes inputType so the server knows it's a password; the visual
+  // affordance can come later). For date/time/datetime-local: the wire is
+  // already a string, and a freeform text field is the lowest-common-denominator
+  // terminal UX (a graphical date picker doesn't fit the medium anyway).
+  return (
+    <box flexDirection="column" gap={0}>
+      <text fg="#888888">{label}</text>
+      <input
+        key={`${node.name}::wire::${wireValue}`}
+        value={currentValue}
+        placeholder={node.placeholder ?? ""}
+        focused={focused}
+        onInput={(v) => ctx.setFieldValue(node.name, v)}
+        // OpenTUI types onSubmit as an intersection of (value:string)=>void
+        // and (event:SubmitEvent)=>void, so the param at use-site is the
+        // union — narrow it before dispatch. The wire layer's SubmitEvent
+        // is an empty interface (no payload), so the string form is the only
+        // one carrying the user's edit; ignore the event form.
+        onSubmit={(v: string | object) => {
+          handleSubmit(typeof v === "string" ? v : undefined);
+        }}
+      />
+    </box>
+  );
 }
 
 function UnsupportedView({ type }: { type: string }) {
