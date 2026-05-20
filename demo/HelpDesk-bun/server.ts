@@ -313,6 +313,7 @@ function agentBuildTicketPage(ticket: Ticket, state: AgentState): ViewNode {
         type: "button", label: "Mark In Progress",
         action: { name: "start-ticket", context: { id: String(ticket.id) } },
         variant: "primary",
+        pendingLabel: "Marking…",
       });
       break;
     case "in-progress":
@@ -320,6 +321,7 @@ function agentBuildTicketPage(ticket: Ticket, state: AgentState): ViewNode {
         type: "button", label: "Mark Resolved",
         action: { name: "resolve-ticket", context: { id: String(ticket.id) } },
         variant: "primary",
+        pendingLabel: "Resolving…",
       });
       break;
     case "resolved":
@@ -327,6 +329,7 @@ function agentBuildTicketPage(ticket: Ticket, state: AgentState): ViewNode {
         type: "button", label: "Reopen",
         action: { name: "reopen-ticket", context: { id: String(ticket.id) } },
         variant: "secondary",
+        pendingLabel: "Reopening…",
       });
       if (ticket.resolvedAt) {
         actionChildren.push({

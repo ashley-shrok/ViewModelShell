@@ -6,6 +6,24 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `0.8.0` (`ButtonNode.pendingLabel` — npm + NuGet)
+
+**Nothing to do** beyond taking the bump on whichever side you use. `0.8.0` adds one additive optional field on `ButtonNode` (`pendingLabel?: string`) and changes dispatch-error behavior to re-render `currentVm` (previously it only fired `onError`). Both changes are forward-compatible.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.7.1` | **`0.8.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.7.0` | **`0.8.0`** |
+
+- **Existing buttons:** unchanged. Omit `pendingLabel` for instant-click behavior (byte-identical to `0.7.x`).
+- **Slow-action buttons:** set `PendingLabel: "Loading…"` (C#) / `pendingLabel: "Loading…"` (TypeScript) on the `ButtonNode`. The framework swaps the visible label + dims the button on click; reverts on response (success path replaces the button entirely; error path re-renders `currentVm`).
+- **Adapters that mutate the DOM on click:** the error-path re-render now reverts client-side ephemeral state automatically. If you had a custom adapter implementing analogous pending logic via your own cleanup hook, you can drop that hook — the framework re-render handles it.
+- **TUI consumers:** the `TuiAdapter` mirrors the BrowserAdapter behavior (label swap + `dimColor` while pending). Same wire field; no separate opt-in.
+
+Closes [#11](https://github.com/ashley-shrok/ViewModelShell/issues/11).
+
+---
+
 ## Upgrading to npm `0.7.1` (Browser scroll preservation — npm only)
 
 **Nothing to do** beyond taking the patch. `0.7.1` fixes [#7](https://github.com/ashley-shrok/ViewModelShell/issues/7): the window scroll position is now preserved across action-driven re-renders, and `el.focus()` no longer yanks the viewport to the focused element. NuGet unchanged at `0.7.0`; major.minor stays `0.7`.

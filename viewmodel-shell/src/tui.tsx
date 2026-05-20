@@ -128,6 +128,12 @@ export class TuiAdapter implements Adapter {
   // fine UX-wise and avoids needing per-button unique keys.
   private copiedKey: string | null = null;
   private copiedTimer: ReturnType<typeof setTimeout> | null = null;
+  // 0.8.0 (#11) — pending-button state. ButtonView reads ctx.pendingButtonKey
+  // and renders pendingLabel when matched. Set from ButtonView onMouseDown
+  // and from activatePane's button branch. Cleared on every external render()
+  // call (so server-driven re-render — success OR error — naturally clears
+  // pending state, no per-button cleanup wiring needed).
+  private pendingButtonKey: string | null = null;
 
   constructor(opts?: TuiOpts) {
     this.viewport = opts?.viewport ?? "fill";
@@ -169,6 +175,22 @@ export class TuiAdapter implements Adapter {
   // ESC ] 52 ; c ; <base64> BEL. ESC = \x1b, BEL = \x07. Terminals without
   // OSC-52 support ignore the escape (no clipboard write, but the visual
   // "Copied!" feedback still fires, which is honest behavior).
+  // Returns a stable key for ButtonNode identity within a render. Uses
+  // action name + visible label — duplicates are rare and merely cause
+  // two buttons to flash together (acceptable, matches "same action
+  // is in-flight" intuition).
+  private buttonKey(action: string, label: string): string {
+    return `${action}::${label}`;
+  }
+
+  // Set the pending-button key + flush the React tree so ButtonView re-renders
+  // with the swapped label. Called from ButtonView.onMouseDown and from
+  // activatePane's button branch.
+  private setPendingButton = (action: string, label: string): void => {
+    this.pendingButtonKey = this.buttonKey(action, label);
+    this.flushPending();
+  };
+
   private copy = (text: string): void => {
     const b64 = Buffer.from(text, "utf8").toString("base64");
     const seq = `\x1b]52;c;${b64}\x07`;
@@ -204,8 +226,14 @@ export class TuiAdapter implements Adapter {
   // createCliRenderer is async, so we init lazily: the first render() kicks
   // off initialization; subsequent renders are sync. Late renders that
   // arrive before init resolves are coalesced into `pending` (last-write-wins).
+  //
+  // 0.8.0 (#11) — every external render clears the pending-button state
+  // (label swap) so server-driven re-renders (success path AND the dispatch-
+  // error re-render path) naturally revert any in-flight UI without per-
+  // button cleanup wiring.
   render(vm: ViewNode, onAction: (action: ActionEvent) => void): void {
     if (this.disposed) return;
+    this.pendingButtonKey = null;
     this.pending = { vm, onAction };
     if (this.renderer == null) {
       if (this.initPromise == null) this.initPromise = this.init();
@@ -283,6 +311,8 @@ export class TuiAdapter implements Adapter {
         copiedKey={this.copiedKey}
         copy={this.copy}
         navigate={this.navigateForLinks}
+        pendingButtonKey={this.pendingButtonKey}
+        setPendingButton={this.setPendingButton}
       />,
     );
   }
@@ -333,6 +363,9 @@ export class TuiAdapter implements Adapter {
       const a = summary.primaryActionable;
       if (a == null) return;
       if (a.type === "button") {
+        // 0.8.0 (#11) — mirror ButtonView.onMouseDown's pending-state set.
+        // Enter activation is structurally identical to a mouse click here.
+        if (a.pendingLabel != null) this.setPendingButton(a.action.name, a.label);
         this.pending.onAction(a.action);
       } else if (a.type === "link") {
         this.navigate(a.href);
@@ -663,6 +696,16 @@ interface RCtx {
   /** B5 — link / clickable-cell click target. Maps to TuiAdapter.navigate
    *  on the mounted path; no-op for the static conformance walker. */
   navigate: (url: string) => void;
+  /** 0.8.0 (#11) — button pending state. ButtonView compares this against
+   *  its own action+label key to decide whether to render `pendingLabel`
+   *  instead of `label`. Null = no button is currently pending. Cleared
+   *  on every external render() so server-driven re-renders revert. */
+  pendingButtonKey: string | null;
+  /** 0.8.0 (#11) — invoked from ButtonView.onMouseDown (and from
+   *  activatePane's button branch in TuiAdapter) BEFORE dispatching the
+   *  action. Sets pendingButtonKey + re-renders so the swapped label is
+   *  visible immediately. Default no-op for the conformance walker. */
+  setPendingButton: (action: string, label: string) => void;
   /** B4 — true when a modal is somewhere in the tree. When true, panes
    *  OUTSIDE the modal subtree do NOT increment paneCounter and render
    *  without a focus border (operational focus trap). */
@@ -693,6 +736,9 @@ interface AppProps {
    *  Maps to TuiAdapter.navigate (the existing capability verb). Optional
    *  for the conformance walker; defaults to no-op. */
   navigate?: (url: string) => void;
+  /** 0.8.0 (#11) — button pending state. See RCtx.pendingButtonKey. */
+  pendingButtonKey?: string | null;
+  setPendingButton?: (action: string, label: string) => void;
 }
 
 function App({
@@ -705,6 +751,8 @@ function App({
   copiedKey = null,
   copy,
   navigate,
+  pendingButtonKey = null,
+  setPendingButton,
 }: AppProps) {
   // B4 — detect modal at the top of every render so the focus-trap + overlay
   // wiring is consistent end-to-end. When a modal exists in the tree, the
@@ -731,6 +779,10 @@ function App({
     // B5: link click target. Default no-op for the conformance walker (which
     // doesn't have an adapter to call). Real renders thread TuiAdapter.navigate.
     navigate: navigate ?? (() => { /* no-op */ }),
+    // 0.8.0 (#11): pending-button plumbing. Defaults make renderTree (the
+    // static conformance walker) safe to invoke without an adapter.
+    pendingButtonKey,
+    setPendingButton: setPendingButton ?? (() => { /* no-op for walker */ }),
     modalActive: modal != null,
     insideModal: false,
   };
@@ -1228,12 +1280,28 @@ function ButtonView({ node, ctx }: { node: ButtonNode; ctx: RCtx }) {
   const fg = node.variant === "danger" ? "#ff5555"
            : node.variant === "primary" ? "#88aaff"
            : undefined;
+  // 0.8.0 (#11) — pendingLabel: when set + this button's key matches the
+  // adapter's pendingButtonKey, render the pending label instead of the
+  // normal label. Cleared on the next external render() (success path =
+  // server returns a new VM; error path = shell re-renders currentVm).
+  const key = `${node.action.name}::${node.label}`;
+  const isPending = node.pendingLabel != null && ctx.pendingButtonKey === key;
+  const label = isPending ? node.pendingLabel : node.label;
   // B5 — mouse click dispatches the button's action. Keyboard activation
   // (Enter on the focused pane's primary actionable) is wired at the
   // renderer key handler, not here.
-  const onMouseDown = (): void => ctx.onAction(node.action);
+  const onMouseDown = (): void => {
+    if (node.pendingLabel != null) ctx.setPendingButton(node.action.name, node.label);
+    ctx.onAction(node.action);
+  };
   return (
-    <text {...(fg != null ? { fg } : {})} onMouseDown={onMouseDown}>[ {node.label} ]</text>
+    <text
+      {...(fg != null ? { fg } : {})}
+      {...(isPending ? { dimColor: true } : {})}
+      onMouseDown={onMouseDown}
+    >
+      [ {label} ]
+    </text>
   );
 }
 

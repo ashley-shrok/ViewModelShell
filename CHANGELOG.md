@@ -6,6 +6,43 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.8.0 — `ButtonNode.pendingLabel`: instant click feedback for slow actions (npm + NuGet)
+
+**npm:** `0.8.0` (MINOR — wire-format addition) · **NuGet:** `0.8.0` (MINOR — wire-format addition)
+
+Both packages move together. Closes [#11](https://github.com/ashley-shrok/ViewModelShell/issues/11). One additive `ButtonNode` field; no breaking change.
+
+### Added
+
+- **`ButtonNode.pendingLabel?: string`.** Transient label shown from click until the dispatch resolves. Adapter additionally adds `.vms-button--pending` (browser) or visually dims the button (TUI) while pending so the affordance visibly disables — preventing re-clicks both via the shell's existing dispatch-guard AND via the new visual signal. Mirrors `CopyButtonNode.copiedLabel`'s lifecycle pattern at a different beat (DURING the round-trip, rather than AFTER it):
+
+  C#:
+  ```csharp
+  new ButtonNode("Load Plugin",
+      new ActionDescriptor("load-plugin"),
+      "primary",
+      PendingLabel: "Loading…")
+  ```
+
+  TypeScript backend:
+  ```typescript
+  { type: "button", label: "Load Plugin", action: { name: "load-plugin" },
+    variant: "primary", pendingLabel: "Loading…" }
+  ```
+
+  Omitted = no pending feedback (existing instant-click behavior, byte-identical). Pure-client ephemeral state — never round-trips through the wire. The shell's dispatch-error path (see *Changed* below) reverts pending UI without per-button cleanup wiring.
+
+### Changed
+
+- **Shell re-renders `currentVm` on dispatch error.** Previously, a failed dispatch (non-OK response, fetch throw) surfaced `onError` but did NOT trigger a re-render — any client-side ephemeral UI applied in the click handler (e.g. the new `pendingLabel` swap, but applicable to any future similar pattern) would be left visually stuck. Now the shell calls `adapter.render(currentVm, …)` from `dispatch()`'s catch block when `currentVm` is non-null. This snaps client-side state back to the authoritative server tree automatically. Existing apps that previously depended on "no re-render after error" should be unaffected (the re-render uses the *same* VM that was last rendered; idempotent for any adapter that doesn't mutate the DOM in ways the snapshot/restore doesn't already cover).
+
+### Consumers
+
+- **None required — additive.** Existing `ButtonNode` consumers untouched (new `pendingLabel`/`PendingLabel` field is optional, null-omitted on the wire). Existing dispatch-error behavior is now "re-render currentVm + fire onError" rather than just "fire onError"; this is strictly more correct for adapters that mutate the DOM on click. Cross-backend parity unchanged.
+- **Demo worked example:** `demo/HelpDesk` (and its Bun twin) now sets `pendingLabel` on the ticket-status-change buttons (`"Marking…"`, `"Resolving…"`, `"Reopening…"`) — exercise it in the agent view of a HelpDesk ticket.
+
+---
+
 ## 0.7.1 — Browser scroll preservation across re-render (npm only)
 
 **npm:** `0.7.1` (PATCH — client-only bug fix) · **NuGet:** unchanged at `0.7.0`

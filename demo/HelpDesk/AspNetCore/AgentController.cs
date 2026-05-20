@@ -180,17 +180,20 @@ public class AgentController(HelpDeskDb db) : ControllerBase
             case "open":
                 actionChildren.Add(new ButtonNode("Mark In Progress",
                     new ActionDescriptor("start-ticket",   new() { ["id"] = ticket.Id.ToString() }),
-                    "primary"));
+                    "primary",
+                    PendingLabel: "Marking…"));
                 break;
             case "in-progress":
                 actionChildren.Add(new ButtonNode("Mark Resolved",
                     new ActionDescriptor("resolve-ticket", new() { ["id"] = ticket.Id.ToString() }),
-                    "primary"));
+                    "primary",
+                    PendingLabel: "Resolving…"));
                 break;
             case "resolved":
                 actionChildren.Add(new ButtonNode("Reopen",
                     new ActionDescriptor("reopen-ticket",  new() { ["id"] = ticket.Id.ToString() }),
-                    "secondary"));
+                    "secondary",
+                    PendingLabel: "Reopening…"));
                 if (!string.IsNullOrEmpty(ticket.ResolvedAt))
                     actionChildren.Add(new TextNode($"Resolved {FormatDate(ticket.ResolvedAt)}", "muted"));
                 break;

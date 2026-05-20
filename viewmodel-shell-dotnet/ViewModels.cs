@@ -190,7 +190,11 @@ public record CheckboxNode(
 public record ButtonNode(
     string Label,
     ActionDescriptor Action,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant,
+    // Transient label shown from click until dispatch resolves (issue #11).
+    // Adapter additionally adds `.vms-button--pending` while pending so the
+    // button visibly disables. Null = instant-click behavior (pre-0.8.0).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? PendingLabel = null
 ) : ViewNode;
 
 public record TextNode(

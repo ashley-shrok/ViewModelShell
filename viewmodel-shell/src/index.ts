@@ -148,6 +148,13 @@ export interface ButtonNode {
   label: string;
   action: ActionEvent;
   variant?: "primary" | "secondary" | "danger";
+  /** Transient label shown from click until the dispatch resolves (response
+   *  arrives or dispatch errors). Mirrors `CopyButtonNode.copiedLabel`'s
+   *  lifecycle pattern at a different beat: shown DURING the round-trip
+   *  rather than AFTER it. The adapter additionally adds `.vms-button--pending`
+   *  while in this state so the button visibly disables (cursor + opacity).
+   *  Omitted = no pending feedback (existing instant-click behavior). */
+  pendingLabel?: string;
 }
 
 export interface TextNode {
@@ -357,6 +364,15 @@ export class ViewModelShell {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       onError ? onError(error) : console.error("[ViewModelShell]", error);
+      // 0.8.0 (#11) — re-render the current VM on dispatch error. Adapters
+      // may have applied client-side ephemeral state in onAction handlers
+      // (e.g., BrowserAdapter swaps button text for ButtonNode.pendingLabel).
+      // Re-rendering snaps that back to the authoritative server state.
+      // Skipped when no VM has loaded yet (pre-initial-load dispatch is
+      // already an error case handled above; currentVm stays null there).
+      if (this.currentVm !== null) {
+        this.options.adapter.render(this.currentVm, (a) => this.dispatch(a));
+      }
     } finally {
       this.dispatching = false;
       if (!silent) onLoading?.(false);

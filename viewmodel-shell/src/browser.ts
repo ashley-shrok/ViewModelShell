@@ -502,7 +502,20 @@ export class BrowserAdapter implements Adapter {
     btn.type = "button";
     btn.className = `vms-button${n.variant ? ` vms-button--${n.variant}` : ""}`;
     btn.textContent = n.label;
-    btn.addEventListener("click", () => on(n.action));
+    btn.addEventListener("click", () => {
+      // 0.8.0 (#11) — pendingLabel: instant client-side feedback. Swap text +
+      // add .vms-button--pending BEFORE handing off to the dispatcher. On
+      // success the next render replaces the button entirely. On dispatch
+      // error, the shell's dispatch() catch re-renders this.currentVm so
+      // the original label snaps back automatically — no per-button cleanup
+      // wiring needed in the adapter. Pure-client ephemeral state; never
+      // round-trips through the wire.
+      if (n.pendingLabel) {
+        btn.textContent = n.pendingLabel;
+        btn.classList.add("vms-button--pending");
+      }
+      on(n.action);
+    });
     parent.appendChild(btn);
   }
 

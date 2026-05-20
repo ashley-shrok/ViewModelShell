@@ -345,6 +345,18 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 }
 .vms-button--danger:hover { background: var(--vms-error-glow); border-color: var(--vms-error); }
 
+/* ── Pending state (0.8.0 / issue #11) ──
+   Applied by BrowserAdapter when a ButtonNode with `pendingLabel` is clicked.
+   The button visibly disables (dimmed + wait cursor + ignores pointer events)
+   for the duration of the dispatch round-trip; the next render either
+   replaces the button (success path) or re-renders the current VM (error
+   path) so this state always clears without per-button cleanup. */
+.vms-button--pending {
+  opacity: 0.55;
+  cursor: progress;
+  pointer-events: none;
+}
+
 /* Inside a list item, a danger button is treated as the row's "X" affordance:
    muted and hidden until the row is hovered, then visible and red on hover. */
 .vms-list-item .vms-button--danger {
