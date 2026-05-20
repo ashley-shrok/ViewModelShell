@@ -6,6 +6,34 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.6.0 — Terminal substrate rewrite (OpenTUI, Bun runtime) + interaction polish
+
+**npm:** `0.6.0` (MINOR — client adapter rewrite, optional-dep set changes) · **NuGet:** `0.6.0` (MINOR — version-aligned no-op; no functional changes)
+
+The terminal/TUI front-end is rewritten from scratch on a new substrate. **No wire change** — `ViewNode` types, `ShellSideEffect`, `ShellResponse`, every backend, and `parity/` are all untouched. NuGet bumps to `0.6.0` purely to keep shared major.minor with npm (the existing alignment rule); the package contents are identical to `0.5.0`. Browser and server consumers are unaffected.
+
+### Changed
+
+- **`@ashley-shrok/viewmodel-shell/tui` rewritten on [OpenTUI](https://github.com/anomalyco/opentui).** The Ink-based adapter (4 of its arc versions: 0.4.5–0.4.9) had two structural limitations end-users reported on real apps: no mouse support at all, and no scrollable-view primitive (overflow clipped silently). The Node TUI ecosystem in 2026 doesn't have an active library that delivers both with React-style ergonomics — `blessed` and `neo-blessed` are abandoned (2015 / 2018), `terminal-kit` is active but imperative, and OpenTUI is the only library that ships a React reconciler (`@opentui/react`) alongside `ScrollBox`, native mouse handling, focus management, and prebuilt platform binaries (`@opentui/core-{linux,darwin,win32}-{x64,arm64}` via `optionalDependencies`). OpenTUI is **currently Bun-only** (their docs: "Node and Deno support in-progress"), so the `/tui` subpath + `vms-tui` CLI now require Bun runtime. **Browser/server consumers are unaffected** — `.`, `./browser`, `./server` are pure JS with no native binaries and run on Node/Deno/Bun/Workers as before.
+- **Mouse support throughout.** Click any button, checkbox (with action), link, copy-button, table header (sortable columns), or table row (with action) and the appropriate event dispatches. Wheel scrolls the focused pane's `<scrollbox>`. Cmd/Ctrl-click on external links opens them in the system browser via OSC-8 (already supported by every modern terminal).
+- **Per-pane scrolling + Tab focus cycle (lazygit-style).** Each `section`/top-level `list`/top-level `table` is its own scrollable pane with a focus border. Tab/Shift-Tab cycles focus across panes; ↑↓ PgUp/PgDn scroll inside the focused pane.
+- **Keyboard activation.** Enter on the focused pane activates its primary actionable (first button → dispatch action; first link → navigate; first copy-button → OSC-52 copy). Space toggles the focused pane's first checkbox-with-action. Both are no-ops when the focused pane has a field input (FieldView's `<input onSubmit>` owns Enter; Space is a printable character there).
+- **Pane-aware status bar.** A persistent status line at the bottom of the viewport shows the current keybinds: always `Tab next pane | Shift-Tab prev | ↑↓ PgUp/PgDn scroll | Ctrl-C quit`, plus a context-aware slot — `Enter <button-label>` when a button is the primary actionable, `Enter submit` when the pane has fields, `Space toggle` when a checkbox is the primary, etc. The focused pane's section heading shows on the right so you always know where you are.
+- **Modal overlay + focus trap (carried from B4).** Modals portal to the app-root z-level and trap Tab inside their interior — outer panes still render but aren't part of the cycle. Click `[ Close ]` or wire any `dismissAction` button to exit.
+- **Draft preservation, copy-button OSC-52 + 1500ms revert, alt-screen + Ctrl-C teardown** (carried from earlier OpenTUI arc phases B1–B4) all unchanged.
+
+### Removed
+
+- **Ink, react@18, ink-text-input, ink-select-input** from `optionalDependencies`. Replaced with `@opentui/core` + `@opentui/react` + `react@19`. Existing consumers using `import { TuiAdapter } from "@ashley-shrok/viewmodel-shell/tui"` must update their install (and switch from `node`/`npx` to `bun`/`bunx` for the TUI subpath — see MIGRATION.md).
+
+### Consumers
+
+- **Browser / server consumers:** nothing to do. `.`, `./browser`, `./server` runtime-agnostic; NuGet contents are byte-identical to `0.5.0` (alignment-only version bump).
+- **TUI consumers** (`vms-tui` CLI or programmatic `TuiAdapter`): one-time `curl -fsSL https://bun.sh/install | bash`, then `bunx vms-tui …` or `bun install`. See `MIGRATION.md` for the full step-by-step including the optionalDependency swap.
+- **No wire change.** `parity/` 14-backend suite green; `conformance.tui.test.ts` (information parity vs. `BrowserAdapter`) green throughout the rewrite.
+
+---
+
 ## 0.5.0 — Authenticated downloads (npm + NuGet)
 
 **npm:** `0.5.0` (MINOR — wire-format addition) · **NuGet:** `0.5.0` (MINOR — wire-format addition)

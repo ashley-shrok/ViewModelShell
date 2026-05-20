@@ -51,13 +51,15 @@ The download endpoint stays auth-gated and the server authorizes in the action h
 
 ## Terminal (TUI)
 
-The same backend renders in a terminal — same wire, no backend change. Point the CLI at any ViewModel Shell endpoint:
+The same backend renders in a terminal — same wire, no backend change, with a real lazygit-style UX: mouse clicks, wheel scroll, per-pane focus cycle, and a context-aware status bar. Point the CLI at any ViewModel Shell endpoint:
 
 ```bash
-npx vms-tui https://your-app.example/api/tasks
+bunx vms-tui https://your-app.example/api/tasks
 ```
 
-The action endpoint is derived by convention (`<endpoint>/action`). Or wire it programmatically, exactly like `BrowserAdapter`:
+The action endpoint is derived by convention (`<endpoint>/action`). The TUI requires the [Bun](https://bun.sh) runtime — install once via `curl -fsSL https://bun.sh/install | bash` (or any installer on bun.sh). Browser and server consumers are unaffected; only `/tui` + `vms-tui` need Bun.
+
+Wire it programmatically, exactly like `BrowserAdapter`:
 
 ```ts
 import { ViewModelShell } from "@ashley-shrok/viewmodel-shell";
@@ -72,12 +74,14 @@ const shell = new ViewModelShell({
 shell.load();
 ```
 
-On an interactive terminal the app **fills the screen** via the alternate-screen buffer — a vim/htop-style takeover that re-flows on resize and restores your prior terminal verbatim on exit (every exit path: quit, Ctrl-C, SIGTERM, crash). Opt out with `new TuiAdapter({ viewport: "content" })` for intrinsic content size and no screen takeover. Non-interactive runs (pipe / CI / agent / `</dev/null`) are unaffected — one static frame, no alternate screen.
+**Interaction model.** Every `section`, top-level `list`, and top-level `table` is its own scrollable focus pane with a border. Tab/Shift-Tab cycles focus across panes; ↑↓ PgUp/PgDn scroll inside the focused pane; click any button, checkbox, link, copy-button, table header, or table row to act on it. Enter activates the focused pane's primary actionable (first button → dispatch, first link → navigate, first copy-button → OSC-52 copy). Space toggles the focused pane's first checkbox-with-action. When the pane has a text field, Enter submits the enclosing form (Field's `<input onSubmit>`) and Space is a normal character.
 
-The TUI is built on [Ink](https://github.com/vadimdemedes/ink) and friends, declared as **optional** dependencies (`ink`, `react`, `ink-text-input`, `ink-select-input`) so web and server consumers are unaffected — they are never imported by the browser, server, or core entrypoints. `npx vms-tui` installs them automatically. **Project consumers using `TuiAdapter` programmatically must add all four explicitly** — optional dependencies are *not* pulled transitively when another project depends on this package (notably with `bun install`):
+On an interactive terminal the app **fills the screen** via the alternate-screen buffer — a vim/htop-style takeover that re-flows on resize and restores your prior terminal verbatim on exit (every exit path: quit, Ctrl-C, SIGTERM, crash). Opt out with `new TuiAdapter({ viewport: "content" })` for intrinsic content size and no screen takeover. Non-interactive runs (pipe / CI / agent / `</dev/null`) are unaffected.
+
+The TUI is built on [OpenTUI](https://github.com/anomalyco/opentui), declared as **optional** dependencies (`@opentui/core`, `@opentui/react`, `react@19`) so web and server consumers are unaffected — they are never imported by the browser, server, or core entrypoints. `bunx vms-tui` installs them automatically. **Project consumers using `TuiAdapter` programmatically must add all three explicitly** — optional dependencies are *not* pulled transitively:
 
 ```bash
-npm i @ashley-shrok/viewmodel-shell ink react ink-text-input ink-select-input
+bun add @ashley-shrok/viewmodel-shell @opentui/core @opentui/react react
 ```
 
 See [AGENTS.md](https://github.com/ashley-shrok/ViewModelShell/blob/main/AGENTS.md) for what the terminal renders.

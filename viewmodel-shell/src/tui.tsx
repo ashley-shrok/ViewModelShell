@@ -236,6 +236,17 @@ export class TuiAdapter implements Adapter {
         if (this.disposed) return;
         if (e.name === "tab") {
           this.cycleFocus(!e.shift);
+        } else if (e.name === "return" || e.name === "enter") {
+          // B5 — Enter activates the focused pane's primary actionable
+          // (first button/link/copy-button). Skipped when the focused pane
+          // has any FieldNode — input widgets own Enter for form submit
+          // (FieldView's `<input onSubmit>` already handles that).
+          this.activatePane("enter");
+        } else if (e.name === "space") {
+          // B5 — Space toggles the focused pane's first checkbox (the one
+          // with an action). Skipped when the pane has inputs (Space is a
+          // legitimate text character there).
+          this.activatePane("space");
         }
       });
 
@@ -271,9 +282,15 @@ export class TuiAdapter implements Adapter {
         resolveFieldValue={this.resolveFieldValue}
         copiedKey={this.copiedKey}
         copy={this.copy}
+        navigate={this.navigateForLinks}
       />,
     );
   }
+
+  // B5 — bound reference to navigate(), used as the App prop. We bind once
+  // (in the property initializer below) so React sees a stable function
+  // identity across renders (avoids spurious child re-renders on click).
+  private navigateForLinks = (url: string): void => this.navigate(url);
 
   /** Test-only: read the current edit value for a named field (for asserting
    *  draft preservation across server re-renders). */
@@ -293,6 +310,43 @@ export class TuiAdapter implements Adapter {
       ? (this.focusedPaneIndex + 1) % this.lastPaneCount
       : (this.focusedPaneIndex + this.lastPaneCount - 1) % this.lastPaneCount;
     this.flushPending();
+  }
+
+  /** B5 — keyboard activation of the focused pane's primary actionable.
+   *
+   *  Mode mapping:
+   *    "enter" → dispatch the first button.action / link → navigate /
+   *              copy-button → copy(). No-op if the pane has inputs
+   *              (FieldView's <input onSubmit> handles Enter for forms).
+   *    "space" → toggle the first checkbox (dispatch action with
+   *              {checked: !node.checked}). No-op if the pane has inputs
+   *              (Space is a printable character in text fields).
+   *
+   *  Always reads pane state from the CURRENT vm (this.pending), so a key
+   *  pressed mid-render still acts on the structure the user can see.
+   */
+  private activatePane(mode: "enter" | "space"): void {
+    if (!this.pending) return;
+    const summary = focusedPaneSummary(this.pending.vm, this.focusedPaneIndex);
+    if (summary == null || summary.hasInputs) return;
+    if (mode === "enter") {
+      const a = summary.primaryActionable;
+      if (a == null) return;
+      if (a.type === "button") {
+        this.pending.onAction(a.action);
+      } else if (a.type === "link") {
+        this.navigate(a.href);
+      } else if (a.type === "copy-button") {
+        this.copy(a.text);
+      }
+    } else {
+      const c = summary.primaryCheckbox;
+      if (c == null || c.action == null) return;
+      this.pending.onAction({
+        name: c.action.name,
+        context: { ...(c.action.context ?? {}), checked: !c.checked },
+      });
+    }
   }
 
   /** Teardown — restore terminal cleanly. Idempotent. */
@@ -478,6 +532,96 @@ function countPanes(vm: ViewNode): number {
   return count;
 }
 
+/** B5 — locate the focused pane and summarize its interactive contents.
+ *
+ *  Walks the VM in the same DFS order as `countPanes` (modal-aware),
+ *  identifies the pane at `index`, then scans that pane's subtree for:
+ *    - heading text (for the status bar's pane label),
+ *    - whether any FieldNode lives in it (input-focused mode),
+ *    - the first activatable node (button / link / copy-button) in DOM
+ *      order (Enter activates this when no input is being typed),
+ *    - the first checkbox with an action (Space toggles this).
+ *
+ *  Returns null when `index` is out of range (e.g. zero panes). The summary
+ *  is used by App for the status bar + by TuiAdapter for Enter/Space keybind
+ *  activation. Walker has no side effects — safe to call any time.
+ */
+interface PaneSummary {
+  heading: string | null;
+  hasInputs: boolean;
+  primaryActionable: ButtonNode | LinkNodeType | CopyButtonNode | null;
+  primaryCheckbox: CheckboxNode | null;
+}
+
+function focusedPaneSummary(vm: ViewNode, index: number): PaneSummary | null {
+  // Step 1: find the pane node at `index`, mirroring countPanes' traversal.
+  let cursor = -1;
+  let target: ViewNode | null = null;
+  const visit = (node: ViewNode, isTopLevel: boolean): boolean => {
+    // Returns true when target found (early-exit propagation).
+    if (isPaneNode(node, isTopLevel)) {
+      cursor++;
+      if (cursor === index) {
+        target = node;
+        return true;
+      }
+    }
+    if (node.type === "page") {
+      for (const c of node.children) if (visit(c, true)) return true;
+    } else if (node.type === "section") {
+      for (const c of node.children) if (visit(c, false)) return true;
+    } else if (node.type === "list") {
+      for (const c of node.children) if (visit(c, false)) return true;
+    } else if (node.type === "list-item") {
+      for (const c of node.children) if (visit(c, false)) return true;
+    } else if (node.type === "modal") {
+      for (const c of node.children) if (visit(c, false)) return true;
+      if (node.footer) for (const c of node.footer) if (visit(c, false)) return true;
+    } else if (node.type === "form") {
+      for (const c of node.children) if (visit(c, false)) return true;
+    }
+    return false;
+  };
+  const modal = findModal(vm);
+  if (modal != null) {
+    for (const c of modal.children) if (visit(c, false)) break;
+    if (target == null && modal.footer) for (const c of modal.footer) if (visit(c, false)) break;
+  } else {
+    visit(vm, true);
+  }
+  if (target == null) return null;
+
+  // Step 2: scan the target pane's subtree for interactives.
+  // TypeScript narrows let-mutated-through-a-closure conservatively (the
+  // `target = node` assignment is invisible to flow analysis here), so the
+  // post-check narrowing collapses `ViewNode | null` to `never`. The cast
+  // restores the type without changing runtime behavior.
+  const pane = target as ViewNode;
+  const heading: string | null = pane.type === "section" ? (pane.heading ?? null) : null;
+  let hasInputs = false;
+  let primaryActionable: ButtonNode | LinkNodeType | CopyButtonNode | null = null;
+  let primaryCheckbox: CheckboxNode | null = null;
+  const scan = (node: ViewNode): void => {
+    if (node.type === "field") hasInputs = true;
+    if (primaryActionable == null) {
+      if (node.type === "button") primaryActionable = node;
+      else if (node.type === "link" && node.href.trim().length > 0) primaryActionable = node;
+      else if (node.type === "copy-button") primaryActionable = node;
+    }
+    if (primaryCheckbox == null && node.type === "checkbox" && node.action != null) {
+      primaryCheckbox = node;
+    }
+    const children = (node as { children?: ViewNode[] }).children;
+    if (children) for (const c of children) scan(c);
+  };
+  // Scan only the pane's children — not the pane itself (which is the
+  // section/list/table wrapper). For a top-level list/table pane, the
+  // node IS the container and its children are rows / list-items.
+  const paneChildren = (pane as { children?: ViewNode[] }).children;
+  if (paneChildren) for (const c of paneChildren) scan(c);
+  return { heading, hasInputs, primaryActionable, primaryCheckbox };
+}
+
 // ─── React tree ──────────────────────────────────────────────────────────────
 
 interface RCtx {
@@ -516,6 +660,9 @@ interface RCtx {
    *  stdout + flips copiedKey + schedules the revert. Default no-op for
    *  conformance walker. */
   copy: (text: string) => void;
+  /** B5 — link / clickable-cell click target. Maps to TuiAdapter.navigate
+   *  on the mounted path; no-op for the static conformance walker. */
+  navigate: (url: string) => void;
   /** B4 — true when a modal is somewhere in the tree. When true, panes
    *  OUTSIDE the modal subtree do NOT increment paneCounter and render
    *  without a focus border (operational focus trap). */
@@ -542,6 +689,10 @@ interface AppProps {
   /** Copy-button feedback state — provided by TuiAdapter. Optional so renderTree works. */
   copiedKey?: string | null;
   copy?: (text: string) => void;
+  /** B5 — link click invokes this to hand the URL off to the platform.
+   *  Maps to TuiAdapter.navigate (the existing capability verb). Optional
+   *  for the conformance walker; defaults to no-op. */
+  navigate?: (url: string) => void;
 }
 
 function App({
@@ -553,6 +704,7 @@ function App({
   resolveFieldValue,
   copiedKey = null,
   copy,
+  navigate,
 }: AppProps) {
   // B4 — detect modal at the top of every render so the focus-trap + overlay
   // wiring is consistent end-to-end. When a modal exists in the tree, the
@@ -576,9 +728,16 @@ function App({
     resolveFieldValue: resolveFieldValue ?? ((_name, wireValue) => wireValue),
     copiedKey,
     copy: copy ?? (() => { /* no-op for conformance walker */ }),
+    // B5: link click target. Default no-op for the conformance walker (which
+    // doesn't have an adapter to call). Real renders thread TuiAdapter.navigate.
+    navigate: navigate ?? (() => { /* no-op */ }),
     modalActive: modal != null,
     insideModal: false,
   };
+  // B5 — pane summary for the StatusBar's hotkey hints. Computed at render
+  // time from the same focusedPaneIndex used by everyone else; consistent
+  // with what the user sees as the focused pane.
+  const paneSummary = focusedPaneSummary(vm, focusedPaneIndex);
   // App shell: content fills, status bar pinned at the bottom. height="100%"
   // means it consumes the renderer's viewport (alt-screen size). The
   // inner content box is position="relative" so the modal overlay's
@@ -594,22 +753,63 @@ function App({
           />
         ) : null}
       </box>
-      <StatusBar />
+      <StatusBar summary={paneSummary} />
     </box>
   );
 }
 
-function StatusBar() {
-  // B2 status line: shows the keybinds always available across panes. In B5
-  // this becomes context-aware (current pane name + pane-specific keybinds).
+/** B5 — pane-aware keybind hints.
+ *
+ *  Tab/Shift-Tab and Ctrl-C are universal; ↑↓ PgUp/PgDn is universal because
+ *  scrolling happens inside OpenTUI's <scrollbox> regardless of pane type.
+ *  The variable slot in the middle is determined by `summary`:
+ *    - pane has fields → "Enter submit" (FieldView's <input onSubmit>)
+ *    - pane has primary actionable → "Enter <label>" (truncated to ~16ch)
+ *    - pane has checkbox with action → "Space toggle"
+ *    - none of the above → no extra hint
+ *
+ *  Heading (when present) shows on the right side so the user sees which
+ *  pane they're focused in — important when multiple sections look similar.
+ */
+function StatusBar({ summary }: { summary: PaneSummary | null }) {
+  const hint = paneActivationHint(summary);
+  const heading = summary?.heading ?? null;
   return (
     <box flexDirection="row" gap={2} paddingLeft={1} paddingRight={1}>
       <text fg="#888888">Tab</text><text fg="#aaaaaa">next pane</text>
-      <text fg="#888888">Shift-Tab</text><text fg="#aaaaaa">prev pane</text>
+      <text fg="#888888">Shift-Tab</text><text fg="#aaaaaa">prev</text>
       <text fg="#888888">↑↓ PgUp/PgDn</text><text fg="#aaaaaa">scroll</text>
+      {hint != null ? (
+        <>
+          <text fg="#88aaff">{hint.key}</text>
+          <text fg="#aaaaaa">{hint.label}</text>
+        </>
+      ) : null}
       <text fg="#888888">Ctrl-C</text><text fg="#aaaaaa">quit</text>
+      {heading != null ? (
+        <box flexGrow={1} flexShrink={1} justifyContent="flex-end" flexDirection="row">
+          <text fg="#88aaff">{heading}</text>
+        </box>
+      ) : null}
     </box>
   );
+}
+
+function paneActivationHint(summary: PaneSummary | null): { key: string; label: string } | null {
+  if (summary == null) return null;
+  if (summary.hasInputs) return { key: "Enter", label: "submit" };
+  const a = summary.primaryActionable;
+  if (a != null) {
+    let label: string;
+    if (a.type === "button") label = a.label;
+    else if (a.type === "link") label = a.label;
+    else label = a.label ?? "copy"; // copy-button
+    // Truncate long labels so the status bar fits a single line cleanly.
+    const truncated = label.length > 16 ? label.slice(0, 13) + "..." : label;
+    return { key: "Enter", label: truncated };
+  }
+  if (summary.primaryCheckbox != null) return { key: "Space", label: "toggle" };
+  return null;
 }
 
 function renderNode(node: ViewNode, ctx: RCtx, key?: string | number): React.ReactNode {
@@ -621,9 +821,8 @@ function renderNode(node: ViewNode, ctx: RCtx, key?: string | number): React.Rea
     case "list":         return <ListView         key={key} node={node} ctx={ctx} />;
     case "list-item":    return <ListItemView     key={key} node={node} ctx={ctx} />;
     case "table":        return <TableView        key={key} node={node} ctx={ctx} />;
-    // ── Minimum-viable text surface (full widgets in B3/B4) ──────────────
-    case "button":       return <ButtonView       key={key} node={node} />;
-    case "checkbox":     return <CheckboxView     key={key} node={node} />;
+    case "button":       return <ButtonView       key={key} node={node} ctx={ctx} />;
+    case "checkbox":     return <CheckboxView     key={key} node={node} ctx={ctx} />;
     case "tabs":         return <TabsView         key={key} node={node} ctx={ctx} />;
     case "progress":     return <ProgressView     key={key} node={node} />;
     case "stat-bar":     return <StatBarView      key={key} node={node} />;
@@ -803,15 +1002,27 @@ function TextView({ node }: { node: TextNodeType }) {
 // degrade to the label. Empty href degrades to plain underlined text.
 // Click activation (mouse + Enter) is wired in B5's interaction polish.
 
-function LinkView({ node }: { node: LinkNodeType; ctx: RCtx }) {
+function LinkView({ node, ctx }: { node: LinkNodeType; ctx: RCtx }) {
   const ESC = String.fromCharCode(27);
   const BEL = String.fromCharCode(7);
   const href = node.href.trim();
   const inner = href.length > 0 && node.external
     ? `${ESC}]8;;${href}${BEL}${node.label}${ESC}]8;;${BEL}`
     : node.label;
+  // B5 — mouse click hands the URL to the navigate capability (which opens
+  // it externally on the TUI). External links ALSO render as a real OSC-8
+  // hyperlink so modern terminals make Cmd/Ctrl-click work natively; the
+  // onMouseDown handler is the fallback for terminals without OSC-8 + the
+  // primary path for internal (external:false) links. Empty href → no-op.
+  const onMouseDown = href.length > 0
+    ? (): void => ctx.navigate(href)
+    : undefined;
   return (
-    <text attributes={4 /* UNDERLINE */} fg="#6688cc">
+    <text
+      attributes={4 /* UNDERLINE */}
+      fg="#6688cc"
+      {...(onMouseDown ? { onMouseDown } : {})}
+    >
       {inner}
     </text>
   );
@@ -910,6 +1121,18 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
   const isPaneFocusable = !ctx.modalActive || ctx.insideModal;
   const paneIndex = isPaneFocusable ? ctx.paneCounter.current++ : -1;
   const focused = isPaneFocusable && paneIndex === ctx.focusedPaneIndex;
+  // B5 — header click toggles sort. Direction policy: clicking the
+  // currently-sorted column flips asc↔desc; clicking any other column
+  // starts at asc. Matches BrowserAdapter table semantics.
+  const onHeaderClick = (columnKey: string): void => {
+    if (!node.sortAction) return;
+    const direction: "asc" | "desc" =
+      node.sortColumn === columnKey && node.sortDirection === "asc" ? "desc" : "asc";
+    ctx.onAction({
+      name: node.sortAction.name,
+      context: { ...(node.sortAction.context ?? {}), column: columnKey, direction },
+    });
+  };
   return (
     <scrollbox
       focused={focused}
@@ -925,8 +1148,15 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
           {node.columns.map((c) => {
             const isSorted = node.sortColumn === c.key;
             const caret = isSorted ? (node.sortDirection === "desc" ? " ↓" : " ↑") : "";
+            // B5 — only sortable headers respond to clicks (matches BrowserAdapter).
+            const clickable = c.sortable && node.sortAction != null;
+            const onMouseDown = clickable ? (): void => onHeaderClick(c.key) : undefined;
             return (
-              <text key={c.key} attributes={1 /* BOLD */}>
+              <text
+                key={c.key}
+                attributes={1 /* BOLD */}
+                {...(onMouseDown ? { onMouseDown } : {})}
+              >
                 {c.label}{caret}
               </text>
             );
@@ -943,24 +1173,49 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
           </box>
         ) : null}
         {/* Data rows */}
-        {node.rows.map((row, ri) => (
-          <box key={row.id ?? ri} flexDirection="row" gap={2}>
-            {node.columns.map((c) => {
-              const cell = row.cells[c.key] ?? "";
-              if (c.linkLabel != null && cell.length > 0) {
-                // Cell is a link — emit OSC-8 for external links, plain
-                // underlined text otherwise. Clickability comes with B5.
-                const ESC = String.fromCharCode(27);
-                const BEL = String.fromCharCode(7);
-                const inner = c.linkExternal
-                  ? `${ESC}]8;;${cell}${BEL}${c.linkLabel}${ESC}]8;;${BEL}`
-                  : c.linkLabel;
-                return <text key={c.key} attributes={4 /* UNDERLINE */} fg="#6688cc">{inner}</text>;
-              }
-              return <text key={c.key}>{cell}</text>;
-            })}
-          </box>
-        ))}
+        {node.rows.map((row, ri) => {
+          // B5 — row click dispatches row.action when present.
+          const onRowClick = row.action
+            ? (): void => ctx.onAction(row.action!)
+            : undefined;
+          return (
+            <box
+              key={row.id ?? ri}
+              flexDirection="row"
+              gap={2}
+              {...(onRowClick ? { onMouseDown: onRowClick } : {})}
+            >
+              {node.columns.map((c) => {
+                const cell = row.cells[c.key] ?? "";
+                if (c.linkLabel != null && cell.length > 0) {
+                  // Cell is a link — emit OSC-8 for external links, plain
+                  // underlined text otherwise. External links are clickable
+                  // natively via the terminal's OSC-8 support; internal cell
+                  // links route through navigate (B5).
+                  const ESC = String.fromCharCode(27);
+                  const BEL = String.fromCharCode(7);
+                  const inner = c.linkExternal
+                    ? `${ESC}]8;;${cell}${BEL}${c.linkLabel}${ESC}]8;;${BEL}`
+                    : c.linkLabel;
+                  const cellClick = !c.linkExternal && cell.length > 0
+                    ? (): void => ctx.navigate(cell)
+                    : undefined;
+                  return (
+                    <text
+                      key={c.key}
+                      attributes={4 /* UNDERLINE */}
+                      fg="#6688cc"
+                      {...(cellClick ? { onMouseDown: cellClick } : {})}
+                    >
+                      {inner}
+                    </text>
+                  );
+                }
+                return <text key={c.key}>{cell}</text>;
+              })}
+            </box>
+          );
+        })}
       </box>
     </scrollbox>
   );
@@ -969,18 +1224,34 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
 // ── minimum-viable text surface for the rest of the node set ───────────────
 // Same as B1 — text only, no interactivity. Full widgets land in B3/B4.
 
-function ButtonView({ node }: { node: ButtonNode }) {
+function ButtonView({ node, ctx }: { node: ButtonNode; ctx: RCtx }) {
   const fg = node.variant === "danger" ? "#ff5555"
            : node.variant === "primary" ? "#88aaff"
            : undefined;
+  // B5 — mouse click dispatches the button's action. Keyboard activation
+  // (Enter on the focused pane's primary actionable) is wired at the
+  // renderer key handler, not here.
+  const onMouseDown = (): void => ctx.onAction(node.action);
   return (
-    <text {...(fg != null ? { fg } : {})}>[ {node.label} ]</text>
+    <text {...(fg != null ? { fg } : {})} onMouseDown={onMouseDown}>[ {node.label} ]</text>
   );
 }
 
-function CheckboxView({ node }: { node: CheckboxNode }) {
+function CheckboxView({ node, ctx }: { node: CheckboxNode; ctx: RCtx }) {
   const glyph = node.checked ? "[x]" : "[ ]";
-  return <text>{glyph} {node.label ?? ""}</text>;
+  // B5 — mouse click toggles. When node.action is defined, dispatch it with
+  // the NEW checked value merged into context (matches BrowserAdapter's
+  // checkbox onChange wire: `{checked: !node.checked}`). When no action,
+  // the click has no semantic effect — the visual state is server-owned
+  // and only changes on the next server response that flips node.checked.
+  const onMouseDown = (): void => {
+    if (!node.action) return;
+    ctx.onAction({
+      name: node.action.name,
+      context: { ...(node.action.context ?? {}), checked: !node.checked },
+    });
+  };
+  return <text onMouseDown={onMouseDown}>{glyph} {node.label ?? ""}</text>;
 }
 
 // ── tabs ──────────────────────────────────────────────────────────────────

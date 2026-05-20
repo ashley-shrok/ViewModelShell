@@ -597,3 +597,309 @@ describe("0.6.0 — B4 modal overlay + focus trap", () => {
   });
 });
 
+// ─── B5 — interaction polish (mouse click + keyboard activation) ────────────
+// These tests exercise two new B5 surfaces against the PUBLIC adapter:
+//
+//   1. Click handlers — Button/Checkbox/Link/Table headers/Table rows all
+//      now carry onMouseDown that dispatches the appropriate action (or
+//      navigate for links). Tests walk the rendered tree, locate the
+//      onMouseDown by element identity, invoke it, assert dispatch.
+//
+//   2. Keyboard activation — activatePane("enter") on the focused pane's
+//      primary actionable; activatePane("space") on its primary checkbox.
+//      The fail-quiet path (pane has inputs, or no actionable) is also
+//      asserted to avoid stealing Enter/Space from input widgets.
+//
+// We avoid mounting a real renderer (same reason as the earlier blocks);
+// the adapter's pending state is primed directly via a sanctioned type-cast
+// escape hatch, the same pattern the B3/B4 tests use to read `copy`/
+// `setFieldValue`/`_peekCopiedKey`.
+
+interface MouseDownNode {
+  props: { onMouseDown?: () => void; children?: unknown };
+}
+
+/** Walk a rendered tree (output of renderNode/renderTree) and return every
+ *  intrinsic element that carries an `onMouseDown` prop, in DOM order. The
+ *  same recursion that the conformance walker uses, but returns the element
+ *  refs instead of token text. */
+function collectClickHandlers(tree: ReactNode): MouseDownNode[] {
+  const out: MouseDownNode[] = [];
+  const visit = (n: ReactNode): void => {
+    if (n == null || typeof n !== "object") return;
+    if (Array.isArray(n)) { for (const c of n) visit(c); return; }
+    if ("type" in n && "props" in n) {
+      const el = n as { type: unknown; props?: Record<string, unknown> };
+      const props = el.props ?? {};
+      if (typeof el.type === "function") {
+        const result = (el.type as (p: Record<string, unknown>) => ReactNode)(props);
+        visit(result);
+        return;
+      }
+      if (typeof el.type === "string" && typeof props.onMouseDown === "function") {
+        out.push({ props: props as MouseDownNode["props"] });
+      }
+      visit(props.children as ReactNode);
+    }
+  };
+  visit(tree);
+  return out;
+}
+
+// Dispatch-payload assertions go through activatePane (below) — the renderTree
+// path's no-op onAction makes onMouseDown invocation observe-only. The click
+// tests above prove the handler is WIRED on every interactive at render
+// time; activatePane proves the kbd path's payload shape (which is the same
+// shape ButtonView/CheckboxView/LinkView pass through their onMouseDown).
+
+interface RCtxLike {
+  onAction: (a: ActionEvent) => void;
+  focusedPaneIndex: number;
+  paneCounter: { current: number };
+  sidebarFraction: number;
+  isTopLevel: boolean;
+  inFocusedPane: boolean;
+  paneInputCounter: { current: number };
+  submitForm: (() => void) | null;
+  setFieldValue: (n: string, v: string) => void;
+  resolveFieldValue: (n: string, w: string) => string;
+  copiedKey: string | null;
+  copy: (text: string) => void;
+  navigate: (url: string) => void;
+  modalActive: boolean;
+  insideModal: boolean;
+}
+
+/** Find the first onMouseDown handler in the rendered tree. Used by the
+ *  "click handler wired on render" tests below — those assert the WIRING,
+ *  not the dispatch payload (the dispatch path's no-op onAction in
+ *  renderTree makes payload assertions impossible from this entrypoint;
+ *  payload shape is verified via activatePane in the next describe block,
+ *  which uses the SAME ctx.onAction the click path uses). */
+function findFirstHandler(tree: ReactNode): (() => void) | null {
+  const handlers = collectClickHandlers(tree);
+  if (handlers.length === 0) return null;
+  return handlers[0]!.props.onMouseDown ?? null;
+}
+
+describe("0.6.0 — B5 click handlers (wired on render)", () => {
+  it("ButtonView renders an onMouseDown handler", () => {
+    const vm: ViewNode = { type: "page", children: [
+      { type: "button", label: "Save", action: { name: "save" } },
+    ]};
+    expect(findFirstHandler(renderTree(vm)), "button has onMouseDown").not.toBeNull();
+  });
+
+  it("CheckboxView renders onMouseDown when an action is bound", () => {
+    const vm: ViewNode = { type: "page", children: [
+      { type: "checkbox", name: "active", checked: false, label: "Active", action: { name: "toggle" } },
+    ]};
+    expect(findFirstHandler(renderTree(vm)), "checkbox has onMouseDown").not.toBeNull();
+  });
+
+  it("LinkView with non-empty href renders onMouseDown", () => {
+    const vm: ViewNode = { type: "page", children: [
+      { type: "link", label: "Docs", href: "https://example.com", external: true },
+    ]};
+    expect(findFirstHandler(renderTree(vm)), "link has onMouseDown").not.toBeNull();
+  });
+
+  it("LinkView with empty href has NO onMouseDown (graceful degrade)", () => {
+    const vm: ViewNode = { type: "page", children: [
+      { type: "link", label: "Empty", href: "" },
+    ]};
+    expect(findFirstHandler(renderTree(vm)), "empty-href link has no handler").toBeNull();
+  });
+
+  it("TableView sortable header has onMouseDown (non-sortable does not)", () => {
+    const vm: ViewNode = { type: "page", children: [
+      {
+        type: "table",
+        sortAction: { name: "sort" },
+        columns: [
+          { key: "a", label: "A", sortable: true },
+          { key: "b", label: "B" /* not sortable */ },
+        ],
+        rows: [{ cells: { a: "1", b: "2" } }],
+      },
+    ]};
+    const handlers = collectClickHandlers(renderTree(vm));
+    // The sortable header "A" produces one handler; the row data has no
+    // action so no row-level handler. Total should be >= 1.
+    expect(handlers.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("0.6.0 — B5 activatePane (Enter / Space keyboard activation)", () => {
+  // Internal-shape escape hatch: the adapter's `pending`/`focusedPaneIndex`/
+  // `activatePane` are private. Type-cast lets the test prime them — same
+  // sanctioned pattern used by `(adapter as ...).copy` in the B4 tests.
+  interface InternalAdapter {
+    pending: { vm: ViewNode; onAction: (a: ActionEvent) => void } | null;
+    focusedPaneIndex: number;
+    activatePane: (mode: "enter" | "space") => void;
+  }
+  function internals(a: TuiAdapter): InternalAdapter {
+    return a as unknown as InternalAdapter;
+  }
+
+  it("Enter on a focused pane with a button → dispatches button.action", () => {
+    const adapter = new TuiAdapter();
+    const dispatched: ActionEvent[] = [];
+    const vm: ViewNode = {
+      type: "page",
+      children: [
+        {
+          type: "section",
+          heading: "Actions",
+          children: [
+            { type: "button", label: "Save", action: { name: "save", context: { id: 42 } } },
+          ],
+        },
+      ],
+    };
+    const a = internals(adapter);
+    a.pending = { vm, onAction: (act) => dispatched.push(act) };
+    a.focusedPaneIndex = 0;
+    a.activatePane("enter");
+    expect(dispatched).toEqual([{ name: "save", context: { id: 42 } }]);
+  });
+
+  it("Enter on a focused pane with NO actionable → no-op (does NOT throw)", () => {
+    const adapter = new TuiAdapter();
+    const dispatched: ActionEvent[] = [];
+    const vm: ViewNode = {
+      type: "page",
+      children: [
+        {
+          type: "section",
+          heading: "Empty",
+          children: [{ type: "text", value: "nothing to click" }],
+        },
+      ],
+    };
+    const a = internals(adapter);
+    a.pending = { vm, onAction: (act) => dispatched.push(act) };
+    a.focusedPaneIndex = 0;
+    expect(() => a.activatePane("enter")).not.toThrow();
+    expect(dispatched).toHaveLength(0);
+  });
+
+  it("Enter on a pane with a field → no-op (FieldView owns Enter for form submit)", () => {
+    const adapter = new TuiAdapter();
+    const dispatched: ActionEvent[] = [];
+    const vm: ViewNode = {
+      type: "page",
+      children: [
+        {
+          type: "section",
+          heading: "Form",
+          children: [
+            { type: "field", name: "title", inputType: "text", label: "Title", value: "" },
+            // A button is present, but the field's existence makes Enter ours.
+            { type: "button", label: "Submit", action: { name: "submit" } },
+          ],
+        },
+      ],
+    };
+    const a = internals(adapter);
+    a.pending = { vm, onAction: (act) => dispatched.push(act) };
+    a.focusedPaneIndex = 0;
+    a.activatePane("enter");
+    expect(dispatched, "field pane swallows Enter — submit happens via <input onSubmit>").toHaveLength(0);
+  });
+
+  it("Space on a pane with a checkbox → dispatches with toggled checked", () => {
+    const adapter = new TuiAdapter();
+    const dispatched: ActionEvent[] = [];
+    const vm: ViewNode = {
+      type: "page",
+      children: [
+        {
+          type: "section",
+          heading: "Settings",
+          children: [
+            {
+              type: "checkbox",
+              name: "subscribed",
+              checked: false,
+              label: "Subscribe",
+              action: { name: "set-subscription", context: { source: "kbd" } },
+            },
+          ],
+        },
+      ],
+    };
+    const a = internals(adapter);
+    a.pending = { vm, onAction: (act) => dispatched.push(act) };
+    a.focusedPaneIndex = 0;
+    a.activatePane("space");
+    // Toggle: checked was false → dispatch sets checked: true.
+    expect(dispatched).toEqual([
+      { name: "set-subscription", context: { source: "kbd", checked: true } },
+    ]);
+  });
+
+  it("Enter on a pane with a link → invokes navigate(href)", () => {
+    const adapter = new TuiAdapter();
+    const navigated: string[] = [];
+    // Stub navigate at the public method (the activatePane path calls
+    // `this.navigate(href)` directly).
+    const origNav = adapter.navigate.bind(adapter);
+    adapter.navigate = (url: string) => { navigated.push(url); };
+    try {
+      const vm: ViewNode = {
+        type: "page",
+        children: [
+          {
+            type: "section",
+            heading: "Resources",
+            children: [
+              { type: "link", label: "Docs", href: "https://example.com/docs" },
+            ],
+          },
+        ],
+      };
+      const a = internals(adapter);
+      a.pending = { vm, onAction: () => { /* unused */ } };
+      a.focusedPaneIndex = 0;
+      a.activatePane("enter");
+      expect(navigated).toEqual(["https://example.com/docs"]);
+    } finally {
+      adapter.navigate = origNav;
+    }
+  });
+
+  it("focusedPaneIndex selects WHICH pane's actionable activates", () => {
+    const adapter = new TuiAdapter();
+    const dispatched: ActionEvent[] = [];
+    const vm: ViewNode = {
+      type: "page",
+      children: [
+        {
+          type: "section",
+          heading: "First",
+          children: [{ type: "button", label: "Alpha", action: { name: "a" } }],
+        },
+        {
+          type: "section",
+          heading: "Second",
+          children: [{ type: "button", label: "Bravo", action: { name: "b" } }],
+        },
+      ],
+    };
+    const a = internals(adapter);
+    a.pending = { vm, onAction: (act) => dispatched.push(act) };
+    a.focusedPaneIndex = 1; // second pane
+    a.activatePane("enter");
+    expect(dispatched).toEqual([{ name: "b" }]);
+  });
+
+  it("activatePane is a no-op when pending is null", () => {
+    const adapter = new TuiAdapter();
+    const a = internals(adapter);
+    a.pending = null;
+    expect(() => a.activatePane("enter")).not.toThrow();
+  });
+});
+

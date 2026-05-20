@@ -6,6 +6,39 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `0.6.0` (Terminal substrate rewrite — OpenTUI + Bun runtime)
+
+**No wire change. NuGet contents identical to `0.5.0`** — it bumps to `0.6.0` only to keep shared major.minor with npm.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.5.0` | **`0.6.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.5.0` | **`0.6.0`** *(alignment-only; no functional change)* |
+
+### What changed and what didn't
+
+- **Wire format:** unchanged. `ViewNode` types, `ShellSideEffect`, `ShellResponse`, anti-forgery / `getRequestHeaders()` plumbing — all identical to `0.5.0`. The cross-backend parity suite passes byte-for-byte against the same 14 backends.
+- **`BrowserAdapter` (`./browser` subpath):** unchanged. No code change, no behavior change, no install change.
+- **Backend types (`./server` subpath + NuGet):** unchanged.
+- **`TuiAdapter` (`./tui` subpath + `vms-tui` CLI):** **rewritten on OpenTUI**, which is currently Bun-only. The visual layout is meaningfully different (per-pane borders + focused-pane highlight + persistent status bar at the bottom); functionally it now ships mouse support throughout (click any button/checkbox/link/copy-button/table header/table row), wheel scroll, Tab/Shift-Tab focus cycle across panes, and Enter/Space keyboard activation of the focused pane's primary actionable.
+
+### What you need to do
+
+- **If you're a browser-only consumer or a server-only consumer:** nothing. The npm bump is harmless; you can take it or pin to `0.5.0` (the wire is identical).
+- **If you use the `vms-tui` CLI** (e.g. `npx vms-tui http://localhost:3000/api/tasks`):
+  1. Install Bun if you don't have it: `curl -fsSL https://bun.sh/install | bash` (see [bun.sh](https://bun.sh/install) for other installers).
+  2. Swap `npx vms-tui …` → `bunx vms-tui …` (or `bun install -g @ashley-shrok/viewmodel-shell && vms-tui …`). The Node entry still runs — it now prints a clear "needs Bun" message and exits 1 before any FFI import attempts.
+- **If you import `TuiAdapter` programmatically** (i.e. `import { TuiAdapter } from "@ashley-shrok/viewmodel-shell/tui"`):
+  1. Update your `package.json` `optionalDependencies` / `dependencies`: remove `ink`, `ink-text-input`, `ink-select-input`, and any `react@18` pin; add `@opentui/core`, `@opentui/react`, `react@19`. Or just install via the new README snippet: `bun add @ashley-shrok/viewmodel-shell @opentui/core @opentui/react react`.
+  2. Your host process must run under Bun (not Node) for the TUI render path. Side-channel verbs (`storage`, `saveFile`, `navigate`) still work under Node, but mounting the renderer (`adapter.render(vm, onAction)`) requires Bun's FFI.
+  3. Public API surface — constructor (`new TuiAdapter({ viewport?, sidebarFraction? })`), `render(vm, onAction)`, and the optional `Adapter` capability verbs — is byte-identical to `0.5.0`. No code changes to your integration.
+
+### Why the version is aligned even with no NuGet-side change
+
+`AGENTS.md` (top of file) states the two packages "share major.minor; bumping a `ViewNode` type or wire-format change bumps both sides." This wasn't a wire change, but a major.minor on npm with the existing rule means NuGet ticks too. The alternative — letting npm hit `0.6` while NuGet stays at `0.5` — would diverge major.minor and silently break the rule. Going forward, if the TUI work needs another bump without a wire change, that's another no-op alignment release on NuGet; once OpenTUI's Node support lands and we drop the Bun requirement, the alignment story stays clean.
+
+---
+
 ## Upgrading to `0.5.0` (Authenticated downloads — npm + NuGet)
 
 **Nothing to do** beyond taking the bump on whichever side you use. `0.5.0` adds one additive `ShellSideEffect` type (`"download"`) and one optional `Adapter` capability verb (`saveFile?`). No existing consumer code requires changes; the existing wire is forward-compatible.

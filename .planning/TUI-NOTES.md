@@ -1136,3 +1136,95 @@ in this file. Each section is a "read before the next phase" cheat sheet.
   the overlay. Any subsequent modals render in-place as null (the
   in-tree ModalView's return value). Sufficient for practical use; a
   modal stack with z-ordering is a future enhancement if needed.
+
+## B5 learnings (read post-arc — TUI rewrite COMPLETE at 0.6.0)
+
+- **Closure-mutated `let` defeats post-null-check narrowing.** In
+  `focusedPaneSummary`, a captured `let target: ViewNode | null = null`
+  reassigned inside a recursive `visit` closure looks correct, but
+  TypeScript's control-flow analysis can't see the closure mutation
+  from outside — after `if (target == null) return null;` it narrows
+  `target` to `null & not-null = never`. The next line's
+  `const pane: ViewNode = target` then errors with `Property 'type'
+  does not exist on type 'never'`. Fix: `const pane = target as
+  ViewNode;` (the runtime check is already proven by the prior
+  guard). If a future B-author hits the same pattern in a new
+  walker, prefer a function returning the found node directly (avoids
+  the let-mutation entirely) or accept the cast — both are clean,
+  picking by what reads better in context.
+- **`RCtx` and `AppProps` are SEPARATE — add to BOTH when threading a
+  new capability through.** B5 added `navigate?` to `AppProps` first
+  (because that's where the prop arrives from the adapter), built,
+  and got `Object literal may only specify known properties, and
+  'navigate' does not exist in type 'RCtx'` because the `ctx` object
+  inside `App` is typed `RCtx`. The fix is mechanical (also add to
+  `RCtx`); the learning is to update both interfaces in the same
+  edit. Same lesson applies to future prop additions (e.g. a
+  hypothetical `theme` passthrough).
+- **Sub-pane interactive focus traversal is NOT in B5.** B5 stops at
+  pane-level Tab cycle + Enter activates the FIRST actionable in the
+  focused pane. If a pane has three buttons, mouse is the answer —
+  Enter activates the FIRST in DOM order. Multi-actionable keyboard
+  navigation (arrow keys to pick, Enter to activate the picked one)
+  is a future polish phase if the need is reported; the current
+  primitive is good enough for the canonical "section with one
+  button or one form" shape that 90% of demo apps have.
+- **Enter is shared between FieldView's `<input onSubmit>` and the
+  pane-level activatePane.** OpenTUI's `<input>` consumes Enter
+  when focused (calling the prop's onSubmit), but the renderer-level
+  "key" event handler ALSO sees Enter unconditionally. Avoiding
+  double-fire: `activatePane` reads `focusedPaneSummary(...).hasInputs`
+  and bails when true. Net behavior: in a pane with fields, Enter
+  submits the form (FieldView's onSubmit, which calls ctx.submitForm
+  → dispatches submitAction). In a pane without fields, Enter
+  activates the primary actionable. Both feel natural; tests in
+  `tui-lifecycle.test.ts` cover both paths.
+- **`activatePane` is privately exposed for tests via type-cast
+  escape hatch.** Same pattern as `copy`/`_peekCopiedKey`/
+  `setFieldValue` from B3/B4: declare a local `InternalAdapter`
+  interface in the test file and cast `as unknown as
+  InternalAdapter`. Direct invocation primes `pending` + sets
+  `focusedPaneIndex` + calls `activatePane(mode)`. Asserts dispatch
+  payload + navigate calls. Don't expose `activatePane` as a public
+  API — it's a side-effect method that's only meaningful when the
+  renderer is mounted.
+- **Renderer-level key handler ALSO sees Tab even when an `<input>`
+  has focus.** This is a known cost of intercepting keys at the
+  CliRenderer level rather than scoping them to the active widget.
+  For Tab it's the desired behavior (Tab always cycles panes). For
+  Enter we explicitly check `hasInputs` to defer to the input. For
+  future global hotkeys (e.g. `?` for help) the same pattern applies
+  — check the focused-pane summary before consuming the key.
+- **NuGet ticks on major.minor alignment even with zero code change.**
+  AGENTS.md tail says shared major.minor. A client-only minor on npm
+  (substrate rewrite, no wire change) would diverge it. The minimum-
+  disruption play is a no-op alignment release: NuGet 0.5.0 → 0.6.0
+  with byte-identical contents, CHANGELOG/MIGRATION explicitly
+  noting "alignment-only — no functional change." Consumers can take
+  the bump or pin. This was the precedent set for the 0.4.x npm-only
+  patches (NuGet held at 0.4.2 while npm went 0.4.3 → 0.4.9) — that
+  was the inverse case; B5 is the first instance going the other
+  direction (npm advances minor, NuGet syncs).
+- **Status bar should be the LAST thing to add per phase.** B5
+  introduced `paneActivationHint(summary)` and the status bar
+  layout change AFTER all the click handlers + key handler. By the
+  time the status bar landed, all the upstream callbacks already
+  worked — the status bar just reflects current state. If status
+  had been built first, every keybind addition would have triggered
+  a status-bar rewrite. Order matters; behavior first, surface
+  second. (This is consistent with how StatusBar was a stub in B2
+  through B4 and only became context-aware in B5.)
+- **OpenTUI's `<box>` `JustifyContent="flex-end"` works for right-
+  aligned status-bar segments.** The pane-heading slot uses
+  `<box flexGrow={1} flexShrink={1} justifyContent="flex-end"
+  flexDirection="row">` to push the heading to the right edge.
+  Without `flexDirection="row"` the inner alignment doesn't take
+  effect (children stack vertically). Same Yoga semantics as the
+  browser, but worth noting because Yoga defaults differ across
+  hosts (some default `flexDirection` to row, some to column).
+- **`paneActivationHint` truncates long button labels.** Buttons
+  like "Submit Application for Review" would push the status bar
+  past 80 columns. Truncate at 16 chars with "...". Future tweak: a
+  shorter convention like "Enter ▸ Submit Applicat..." or pulling
+  from a separate `hint` field on the wire — but that's a wire
+  change and out of scope for an adapter-only release.
