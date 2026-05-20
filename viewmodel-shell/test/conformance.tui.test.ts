@@ -1,35 +1,75 @@
 // @vitest-environment node
 //
-// Phase 6 — cross-adapter conformance: the TuiAdapter half.
+// Cross-adapter conformance: TuiAdapter half.
 //
-// Node env (Ink + ink-testing-library need Node stream semantics, not jsdom —
-// same per-file docblock as test/tui.test.ts). The static `renderTree` path
-// (no interaction, deterministic) is exactly what conformance needs. Same
-// FIXTURES, same declared information as the BrowserAdapter half
-// (conformance.browser.test.ts) — both must independently surface every token.
+// The TuiAdapter is now backed by OpenTUI (formerly Ink). To extract text
+// from the JSX tree without spinning up the full OpenTUI CliRenderer (which
+// would need a TTY + the platform binary), this file walks the React tree
+// returned by `renderTree` directly. The walker only needs to recognize
+// `<text>` (string children become information tokens) and `<box>` (whose
+// `title` / `bottomTitle` props also carry information). Everything else
+// either contains children we recurse into or doesn't carry text.
+//
+// Same FIXTURES + same declared information as the BrowserAdapter half
+// (conformance.browser.test.ts). Both must independently surface every
+// token. Information parity, not byte parity.
+
 import { describe, it, expect } from "vitest";
-import { render } from "ink-testing-library";
-import { TuiAdapter } from "../src/tui.js";
+import type { ReactNode } from "react";
+import { renderTree } from "../src/tui.js";
 import { FIXTURES } from "./conformance-fixtures.js";
 
-// chalk is disabled under ink-testing-library (no TTY) so SGR is largely
-// absent, but OSC 8 hyperlink wrappers are written verbatim by our `link`
-// renderer (Phase-1 fact: Ink does not sanitize OSC; lastFrame() keeps the
-// raw bytes). Strip both — the opener `ESC ] 8 ; ; <uri> BEL` and the empty
-// closer `ESC ] 8 ; ; BEL` — so token presence/order is measured on the
-// visible text only; the label/value text between them is kept verbatim.
-// ESC () is optional (ink-testing-library may drop it; the `]8;;` /
-// `[…m` bytes are what survive — Phase-1/3 notes). OSC 8 is bounded at
-// BEL () so it can never swallow the frame.
-const SGR = /?\[[0-9;]*m/g;
-const OSC8 = /?\]8;;[^]*/g;
-
-function tuiInfo(vm: (typeof FIXTURES)[number]["vm"]): string {
-  const frame = String(render(new TuiAdapter().renderTree(vm)).lastFrame() ?? "");
-  return frame.replace(SGR, "").replace(OSC8, "");
+// Walk a React tree and collect user-visible text in document order. The
+// tree is a mix of:
+//   - intrinsic elements (`<box>`, `<text>` — string `type`) whose
+//     children + title carry text;
+//   - our function components (`PageView`, `SectionView`, …) which haven't
+//     been expanded yet — React only expands these inside a reconciler.
+//     For the static conformance path we manually invoke them: a function
+//     component is just `(props) => ReactNode`, and our renderers are
+//     pure of side effects, so calling them directly is safe.
+function collectText(node: ReactNode, out: string[]): void {
+  if (node == null || node === false || node === true) return;
+  if (typeof node === "string" || typeof node === "number") {
+    out.push(String(node));
+    return;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) collectText(child, out);
+    return;
+  }
+  if (typeof node === "object" && "type" in node && "props" in node) {
+    const el = node as { type: unknown; props?: Record<string, unknown> };
+    const props = el.props ?? {};
+    if (typeof el.type === "function") {
+      // Function component — invoke it with its props to get the JSX it
+      // returns, then continue walking. Cast through unknown because
+      // React's official types don't model function-component invocation
+      // cleanly outside a reconciler.
+      const result = (el.type as (p: Record<string, unknown>) => ReactNode)(props);
+      collectText(result, out);
+      return;
+    }
+    // Intrinsic element (string type): title appears before children in
+    // the rendered surface; bottomTitle after.
+    if (typeof props.title === "string" && props.title.length > 0) out.push(props.title);
+    collectText(props.children as ReactNode, out);
+    if (typeof props.bottomTitle === "string" && props.bottomTitle.length > 0) {
+      out.push(props.bottomTitle);
+    }
+    return;
+  }
+  // Anything we don't recognize is invisible — keeps the walker total.
 }
 
-describe("Phase 6 — conformance: TuiAdapter surfaces every fixture token", () => {
+function tuiInfo(vm: (typeof FIXTURES)[number]["vm"]): string {
+  const tokens: string[] = [];
+  collectText(renderTree(vm), tokens);
+  // Join with spaces so substring matches don't accidentally bridge tokens.
+  return tokens.join(" ");
+}
+
+describe("conformance: TuiAdapter surfaces every fixture token", () => {
   for (const fx of FIXTURES) {
     it(fx.name, () => {
       const info = tuiInfo(fx.vm);

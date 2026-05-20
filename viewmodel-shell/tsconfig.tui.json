@@ -3,10 +3,11 @@
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",
-    "jsxImportSource": "react",
-    "types": ["node", "react"],
+    "jsxImportSource": "@opentui/react",
+    "types": ["node", "react", "bun"],
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "skipLibCheck": true
   },
   "references": [{ "path": "./tsconfig.json" }],
   "include": ["src/tui.tsx", "src/tui-cli.ts"],
