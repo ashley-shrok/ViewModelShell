@@ -33,6 +33,16 @@ export class BrowserAdapter implements Adapter {
     const selStart = active?.selectionStart ?? null;
     const selEnd = active?.selectionEnd ?? null;
 
+    // 0.7.1 (#7) — snapshot the WINDOW scroll position alongside element-level
+    // scroll. Without this, an action-driven re-render rebuilds the entire
+    // subtree and the viewport jumps (to top, or wherever HTMLElement.focus()
+    // scrolled the restored-focus element into view). Same preservation
+    // contract as element scroll: preserve unless the server explicitly
+    // navigates (a redirect IS a navigation, so it correctly does NOT
+    // round-trip through render — it goes through navigate()).
+    const winScrollX = window.scrollX;
+    const winScrollY = window.scrollY;
+
     const scrollMap = new Map<string, { top: number; left: number }>();
     this.container.querySelectorAll<HTMLElement>("[id]").forEach(el => {
       if (el.scrollTop !== 0 || el.scrollLeft !== 0)
@@ -61,7 +71,11 @@ export class BrowserAdapter implements Adapter {
         `#${CSS.escape(focusId)}`
       );
       if (el) {
-        el.focus();
+        // 0.7.1 (#7) — preventScroll stops focus() from yanking the viewport
+        // to the focused element. The window-scroll restore below still
+        // overrides any scroll that snuck in, but preventing the scroll in
+        // the first place is the cleaner contract.
+        el.focus({ preventScroll: true });
         if (selStart !== null && selEnd !== null) {
           try { el.setSelectionRange(selStart, selEnd); } catch {}
         }
@@ -72,6 +86,11 @@ export class BrowserAdapter implements Adapter {
       const el = this.container.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
       if (el) { el.scrollTop = top; el.scrollLeft = left; }
     });
+
+    // 0.7.1 (#7) — restore the window scroll LAST so any defensive
+    // browser behavior earlier in this method (e.g. a future element
+    // bringing itself into view) gets overridden by the snapshot.
+    window.scrollTo(winScrollX, winScrollY);
   }
 
   navigate(url: string): void {

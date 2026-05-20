@@ -6,6 +6,20 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `0.7.1` (Browser scroll preservation — npm only)
+
+**Nothing to do** beyond taking the patch. `0.7.1` fixes [#7](https://github.com/ashley-shrok/ViewModelShell/issues/7): the window scroll position is now preserved across action-driven re-renders, and `el.focus()` no longer yanks the viewport to the focused element. NuGet unchanged at `0.7.0`; major.minor stays `0.7`.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.7.0` | **`0.7.1`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.7.0` | `0.7.0` (unchanged) |
+
+- **Browser consumers with long, scrollable pages:** the page no longer jumps on every action. If you explicitly want scroll-to-top after an action, navigate via `ShellResponse.redirect` — that's the existing wire affordance for app-driven navigation.
+- **Server / TUI consumers:** nothing to do — no wire/type/API change.
+
+---
+
 ## Upgrading to `0.7.0` (`PageNode.width` override seam — npm + NuGet)
 
 **Nothing to do** beyond taking the bump on whichever side you use. `0.7.0` adds one additive `PageNode` field (`width?: "wide" | "full"`). No existing consumer code requires changes; the wire is forward-compatible.

@@ -6,6 +6,22 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.7.1 — Browser scroll preservation across re-render (npm only)
+
+**npm:** `0.7.1` (PATCH — client-only bug fix) · **NuGet:** unchanged at `0.7.0`
+
+Closes [#7](https://github.com/ashley-shrok/ViewModelShell/issues/7). No wire, type, or API change; NuGet untouched; major.minor stays `0.7`.
+
+### Fixed
+
+- **`BrowserAdapter.render()` now preserves the window scroll position across action-driven re-renders.** Previously, the snapshot/restore block preserved element-level `scrollTop`/`scrollLeft` for nodes with an `id` and restored focus + caret, but it did NOT snapshot `window.scrollX`/`window.scrollY`. Combined with `el.focus()` being called without `{ preventScroll: true }`, the re-render would yank the viewport to the focused element (or to the top), making long-page apps jump on every action. Fix: snapshot `window.scrollX`/`Y` alongside the existing snapshot, pass `preventScroll: true` to the focus restore call, and `window.scrollTo(x, y)` after all DOM restoration so the position is the last thing written. **Behavior change is "scroll stays where the user left it"**, which is what every other framework does in the same situation — apps that previously relied on the implicit scroll-to-top can still navigate explicitly via `ShellResponse.redirect`.
+
+### Consumers
+
+- **None required.** Client-only fix; no wire/type/API change. Static/non-interactive rendering unaffected. Server consumers (.NET / TS server subpath) untouched — NuGet stays at `0.7.0`. Apps that depended on the scroll-to-top behavior of action-driven re-renders should switch to explicit `ShellResponse.redirect` for that intent (the existing wire affordance for app-driven navigation).
+
+---
+
 ## 0.7.0 — `PageNode.width` override seam + page-max docs (npm + NuGet)
 
 **npm:** `0.7.0` (MINOR — wire-format addition) · **NuGet:** `0.7.0` (MINOR — wire-format addition)
