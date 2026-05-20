@@ -6,6 +6,48 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.7.0 — `PageNode.width` override seam + page-max docs (npm + NuGet)
+
+**npm:** `0.7.0` (MINOR — wire-format addition) · **NuGet:** `0.7.0` (MINOR — wire-format addition)
+
+Both packages move together. The shared wire gains one optional `PageNode` field — no breaking change; existing consumers untouched. Closes [#13](https://github.com/ashley-shrok/ViewModelShell/issues/13).
+
+### Added
+
+- **`PageNode.width?: "wide" | "full"`.** Opt-in per-page max-width override. Omitted = framework default cap (`--vms-page-max`, 1080px). `"wide"` emits `.vms-page--wide` which expands to `var(--vms-page-max-wide)` (default 1440px). `"full"` emits `.vms-page--full` which removes the cap entirely. Sibling of the existing `density` and `layout` closed-union appearance modifiers; same wire shape (null-omitted on the wire, no modifier class when absent). `TuiAdapter` ignores the field — width caps are a browser concern; the terminal naturally fills.
+
+  C#:
+  ```csharp
+  return new PageNode(
+      Title: "Invoices",
+      Layout: "stack",
+      Width: "wide",       // wider page for the data-heavy table
+      Children: [...]);
+  ```
+
+  TypeScript backend:
+  ```typescript
+  return {
+    type: "page",
+    title: "Invoices",
+    layout: "stack",
+    width: "wide",
+    children: [...],
+  };
+  ```
+
+- **`--vms-page-max` formally annotated as an additive override seam** in `styles/default.css` (matching the existing `--vms-card-min` treatment). Hosts can globally retune via a single `:root { --vms-page-max: 1280px }` after the theme import — already documented in `AGENTS.md`, now sanctioned in the inline CSS comment too. Companion token `--vms-page-max-wide` (default `1440px`) backs the `.vms-page--wide` modifier and is independently host-retunable.
+
+### Fixed
+
+- **`server.ts` multipart-file narrowing.** A latent build break in `parseFormDataAction` surfaced when `@types/node@22.19+` started shipping its own `File` interface alongside DOM's: `value instanceof File` ambiguates the narrow on `FormDataEntryValue`. Switched to `typeof value !== "string"`, which narrows the union to `File` unambiguously and is identical at runtime. Behavior unchanged; latent fix.
+
+### Consumers
+
+- **None required — additive.** Existing `PageNode` consumers untouched (new `width`/`Width` field is optional and null-omitted on the wire). Wire is forward-compatible. Cross-backend parity unchanged. The shipped `demo/ContactManager` now uses `width: "wide"` as a worked example of the new field.
+
+---
+
 ## 0.6.0 — Terminal substrate rewrite (OpenTUI, Bun runtime) + interaction polish
 
 **npm:** `0.6.0` (MINOR — client adapter rewrite, optional-dep set changes) · **NuGet:** `0.6.0` (MINOR — version-aligned no-op; no functional changes)

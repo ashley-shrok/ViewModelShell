@@ -134,7 +134,11 @@ public record PageNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Title,
     IReadOnlyList<ViewNode> Children,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Density = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null,
+    // Page-shell max-width override (issue #13). null = default cap (--vms-page-max,
+    // 1080px). "wide" = --vms-page-max-wide (1440px default). "full" = uncapped.
+    // TUI ignores this — width caps are a browser concern.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Width = null
 ) : ViewNode;
 
 public record SectionNode(

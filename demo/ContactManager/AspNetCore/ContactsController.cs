@@ -108,6 +108,7 @@ public class ContactsController : ControllerBase
         Title: "Contacts",
         Density: "compact",      // a real contacts list is information-dense
         Layout: "split",         // 2-up master/detail; collapses to stacked on narrow
+        Width: "wide",           // master+detail benefits from the 1440px cap — 0.7.0/#13
         Children:
         [
             BuildMaster(state),

@@ -110,3 +110,31 @@ describe("LAYOUT-02/03 — section layout preset modifier emission (D-02 idiom)"
     expect(el.className).toBe("vms-section");
   });
 });
+
+describe('0.7.0 / #13 — PageNode.width modifier emission', () => {
+  it('width: "wide" ⇒ className contains vms-page--wide', () => {
+    const el = renderPage({ type: "page", children: [], width: "wide" });
+    expect(el.classList.contains("vms-page")).toBe(true);
+    expect(el.classList.contains("vms-page--wide")).toBe(true);
+  });
+  it('width: "full" ⇒ className contains vms-page--full', () => {
+    const el = renderPage({ type: "page", children: [], width: "full" });
+    expect(el.classList.contains("vms-page--full")).toBe(true);
+  });
+  it('width omitted ⇒ className === "vms-page" (byte-identical to pre-0.7.0)', () => {
+    const el = renderPage({ type: "page", children: [] });
+    expect(el.className).toBe("vms-page");
+  });
+  it('width composes with density and layout (all three modifier classes present)', () => {
+    const el = renderPage({
+      type: "page",
+      children: [],
+      density: "compact",
+      layout: "cards",
+      width: "wide",
+    });
+    expect(el.classList.contains("vms-page--compact")).toBe(true);
+    expect(el.classList.contains("vms-page--cards")).toBe(true);
+    expect(el.classList.contains("vms-page--wide")).toBe(true);
+  });
+});

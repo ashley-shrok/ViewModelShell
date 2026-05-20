@@ -6,6 +6,26 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `0.7.0` (`PageNode.width` override seam — npm + NuGet)
+
+**Nothing to do** beyond taking the bump on whichever side you use. `0.7.0` adds one additive `PageNode` field (`width?: "wide" | "full"`). No existing consumer code requires changes; the wire is forward-compatible.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.6.0` | **`0.7.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.6.0` | **`0.7.0`** |
+
+- **Existing pages:** unchanged behavior. Omitting the new field renders the same as `0.6.0` (1080px max-width).
+- **Wider pages for data-heavy views:** set `Width: "wide"` (C#) / `width: "wide"` (TypeScript) on the page; the framework emits `.vms-page--wide` and the page extends to `var(--vms-page-max-wide)` (1440px default).
+- **Full-bleed pages:** `Width: "full"` removes the max-width cap entirely.
+- **Host retune of the wide value:** add `:root { --vms-page-max-wide: 1280px }` to your app's stylesheet (imported after the theme).
+- **Global retune of the default cap (also valid):** `:root { --vms-page-max: 1280px }`. This was already a sanctioned seam (`AGENTS.md`); `0.7.0` annotates it in the inline `default.css` comment to match.
+- **TUI consumers:** the `width` field is ignored — terminals fill naturally; width caps are a browser concept. No code change.
+
+Closes [#13](https://github.com/ashley-shrok/ViewModelShell/issues/13).
+
+---
+
 ## Upgrading to `0.6.0` (Terminal substrate rewrite — OpenTUI + Bun runtime)
 
 **No wire change. NuGet contents identical to `0.5.0`** — it bumps to `0.6.0` only to keep shared major.minor with npm.

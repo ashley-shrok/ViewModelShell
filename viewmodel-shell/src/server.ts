@@ -33,7 +33,12 @@ export function parseFormDataAction<TState>(formData: FormData): ActionPayload<T
   const state = JSON.parse(stateRaw) as TState;
   const files: Record<string, File> = {};
   for (const [key, value] of formData.entries()) {
-    if (key !== "_action" && key !== "_state" && value instanceof File) {
+    // Narrow via typeof, NOT `instanceof File`: @types/node@22.19+ declares
+    // its own `File` interface alongside DOM's, and the TS narrowing for
+    // `instanceof File` ambiguates between the two on
+    // `FormDataEntryValue = string | File`. `typeof !== "string"` narrows
+    // the union to File unambiguously and is identical at runtime.
+    if (key !== "_action" && key !== "_state" && typeof value !== "string") {
       files[key] = value;
     }
   }

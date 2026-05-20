@@ -54,10 +54,15 @@
   --vms-text-lg:    1rem;
   --vms-text-xl:    1.375rem;
   --vms-text-2xl:   2.25rem;
-  /* Page shell (D-12) */
-  --vms-page-max:   1080px;
+  /* Page shell (D-12) — additive override seam (issue #13); host/theme-retunable
+     via a single :root{} override imported after the theme. The two width
+     ratchets — --vms-page-max-wide (1440px default) and --vms-page-max-full
+     (none) — back the `.vms-page--wide` / `.vms-page--full` modifier classes
+     emitted when PageNode.width is set. */
+  --vms-page-max:        1080px;
+  --vms-page-max-wide:   1440px;
   /* Card-grid min item width — additive override seam (D-05); host/theme-retunable */
-  --vms-card-min:   16rem;
+  --vms-card-min:        16rem;
 }
 
 /* ── Page chrome ──
@@ -115,6 +120,15 @@ body {
   --vms-space-md: 0.75rem;
   --vms-space-lg: 1rem;
 }
+
+/* ── Width override (0.7.0 / issue #13) ──
+   `.vms-page--wide` opts a data-heavy page into a wider cap (1440px default)
+   without retuning the global --vms-page-max. `.vms-page--full` removes the
+   cap entirely (full-bleed). Both compose with --vms-page-max-wide for host
+   retunes — set `:root { --vms-page-max-wide: 1280px }` to change the wide
+   value app-wide while leaving the framework default alone. */
+.vms-page--wide { max-width: var(--vms-page-max-wide); }
+.vms-page--full { max-width: none; }
 
 /* ── Layout preset: cards (LAYOUT-03, D-04) ──
    auto-fit intrinsically collapses toward 1 column as the container narrows;

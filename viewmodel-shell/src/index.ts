@@ -73,6 +73,8 @@ export interface PageNode {
   density?: "comfortable" | "compact";
   /** Layout preset arranging direct children. Omitted or "stack" = current vertical flow (no modifier class). "split" (equal 2-up), "cards" (uniform grid), "sidebar" (thin + wide app shell) emit .vms-page--{value}. Closed union (D-01/D-02; sidebar D-28). */
   layout?: "stack" | "split" | "cards" | "sidebar";
+  /** Page-shell max-width override. Omitted = framework default cap (`--vms-page-max`, 1080px). "wide" = `--vms-page-max-wide` (1440px default), for data-heavy pages with wide tables. "full" = uncapped (max-width: none), for full-bleed dashboards. TUI ignores this (terminals fill naturally). Closed union (D-13 / issue #13). */
+  width?: "wide" | "full";
   children: ViewNode[];
 }
 

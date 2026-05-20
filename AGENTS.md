@@ -129,7 +129,7 @@ The shipped themes are the files under `viewmodel-shell/styles/themes/` — one 
 
 ### The `--vms-*` override seam — override the token, don't hand-roll
 
-The **only** sanctioned per-app deviation: a tiny per-app stylesheet with a single `:root{}` setting `--vms-*` tokens, imported in your entrypoint **after** the theme — **never** an HTML `<style>` block. Use it for a width retune (`--vms-page-max`), branded fonts (`--vms-font-body` / `--vms-font-head` / `--vms-font-mono`), or any `--vms-*` color var for a full reskin. The theme files under `viewmodel-shell/styles/themes/` are the reskin reference; this seam is additive — never remove or rename a `--vms-*` var.
+The **only** sanctioned per-app deviation: a tiny per-app stylesheet with a single `:root{}` setting `--vms-*` tokens, imported in your entrypoint **after** the theme — **never** an HTML `<style>` block. Use it for a width retune (`--vms-page-max` — *global* default; `--vms-page-max-wide` — what `.vms-page--wide` expands to), branded fonts (`--vms-font-body` / `--vms-font-head` / `--vms-font-mono`), or any `--vms-*` color var for a full reskin. **For per-page width opt-in, prefer the `PageNode.width: "wide" | "full"` wire field** (added in 0.7.0) over a `:root` retune — the wire field expresses page-level intent without changing the global default. The theme files under `viewmodel-shell/styles/themes/` are the reskin reference; this seam is additive — never remove or rename a `--vms-*` var.
 
 ```typescript
 import "@ashley-shrok/viewmodel-shell/styles.css";
@@ -148,6 +148,7 @@ Layout *arrangement* is server intent on the existing `page`/`section` nodes (ap
 - **`cards`**: auto-fit grid from `--vms-card-min` (default 16rem), collapses to one column intrinsically. Dashboards, tile/summary grids.
 - **`density: "compact"`** on `page`: tightens the spacing rhythm tokens globally — no app CSS.
 - **`section variant:"card"`**: a grouped surface (background / border / padding / radius). Dashboard tiles, detail panes.
+- **`page width: "wide"`** (0.7.0): widens the page cap from `--vms-page-max` (1080px) to `--vms-page-max-wide` (1440px) for data-heavy views (wide tables, dense list+detail). `width: "full"` removes the cap entirely. Omit for the framework default. TUI ignores it (terminals fill naturally).
 
 ### The canonical worked example (single source of truth)
 

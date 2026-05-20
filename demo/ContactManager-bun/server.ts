@@ -193,6 +193,7 @@ function buildVm(state: ContactsState): ViewNode {
     title: "Contacts",
     density: "compact",
     layout: "split",
+    width: "wide",   // master+detail benefits from the 1440px cap — 0.7.0/#13
     children: [
       buildMaster(state),
       buildDetail(state),

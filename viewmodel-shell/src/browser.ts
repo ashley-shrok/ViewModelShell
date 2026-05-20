@@ -214,7 +214,10 @@ export class BrowserAdapter implements Adapter {
   private page(n: PageNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const el = document.createElement("div");
     el.className = `vms-page${n.density === "compact" ? " vms-page--compact" : ""}${
-      n.layout && n.layout !== "stack" ? ` vms-page--${n.layout}` : ""}`;
+      n.layout && n.layout !== "stack" ? ` vms-page--${n.layout}` : ""}${
+      // 0.7.0 (#13) — width override: "wide" or "full" opt-in via a closed
+      // union. Omitted = no modifier class (existing 1080px cap holds).
+      n.width ? ` vms-page--${n.width}` : ""}`;
     if (n.title) {
       const h = document.createElement("h1");
       h.className = "vms-page__title";
