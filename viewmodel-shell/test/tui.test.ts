@@ -2192,3 +2192,62 @@ describe("0.4.5 — viewport fill + opt-out + resize", () => {
     expect(w100, "row spans ~the terminal @100").toBeGreaterThan(80);
   });
 });
+
+describe("0.5.0 — TuiAdapter.saveFile (authenticated download)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("writes the blob bytes to $XDG_DOWNLOAD_DIR/<filename>", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "vms-dl-"));
+    vi.stubEnv("XDG_DOWNLOAD_DIR", tmp);
+    try {
+      const adapter = new TuiAdapter();
+      await adapter.saveFile(new Blob(["hello"]), "greeting.txt", "text/plain");
+      expect(readFileSync(join(tmp, "greeting.txt"), "utf8")).toBe("hello");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("sanitizes server-supplied filename — path traversal lands the file INSIDE the dir, not outside", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "vms-dl-"));
+    vi.stubEnv("XDG_DOWNLOAD_DIR", tmp);
+    try {
+      const adapter = new TuiAdapter();
+      // Hostile filename: "../../etc/passwd". After split('/').pop() → "passwd";
+      // the file lands flat in tmp, NEVER outside.
+      await adapter.saveFile(new Blob(["x"]), "../../etc/passwd", "text/plain");
+      expect(readFileSync(join(tmp, "passwd"), "utf8")).toBe("x");
+      // The hostile path was not created anywhere relative to tmp.
+      expect(existsSync(join(tmp, "..", "etc", "passwd"))).toBe(false);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("sanitizes Windows-style backslash separators in the same way", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "vms-dl-"));
+    vi.stubEnv("XDG_DOWNLOAD_DIR", tmp);
+    try {
+      const adapter = new TuiAdapter();
+      await adapter.saveFile(new Blob(["y"]), "..\\..\\Windows\\System32\\evil.bin", "application/octet-stream");
+      expect(readFileSync(join(tmp, "evil.bin"), "utf8")).toBe("y");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("dot-only / empty filename collapses to the literal 'download' fallback", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "vms-dl-"));
+    vi.stubEnv("XDG_DOWNLOAD_DIR", tmp);
+    try {
+      const adapter = new TuiAdapter();
+      await adapter.saveFile(new Blob(["z"]), "...", "application/octet-stream");
+      expect(readFileSync(join(tmp, "download"), "utf8")).toBe("z");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});

@@ -83,6 +83,26 @@ export class BrowserAdapter implements Adapter {
     store.setItem(key, value);
   }
 
+  /** Save an authenticated-download blob via the browser's native Save-As.
+   *  contentType is informational — the Blob's own .type takes precedence in
+   *  browsers. We accept the arg for adapter symmetry (other adapters use it). */
+  saveFile(data: Blob, filename: string, _contentType: string): void {
+    const url = URL.createObjectURL(data);
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } finally {
+      // Revoke async so the browser has time to start the download. The 0ms
+      // setTimeout is the established pattern (Chromium/Firefox/Safari).
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+  }
+
   async transport(
     input: string,
     init: { method?: string; headers?: Record<string, string>; body?: FormData | string },

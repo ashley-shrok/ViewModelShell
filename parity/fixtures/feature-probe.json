@@ -14,6 +14,10 @@
     { "id": "set-storage-default", "method": "POST", "action": { "name": "set-storage" } },
     { "id": "set-storage-custom",  "method": "POST", "action": { "name": "set-storage", "context": { "local-value": "L1", "session-value": "S1" } } },
 
+    { "id": "fresh-download",   "method": "GET", "freshState": true },
+    { "id": "download-default", "method": "POST", "action": { "name": "trigger-download" } },
+    { "id": "download-custom",  "method": "POST", "action": { "name": "trigger-download", "context": { "url": "/api/probe/file/report.pdf", "filename": "report.pdf" } } },
+
     { "id": "fresh-2",          "method": "GET", "freshState": true },
     { "id": "poll-1",           "method": "POST", "action": { "name": "do-poll" } },
     { "id": "poll-2",           "method": "POST", "action": { "name": "do-poll" } },

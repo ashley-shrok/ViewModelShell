@@ -33,6 +33,22 @@ If your backend is .NET: copy `demo/Tasks/AspNetCore/ViewModels.cs` from the [Gi
 
 For other backends, implement the same JSON shape: a `GET` returning `{ vm, state }`, and a `POST` that takes `multipart/form-data` with `_action` and `_state` form fields and returns the next `{ vm, state }`. See [AGENTS.md](https://github.com/ashley-shrok/ViewModelShell/blob/main/AGENTS.md) for the full wire format.
 
+## Authenticated downloads
+
+When a header-authenticated consumer (e.g. `Authorization: Bearer <jwt>` via `ShellOptions.getRequestHeaders()`) needs to offer a file download, return a `"download"` side-effect from your action handler — the shell fetches the URL with the same headers merged in, parses `Content-Disposition` + `Content-Type`, and triggers a browser "Save As":
+
+```csharp
+return new ShellResponse<MyState>(BuildVm(state), state)
+    .WithEffect(ShellSideEffect.Download("/api/invoices/42/pdf", "invoice-42.pdf"));
+```
+
+```typescript
+return { vm: buildVm(state), state,
+  sideEffects: [shellSideEffect.download("/api/invoices/42/pdf", "invoice-42.pdf")] };
+```
+
+The download endpoint stays auth-gated and the server authorizes in the action handler — no signed-URL machinery. See [AGENTS.md](https://github.com/ashley-shrok/ViewModelShell/blob/main/AGENTS.md#client-side-effects) for the wire format and pattern.
+
 ## Terminal (TUI)
 
 The same backend renders in a terminal — same wire, no backend change. Point the CLI at any ViewModel Shell endpoint:

@@ -10,10 +10,11 @@ export interface ActionEvent {
 // Implement this to target a new platform (browser, mobile, terminal, …).
 // The core references zero platform globals (this is a CI-enforced invariant) —
 // platform side-effects are delegated through this seam, exactly like render().
-// `render` is required; `navigate`/`storage`/`transport` are optional capability
-// verbs a target opts into. A target that handles redirects must implement
-// `navigate`; a target that supports the storage side-effects must implement
-// `storage`; `transport` is an optional override point (default transport is
+// `render` is required; `navigate`/`storage`/`transport`/`saveFile` are optional
+// capability verbs a target opts into. A target that handles redirects must
+// implement `navigate`; one that supports storage side-effects must implement
+// `storage`; one that supports authenticated downloads must implement
+// `saveFile`; `transport` is an optional override point (default transport is
 // the core's own `fetch`).
 
 export interface Adapter {
@@ -34,6 +35,15 @@ export interface Adapter {
     init: { method?: string; headers?: Record<string, string>; body?: FormData | string },
     hooks?: { onUploadProgress?: (sent: number, total: number) => void }
   ): Promise<Response>;
+  /** Save an authenticated-download blob to platform-appropriate storage. The
+   *  shell fetches the URL with getRequestHeaders() merged, parses
+   *  Content-Disposition filename + Content-Type, and calls saveFile().
+   *  No safe no-op exists — a silently-dropped authenticated download is a
+   *  correctness/security bug (cf. navigate/storage). If a "download"
+   *  side-effect arrives and this method is absent, the shell fails loudly.
+   *  May return void or Promise<void>; the shell awaits the return value so
+   *  async I/O errors surface via onError. */
+  saveFile?(data: Blob, filename: string, contentType: string): void | Promise<void>;
 }
 
 // ─── Node types ───────────────────────────────────────────────────────────────
@@ -249,10 +259,17 @@ export interface ShellOptions {
 }
 
 export interface ShellSideEffect {
-  /** "set-local-storage" | "set-session-storage" — unknown types are silently ignored. */
+  /** "set-local-storage" | "set-session-storage" | "download" — unknown types are silently ignored. */
   type: string;
+  /** For "set-local-storage" / "set-session-storage": the storage key. */
   key?: string;
+  /** For "set-local-storage" / "set-session-storage": the storage value. */
   value?: string;
+  /** For "download": the URL to fetch (shell merges getRequestHeaders() into the request). */
+  url?: string;
+  /** For "download": optional filename hint. Response Content-Disposition wins
+   *  when present; this is the fallback before the URL basename. */
+  filename?: string;
 }
 
 export interface ShellResponse {
@@ -357,13 +374,14 @@ export class ViewModelShell {
   getCurrentVm(): ViewNode | null { return this.currentVm; }
   getCurrentState(): unknown { return this.currentState; }
 
-  private failCapability(capability: "navigate" | "storage", detail: string): void {
+  private failCapability(capability: "navigate" | "storage" | "saveFile", detail: string): void {
     const err = new Error(
       `[ViewModelShell] Adapter is missing the "${capability}" capability but the ` +
       `server response requires it (${detail}). This is a hard failure, not a no-op: ` +
-      `a silently-dropped ${capability} (e.g. an auth token never persisted, or a ` +
-      `redirect that never happens) is a correctness/security bug. Implement ` +
-      `${capability}() on your Adapter, or (for redirect) pass ShellOptions.onRedirect.`
+      `a silently-dropped ${capability} (e.g. an auth token never persisted, a ` +
+      `redirect that never happens, or an authenticated download silently swallowed) ` +
+      `is a correctness/security bug. Implement ${capability}() on your Adapter, ` +
+      `or (for redirect) pass ShellOptions.onRedirect.`
     );
     this.options.onError ? this.options.onError(err) : console.error("[ViewModelShell]", err);
   }
@@ -377,6 +395,11 @@ export class ViewModelShell {
       } else if (effect.type === "set-session-storage" && effect.key != null) {
         if (adapter.storage) adapter.storage("session", effect.key, effect.value ?? "");
         else this.failCapability("storage", `side-effect "${effect.type}" key="${effect.key}"`);
+      } else if (effect.type === "download" && effect.url != null) {
+        // Fire-and-forget. Surfaces errors via onError. Does not block the
+        // render/redirect branch below — downloads are a side channel, like
+        // storage, and a slow download MUST NOT delay the user-visible update.
+        void this.download(effect.url, effect.filename);
       }
     }
     if (body.redirect) {
@@ -403,5 +426,93 @@ export class ViewModelShell {
       this.pollTimer = null;
       this.dispatch({ name: "poll" }, true);
     }, delay);
+  }
+
+  /**
+   * Authenticated download: fetch the URL with getRequestHeaders() merged
+   * (Bearer / anti-forgery / etc.), parse the response filename + content
+   * type, and hand the bytes to the adapter's platform-specific save verb.
+   *
+   * Deliberately uses core `fetch`, NOT adapter.transport. The existing
+   * transport override (XHR for upload-progress) constructs Response from
+   * xhr.responseText (a string) and would corrupt binary blobs. Download
+   * progress is a future, opt-in extension on its own seam.
+   *
+   * Errors (missing capability / non-OK status / adapter throw) surface
+   * via onError; the download() call itself never throws into the caller.
+   */
+  private async download(url: string, hintFilename?: string): Promise<void> {
+    const adapter = this.options.adapter;
+    if (!adapter.saveFile) {
+      this.failCapability("saveFile", `download from "${url}"`);
+      return;
+    }
+    try {
+      const extraHeaders = this.options.getRequestHeaders
+        ? await this.options.getRequestHeaders()
+        : {};
+      const res = await fetch(url, { headers: extraHeaders });
+      if (!res.ok) {
+        throw new Error(`Download from ${url} failed: ${res.status} ${res.statusText}`);
+      }
+      const contentType = res.headers.get("Content-Type") ?? "application/octet-stream";
+      const filename =
+        parseContentDispositionFilename(res.headers.get("Content-Disposition")) ??
+        hintFilename ??
+        basenameFromUrl(url) ??
+        "download";
+      const blob = await res.blob();
+      await adapter.saveFile(blob, filename, contentType);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.options.onError ? this.options.onError(error) : console.error("[ViewModelShell]", error);
+    }
+  }
+}
+
+// ─── Download helpers (file-private; no platform globals) ────────────────────
+// `Blob` and `URL` are universals (browser, Node 18+, Deno, Bun) — confirmed
+// off the check:core-globals denylist. `URL.createObjectURL` is browser-only
+// and stays in BrowserAdapter behind the capability seam.
+
+/**
+ * Parse a `Content-Disposition` header for a filename. RFC 5987 `filename*`
+ * (UTF-8, percent-encoded, internationalized) wins over the plain `filename`
+ * parameter when both are present — that's the spec-canonical preference.
+ * Returns null when the header is absent or no filename parameter is found.
+ */
+function parseContentDispositionFilename(header: string | null): string | null {
+  if (header == null) return null;
+  // RFC 5987 extended form: filename*=UTF-8''<percent-encoded>
+  const ext = /filename\*\s*=\s*([^']*)'[^']*'([^;]+)/i.exec(header);
+  if (ext) {
+    try {
+      const decoded = decodeURIComponent(ext[2].trim());
+      if (decoded.length > 0) return decoded;
+    } catch {
+      // Malformed percent-encoding — fall through to plain `filename`.
+    }
+  }
+  // Plain form: filename="..." or filename=...
+  const plain = /filename\s*=\s*"([^"]*)"|filename\s*=\s*([^;]+)/i.exec(header);
+  if (plain) {
+    const val = (plain[1] ?? plain[2] ?? "").trim();
+    if (val.length > 0) return val;
+  }
+  return null;
+}
+
+/**
+ * Extract a basename from a URL (relative or absolute). Returns null if the
+ * path is empty or ends with `/`. Uses a dummy base so relative URLs parse;
+ * the base is discarded.
+ */
+function basenameFromUrl(url: string): string | null {
+  try {
+    const u = new URL(url, "http://_/");
+    const last = u.pathname.split("/").pop();
+    return last && last.length > 0 ? decodeURIComponent(last) : null;
+  } catch {
+    return null;
   }
 }

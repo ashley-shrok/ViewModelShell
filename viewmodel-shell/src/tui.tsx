@@ -22,7 +22,7 @@ import type {
   TableRow,
 } from "./index.js";
 import { spawn } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -1435,6 +1435,37 @@ export class TuiAdapter implements Adapter {
       this.showInterstitial(
         `Storage write FAILED — your data was NOT saved.\n\n  key:   ${key}\n  error: ${m}`,
       );
+    }
+  }
+
+  /** Save an authenticated-download blob to the terminal user's filesystem.
+   *  Directory precedence: $XDG_DOWNLOAD_DIR → ~/Downloads (if it exists) →
+   *  process.cwd(). The chosen path is printed to stderr so the operator
+   *  can find it. The filename is sanitized (no path components / no `..`)
+   *  so a hostile/buggy server can't escape the download dir; this is the
+   *  TUI counterpart to the browser's built-in download-name sanitization. */
+  async saveFile(data: Blob, filename: string, _contentType: string): Promise<void> {
+    const xdg = process.env.XDG_DOWNLOAD_DIR;
+    const home = homedir();
+    const dir = xdg && xdg.trim()
+      ? xdg
+      : existsSync(join(home, "Downloads")) ? join(home, "Downloads") : process.cwd();
+    mkdirSync(dir, { recursive: true });
+    // Strip path separators (POSIX + Windows) and any leading dots so a
+    // server-supplied "../etc/passwd" or "foo/bar" becomes a flat basename.
+    // Empty/dot-only results fall back to literal "download".
+    const sanitized = filename
+      .split(/[/\\]/).pop()!     // drop everything before the last separator
+      .replace(/^\.+/, "")       // strip leading dots (no hidden files via traversal)
+      .trim();
+    const safeName = sanitized.length > 0 ? sanitized : "download";
+    const out = join(dir, safeName);
+    const buf = Buffer.from(await data.arrayBuffer());
+    writeFileSync(out, buf);
+    try {
+      process.stderr.write(`vms-tui: saved ${out}\n`);
+    } catch {
+      /* stderr unavailable — the file landed regardless */
     }
   }
 

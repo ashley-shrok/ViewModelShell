@@ -92,7 +92,7 @@ export interface Adapter {
 2. else `adapter.navigate(url)` — consumers relying on the old in-core default now get it from `BrowserAdapter.navigate` instead of core (still byte-identical, since every real consumer uses `BrowserAdapter`).
 3. else a **loud error** (see fail-loud rule).
 
-**Fail-loud rule.** Unlike `onError`/`onLoading`, `navigate` and `storage` have **no safe core default** — there is no sane no-op. If a redirect or storage side-effect arrives and the capability is absent (no `onRedirect` and no `adapter.navigate`; or no `adapter.storage`), the shell **fails loudly** — it surfaces an `Error` via `ShellOptions.onError` (or `console.error` if unset), **never a silent no-op**. This is a correctness/security requirement: a `set-local-storage` of an auth JWT (e.g. `hecate_jwt`) silently swallowed, or a post-login redirect silently no-op'd, is a security failure, not a soft degradation. An adapter author who omits `storage`/`navigate` gets a hard, debuggable failure — not a swallowed auth token.
+**Fail-loud rule.** Unlike `onError`/`onLoading`, `navigate`, `storage`, and `saveFile` have **no safe core default** — there is no sane no-op. If a redirect, storage side-effect, or download side-effect arrives and the capability is absent (no `onRedirect` and no `adapter.navigate`; or no `adapter.storage`; or no `adapter.saveFile`), the shell **fails loudly** — it surfaces an `Error` via `ShellOptions.onError` (or `console.error` if unset), **never a silent no-op**. This is a correctness/security requirement: a `set-local-storage` of an auth JWT (e.g. `hecate_jwt`) silently swallowed, a post-login redirect silently no-op'd, or an authenticated download silently dropped, is a security failure, not a soft degradation. An adapter author who omits `storage`/`navigate`/`saveFile` gets a hard, debuggable failure — not a swallowed auth token, a missed redirect, or a vanished download.
 
 **Enforcement.** The "core references zero platform globals" invariant is enforced by a grep-based CI guard, scoped to **core `src/index.ts` only** (`viewmodel-shell/src/browser.ts` legitimately owns all DOM bindings and is *excluded*; `server.ts` is out of this guard's scope). The guard (`viewmodel-shell/scripts/check-core-platform-globals.mjs`, run locally via `npm run check:core-globals`) fails the build if `src/index.ts` references any of `window`, `document`, `localStorage`, `sessionStorage`, or `XMLHttpRequest`. It runs as a gating step in `.github/workflows/parity.yml` (the `Enforce core platform-agnosticism (AGNOSTIC-03)` step), alongside a framework-level jsdom adapter test that proves the relocated bindings actually fire. Universals deliberately kept in core (`fetch`, `FormData`, `setTimeout`, `URLSearchParams`, `console`) are not on the denylist. The guard scans **code only**: it strips line/block comments and string/template literals before the denylist match, so a clarifying doc comment or string in `index.ts` that *names* one of the five tokens (e.g. JSDoc explaining why `window` is intentionally absent) is allowed and will not false-fail CI — only a real code reference fails the build.
 
@@ -287,16 +287,22 @@ Built-in effect types:
 |---|---|---|
 | `ShellSideEffect.SetLocalStorage(key, value)` | `"set-local-storage"` | `localStorage.setItem(key, value)` |
 | `ShellSideEffect.SetSessionStorage(key, value)` | `"set-session-storage"` | `sessionStorage.setItem(key, value)` |
+| `ShellSideEffect.Download(url, filename?)` | `"download"` | Shell fetches `url` with `getRequestHeaders()` merged, parses `Content-Disposition` + `Content-Type`, hands the bytes to `Adapter.saveFile`. `BrowserAdapter` triggers a Save-As; `TuiAdapter` writes to `~/Downloads`. Filename precedence: `Content-Disposition` > side-effect `filename` > URL basename > `"download"`. Missing the `saveFile` capability fails loud (see fail-loud rule). |
 
 Unknown `type` values are silently ignored by the shell — forward-compatible if new effect types are added later.
 
 Wire format:
 ```json
 {
-  "sideEffects": [{ "type": "set-local-storage", "key": "hecate_jwt", "value": "eyJ..." }],
+  "sideEffects": [
+    { "type": "set-local-storage", "key": "hecate_jwt", "value": "eyJ..." },
+    { "type": "download", "url": "/api/invoices/42/pdf", "filename": "invoice-42.pdf" }
+  ],
   "redirect": "/app"
 }
 ```
+
+**`"download"` design note.** Authenticated file downloads were the gap that motivated this side-effect type ([#10](https://github.com/ashley-shrok/ViewModelShell/issues/10)): `LinkNode { external: true }` is a top-level browser navigation that carries no shell headers, so every header-auth consumer (Bearer JWT via `getRequestHeaders()`) was forced into per-backend signed-URL machinery. The side-effect path reuses the existing header seam — the shell's own download fetch re-presents the merged headers to the file endpoint — and the server authorizes *in the action handler* with the real auth context. No new authorization lane; no per-backend token signing.
 
 ### Polling and push
 
@@ -381,14 +387,14 @@ Every field except `Vm` and `State` is optional. The combination determines what
 | `Vm` | `ViewNode?` | The view tree to render. Omit (null) when redirecting. |
 | `State` | `TState?` | The new client state. Omit (null) when redirecting. |
 | `Redirect` | `string?` | When set, the shell navigates to this URL instead of re-rendering. `Vm` and `State` are ignored. |
-| `SideEffects` | `IReadOnlyList<ShellSideEffect>?` | Applied in order before redirect/render. Built-in types: `"set-local-storage"`, `"set-session-storage"`. Unknown types are silently ignored (forward-compatible). |
+| `SideEffects` | `IReadOnlyList<ShellSideEffect>?` | Applied in order before redirect/render. Built-in types: `"set-local-storage"`, `"set-session-storage"`, `"download"`. Unknown types are silently ignored (forward-compatible). |
 | `NextPollIn` | `int?` (ms) | Schedules the next poll at this delay. Falls back to `ShellOptions.pollInterval` if omitted. **Omit on a response with no `pollInterval` set to stop polling.** See the polling section for the fast-completion footgun. |
 
 Factory methods on `ShellResponse<TState>`:
 - `ShellResponse<T>.RedirectTo(url)` — redirect response with `Vm`/`State` null.
 - `response.WithEffect(ShellSideEffect.SetLocalStorage(key, value))` — fluent side-effect append.
 
-`ShellSideEffect` factories: `SetLocalStorage(key, value)`, `SetSessionStorage(key, value)`.
+`ShellSideEffect` factories: `SetLocalStorage(key, value)`, `SetSessionStorage(key, value)`, `Download(url, filename?)`.
 
 ### TypeScript backend pattern
 

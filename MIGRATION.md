@@ -6,6 +6,30 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `0.5.0` (Authenticated downloads — npm + NuGet)
+
+**Nothing to do** beyond taking the bump on whichever side you use. `0.5.0` adds one additive `ShellSideEffect` type (`"download"`) and one optional `Adapter` capability verb (`saveFile?`). No existing consumer code requires changes; the existing wire is forward-compatible.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.4.9` | **`0.5.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.4.2` | **`0.5.0`** |
+
+- **Browser / server consumers (no `"download"` side-effect emitted):** nothing to do — existing `ShellSideEffect` JSON is unchanged (new `Url`/`Filename` fields are optional and null-omitted).
+- **Backends that want to offer authenticated downloads:** use the new factory in your action handlers — the shell will fetch the URL with `getRequestHeaders()` merged and save the response:
+  ```csharp
+  return new ShellResponse<MyState>(BuildVm(state), state)
+      .WithEffect(ShellSideEffect.Download("/api/invoices/42/pdf", "invoice-42.pdf"));
+  ```
+  ```typescript
+  return { vm: buildVm(state), state,
+    sideEffects: [shellSideEffect.download("/api/invoices/42/pdf", "invoice-42.pdf")] };
+  ```
+- **Custom `Adapter` implementations:** to support `"download"` side-effects, implement the new optional `saveFile?(data: Blob, filename: string, contentType: string): void | Promise<void>` verb on your adapter. Without it, an arriving `"download"` side-effect surfaces a loud `onError` (no silent swallow). `BrowserAdapter` and `TuiAdapter` ship the verb out of the box.
+- **Static / non-interactive output (TUI `renderTree`):** byte-identical to `0.4.9`.
+
+---
+
 ## Upgrading to npm `0.4.9` (Terminal sidebar rail proportional — npm only)
 
 **Nothing to do** beyond taking the patch. `layout:"sidebar"`'s rail is

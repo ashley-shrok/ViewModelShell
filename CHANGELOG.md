@@ -6,6 +6,37 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.5.0 — Authenticated downloads (npm + NuGet)
+
+**npm:** `0.5.0` (MINOR — wire-format addition) · **NuGet:** `0.5.0` (MINOR — wire-format addition)
+
+Both packages move together. The shared wire gains one additive `ShellSideEffect` type — no breaking change; existing consumers untouched.
+
+### Added
+
+- **`ShellSideEffect "download"` — first-class authenticated file downloads.** Closes [#10](https://github.com/ashley-shrok/ViewModelShell/issues/10). Header-auth consumers (the `Authorization: Bearer <jwt>` pattern via `getRequestHeaders()`) previously had no way to offer auth-gated downloads: a `LinkNode` with `external: true` is a top-level browser navigation that carries no shell headers, so every auth-gated download endpoint returned 401. The new side-effect rides along with any action response — server authorizes inline (in the action handler, with the real Bearer-authenticated request context), then emits `ShellSideEffect.Download(url, filename?)`; the shell fetches the URL with `getRequestHeaders()` merged, parses `Content-Disposition` (RFC 5987 `filename*` wins over plain `filename`) + `Content-Type`, and saves via the new optional `Adapter.saveFile` capability. **No signed URL machinery required** — the existing header seam is reused. Wire shape: `{ "type": "download", "url": "...", "filename": "..." }` (filename optional).
+
+  C#:
+  ```csharp
+  return new ShellResponse<MyState>(BuildVm(state), state)
+      .WithEffect(ShellSideEffect.Download("/api/invoices/42/pdf", "invoice-42.pdf"));
+  ```
+  TypeScript backend:
+  ```typescript
+  return {
+    vm: buildVm(state), state,
+    sideEffects: [shellSideEffect.download("/api/invoices/42/pdf", "invoice-42.pdf")],
+  };
+  ```
+
+- **`Adapter.saveFile?(data, filename, contentType)` — new optional capability verb.** Sibling of `navigate?` / `storage?` / `transport?`. `BrowserAdapter` implements it via `URL.createObjectURL` + a transient `<a download>` (revoked on the next tick). `TuiAdapter` writes to `$XDG_DOWNLOAD_DIR` → `~/Downloads` → CWD (filename sanitized — path separators stripped to prevent traversal — and prints the saved path to stderr). Missing the capability on an adapter that receives a `"download"` side-effect **fails loud** via `onError`, never a silent no-op (extends the existing fail-loud rule — a swallowed authenticated download is the same class of correctness/security bug as a swallowed auth-token write).
+
+### Consumers
+
+- **None required — additive.** Existing `ShellSideEffect` consumers untouched (new `Url`/`Filename` fields are optional and null-omitted on the wire). Existing custom `Adapter` implementations untouched — `saveFile?` is optional; adapters that want to support downloads implement the verb. Wire is forward-compatible (unknown side-effect types remain silently ignored). Cross-backend parity passes — the harness already diffs `sideEffects` arrays; the new `download-default` / `download-custom` fixture steps verify .NET and Bun emit byte-identical downloads.
+
+---
+
 ## 0.4.9 — Terminal sidebar rail is proportional (npm only)
 
 **npm:** `0.4.9` (PATCH — client-only) · **NuGet:** unchanged at `0.4.2`

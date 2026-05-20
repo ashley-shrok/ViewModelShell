@@ -69,6 +69,18 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
         ],
       };
 
+    case "trigger-download":
+      return {
+        vm: buildVm(state),
+        state,
+        sideEffects: [
+          shellSideEffect.download(
+            str("url")      ?? "/api/probe/file/hello.txt",
+            str("filename") ?? "hello.txt",
+          ),
+        ],
+      };
+
     case "do-poll": {
       state = { ...state, pollCount: state.pollCount + 1 };
       const done = state.pollCount >= 3;

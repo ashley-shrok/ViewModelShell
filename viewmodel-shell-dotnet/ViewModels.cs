@@ -72,7 +72,9 @@ public record ActionPayload<TState>(
 public record ShellSideEffect(
     string Type,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Key = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Value = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Value = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Url = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Filename = null
 )
 {
     public static ShellSideEffect SetLocalStorage(string key, string value) =>
@@ -80,6 +82,16 @@ public record ShellSideEffect(
 
     public static ShellSideEffect SetSessionStorage(string key, string value) =>
         new("set-session-storage", key, value);
+
+    /// <summary>
+    /// Server-decided authenticated file download. The shell fetches <paramref name="url"/>
+    /// with ShellOptions.getRequestHeaders() merged (Bearer/anti-forgery/etc.), parses
+    /// Content-Disposition + Content-Type, and saves via Adapter.saveFile. If the response
+    /// has no Content-Disposition, <paramref name="filename"/> is used; otherwise the URL
+    /// basename. A missing saveFile capability fails loud (no silent swallow).
+    /// </summary>
+    public static ShellSideEffect Download(string url, string? filename = null) =>
+        new("download", Url: url, Filename: filename);
 }
 
 public record ShellResponse<TState>(

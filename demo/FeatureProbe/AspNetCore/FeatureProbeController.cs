@@ -52,6 +52,12 @@ public class FeatureProbeController : ControllerBase
                     .WithEffect(ShellSideEffect.SetLocalStorage("probe-local", Str("local-value") ?? "default-local"))
                     .WithEffect(ShellSideEffect.SetSessionStorage("probe-session", Str("session-value") ?? "default-session"));
 
+            case "trigger-download":
+                return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
+                    .WithEffect(ShellSideEffect.Download(
+                        Str("url")      ?? "/api/probe/file/hello.txt",
+                        Str("filename") ?? "hello.txt"));
+
             case "do-poll":
                 state = state with { PollCount = state.PollCount + 1 };
                 var done = state.PollCount >= 3;

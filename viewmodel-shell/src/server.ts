@@ -80,6 +80,14 @@ export const shellSideEffect = {
     ({ type: "set-local-storage", key, value }),
   setSessionStorage: (key: string, value: string): ShellSideEffect =>
     ({ type: "set-session-storage", key, value }),
+  /** Server-decided authenticated download. The shell fetches `url` with
+   *  getRequestHeaders() merged (Bearer / anti-forgery / etc.), parses
+   *  Content-Disposition + Content-Type, and saves via Adapter.saveFile.
+   *  `filename` is a fallback used only when Content-Disposition is absent.
+   *  The conditional spread keeps `filename` ABSENT (not undefined) on the
+   *  JSON wire, matching the .NET WhenWritingNull null-omission contract. */
+  download: (url: string, filename?: string): ShellSideEffect =>
+    ({ type: "download", url, ...(filename != null ? { filename } : {}) }),
 };
 
 // ─── Action handler factory ──────────────────────────────────────────────────
