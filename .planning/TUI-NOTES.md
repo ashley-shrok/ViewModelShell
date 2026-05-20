@@ -1035,3 +1035,104 @@ in this file. Each section is a "read before the next phase" cheat sheet.
   values being submitted in B5's polish pass if forms grow/shrink
   dynamically across renders. Cleanup option: walk the tree per render to
   collect active field names, sweep map entries not in that set. Deferred.
+
+## B4 learnings (read before B5)
+
+- **OpenTUI mouse-event shape.** `onMouseDown` lives on every renderable
+  (it's on `Renderable` base, which `<text>` / `<box>` / `<scrollbox>`
+  all extend). The handler receives a `MouseEvent { type, button, x, y,
+  source, target, modifiers, scroll, isDragging }`. `type` is the union
+  `"down"|"up"|"move"|"drag"|"drag-end"|"drop"|"over"|"out"|"scroll"`.
+  `button` is the numeric mouse button (0 = primary). For B4 we only
+  needed onMouseDown→dispatch; B5's mouse-routing pass will distinguish
+  drag from click and route through a unified hit-test layer.
+- **`onMouseDown` on `<text>` works as expected.** The B4 implementation
+  wires `<text onMouseDown=…>` directly for tabs and copy-button. JSX
+  types accept it (every intrinsic element inherits the Renderable event
+  surface). No special wrapper needed.
+- **Focus trap via the existing pane-counter pattern — no portal API
+  needed.** OpenTUI doesn't ship a portal/Teleport primitive, but it
+  doesn't need one for modals. The B4 implementation hoists the modal
+  to App-root via a SECOND React subtree (`ModalOverlay`), positioned
+  with `position="absolute" top=0 left=0 width="100%" height="100%"
+  justifyContent="center" alignItems="center" zIndex=100`. The OUTER
+  content render tree is unchanged — the in-place `ModalView` simply
+  returns `null` when invoked. Focus-trap is purely about the pane
+  counter: `countPanes(vm)` is modal-aware (returns only modal-internal
+  panes when a modal is present), and `SectionView`/`ListView`/`TableView`
+  gate their `paneCounter.current++` on `(!ctx.modalActive || ctx.insideModal)`.
+  Outer panes still RENDER but with `focused={false} focusable={false}`,
+  so Tab cycles only inner panes.
+- **The inner content box needs `position="relative"`.** Without it,
+  an `<box position="absolute" top=0 left=0>` child of the App's outer
+  box resolves against whatever positioned ancestor exists higher up
+  (in practice, the renderer root). We want the modal to overlay the
+  CONTENT area, not the StatusBar — making the inner content box
+  `position="relative"` establishes the positioning context exactly
+  where we want it.
+- **OpenTUI box width types are a template literal, not `string`.**
+  `MODAL_SIZE` initially typed `{ width: number | string }` triggered
+  TS2322 because the JSX prop type is `number | "auto" | \`${number}%\``
+  (template literal). Fix: type the constant as
+  `{ width: number | \`${number}%\` }`. Pattern to remember: when
+  ferrying string-percentage dimensions through a const, the
+  literal-template constraint must propagate.
+- **OSC-52 byte form matches the link OSC-8 fix (0.4.8).**
+  `\x1b]52;c;<base64>\x07` — ESC introducer, BEL terminator, the same
+  escape shape we proved works in the link case. `Buffer.from(text,
+  "utf8").toString("base64")` produces the encoded payload. Terminals
+  without OSC-52 support silently ignore the escape; the visual
+  "Copied!" label flash still fires regardless — honest behavior.
+- **Copy-button feedback state needs `flushPending()` to re-render.**
+  The adapter has `requestRender()` available on `CliRenderer` (an
+  OpenTUI-level "flush the back buffer" call), but that's NOT what we
+  want — we want a STATE-change re-render that re-invokes App with the
+  new `copiedKey`. The path is the existing `flushPending()` (which
+  calls `root.render(<App …copiedKey={…} />)`). Called both on
+  activation (immediate "Copied!" flash) and inside the
+  `setTimeout(1500)` callback (revert).
+- **Single-state copy-button key choice.** `copiedKey` is the
+  `node.text` string, NOT a per-instance key. Two copy-buttons with
+  the same text share the "copied" state and flash together — this is
+  fine UX (matches "I copied the same data twice" intuition) and
+  avoids needing to thread a unique per-instance identifier through
+  the tree. Document this if a future B5 reviewer wonders.
+- **Conformance walker handles the portal seamlessly.** The walker
+  invokes function components directly and recurses into their JSX.
+  `ModalOverlay` is just a function component, so the walker descends
+  into it like any other. The inline `ModalView` returns null, so the
+  walker sees no tokens there. Net: every modal text token surfaces
+  exactly once (via the overlay), which matches BrowserAdapter's
+  in-DOM behavior (modal tokens appear once even though the modal
+  CSS visually overlays the page).
+- **`_peekCopiedKey()` is the test affordance for copy feedback.**
+  Mirrors `_peekSession`/`_peekFieldValue` from B1/B3. Tests assert
+  `adapter._peekCopiedKey() === "payload-abc"` immediately after
+  `copy()`, then `vi.advanceTimersByTime(1500)` to assert the revert.
+  The OSC-52 stdout write is spied via `vi.spyOn(process.stdout,
+  "write")`.
+- **Modal focus-trap visible from the rendered tree.** The B4 test
+  walks `renderTree(vm)`'s rendered scrollboxes and asserts that
+  outer panes (with a modal present) have `focused={false}
+  focusable={false}` while modal-inner panes have `focused={true}
+  focusable={true}`. No need to expose `countPanes` — the contract
+  is observable through prop shape, which is what consumers see
+  anyway.
+- **`StatBarView`'s wrapper-per-stat is intentional.** B4 splits each
+  stat into its own `<box>` so the `│` divider sits inside the same
+  row as the label/value pair. Drawing the divider as a sibling of
+  the label/value would put it on its own column gap and lose visual
+  grouping. Keep the `i > 0` guard to skip the divider on the first
+  stat.
+- **Progress bar width 20 is hardcoded by convention.** A `width="100%"`
+  bar would consume the entire pane width, which looks comical inside
+  a list row. 20 cells is wide enough to read at a glance and narrow
+  enough to fit inline with other content. If a B5 reviewer wants
+  this configurable, it'd be an adapter-option, NOT a wire field
+  (appearance, not arrangement — same logic as `sidebarFraction`).
+- **`findModal` is depth-first child-order — first modal wins.** The
+  wire allows multiple modals in the tree in principle (the type
+  doesn't forbid it), but only the first encountered is hoisted to
+  the overlay. Any subsequent modals render in-place as null (the
+  in-tree ModalView's return value). Sufficient for practical use; a
+  modal stack with z-ordering is a future enhancement if needed.

@@ -430,3 +430,170 @@ describe("0.6.0 — B3 field state + form submit", () => {
   });
 });
 
+// ─── B4 — copy-button feedback + modal overlay/focus-trap ────────────────────
+// These tests exercise the adapter's PUBLIC effects without mounting a real
+// OpenTUI renderer. The copy-button test verifies the OSC-52 byte form +
+// the copiedKey lifecycle (set on activate, cleared after 1500ms). The modal
+// tests verify the tree-shape contract (ModalOverlay portaled to app root +
+// inline ModalView returns null) and the focus-trap behavior (outer
+// section scrollboxes render focused=false/focusable=false when modal active).
+
+describe("0.6.0 — B4 copy-button feedback", () => {
+  it("copy() writes OSC-52 to stdout with base64-encoded text, sets copiedKey, clears after 1500ms", () => {
+    vi.useFakeTimers();
+    try {
+      const adapter = new TuiAdapter();
+      const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      const copyFn = (adapter as unknown as { copy: (t: string) => void }).copy;
+
+      copyFn("payload-abc");
+
+      // copiedKey reflects the activated copy text immediately.
+      expect(adapter._peekCopiedKey()).toBe("payload-abc");
+      // OSC-52 byte form: ESC ] 52 ; c ; <base64> BEL — same escape shape
+      // as the link OSC-8 fix (0.4.8) — keeps terminals consistent.
+      const expectedB64 = Buffer.from("payload-abc", "utf8").toString("base64");
+      const expectedSeq = `\x1b]52;c;${expectedB64}\x07`;
+      expect(stdoutSpy).toHaveBeenCalledWith(expectedSeq);
+
+      vi.advanceTimersByTime(1499);
+      expect(adapter._peekCopiedKey(), "still copied just before timeout").toBe("payload-abc");
+      vi.advanceTimersByTime(1);
+      expect(adapter._peekCopiedKey(), "cleared after 1500ms").toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a fresh copy() resets the 1500ms revert timer (most-recent wins)", () => {
+    vi.useFakeTimers();
+    try {
+      const adapter = new TuiAdapter();
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      const copyFn = (adapter as unknown as { copy: (t: string) => void }).copy;
+
+      copyFn("first");
+      vi.advanceTimersByTime(1000);
+      expect(adapter._peekCopiedKey()).toBe("first");
+
+      copyFn("second");
+      vi.advanceTimersByTime(1000);
+      // 2000ms after `first` — would normally have cleared — but the second
+      // copy reset the timer, so we're only 1000ms after `second`.
+      expect(adapter._peekCopiedKey()).toBe("second");
+
+      vi.advanceTimersByTime(500);
+      expect(adapter._peekCopiedKey()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("0.6.0 — B4 modal overlay + focus trap", () => {
+  // Helpers: walk the rendered React tree from renderTree(vm), invoking
+  // function components like the conformance walker does, and collect
+  // <scrollbox> elements with their focused/focusable props so we can
+  // assert focus-trap gating.
+
+  type SbInfo = { focused?: boolean; focusable?: boolean };
+  function collectScrollboxes(node: ReactNode, out: SbInfo[]): void {
+    if (node == null || typeof node !== "object") return;
+    if (Array.isArray(node)) { for (const c of node) collectScrollboxes(c, out); return; }
+    if (!("type" in node) || !("props" in node)) return;
+    const el = node as { type: unknown; props?: Record<string, unknown> };
+    const props = el.props ?? {};
+    if (typeof el.type === "function") {
+      const inside = (el.type as (p: Record<string, unknown>) => ReactNode)(props);
+      collectScrollboxes(inside, out);
+      return;
+    }
+    if (el.type === "scrollbox") {
+      out.push({
+        focused: props.focused as boolean | undefined,
+        focusable: props.focusable as boolean | undefined,
+      });
+    }
+    collectScrollboxes(props.children as ReactNode, out);
+  }
+
+  function findModalOverlay(node: ReactNode): boolean {
+    if (node == null || typeof node !== "object") return false;
+    if (Array.isArray(node)) return node.some(c => findModalOverlay(c));
+    if (!("type" in node) || !("props" in node)) return false;
+    const el = node as { type: unknown; props?: Record<string, unknown> };
+    if (typeof el.type === "function" && el.type.name === "ModalOverlay") return true;
+    if (typeof el.type === "function") {
+      return findModalOverlay(
+        (el.type as (p: Record<string, unknown>) => ReactNode)(el.props ?? {}),
+      );
+    }
+    return findModalOverlay((el.props ?? {}).children as ReactNode);
+  }
+
+  it("when no modal: outer sections are focusable + the first claims focused=true", () => {
+    const vm: ViewNode = {
+      type: "page",
+      children: [
+        { type: "section", heading: "A", variant: "card", children: [{ type: "text", value: "x" }] },
+        { type: "section", heading: "B", variant: "card", children: [{ type: "text", value: "y" }] },
+      ],
+    };
+    const sbs: SbInfo[] = [];
+    collectScrollboxes(renderTree(vm), sbs);
+    expect(sbs).toHaveLength(2);
+    expect(sbs[0]!.focusable, "first section focusable").toBe(true);
+    expect(sbs[0]!.focused,   "first section focused (paneIndex 0)").toBe(true);
+    expect(sbs[1]!.focusable, "second section focusable").toBe(true);
+    expect(sbs[1]!.focused,   "second section not focused (paneIndex 1)").toBe(false);
+  });
+
+  it("when modal is present: outer section scrollboxes are NOT in the focus cycle", () => {
+    const vm: ViewNode = {
+      type: "page",
+      children: [
+        // Outer section — should be rendered but with focused=false, focusable=false.
+        { type: "section", heading: "Outer", variant: "card", children: [{ type: "text", value: "background" }] },
+        // Modal containing one inner section — that section IS in the focus cycle.
+        {
+          type: "modal",
+          title: "Quebec",
+          children: [
+            { type: "section", heading: "Inner", variant: "card", children: [{ type: "text", value: "Romeo2" }] },
+          ],
+          dismissAction: { name: "x" },
+        },
+      ],
+    };
+    const sbs: SbInfo[] = [];
+    collectScrollboxes(renderTree(vm), sbs);
+    // Three scrollboxes expected: outer section, modal-inner section.
+    // (The modal box itself is a <box>, not a scrollbox.) Order may vary
+    // by tree-walk but the OUTER one is always non-focusable; the INNER
+    // one (the only one inside the modal) is focusable + focused.
+    const outerLike = sbs.filter(s => s.focusable === false);
+    const innerLike = sbs.filter(s => s.focusable === true && s.focused === true);
+    expect(outerLike.length, "outer section gated out of focus").toBeGreaterThanOrEqual(1);
+    expect(innerLike.length, "inner modal section is the focused pane").toBeGreaterThanOrEqual(1);
+  });
+
+  it("modal portal: a ModalOverlay element exists in the tree when a modal is present", () => {
+    const vm: ViewNode = {
+      type: "modal",
+      title: "Quebec",
+      children: [{ type: "text", value: "body" }],
+    };
+    expect(findModalOverlay(renderTree(vm))).toBe(true);
+  });
+
+  it("modal portal: no ModalOverlay when there is no modal in the tree", () => {
+    const vm: ViewNode = {
+      type: "page",
+      children: [
+        { type: "section", heading: "A", children: [{ type: "text", value: "x" }] },
+      ],
+    };
+    expect(findModalOverlay(renderTree(vm))).toBe(false);
+  });
+});
+

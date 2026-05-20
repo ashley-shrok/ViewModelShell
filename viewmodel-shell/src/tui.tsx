@@ -120,6 +120,14 @@ export class TuiAdapter implements Adapter {
   // re-renders UNLESS the server explicitly sets a new value).
   private readonly fieldValues = new Map<string, string>();
   private readonly fieldWireValues = new Map<string, string>();
+  // B4 — copy-button feedback state. `copiedKey` is set to the node.text
+  // string of the most recently activated copy-button; reverts to null
+  // after 1500ms. CopyButtonView checks ctx.copiedKey === node.text to
+  // decide whether to render the copiedLabel. Two buttons with the same
+  // copy text share this state (both flash "Copied!" together) — that's
+  // fine UX-wise and avoids needing per-button unique keys.
+  private copiedKey: string | null = null;
+  private copiedTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(opts?: TuiOpts) {
     this.viewport = opts?.viewport ?? "fill";
@@ -147,6 +155,34 @@ export class TuiAdapter implements Adapter {
    *    2. Wire value unchanged since last render — preserve the edit value.
    *    3. Wire value differs from the prior wire baseline — server intent
    *       change → reset the edit value to match. */
+  // ── Copy-button state plumbing (B4) ───────────────────────────────────────
+  // copy() writes the text to the system clipboard via OSC-52 (escape
+  // sequence the terminal forwards to the OS), sets copiedKey, re-renders
+  // so the button label swaps to copiedLabel, and schedules a 1500ms timer
+  // that clears copiedKey + re-renders again. The clipboard write happens
+  // even in conformance/test paths where the renderer isn't initialized
+  // (Bun-free environments) — the write goes to process.stdout, which is
+  // always available, and the re-render flush is a no-op if the renderer
+  // isn't up.
+  //
+  // OSC-52 byte form is the SAME as the 0.4.8 link OSC-8 fix used:
+  // ESC ] 52 ; c ; <base64> BEL. ESC = \x1b, BEL = \x07. Terminals without
+  // OSC-52 support ignore the escape (no clipboard write, but the visual
+  // "Copied!" feedback still fires, which is honest behavior).
+  private copy = (text: string): void => {
+    const b64 = Buffer.from(text, "utf8").toString("base64");
+    const seq = `\x1b]52;c;${b64}\x07`;
+    try { process.stdout.write(seq); } catch { /* stdout closed — nothing to do */ }
+    this.copiedKey = text;
+    if (this.copiedTimer != null) clearTimeout(this.copiedTimer);
+    this.copiedTimer = setTimeout(() => {
+      this.copiedKey = null;
+      this.copiedTimer = null;
+      this.flushPending();
+    }, 1500);
+    this.flushPending();
+  };
+
   private resolveFieldValue = (name: string, wireValue: string): string => {
     if (!this.fieldWireValues.has(name)) {
       this.fieldWireValues.set(name, wireValue);
@@ -233,6 +269,8 @@ export class TuiAdapter implements Adapter {
         sidebarFraction={this.sidebarFraction}
         setFieldValue={this.setFieldValue}
         resolveFieldValue={this.resolveFieldValue}
+        copiedKey={this.copiedKey}
+        copy={this.copy}
       />,
     );
   }
@@ -241,6 +279,12 @@ export class TuiAdapter implements Adapter {
    *  draft preservation across server re-renders). */
   _peekFieldValue(name: string): string | undefined {
     return this.fieldValues.get(name);
+  }
+
+  /** Test-only: read the current "copied" key for asserting that activation
+   *  set the feedback state. Returns null when no button is currently flashing. */
+  _peekCopiedKey(): string | null {
+    return this.copiedKey;
   }
 
   private cycleFocus(forward: boolean): void {
@@ -371,6 +415,31 @@ function isPaneNode(node: ViewNode, isTopLevel: boolean): boolean {
   return false;
 }
 
+/** B4 — find the first ModalNode anywhere in the tree (depth-first, child
+ *  order). Returns null when there is no modal active.
+ *
+ *  Used by App to (a) decide whether to render the modal overlay portal at
+ *  app-root z-level, and (b) tell countPanes to restrict the focus cycle to
+ *  the modal's interior. The wire allows at most one visible modal at a time
+ *  in practice — if a future use-case wires two, the first wins; the second
+ *  is rendered inline (returning null today) and so just isn't visible. We
+ *  can promote this to a stack if the need arises.
+ */
+function findModal(node: ViewNode): ModalNode | null {
+  if (node.type === "modal") return node;
+  const children = (node as { children?: ViewNode[] }).children;
+  if (children) for (const c of children) {
+    const m = findModal(c);
+    if (m) return m;
+  }
+  const footer = (node as { footer?: ViewNode[] }).footer;
+  if (footer) for (const c of footer) {
+    const m = findModal(c);
+    if (m) return m;
+  }
+  return null;
+}
+
 function countPanes(vm: ViewNode): number {
   let count = 0;
   const visit = (node: ViewNode, isTopLevel: boolean): void => {
@@ -395,6 +464,16 @@ function countPanes(vm: ViewNode): number {
       for (const c of node.children) visit(c, false);
     }
   };
+  // B4 focus trap: when a modal is in the tree, only count panes within the
+  // modal's subtree. Outer panes still RENDER, but they're not part of the
+  // Tab cycle and have no focus border — the user is operationally locked
+  // to the modal until it's dismissed.
+  const modal = findModal(vm);
+  if (modal != null) {
+    for (const c of modal.children) visit(c, false);
+    if (modal.footer) for (const c of modal.footer) visit(c, false);
+    return count;
+  }
   visit(vm, true);
   return count;
 }
@@ -429,6 +508,23 @@ interface RCtx {
    *  adapter. */
   setFieldValue: (name: string, value: string) => void;
   resolveFieldValue: (name: string, wireValue: string) => string;
+  /** Copy-button feedback state (B4). When a copy-button's `text` matches
+   *  `copiedKey`, the view renders `copiedLabel` instead of `label`. Default
+   *  null keeps the conformance walker path working without the adapter. */
+  copiedKey: string | null;
+  /** Triggered by CopyButtonView onMouseDown. The adapter writes OSC-52 to
+   *  stdout + flips copiedKey + schedules the revert. Default no-op for
+   *  conformance walker. */
+  copy: (text: string) => void;
+  /** B4 — true when a modal is somewhere in the tree. When true, panes
+   *  OUTSIDE the modal subtree do NOT increment paneCounter and render
+   *  without a focus border (operational focus trap). */
+  modalActive: boolean;
+  /** B4 — true when the current render position is inside the modal subtree.
+   *  Together with modalActive, gates pane counting:
+   *    isPaneFocusable = !modalActive || insideModal
+   *  Sections/lists/tables only increment paneCounter when isPaneFocusable. */
+  insideModal: boolean;
 }
 
 interface AppProps {
@@ -443,6 +539,9 @@ interface AppProps {
   /** Field state — provided by TuiAdapter. Optional so renderTree works. */
   setFieldValue?: (name: string, value: string) => void;
   resolveFieldValue?: (name: string, wireValue: string) => string;
+  /** Copy-button feedback state — provided by TuiAdapter. Optional so renderTree works. */
+  copiedKey?: string | null;
+  copy?: (text: string) => void;
 }
 
 function App({
@@ -452,7 +551,16 @@ function App({
   sidebarFraction = 1 / 3,
   setFieldValue,
   resolveFieldValue,
+  copiedKey = null,
+  copy,
 }: AppProps) {
+  // B4 — detect modal at the top of every render so the focus-trap + overlay
+  // wiring is consistent end-to-end. When a modal exists in the tree, the
+  // inline ModalView returns null (so it doesn't render in-place); we render
+  // the modal at app-root via ModalOverlay so its z-order is above all
+  // outer content and its position context is the viewport, not whatever
+  // section the modal happened to be nested under.
+  const modal = findModal(vm);
   const ctx: RCtx = {
     onAction,
     focusedPaneIndex,
@@ -466,13 +574,25 @@ function App({
     // Default resolver: just return the wire value — no preservation outside
     // the mounted adapter path (the conformance walker doesn't persist state).
     resolveFieldValue: resolveFieldValue ?? ((_name, wireValue) => wireValue),
+    copiedKey,
+    copy: copy ?? (() => { /* no-op for conformance walker */ }),
+    modalActive: modal != null,
+    insideModal: false,
   };
   // App shell: content fills, status bar pinned at the bottom. height="100%"
-  // means it consumes the renderer's viewport (alt-screen size).
+  // means it consumes the renderer's viewport (alt-screen size). The
+  // inner content box is position="relative" so the modal overlay's
+  // absolute positioning resolves to the content area (not the status bar).
   return (
     <box flexDirection="column" height="100%">
-      <box flexGrow={1} flexShrink={1} flexDirection="column">
+      <box flexGrow={1} flexShrink={1} flexDirection="column" position="relative">
         {renderNode(vm, ctx)}
+        {modal != null ? (
+          <ModalOverlay
+            node={modal}
+            ctx={{ ...ctx, isTopLevel: true, insideModal: true, paneCounter: ctx.paneCounter }}
+          />
+        ) : null}
       </box>
       <StatusBar />
     </box>
@@ -504,11 +624,11 @@ function renderNode(node: ViewNode, ctx: RCtx, key?: string | number): React.Rea
     // ── Minimum-viable text surface (full widgets in B3/B4) ──────────────
     case "button":       return <ButtonView       key={key} node={node} />;
     case "checkbox":     return <CheckboxView     key={key} node={node} />;
-    case "tabs":         return <TabsView         key={key} node={node} />;
+    case "tabs":         return <TabsView         key={key} node={node} ctx={ctx} />;
     case "progress":     return <ProgressView     key={key} node={node} />;
     case "stat-bar":     return <StatBarView      key={key} node={node} />;
     case "modal":        return <ModalView        key={key} node={node} ctx={ctx} />;
-    case "copy-button":  return <CopyButtonView   key={key} node={node} />;
+    case "copy-button":  return <CopyButtonView   key={key} node={node} ctx={ctx} />;
     case "form":         return <FormView         key={key} node={node} ctx={ctx} />;
     case "field":        return <FieldView        key={key} node={node} ctx={ctx} />;
     default:
@@ -610,8 +730,13 @@ function layoutProps(
 // layouts do.
 
 function SectionView({ node, ctx }: { node: SectionNode; ctx: RCtx }) {
-  const paneIndex = ctx.paneCounter.current++;
-  const focused = paneIndex === ctx.focusedPaneIndex;
+  // B4 focus-trap gate: when a modal is active and this section is OUTSIDE
+  // the modal subtree, the section is not part of the Tab cycle. It still
+  // renders its content (so the user sees the dimmed background), but
+  // without a focus border and without claiming a paneCounter slot.
+  const isPaneFocusable = !ctx.modalActive || ctx.insideModal;
+  const paneIndex = isPaneFocusable ? ctx.paneCounter.current++ : -1;
+  const focused = isPaneFocusable && paneIndex === ctx.focusedPaneIndex;
   const border = node.variant === "card";
   const childCtx: RCtx = {
     ...ctx,
@@ -630,7 +755,7 @@ function SectionView({ node, ctx }: { node: SectionNode; ctx: RCtx }) {
       ) : null}
       <scrollbox
         focused={focused}
-        focusable
+        focusable={isPaneFocusable}
         border={border}
         title={border ? node.heading : undefined}
         padding={border ? 1 : 0}
@@ -715,9 +840,10 @@ function ListView({ node, ctx }: { node: ListNode; ctx: RCtx }) {
       </box>
     );
   }
-  // Top-level list → its own focus pane.
-  const paneIndex = ctx.paneCounter.current++;
-  const focused = paneIndex === ctx.focusedPaneIndex;
+  // Top-level list → its own focus pane (subject to the B4 modal focus-trap).
+  const isPaneFocusable = !ctx.modalActive || ctx.insideModal;
+  const paneIndex = isPaneFocusable ? ctx.paneCounter.current++ : -1;
+  const focused = isPaneFocusable && paneIndex === ctx.focusedPaneIndex;
   const childCtx: RCtx = {
     ...ctx,
     isTopLevel: false,
@@ -727,7 +853,7 @@ function ListView({ node, ctx }: { node: ListNode; ctx: RCtx }) {
   return (
     <scrollbox
       focused={focused}
-      focusable
+      focusable={isPaneFocusable}
       borderColor={focused ? "#88aaff" : "#555555"}
       focusedBorderColor="#88aaff"
       flexGrow={1}
@@ -781,12 +907,13 @@ function ListItemView({ node, ctx }: { node: ListItemNode; ctx: RCtx }) {
 // lands in B5.
 
 function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
-  const paneIndex = ctx.paneCounter.current++;
-  const focused = paneIndex === ctx.focusedPaneIndex;
+  const isPaneFocusable = !ctx.modalActive || ctx.insideModal;
+  const paneIndex = isPaneFocusable ? ctx.paneCounter.current++ : -1;
+  const focused = isPaneFocusable && paneIndex === ctx.focusedPaneIndex;
   return (
     <scrollbox
       focused={focused}
-      focusable
+      focusable={isPaneFocusable}
       borderColor={focused ? "#88aaff" : "#555555"}
       focusedBorderColor="#88aaff"
       flexGrow={1}
@@ -856,55 +983,159 @@ function CheckboxView({ node }: { node: CheckboxNode }) {
   return <text>{glyph} {node.label ?? ""}</text>;
 }
 
-function TabsView({ node }: { node: TabsNode }) {
+// ── tabs ──────────────────────────────────────────────────────────────────
+// Click a tab → dispatch `node.action` with `{ ...node.action.context,
+// value: tab.value }` merged. Selected tab renders bold; unselected tabs
+// render dim. Keyboard activation (Tab on focused tab-bar → cycle) is B5.
+
+function TabsView({ node, ctx }: { node: TabsNode; ctx: RCtx }) {
   return (
     <box flexDirection="row" gap={1}>
-      {node.tabs.map((t) => (
-        <text key={t.value}
-              attributes={t.value === node.selected ? 1 /* BOLD */ : 0}
-              {...(t.value === node.selected ? {} : { fg: "#888888" })}>
-          {t.label}
-        </text>
-      ))}
+      {node.tabs.map((t) => {
+        const selected = t.value === node.selected;
+        const onMouseDown = (): void => {
+          ctx.onAction({
+            name: node.action.name,
+            context: { ...(node.action.context ?? {}), value: t.value },
+          });
+        };
+        return (
+          <text
+            key={t.value}
+            onMouseDown={onMouseDown}
+            attributes={selected ? 1 /* BOLD */ : 0}
+            {...(selected ? {} : { fg: "#888888" })}
+          >
+            {t.label}
+          </text>
+        );
+      })}
     </box>
   );
 }
+
+// ── progress ──────────────────────────────────────────────────────────────
+// Visual bar: [████░░░░░░] N% using FULL BLOCK (U+2588) / LIGHT SHADE
+// (U+2591). 20-cell bar width is a fixed convention — wide enough to be
+// readable, narrow enough to fit inside list rows / cards. The trailing
+// "N%" string is what keeps conformance happy (token "%" surfaces).
+const PROGRESS_BAR_WIDTH = 20;
 
 function ProgressView({ node }: { node: ProgressNode }) {
   const pct = Math.max(0, Math.min(100, Math.round(node.value)));
-  return <text>{pct}%</text>;
+  const filled = Math.round((pct / 100) * PROGRESS_BAR_WIDTH);
+  const bar = "█".repeat(filled) + "░".repeat(PROGRESS_BAR_WIDTH - filled);
+  return <text>{bar} {pct}%</text>;
 }
+
+// ── stat-bar ──────────────────────────────────────────────────────────────
+// Row of label+value pairs separated by │ (U+2502) for visual grouping.
+// Labels render dim; values render normal — same scan pattern used in
+// most status-bar UIs.
 
 function StatBarView({ node }: { node: StatBarNode }) {
   return (
-    <box flexDirection="row" gap={2}>
+    <box flexDirection="row" gap={1}>
       {node.stats.map((s, i) => (
-        <text key={i}>
-          {s.label} {String(s.value)}
-        </text>
+        <box key={i} flexDirection="row" gap={1}>
+          {i > 0 ? <text fg="#555555">│</text> : null}
+          <text fg="#888888">{s.label}</text>
+          <text>{String(s.value)}</text>
+        </box>
       ))}
     </box>
   );
 }
 
-function ModalView({ node, ctx }: { node: ModalNode; ctx: RCtx }) {
-  // True overlay (z-index + focus trap) is B4. B1/B2 render inline so the
-  // modal's title/body/footer text is surfaced to conformance.
-  const childCtx: RCtx = { ...ctx, isTopLevel: false };
+// ── modal ─────────────────────────────────────────────────────────────────
+// Modals are PORTALED to app-root by App (see findModal + ModalOverlay).
+// The inline ModalView (invoked when renderNode hits a "modal" in the tree)
+// returns null so the modal doesn't render twice — once in-tree, once at
+// app-root. App's ModalOverlay handles the actual rendering with absolute
+// positioning + focus-trap context.
+
+function ModalView(_props: { node: ModalNode; ctx: RCtx }) {
+  return null;
+}
+
+// Modal size → fixed pixel widths + minimum heights. fullscreen takes
+// most of the viewport. Numbers chosen to match the BrowserAdapter modal
+// CSS ratios documented in styles/default.css. The template-literal type
+// (`${number}%`) is what OpenTUI's box width/height props accept; plain
+// `string` would widen and break the JSX prop type.
+type ModalSize = { width: number | `${number}%`; height?: number | `${number}%` };
+const MODAL_SIZE: Record<NonNullable<ModalNode["size"]>, ModalSize> = {
+  narrow:     { width: 36, height: 14 },
+  medium:     { width: 60, height: 18 },
+  wide:       { width: 88, height: 24 },
+  fullscreen: { width: "90%", height: "90%" },
+};
+
+function ModalOverlay({ node, ctx }: { node: ModalNode; ctx: RCtx }) {
+  const size = MODAL_SIZE[node.size ?? "medium"];
+  const childCtx: RCtx = {
+    ...ctx,
+    isTopLevel: false,
+    insideModal: true,
+    paneInputCounter: { current: 0 },
+  };
   return (
-    <box flexDirection="column" border padding={1} title={node.title}>
-      {node.children.map((child, i) => renderNode(child, childCtx, i))}
-      {node.footer && node.footer.length > 0 ? (
-        <box flexDirection="row" gap={2}>
-          {node.footer.map((child, i) => renderNode(child, childCtx, `f${i}`))}
+    <box
+      position="absolute"
+      top={0}
+      left={0}
+      width="100%"
+      height="100%"
+      justifyContent="center"
+      alignItems="center"
+      backgroundColor="#000000"
+      zIndex={100}
+    >
+      <box
+        flexDirection="column"
+        border
+        padding={1}
+        title={node.title}
+        backgroundColor="#1a1a1a"
+        borderColor="#88aaff"
+        width={size.width}
+        {...(size.height != null ? { height: size.height } : {})}
+      >
+        <box flexDirection="column" flexGrow={1} flexShrink={1}>
+          {node.children.map((child, i) => renderNode(child, childCtx, i))}
         </box>
-      ) : null}
+        {(node.footer && node.footer.length > 0) || node.dismissAction ? (
+          <box flexDirection="row" gap={2} justifyContent="flex-end">
+            {node.footer ? node.footer.map((child, i) => renderNode(child, childCtx, `f${i}`)) : null}
+            {node.dismissAction ? (
+              <text onMouseDown={() => ctx.onAction(node.dismissAction!)}>
+                [ Close ]
+              </text>
+            ) : null}
+          </box>
+        ) : null}
+      </box>
     </box>
   );
 }
 
-function CopyButtonView({ node }: { node: CopyButtonNode }) {
-  return <text>[ {node.label ?? "Copy"} ]</text>;
+// ── copy-button ───────────────────────────────────────────────────────────
+// Click → OSC-52 write to the clipboard + ephemeral "Copied!" label.
+// Adapter holds the `copiedKey` state; the view checks ctx.copiedKey
+// against node.text to decide which label to render. The static
+// conformance walker sees only the label text (which token sequence
+// remains stable: just `node.label ?? "Copy"`).
+
+function CopyButtonView({ node, ctx }: { node: CopyButtonNode; ctx: RCtx }) {
+  const isCopied = ctx.copiedKey === node.text;
+  const label = isCopied
+    ? (node.copiedLabel ?? "Copied!")
+    : (node.label ?? "Copy");
+  return (
+    <text onMouseDown={() => ctx.copy(node.text)}>
+      [ {label} ]
+    </text>
+  );
 }
 
 // ── form ──────────────────────────────────────────────────────────────────
