@@ -257,5 +257,9 @@ public record LinkNode(
 public record CopyButtonNode(
     string Text,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? CopiedLabel = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? CopiedLabel = null,
+    // Visual variant (issue #14) — mirrors ButtonNode.Variant. Null = current
+    // no-modifier behavior; "primary"/"secondary"/"danger" emit the same
+    // .vms-button--{variant} class ButtonNode does.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant = null
 ) : ViewNode;

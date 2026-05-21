@@ -101,7 +101,11 @@ public class FeatureProbeController : ControllerBase
         if (state.LastUploadName != null)
             children.Add(new TextNode($"Last upload: {state.LastUploadName} ({state.LastUploadSize} bytes)", "muted"));
 
-        children.Add(new CopyButtonNode("npx @ashley-shrok/viewmodel-shell", "Copy install command", "Copied!"));
+        children.Add(new CopyButtonNode(
+            "npx @ashley-shrok/viewmodel-shell",
+            "Copy install command",
+            "Copied!",
+            Variant: "secondary"));   // 0.9.0/#14: read distinctly from neighboring default buttons
 
         var probeSection = new SectionNode("Probe", children, Variant: "card", Layout: "split");
         return new PageNode("Feature Probe", new List<ViewNode> { probeSection }, Density: "compact", Layout: "cards");

@@ -38,6 +38,21 @@ function renderSection(node: ViewNode): HTMLElement {
   return section as HTMLElement;
 }
 
+function renderCopyButton(node: ViewNode): HTMLElement {
+  // The copy-button isn't a page-shell, so wrap it in a minimal page tree.
+  const container = freshContainer();
+  new BrowserAdapter(container).render(
+    { type: "page", children: [node] },
+    () => {},
+  );
+  // Both ButtonNode and CopyButtonNode render as <button class="vms-button">.
+  // querySelector returns the first match — which is the only button in
+  // this minimal tree, the copy-button.
+  const btn = container.querySelector(".vms-button");
+  if (!btn) throw new Error("no .vms-button rendered");
+  return btn as HTMLElement;
+}
+
 describe("THEME-03 — page density modifier emission (D-04 idiom)", () => {
   it('density: "compact" ⇒ root className contains vms-page--compact', () => {
     const el = renderPage({ type: "page", children: [], density: "compact" });
@@ -108,6 +123,32 @@ describe("LAYOUT-02/03 — section layout preset modifier emission (D-02 idiom)"
   it('layout omitted => className === "vms-section" (byte-identical to pre-change)', () => {
     const el = renderSection({ type: "section", children: [] });
     expect(el.className).toBe("vms-section");
+  });
+});
+
+describe('0.9.0 / #14 — CopyButtonNode.variant modifier emission (mirrors ButtonNode)', () => {
+  it('variant: "primary" ⇒ className contains vms-button--primary', () => {
+    const el = renderCopyButton({
+      type: "copy-button", text: "x", variant: "primary",
+    });
+    expect(el.classList.contains("vms-button")).toBe(true);
+    expect(el.classList.contains("vms-button--primary")).toBe(true);
+  });
+  it('variant: "secondary" ⇒ className contains vms-button--secondary', () => {
+    const el = renderCopyButton({
+      type: "copy-button", text: "x", variant: "secondary",
+    });
+    expect(el.classList.contains("vms-button--secondary")).toBe(true);
+  });
+  it('variant: "danger" ⇒ className contains vms-button--danger', () => {
+    const el = renderCopyButton({
+      type: "copy-button", text: "x", variant: "danger",
+    });
+    expect(el.classList.contains("vms-button--danger")).toBe(true);
+  });
+  it('variant omitted ⇒ className === "vms-button" (byte-identical to pre-0.9.0)', () => {
+    const el = renderCopyButton({ type: "copy-button", text: "x" });
+    expect(el.className).toBe("vms-button");
   });
 });
 

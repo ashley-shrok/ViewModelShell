@@ -241,6 +241,11 @@ export interface CopyButtonNode {
   label?: string;
   /** Ephemeral label shown after a successful copy, reverts after ~1.5 s. Adapter default: "Copied!". */
   copiedLabel?: string;
+  /** Visual variant — mirrors ButtonNode.variant (issue #14). Adapter emits
+   *  `vms-button vms-button--{variant}` (browser) / variant-tinted text
+   *  (TUI), so a copy-button can read distinctly from neighboring default
+   *  buttons. Closed union; omitted = current behavior (no modifier). */
+  variant?: "primary" | "secondary" | "danger";
 }
 
 // ─── Shell ────────────────────────────────────────────────────────────────────

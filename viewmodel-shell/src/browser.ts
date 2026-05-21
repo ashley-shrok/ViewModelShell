@@ -736,7 +736,10 @@ export class BrowserAdapter implements Adapter {
   private copyButton(n: CopyButtonNode, parent: HTMLElement): void {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "vms-button";
+    // 0.9.0 (#14): variant modifier class, mirroring button() exactly. The
+    // existing .vms-button--{primary,secondary,danger} CSS rules apply
+    // automatically — no new style surface.
+    btn.className = `vms-button${n.variant ? ` vms-button--${n.variant}` : ""}`;
     btn.textContent = n.label ?? "Copy";
     btn.addEventListener("click", () => {
       const write = navigator.clipboard?.writeText(n.text);

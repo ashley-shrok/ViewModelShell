@@ -1470,8 +1470,14 @@ function CopyButtonView({ node, ctx }: { node: CopyButtonNode; ctx: RCtx }) {
   const label = isCopied
     ? (node.copiedLabel ?? "Copied!")
     : (node.label ?? "Copy");
+  // 0.9.0 (#14): variant coloring — mirrors ButtonView's fg derivation
+  // verbatim. Adapter-medium-adaptation parity: the browser uses CSS
+  // classes; the TUI uses ANSI fg colors. Same semantic mapping.
+  const fg = node.variant === "danger" ? "#ff5555"
+           : node.variant === "primary" ? "#88aaff"
+           : undefined;
   return (
-    <text onMouseDown={() => ctx.copy(node.text)}>
+    <text {...(fg != null ? { fg } : {})} onMouseDown={() => ctx.copy(node.text)}>
       [ {label} ]
     </text>
   );

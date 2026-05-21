@@ -31,7 +31,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
     });
   }
   children.push(
-    { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!" } as ViewNode,
+    { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!", variant: "secondary" } as ViewNode,   // 0.9.0/#14
   );
   const probeSection: ViewNode = {
     type: "section",

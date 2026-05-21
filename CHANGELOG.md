@@ -6,6 +6,39 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.9.0 — `CopyButtonNode.variant`: visual differentiation from default buttons (npm + NuGet)
+
+**npm:** `0.9.0` (MINOR — wire-format addition) · **NuGet:** `0.9.0` (MINOR — wire-format addition)
+
+Both packages move together. Closes [#14](https://github.com/ashley-shrok/ViewModelShell/issues/14). One additive `CopyButtonNode` field; no breaking change.
+
+### Added
+
+- **`CopyButtonNode.variant?: "primary" | "secondary" | "danger"`.** Mirrors `ButtonNode.variant` exactly. Previously, copy-buttons rendered with class `vms-button` (no modifier), visually indistinguishable from default `ButtonNode`s in the same layout — so a copy-button sitting alongside a column of bare action buttons just looked like another row, even though it does something semantically different (clipboard write vs. server action). With `variant`, the same `.vms-button--primary` / `--secondary` / `--danger` CSS rules that already exist for `ButtonNode` now apply to `CopyButtonNode` too.
+
+  C#:
+  ```csharp
+  new CopyButtonNode("npx @ashley-shrok/viewmodel-shell",
+      "Copy install command",
+      "Copied!",
+      Variant: "secondary")
+  ```
+
+  TypeScript backend:
+  ```typescript
+  { type: "copy-button", text: "npx …", label: "Copy install command",
+    copiedLabel: "Copied!", variant: "secondary" }
+  ```
+
+  **No new CSS rules ship** — the existing `.vms-button--{variant}` selectors already match `.vms-button.vms-button--{variant}` regardless of whether the underlying `<button>` came from a `ButtonNode` or a `CopyButtonNode`. The TUI adapter applies the same `fg` color rules its `ButtonView` uses (`#ff5555` for danger, `#88aaff` for primary, undefined for secondary/omitted). Omitted variant = byte-identical to pre-0.9.0 behavior.
+
+### Consumers
+
+- **None required — additive.** Existing `CopyButtonNode` consumers untouched. Cross-backend parity unchanged.
+- **Demo worked example:** `demo/FeatureProbe` (and Bun twin) now sets `variant: "secondary"` on its "Copy install command" copy-button.
+
+---
+
 ## 0.8.0 — `ButtonNode.pendingLabel`: instant click feedback for slow actions (npm + NuGet)
 
 **npm:** `0.8.0` (MINOR — wire-format addition) · **NuGet:** `0.8.0` (MINOR — wire-format addition)

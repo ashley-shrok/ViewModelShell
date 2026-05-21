@@ -6,6 +6,23 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `0.9.0` (`CopyButtonNode.variant` — npm + NuGet)
+
+**Nothing to do** beyond taking the bump on whichever side you use. `0.9.0` adds one additive optional field on `CopyButtonNode` (`variant?: "primary" | "secondary" | "danger"`), mirroring `ButtonNode.variant`. Wire is forward-compatible.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.8.0` | **`0.9.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.8.0` | **`0.9.0`** |
+
+- **Existing copy-buttons:** unchanged. Omit `variant` for the default look (byte-identical to `0.8.0`).
+- **Copy-buttons near regular buttons:** set `Variant: "secondary"` (C#) / `variant: "secondary"` (TypeScript) to make the copy affordance read distinctly. `"primary"` and `"danger"` also available, same as `ButtonNode.variant`.
+- **No CSS work:** the existing `.vms-button--primary` / `.vms-button--secondary` / `.vms-button--danger` rules already apply to whichever `<button>` the framework emits.
+
+Closes [#14](https://github.com/ashley-shrok/ViewModelShell/issues/14).
+
+---
+
 ## Upgrading to `0.8.0` (`ButtonNode.pendingLabel` — npm + NuGet)
 
 **Nothing to do** beyond taking the bump on whichever side you use. `0.8.0` adds one additive optional field on `ButtonNode` (`pendingLabel?: string`) and changes dispatch-error behavior to re-render `currentVm` (previously it only fired `onError`). Both changes are forward-compatible.
