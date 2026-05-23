@@ -104,10 +104,23 @@ export interface ListItemNode {
 
 export interface FormNode {
   type: "form";
-  submitAction: ActionEvent;
+  /** The default submit action — renders an auto submit button + fires on
+   *  Enter in a text field. OPTIONAL since 0.10.0 (#15): omit it for a form
+   *  whose only triggers are `buttons[]`. When omitted, no default submit
+   *  button renders and Enter does not submit at the form level (a
+   *  FieldNode.action still fires per-field). */
+  submitAction?: ActionEvent;
   submitLabel?: string;
   /** Layout preset for the form's controls. Omitted or "stack" = fields stacked (current, no modifier class). "inline" = field row + submit on one line (add/search bar) — emits .vms-form--inline. Closed union (D-29). */
   layout?: "stack" | "inline";
+  /** Multi-action submit buttons (#15). Each is a full ButtonNode (so
+   *  `variant` + `pendingLabel` apply) that, on activation, HARVESTS this
+   *  form's current field values into its `action.context` and dispatches —
+   *  the same harvest the default submit performs, but carrying a different
+   *  action. Mirrors HTML's multiple submit buttons / `formaction`. A plain
+   *  ButtonNode placed in `children` keeps its no-harvest behavior; only
+   *  buttons in THIS slot harvest. */
+  buttons?: ButtonNode[];
   children: ViewNode[];
 }
 

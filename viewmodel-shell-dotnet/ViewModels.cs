@@ -160,10 +160,21 @@ public record ListItemNode(
 ) : ViewNode;
 
 public record FormNode(
-    ActionDescriptor SubmitAction,
+    // OPTIONAL since 0.10.0 (#15): omit for a form whose only triggers are
+    // Buttons[]. Kept positional-but-nullable so existing positional call
+    // sites (new FormNode(action, label, children)) compile unchanged.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? SubmitAction,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SubmitLabel,
     IReadOnlyList<ViewNode> Children,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null,
+    // Multi-action submit buttons (#15). Populate with ButtonNodes — each
+    // harvests this form's fields into its action context, then dispatches.
+    // Typed as IReadOnlyList<ViewNode> (not ButtonNode) so System.Text.Json
+    // emits the polymorphic "type":"button" discriminator (it's only written
+    // when serializing through the ViewNode base) — without it the wire would
+    // drift from the TS backend, which always includes type. variant +
+    // pendingLabel apply.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Buttons = null
 ) : ViewNode;
 
 public record FieldOption(string Value, string Label);

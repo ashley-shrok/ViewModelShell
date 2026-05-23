@@ -282,14 +282,13 @@ export class BrowserAdapter implements Adapter {
     form.className = `vms-form${n.layout && n.layout !== "stack" ? ` vms-form--${n.layout}` : ""}`;
     form.noValidate = true;
     this.kids(n.children, form, on);
-    const submit = document.createElement("button");
-    submit.type = "submit";
-    submit.className = "vms-button vms-button--primary";
-    submit.textContent = n.submitLabel ?? "Submit";
-    form.appendChild(submit);
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const ctx: Record<string, unknown> = { ...(n.submitAction.context ?? {}) };
+
+    // 0.10.0 (#15) — harvest this form's current field values, merge into the
+    // given action's context, and dispatch. Factored out of the submit
+    // handler so both the default submit AND each buttons[] entry can call it
+    // with a DIFFERENT action carrying the SAME live field values.
+    const harvest = (base: ActionEvent): void => {
+      const ctx: Record<string, unknown> = { ...(base.context ?? {}) };
       const files: Record<string, File> = {};
 
       form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
@@ -316,10 +315,43 @@ export class BrowserAdapter implements Adapter {
         if (inp.name && inp.files?.[0]) files[inp.name] = inp.files[0];
       });
 
-      const action: ActionEvent = { name: n.submitAction.name, context: ctx };
+      const action: ActionEvent = { name: base.name, context: ctx };
       if (Object.keys(files).length > 0) action.files = files;
       on(action);
-    });
+    };
+
+    // Default submit button + Enter-to-submit, only when submitAction is set.
+    // (0.10.0: submitAction is now optional — a buttons[]-only form renders
+    // no default button, and Enter does not submit at the form level.)
+    if (n.submitAction) {
+      const submitAction = n.submitAction;
+      const submit = document.createElement("button");
+      submit.type = "submit";
+      submit.className = "vms-button vms-button--primary";
+      submit.textContent = n.submitLabel ?? "Submit";
+      form.appendChild(submit);
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        harvest(submitAction);
+      });
+    } else {
+      // No default submit — still neutralize implicit Enter submission so a
+      // single-field buttons[]-only form doesn't reload via native submit.
+      form.addEventListener("submit", (e) => e.preventDefault());
+    }
+
+    // 0.10.0 (#15) — multi-action buttons. Each renders through the normal
+    // button() path (so variant + pendingLabel work) but its onAction is
+    // wrapped to harvest the form first. We render them in a footer row so
+    // they group like the default submit.
+    if (n.buttons && n.buttons.length > 0) {
+      const row = document.createElement("div");
+      row.className = "vms-form__buttons";
+      const harvestOn = (action: ActionEvent): void => harvest(action);
+      for (const btn of n.buttons) this.button(btn, row, harvestOn);
+      form.appendChild(row);
+    }
+
     parent.appendChild(form);
   }
 

@@ -231,6 +231,16 @@ body {
   flex-wrap: wrap;
 }
 .vms-form--inline > .vms-field { flex: 1 1 12rem; }
+/* Multi-action submit buttons row (0.10.0 / #15) — groups the form's
+   buttons[] entries on one line, like a dialog action bar. align-self
+   flex-start keeps the row from stretching full-width in the stacked form. */
+.vms-form__buttons {
+  display: flex;
+  flex-direction: row;
+  gap: var(--vms-space-sm);
+  align-self: flex-start;
+  flex-wrap: wrap;
+}
 .vms-field { display: flex; flex-direction: column; gap: var(--vms-space-2xs); }
 .vms-field__label { font-size: var(--vms-text-sm); color: var(--vms-text-muted); }
 .vms-field__input {

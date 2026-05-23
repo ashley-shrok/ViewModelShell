@@ -6,6 +6,48 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.10.0 — Multi-action forms: `FormNode.buttons[]` (npm + NuGet)
+
+**npm:** `0.10.0` (MINOR — wire-format addition) · **NuGet:** `0.10.0` (MINOR — wire-format addition)
+
+Both packages move together. Closes [#15](https://github.com/ashley-shrok/ViewModelShell/issues/15). Additive field + a back-compat relaxation of `submitAction`.
+
+### Added
+
+- **`FormNode.buttons?: ButtonNode[]`** — multiple submit buttons on one form, each harvesting the form's *current* field values into its own action's context and dispatching. Mirrors HTML's multiple submit buttons / `formaction`. Closes the "one form, shared fields, multiple actions" gap (fetch-then-save, save-vs-save-and-close, apply-vs-preview) that previously forced a two-form workaround which silently dropped input. Each entry is a **full `ButtonNode`**, so `variant` and `pendingLabel` apply — the slow "Fetch & fill" button gets instant pending feedback for free:
+
+  C#:
+  ```csharp
+  new FormNode(SubmitAction: null, SubmitLabel: null,
+      Children: [ new FieldNode("url", "text", "URL", null, null) ],
+      Buttons: [
+          new ButtonNode("Fetch & fill", new ActionDescriptor("fetch-meta"), null, PendingLabel: "Fetching…"),
+          new ButtonNode("Save",         new ActionDescriptor("add-item"),   "primary"),
+      ])
+  ```
+
+  TypeScript backend:
+  ```typescript
+  { type: "form",
+    children: [{ type: "field", name: "url", inputType: "text", label: "URL" }],
+    buttons: [
+      { type: "button", label: "Fetch & fill", action: { name: "fetch-meta" }, pendingLabel: "Fetching…" },
+      { type: "button", label: "Save", action: { name: "add-item" }, variant: "primary" },
+    ] }
+  ```
+
+  A plain `ButtonNode` placed in `children` keeps its no-harvest behavior — only buttons in the `buttons[]` slot harvest. Browser renders them in a `.vms-form__buttons` row; TUI renders them as activatable buttons (mouse + Enter) sharing the form's harvest closure.
+
+### Changed
+
+- **`FormNode.submitAction` relaxed from required to optional.** A `buttons[]`-only form omits it and renders no default submit button (and Enter doesn't submit at the form level — a `FieldNode.action` still fires per-field). Existing forms with `submitAction` are byte-identical. (C#: `SubmitAction` kept positional-but-nullable so existing positional call sites compile unchanged; serialized with `WhenWritingNull`.)
+
+### Consumers
+
+- **None required — additive.** Existing single-submit forms unchanged. Cross-backend parity unchanged. Demo: `demo/FeatureProbe` (and Bun twin) now has a one-form / two-button (`Save Draft` + `Publish`) example sharing a `note` field.
+
+---
+
 ## 0.9.0 — `CopyButtonNode.variant`: visual differentiation from default buttons (npm + NuGet)
 
 **npm:** `0.9.0` (MINOR — wire-format addition) · **NuGet:** `0.9.0` (MINOR — wire-format addition)

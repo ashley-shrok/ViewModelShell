@@ -13,6 +13,7 @@ interface FeatureProbeState {
   pollCount: number;
   lastUploadName: string | null;
   lastUploadSize: number;
+  lastSubmit?: string | null;   // 0.10.0/#15: "{action}: {note}" from the multi-action form
 }
 
 function initialState(): FeatureProbeState {
@@ -33,6 +34,19 @@ function buildVm(state: FeatureProbeState): ViewNode {
   children.push(
     { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!", variant: "secondary" } as ViewNode,   // 0.9.0/#14
   );
+  if (state.lastSubmit != null) {
+    children.push({ type: "text", value: `Last submit: ${state.lastSubmit}`, style: "muted" });
+  }
+  // 0.10.0/#15: one form, shared "note" field, two buttons each dispatching a
+  // DIFFERENT action carrying the field's current value.
+  children.push({
+    type: "form",
+    children: [{ type: "field", name: "note", inputType: "text", label: "Note", placeholder: "Type a note…", required: false }],
+    buttons: [
+      { type: "button", label: "Save Draft", action: { name: "save-draft" }, variant: "secondary" },
+      { type: "button", label: "Publish", action: { name: "publish" }, variant: "primary" },
+    ],
+  } as ViewNode);
   const probeSection: ViewNode = {
     type: "section",
     heading: "Probe",
@@ -101,6 +115,14 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
 
     case "show-copy-button":
       break;  // state unchanged; buildVm always includes the copy-button node
+
+    // 0.10.0/#15: two buttons[] on ONE form sharing the "note" field.
+    case "save-draft":
+      state = { ...state, lastSubmit: `draft: ${str("note") ?? ""}` };
+      break;
+    case "publish":
+      state = { ...state, lastSubmit: `published: ${str("note") ?? ""}` };
+      break;
 
     case "reset":
       state = initialState();

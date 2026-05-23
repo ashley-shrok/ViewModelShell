@@ -1491,12 +1491,12 @@ function CopyButtonView({ node, ctx }: { node: CopyButtonNode; ctx: RCtx }) {
 // dispatches submitAction with `{ [name]: value, ... }` merged into context.
 
 function FormView({ node, ctx }: { node: FormNode; ctx: RCtx }) {
-  // Snapshot the form for the closure — same-instance fine since the closure
-  // is recreated on every render (which is every server response).
-  const submitThisForm = (): void => {
-    const merged: Record<string, unknown> = {
-      ...(node.submitAction.context ?? {}),
-    };
+  // 0.10.0 (#15) — harvest this form's current field values, merge into the
+  // given action's context, and dispatch. Generalized from the single-submit
+  // closure so the default submit AND each buttons[] entry can call it with
+  // a DIFFERENT action carrying the SAME live field values.
+  const submitFormWith = (base: ActionEvent): void => {
+    const merged: Record<string, unknown> = { ...(base.context ?? {}) };
     const collect = (n: ViewNode): void => {
       if (n.type === "field") {
         const wireValue = n.value ?? "";
@@ -1512,20 +1512,35 @@ function FormView({ node, ctx }: { node: FormNode; ctx: RCtx }) {
       if (children) for (const c of children) collect(c);
     };
     for (const child of node.children) collect(child);
-    ctx.onAction({ name: node.submitAction.name, context: merged });
+    ctx.onAction({ name: base.name, context: merged });
   };
+  // Enter-in-a-field submits the default action — only wired when present.
+  const submitAction = node.submitAction;
   const childCtx: RCtx = {
     ...ctx,
     isTopLevel: false,
-    submitForm: submitThisForm,
+    submitForm: submitAction ? (): void => submitFormWith(submitAction) : null,
   };
+  // buttons[] (#15) render through ButtonView so variant + pendingLabel work;
+  // their onAction is wrapped to harvest the form first. pendingButtonKey
+  // plumbing (0.8.0) flows through ctx unchanged.
+  const buttonCtx: RCtx = { ...childCtx, onAction: submitFormWith };
   // Layout preset on form: "stack" (default — fields stacked) or "inline"
   // (field row + submit on one line, the add-bar/search-bar pattern).
   const isInline = node.layout === "inline";
   return (
     <box flexDirection={isInline ? "row" : "column"} gap={1}>
       {node.children.map((child, i) => renderNode(child, childCtx, i))}
-      <text attributes={1 /* BOLD */}>[ {node.submitLabel ?? "Submit"} ]</text>
+      {submitAction != null ? (
+        <text attributes={1 /* BOLD */}>[ {node.submitLabel ?? "Submit"} ]</text>
+      ) : null}
+      {node.buttons && node.buttons.length > 0 ? (
+        <box flexDirection="row" gap={2}>
+          {node.buttons.map((btn, i) => (
+            <ButtonView key={`b${i}`} node={btn} ctx={buttonCtx} />
+          ))}
+        </box>
+      ) : null}
     </box>
   );
 }

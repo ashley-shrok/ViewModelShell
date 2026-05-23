@@ -6,6 +6,24 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `0.10.0` (Multi-action forms — npm + NuGet)
+
+**Nothing to do** beyond taking the bump. `0.10.0` adds `FormNode.buttons?: ButtonNode[]` and relaxes `submitAction` from required to optional. Both changes are forward-compatible.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.9.0` | **`0.10.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.9.0` | **`0.10.0`** |
+
+- **Existing single-submit forms:** unchanged — keep using `submitAction` + `submitLabel`.
+- **Multi-action forms:** add `buttons: [...]` (each a full `ButtonNode`). Each button harvests the form's current field values into its action context, then dispatches. Set `submitAction: null` (C#) / omit it (TS) for a buttons-only form with no default submit.
+- **`variant` + `pendingLabel` on form buttons:** apply automatically, since `buttons[]` entries are real `ButtonNode`s.
+- **A plain `ButtonNode` in `children`** still does NOT harvest — only `buttons[]` entries do.
+
+Closes [#15](https://github.com/ashley-shrok/ViewModelShell/issues/15).
+
+---
+
 ## Upgrading to `0.9.0` (`CopyButtonNode.variant` — npm + NuGet)
 
 **Nothing to do** beyond taking the bump on whichever side you use. `0.9.0` adds one additive optional field on `CopyButtonNode` (`variant?: "primary" | "secondary" | "danger"`), mirroring `ButtonNode.variant`. Wire is forward-compatible.

@@ -36,6 +36,10 @@
       "action": { "name": "upload" },
       "attach": { "attachment": { "name": "second.txt", "content": "second upload contents" } }
     },
-    { "id": "copy-button-node", "method": "POST", "action": { "name": "show-copy-button" } }
+    { "id": "copy-button-node", "method": "POST", "action": { "name": "show-copy-button" } },
+
+    { "id": "fresh-multiaction", "method": "GET", "freshState": true },
+    { "id": "form-save-draft",   "method": "POST", "action": { "name": "save-draft", "context": { "note": "hello" } } },
+    { "id": "form-publish",      "method": "POST", "action": { "name": "publish",    "context": { "note": "shipit" } } }
   ]
 }
