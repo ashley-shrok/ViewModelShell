@@ -51,6 +51,8 @@ The download endpoint stays auth-gated and the server authorizes in the action h
 
 ## Terminal (TUI)
 
+> ⚠️ **Experimental.** The terminal adapter (`@ashley-shrok/viewmodel-shell/tui` + `vms-tui`) is incomplete and under active design — scrolling, keyboard/focus ergonomics, and layout coverage all need more work. Its API and behavior may change or be removed **without a major-version bump**; don't build production workflows on it yet. The browser/server/core packages are stable and unaffected. Constructing a `TuiAdapter` prints a one-time notice — silence it with `VMS_TUI_SILENCE_EXPERIMENTAL=1`.
+
 The same backend renders in a terminal — same wire, no backend change, with a real lazygit-style UX: mouse clicks, wheel scroll, per-pane focus cycle, and a context-aware status bar. Point the CLI at any ViewModel Shell endpoint:
 
 ```bash

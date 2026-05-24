@@ -59,6 +59,7 @@ export type ViewNode =
   | ButtonNode
   | TextNode
   | LinkNode
+  | ImageNode
   | StatBarNode
   | TabsNode
   | ProgressNode
@@ -173,7 +174,7 @@ export interface ButtonNode {
 export interface TextNode {
   type: "text";
   value: string;
-  style?: "heading" | "subheading" | "body" | "muted" | "strikethrough" | "error" | "pre";
+  style?: "heading" | "subheading" | "body" | "muted" | "strikethrough" | "error" | "warning" | "pre";
 }
 
 export interface LinkNode {
@@ -182,6 +183,19 @@ export interface LinkNode {
   href: string;
   /** true = open outside current app context (browser: new tab + noopener) */
   external?: boolean;
+}
+
+export interface ImageNode {
+  type: "image";
+  /** Image source URL (required). */
+  src: string;
+  /** Accessibility text. Non-browser adapters (TUI) degrade to this. */
+  alt?: string;
+  /** Design-system sizing hint → `.vms-image--{size}`. Omit for intrinsic size
+   *  (capped at 100% of the container). NOT free-form CSS. */
+  size?: "small" | "medium" | "large" | "full";
+  /** `"circle"` → square-cropped circular image (avatars). */
+  shape?: "circle";
 }
 
 export interface StatBarNode {

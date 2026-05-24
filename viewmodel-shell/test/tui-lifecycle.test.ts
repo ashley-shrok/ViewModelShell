@@ -32,6 +32,13 @@ import { TuiAdapter, renderTree } from "../src/tui.js";
 import type { ViewNode, ActionEvent } from "../src/index.js";
 import type { ReactNode } from "react";
 
+// The TUI is experimental — every `new TuiAdapter()` emits a one-time stderr
+// notice. Silence it here so this file's many constructor smoke-tests don't
+// spam the gate output. (The notice + its VMS_TUI_SILENCE_EXPERIMENTAL gate
+// is a one-line guarded stderr write — verified by inspection, not a brittle
+// module-state unit test.)
+process.env.VMS_TUI_SILENCE_EXPERIMENTAL = "1";
+
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();

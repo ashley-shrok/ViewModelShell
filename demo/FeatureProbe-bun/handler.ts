@@ -34,6 +34,8 @@ function buildVm(state: FeatureProbeState): ViewNode {
   children.push(
     { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!", variant: "secondary" } as ViewNode,   // 0.9.0/#14
   );
+  // 0.11.0/#5: ImageNode — exercises src/alt/size/shape on the parity wire.
+  children.push({ type: "image", src: "/logo.png", alt: "ViewModel Shell logo", size: "small", shape: "circle" } as ViewNode);
   if (state.lastSubmit != null) {
     children.push({ type: "text", value: `Last submit: ${state.lastSubmit}`, style: "muted" });
   }

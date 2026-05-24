@@ -74,6 +74,7 @@ import type {
   SectionNode,
   TextNode as TextNodeType,
   LinkNode as LinkNodeType,
+  ImageNode,
   ListNode,
   ListItemNode,
   ButtonNode,
@@ -100,6 +101,35 @@ interface TuiOpts {
   sidebarFraction?: number;
 }
 
+// ─── Experimental notice ───────────────────────────────────────────────────
+// The terminal adapter is EXPERIMENTAL (see the @experimental tag on
+// TuiAdapter). We emit a one-time stderr heads-up the first time a TuiAdapter
+// is constructed in a process — covering both `vms-tui` (which constructs one)
+// and programmatic consumers. Fires once per process; silence with
+// VMS_TUI_SILENCE_EXPERIMENTAL=1 for deliberate users who don't want the nag.
+let experimentalNoticeShown = false;
+function warnExperimental(): void {
+  if (experimentalNoticeShown) return;
+  experimentalNoticeShown = true;
+  if (process.env.VMS_TUI_SILENCE_EXPERIMENTAL) return;
+  process.stderr.write(
+    "[vms-tui] ⚠ The terminal adapter (TuiAdapter) is EXPERIMENTAL: incomplete, " +
+      "under-tested, and subject to breaking change or removal without a major-version " +
+      "bump. Not recommended for production. The browser/server/core packages are " +
+      "stable and unaffected. Silence this notice with VMS_TUI_SILENCE_EXPERIMENTAL=1.\n",
+  );
+}
+
+/**
+ * Renders a ViewModel Shell view tree to a terminal via OpenTUI (Bun runtime).
+ *
+ * @experimental The terminal adapter is incomplete and under active design —
+ * scrolling, keyboard/focus ergonomics, and layout coverage all need more
+ * work. Its API and behavior may change or be removed without a major-version
+ * bump. Constructing one prints a one-time stderr notice (silence with
+ * `VMS_TUI_SILENCE_EXPERIMENTAL=1`). The browser/server/core packages are
+ * stable; only `@ashley-shrok/viewmodel-shell/tui` + `vms-tui` are experimental.
+ */
 export class TuiAdapter implements Adapter {
   private renderer: CliRenderer | null = null;
   private root: ReactRoot | null = null;
@@ -136,6 +166,7 @@ export class TuiAdapter implements Adapter {
   private pendingButtonKey: string | null = null;
 
   constructor(opts?: TuiOpts) {
+    warnExperimental();
     this.viewport = opts?.viewport ?? "fill";
     const f = opts?.sidebarFraction ?? 1 / 3;
     this.sidebarFraction = Math.min(0.6, Math.max(0.15, f));
@@ -870,6 +901,7 @@ function renderNode(node: ViewNode, ctx: RCtx, key?: string | number): React.Rea
     case "section":      return <SectionView      key={key} node={node} ctx={ctx} />;
     case "text":         return <TextView         key={key} node={node} />;
     case "link":         return <LinkView         key={key} node={node} ctx={ctx} />;
+    case "image":        return <ImageView        key={key} node={node} />;
     case "list":         return <ListView         key={key} node={node} ctx={ctx} />;
     case "list-item":    return <ListItemView     key={key} node={node} ctx={ctx} />;
     case "table":        return <TableView        key={key} node={node} ctx={ctx} />;
@@ -1034,6 +1066,7 @@ const STYLE_ATTRS: Record<NonNullable<TextNodeType["style"]>, { attributes?: num
   muted:         { fg: "#888888" },
   strikethrough: { attributes: 16 /* STRIKETHROUGH */, fg: "#888888" },
   error:         { fg: "#ff5555" },
+  warning:       { fg: "#e0a823" },
   pre:           { fg: "#cccccc" },
 };
 
@@ -1078,6 +1111,15 @@ function LinkView({ node, ctx }: { node: LinkNodeType; ctx: RCtx }) {
       {inner}
     </text>
   );
+}
+
+// ── image ─────────────────────────────────────────────────────────────────
+// Terminals can't render raster images, so the TUI degrades to the alt text
+// (the wire's accessibility intent) — the multi-target-safe contract from the
+// ImageNode design. size/shape are browser-only layout hints and are ignored.
+function ImageView({ node }: { node: ImageNode }) {
+  const alt = node.alt && node.alt.trim().length > 0 ? node.alt : "image";
+  return <text fg="#888888">[image: {alt}]</text>;
 }
 
 // ── list / list-item ──────────────────────────────────────────────────────
@@ -1722,6 +1764,10 @@ function UnsupportedView({ type }: { type: string }) {
 // the App component is hooks-free — focus state is passed via props with a
 // safe default — so the walker works without a React reconciler.
 
+/**
+ * @experimental Part of the experimental terminal target (see {@link TuiAdapter}).
+ * A static, non-mounting render path used by the cross-adapter conformance suite.
+ */
 export function renderTree(vm: ViewNode): React.ReactNode {
   return <App vm={vm} onAction={() => { /* conformance is read-only */ }} />;
 }

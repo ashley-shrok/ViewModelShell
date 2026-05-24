@@ -172,6 +172,7 @@ function componentsView(): ViewNode[] {
       { type: "text", value: "Muted secondary information",  style: "muted" },
       { type: "text", value: "Strikethrough completed item", style: "strikethrough" },
       { type: "text", value: "Error message text",           style: "error" },
+      { type: "text", value: "Warning advisory text",         style: "warning" },
       { type: "text", value: "$ vms render --verbose\n  ok page\n  ok section\n  ok list (3 items)\n  ok button x2", style: "pre" },
     ]},
 
@@ -182,6 +183,12 @@ function componentsView(): ViewNode[] {
         { label: "completed", value: 38 },
         { label: "remaining", value: "$420.50" },
       ]},
+    ]},
+
+    // ── Image ─────────────────────────────────────────────────────
+    { type: "section", heading: "Image", layout: "split", children: [
+      { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%237c5cff'/%3E%3C/svg%3E", alt: "Sample avatar", size: "small", shape: "circle" },
+      { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90'%3E%3Crect width='160' height='90' fill='%2310b981'/%3E%3C/svg%3E", alt: "Sample banner", size: "large" },
     ]},
 
     // ── Button variants ───────────────────────────────────────────

@@ -38,6 +38,9 @@ function browserInfo(c: HTMLElement): string {
     }
   });
   c.querySelectorAll("a[href]").forEach((a) => parts.push(a.getAttribute("href") ?? ""));
+  // An <img>'s surfaced information is its alt text (what AT reads) — the same
+  // string the TUI degrades to. src is a fetch target, not human-readable info.
+  c.querySelectorAll("img").forEach((im) => parts.push(im.getAttribute("alt") ?? ""));
   return parts.join(SEP);
 }
 

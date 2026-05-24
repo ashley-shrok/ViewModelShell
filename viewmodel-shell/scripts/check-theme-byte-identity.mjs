@@ -42,13 +42,18 @@ const THEMES_DIR = resolve(__dirname, "../styles/themes");
 const DEFAULT_DARKPURPLE = resolve(THEMES_DIR, "dark-purple.css");
 
 // ── (1) Theme-file SHA-256 manifest (11 files) ───────────────────────────
-// light-* (6): SHAs of the genuinely byte-frozen pre-Phase-5 blob (git
-// blob @ cb97ebb — these were FULL, correct, unchanged). dark-* (5): SHAs
-// of the D-26-CORRECTED full overrides (their pre-0.4.0 accent-only form
-// was broken by the D-01 re-base). dark-purple.css is NOT here — NEW file
-// (D-02), asserted byte-exact separately in (2). light-purple.css IS here
-// and stays byte-unchanged even though its value set became the new
-// default (editing it would be a THEME-05 seam behavior change — D-02/D-03).
+// light-* (6): re-baselined in issue #8 (deliberate drift, recorded per the
+// D-26 precedent) — `warning` became a TEXT style (.vms-text--warning), and
+// the light themes' prior --vms-warning #c89610 was only 2.68:1 on the light
+// surface (fine as a 3.0:1 border accent, sub-AA as text). It was darkened to
+// #8a630d (≥5:1) across default + all 6 light themes so check-aa-contrast.mjs
+// (now theme-wide) passes. ONLY that one declaration changed; the SHAs below
+// re-freeze the corrected files (still catches accidental future drift).
+// dark-* (5): SHAs of the D-26-CORRECTED full overrides (their pre-0.4.0
+// accent-only form was broken by the D-01 re-base). dark-purple.css is NOT
+// here — NEW file (D-02), asserted byte-exact separately in (2); its
+// --vms-warning (#e0a823, light amber on dark) already clears the text bar,
+// so #8 left it untouched and the byte-exact capture in (2) still holds.
 const THEME_SHA256 = {
   // dark-* (5): D-26 — corrected from broken accent-only partials to
   // self-sufficient full dark overrides (the D-01 light re-base removed the
@@ -59,12 +64,12 @@ const THEME_SHA256 = {
   "dark-rose.css":    "1df08e356a902d562172572810388893f1bd762148ffc66144f99b8f15f85f6c",
   "dark-amber.css":   "99f2015f8393d38ff2f80c66b721fad4075be829cf695ccf01c96e8260d8cc63",
   "dark-teal.css":    "7eda81edc92a3968f21e96f256a32e59e4bb71918f2077e6ae99b4c70e125244",
-  "light-purple.css": "1ba8f21da2a5d08800dbb13e1fcaff49936f70d2ae4c903b720cd7ac65bcc39d",
-  "light-blue.css":   "15d9a05140437e43890a3a2be046f35a288a6f63a7902708a05330a149785e6a",
-  "light-green.css":  "bd5947f24f99a35776346bc892daa1b7eeabf9f5598c8109f08e8f12d195e727",
-  "light-rose.css":   "754cb7a6a0e390f1d7e10766bf37cd0f0a9d7b386e92686acf4526dc91abbcac",
-  "light-amber.css":  "8752eb152a4eb961fa6d45f92a8e81ea3d4aa0f1fca7c7b372942981c6d1ecda",
-  "light-teal.css":   "9a5f1efb8147bb467abe2336ae61d42469c355bf5471e08109f4bc411f52d7cf",
+  "light-purple.css": "af04feaee8fec3f00ac076f9a1afc00c13dbab1ebe6a7d8bf1dbf28c901609a6",
+  "light-blue.css":   "9bf3cf660a1c726a5304eddd4b7fdc4261fd796aaf3af1c0265198a406cec13c",
+  "light-green.css":  "a136b91b79027f0f64df2d77d1b8eb096a272527e1052eb87c73c9ae00e63356",
+  "light-rose.css":   "8641db1213b3d7c134af01ea512966a6c951b31d7c321e3bcaf3d71dd6497bb8",
+  "light-amber.css":  "fdb45eb2e16a1fa1553913c76c00b586c95331365d42e717946d90c5be2b32bb",
+  "light-teal.css":   "c26cc9c804e58f42691af8d816e620c32a68cbd9836193a2638137341e840a13",
 };
 
 // ── (2) The prior default.css :root dark COLOR block (frozen-by-D-02) ─────
@@ -164,7 +169,7 @@ if (violations.length > 0) {
 
 console.log(
   `✓ D-03/D-26: all ${Object.keys(THEME_SHA256).length} theme files match their recorded baseline ` +
-  `(SHA-256; light-* frozen pre-Phase-5, dark-* D-26-corrected), ` +
+  `(SHA-256; light-* re-baselined #8 warning-AA, dark-* D-26-corrected), ` +
   `and themes/dark-purple.css :root is a byte-exact capture of the prior default dark color block (${Object.keys(PRIOR_DEFAULT_DARK).length} declarations).`
 );
 process.exit(0);

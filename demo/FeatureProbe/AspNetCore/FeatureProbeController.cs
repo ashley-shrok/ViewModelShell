@@ -118,6 +118,9 @@ public class FeatureProbeController : ControllerBase
             "Copied!",
             Variant: "secondary"));   // 0.9.0/#14: read distinctly from neighboring default buttons
 
+        // 0.11.0/#5: ImageNode — exercises src/alt/size/shape on the parity wire.
+        children.Add(new ImageNode("/logo.png", Alt: "ViewModel Shell logo", Size: "small", Shape: "circle"));
+
         if (state.LastSubmit != null)
             children.Add(new TextNode($"Last submit: {state.LastSubmit}", "muted"));
 

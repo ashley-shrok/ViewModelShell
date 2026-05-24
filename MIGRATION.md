@@ -6,6 +6,23 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `0.11.0` (`ImageNode` + `TextNode` "warning" style + AA hardening — npm + NuGet)
+
+**Nothing to do** beyond taking the bump. `0.11.0` adds the `ImageNode` type, adds `"warning"` to the `TextNode.style` union, and darkens the `--vms-warning` token (default + light themes) so warning text clears WCAG-AA. Purely additive.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.10.0` | **`0.11.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.10.0` | **`0.11.0`** |
+
+- **New `ImageNode`:** render images with `{ type: "image", src, alt?, size?, shape? }` (TS) / `new ImageNode(src, Alt: …, Size: …, Shape: …)` (C#). `size` ∈ `small|medium|large|full`, `shape` ∈ `circle` — both are design-system classes, not free-form CSS. The browser renders `<img class="vms-image">`; the TUI degrades to `[image: <alt>]`. Always provide `alt` for accessibility and non-browser targets.
+- **New inline warning text:** use `style: "warning"` on a `TextNode` (TS) / `new TextNode("…", "warning")` (C#) instead of wrapping a one-line caveat in a `ListItemNode{variant:"warning"}`. Emits `.vms-text--warning` in the browser, amber foreground in the TUI.
+- **`TextNode.Style` was already a free `string?` in C#**, so code that passed `"warning"` *compiled* on ≤0.10.0 but rendered **unstyled** (the value wasn't in the renderer's recognized set). After 0.11.0 that same code renders correctly — a silent visual fix, not a breaking change. (The `"warning"` style adds no C# type; the NuGet package changes in 0.11.0 only because of the new `ImageNode` record.)
+- **`--vms-warning` is now a touch darker** (`#8a630d`, was `#a37510` default / `#c89610` light themes). If you read that token for a custom warning border/badge, expect a slightly deeper amber. Dark themes are unchanged. No action required.
+- **Custom themes:** if you ship your own theme stylesheet and use `--vms-warning` for *text*, verify it clears 4.5:1 on your surface/bg — the shipped `check:aa-contrast` now enforces this for the bundled themes, but your own files are yours to check.
+
+---
+
 ## Upgrading to `0.10.0` (Multi-action forms — npm + NuGet)
 
 **Nothing to do** beyond taking the bump. `0.10.0` adds `FormNode.buttons?: ButtonNode[]` and relaxes `submitAction` from required to optional. Both changes are forward-compatible.

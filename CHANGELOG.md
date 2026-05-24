@@ -6,6 +6,38 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.11.0 — `ImageNode` + `TextNode` "warning" style + WCAG-AA hardening; TUI experimental (npm + NuGet)
+
+**npm:** `0.11.0` (MINOR — new `ImageNode`, `TextNode` style widened) · **NuGet:** `0.11.0` (MINOR — new `ImageNode` record + discriminator)
+
+Both packages move together (AGENTS.md: a `ViewNode` type change bumps both sides). Closes [#5](https://github.com/ashley-shrok/ViewModelShell/issues/5) and [#8](https://github.com/ashley-shrok/ViewModelShell/issues/8). Purely additive.
+
+### Added
+
+- **`ImageNode`** (`{ type: "image"; src; alt?; size?; shape? }`) — renders pictures/media: product catalogs, avatars, logos, thumbnails. Browser emits `<img class="vms-image" src alt>` with design-system sizing/shape modifier classes (`size: "small" | "medium" | "large" | "full"` → widths from `--vms-image-*` tokens; `shape: "circle"` → square-cropped circular avatar via `border-radius:50% + aspect-ratio:1 + object-fit:cover`). No free-form CSS — sizing is the closed enum. Multi-target safe: the TUI degrades to `[image: <alt>]`, so the wire's accessibility intent carries to non-browser adapters. Cross-backend (TS `index.ts`/`server.ts` + C# `ImageNode` record with the `"image"` discriminator), parity-checked, jsdom + conformance tested.
+- **`TextNode.style: "warning"`** — an inline warning text affordance, symmetric with the existing `"error"`. A one-line advisory ("Conversation truncated at 500 rows.") is now one `TextNode`, not a `ListNode` + `ListItemNode{variant:"warning"}` wrapper. Emits `.vms-text--warning` (browser) / amber foreground (TUI). The C# side needs no change — `TextNode.Style` has always been a free `string?`, so `new TextNode("…", "warning")` already compiled; 0.11.0 just makes the renderer style it.
+
+### Changed (accessibility — the non-obvious part)
+
+- **`--vms-warning` darkened `#a37510` → `#8a630d`** in the shipped default, and **`#c89610` → `#8a630d`** across all six `light-*` themes. Reason: `warning` was only ever a **non-text border accent** (list-item left-border, table-row tint), tuned to the WCAG 3.0:1 *non-text* bar. Promoting it to a **text** color means it must clear the **4.5:1** bar (SC 1.4.3); the old values were ~4.1:1 (default) / ~2.7:1 (light themes) as text — sub-AA. The new value clears 4.5:1 on both surface and bg. Dark themes were already compliant (light amber on dark ≈ 8:1) and are untouched, including the byte-frozen `dark-purple.css`. This is a cosmetic deepening of existing warning borders/tints — no API or wire change.
+- **`check:aa-contrast` extended** from default-only to **default + all 12 themes** (each merged over the default `:root`, the real consumer cascade), and `error` + `warning` are now checked at the **text** threshold (4.5:1, on surface *and* bg) rather than the non-text 3.0:1 — closing a latent gap where `error` (a text style since 0.4.1) was only ever guarded at the non-text bar. The six `light-*` theme SHAs in `check:theme-byte-identity` were deliberately re-baselined (recorded in the guard, per the D-26 precedent).
+
+### Consumers
+
+Nothing to do — additive. Code that previously passed `Style: "warning"` and silently rendered unstyled now renders as styled warning text. No migration step.
+
+### Also: terminal adapter (TUI) marked **experimental** (npm only)
+
+The terminal target (`@ashley-shrok/viewmodel-shell/tui` + the `vms-tui` CLI) is now explicitly flagged experimental — it's incomplete (scrolling, keyboard/focus ergonomics, and layout coverage need more work) and not under active development for now. Non-breaking, layered signal:
+
+- **`@experimental` TSDoc** on `TuiAdapter` + `renderTree` (surfaces in editors / API tooling).
+- **One-time runtime notice** to stderr the first time a `TuiAdapter` is constructed (covers both the CLI and programmatic use). Silence with `VMS_TUI_SILENCE_EXPERIMENTAL=1`.
+- **Docs callouts** in the README "Terminal (TUI)" section and AGENTS.md.
+
+No rename, no API removal — existing `import { TuiAdapter }` and `bunx vms-tui` keep working unchanged. **The browser, server, and core packages are stable and unaffected.** NuGet has no TUI surface, so this is npm-only.
+
+---
+
 ## 0.10.0 — Multi-action forms: `FormNode.buttons[]` (npm + NuGet)
 
 **npm:** `0.10.0` (MINOR — wire-format addition) · **NuGet:** `0.10.0` (MINOR — wire-format addition)

@@ -127,6 +127,7 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(ModalNode),    "modal")]
 [JsonDerivedType(typeof(TableNode),    "table")]
 [JsonDerivedType(typeof(LinkNode),       "link")]
+[JsonDerivedType(typeof(ImageNode),      "image")]
 [JsonDerivedType(typeof(CopyButtonNode), "copy-button")]
 public abstract record ViewNode;
 
@@ -263,6 +264,17 @@ public record LinkNode(
     string Label,
     string Href,
     bool External = false
+) : ViewNode;
+
+// Image / media (issue #5). Src is required; Alt/Size/Shape are nullable wire
+// optionals (the maintainer null-omission rule applies — absent, never null).
+// Size ("small"/"medium"/"large"/"full") and Shape ("circle") are design-system
+// hints → .vms-image--{size}/{shape}; non-browser adapters (TUI) degrade to Alt.
+public record ImageNode(
+    string Src,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Alt = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Size = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Shape = null
 ) : ViewNode;
 
 public record CopyButtonNode(

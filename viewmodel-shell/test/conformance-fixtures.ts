@@ -51,13 +51,36 @@ export const FIXTURES: ConformanceFixture[] = [
             { type: "text", value: "Charlie", style: "heading" },
             { type: "text", value: "Delta", style: "muted" },
             { type: "text", value: "Echo", style: "error" },
+            { type: "text", value: "Whiskey", style: "warning" },
             { type: "text", value: "Foxtrot", style: "strikethrough" },
             { type: "text", value: "Golf", style: "pre" },
           ],
         },
       ],
     },
-    expect: ["Alfa", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf"],
+    expect: ["Alfa", "Bravo", "Charlie", "Delta", "Echo", "Whiskey", "Foxtrot", "Golf"],
+  },
+  {
+    // ImageNode (#5): both adapters must surface the alt text — the browser via
+    // the <img alt> attribute, the TUI by degrading to it. src/size/shape are
+    // layout/fetch concerns, not surfaced information, so they're not asserted.
+    name: "image node — alt surfaces on both adapters",
+    ordered: true,
+    vm: {
+      type: "page",
+      title: "Mike",
+      children: [
+        {
+          type: "section",
+          heading: "November",
+          children: [
+            { type: "image", src: "/logo.png", alt: "Oscar", size: "medium" },
+            { type: "image", src: "/avatar.png", alt: "Papa", size: "small", shape: "circle" },
+          ],
+        },
+      ],
+    },
+    expect: ["Mike", "November", "Oscar", "Papa"],
   },
   {
     name: "list + list-item variants (order preserved)",

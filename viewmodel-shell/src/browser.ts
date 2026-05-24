@@ -2,7 +2,7 @@ import type {
   ViewNode, ActionEvent, Adapter,
   PageNode, SectionNode, ListNode, ListItemNode,
   FormNode, FieldNode, CheckboxNode, ButtonNode,
-  TextNode, LinkNode, StatBarNode, TabsNode, ProgressNode,
+  TextNode, LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
   ModalNode, TableNode, CopyButtonNode,
 } from "./index.js";
 
@@ -217,6 +217,7 @@ export class BrowserAdapter implements Adapter {
       case "button":    return this.button(n, parent, on);
       case "text":      return this.text(n, parent);
       case "link":      return this.link(n, parent);
+      case "image":     return this.image(n, parent);
       case "stat-bar":  return this.statBar(n, parent);
       case "tabs":      return this.tabs(n, parent, on);
       case "progress":  return this.progress(n, parent);
@@ -607,6 +608,16 @@ export class BrowserAdapter implements Adapter {
     parent.appendChild(nav);
   }
 
+  private image(n: ImageNode, parent: HTMLElement): void {
+    const img = document.createElement("img");
+    let cls = "vms-image";
+    if (n.size) cls += ` vms-image--${n.size}`;
+    if (n.shape) cls += ` vms-image--${n.shape}`;
+    img.className = cls;
+    img.src = n.src;
+    if (n.alt != null) img.alt = n.alt;
+    parent.appendChild(img);
+  }
   private progress(n: ProgressNode, parent: HTMLElement): void {
     const track = document.createElement("div");
     track.className = "vms-progress";

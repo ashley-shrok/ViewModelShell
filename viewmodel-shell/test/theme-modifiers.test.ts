@@ -53,6 +53,22 @@ function renderCopyButton(node: ViewNode): HTMLElement {
   return btn as HTMLElement;
 }
 
+function renderText(node: ViewNode): HTMLElement {
+  const container = freshContainer();
+  new BrowserAdapter(container).render({ type: "page", children: [node] }, () => {});
+  const el = container.querySelector(".vms-text");
+  if (!el) throw new Error("no .vms-text rendered");
+  return el as HTMLElement;
+}
+
+function renderImage(node: ViewNode): HTMLImageElement {
+  const container = freshContainer();
+  new BrowserAdapter(container).render({ type: "page", children: [node] }, () => {});
+  const el = container.querySelector("img.vms-image");
+  if (!el) throw new Error("no img.vms-image rendered");
+  return el as HTMLImageElement;
+}
+
 describe("THEME-03 — page density modifier emission (D-04 idiom)", () => {
   it('density: "compact" ⇒ root className contains vms-page--compact', () => {
     const el = renderPage({ type: "page", children: [], density: "compact" });
@@ -177,5 +193,49 @@ describe('0.7.0 / #13 — PageNode.width modifier emission', () => {
     expect(el.classList.contains("vms-page--compact")).toBe(true);
     expect(el.classList.contains("vms-page--cards")).toBe(true);
     expect(el.classList.contains("vms-page--wide")).toBe(true);
+  });
+});
+
+describe('0.11.0 / #8 — TextNode "warning" style emission (symmetric with "error")', () => {
+  it('style: "warning" ⇒ className contains vms-text--warning', () => {
+    const el = renderText({ type: "text", value: "w", style: "warning" });
+    expect(el.classList.contains("vms-text")).toBe(true);
+    expect(el.classList.contains("vms-text--warning")).toBe(true);
+  });
+  it('style: "error" still emits vms-text--error (unregressed)', () => {
+    const el = renderText({ type: "text", value: "e", style: "error" });
+    expect(el.classList.contains("vms-text--error")).toBe(true);
+  });
+  it('style omitted ⇒ className === "vms-text" (byte-identical to pre-0.11.0)', () => {
+    const el = renderText({ type: "text", value: "x" });
+    expect(el.className).toBe("vms-text");
+  });
+});
+
+describe('0.11.0 / #5 — ImageNode rendering', () => {
+  it('renders <img class="vms-image"> carrying src + alt', () => {
+    const el = renderImage({ type: "image", src: "/logo.png", alt: "Acme logo" });
+    expect(el.tagName).toBe("IMG");
+    expect(el.getAttribute("src")).toBe("/logo.png");
+    expect(el.getAttribute("alt")).toBe("Acme logo");
+    expect(el.className).toBe("vms-image");
+  });
+  it('size: "medium" ⇒ className contains vms-image--medium', () => {
+    const el = renderImage({ type: "image", src: "/a.png", size: "medium" });
+    expect(el.classList.contains("vms-image--medium")).toBe(true);
+  });
+  it('shape: "circle" ⇒ className contains vms-image--circle', () => {
+    const el = renderImage({ type: "image", src: "/a.png", shape: "circle" });
+    expect(el.classList.contains("vms-image--circle")).toBe(true);
+  });
+  it('size + shape compose; alt omitted ⇒ no alt attribute', () => {
+    const el = renderImage({ type: "image", src: "/a.png", size: "small", shape: "circle" });
+    expect(el.classList.contains("vms-image--small")).toBe(true);
+    expect(el.classList.contains("vms-image--circle")).toBe(true);
+    expect(el.hasAttribute("alt")).toBe(false);
+  });
+  it('size/shape omitted ⇒ className === "vms-image" (byte-identical baseline)', () => {
+    const el = renderImage({ type: "image", src: "/a.png" });
+    expect(el.className).toBe("vms-image");
   });
 });

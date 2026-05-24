@@ -28,12 +28,15 @@
   --vms-done-text:   #9090a0;
   --vms-error:       #c2453d;
   --vms-error-glow:  rgba(194, 69, 61, 0.10);
-  --vms-warning:       #a37510;
+  --vms-warning:       #8a630d;
   --vms-priority-high: #d76410;
   --vms-success:       #2da359;
   --vms-info:          #2277dd;
   --vms-radius:      10px;
   --vms-radius-sm:   6px;
+  --vms-image-small:   4rem;
+  --vms-image-medium:  8rem;
+  --vms-image-large:   16rem;
   --vms-font-body:   system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --vms-font-head:   system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --vms-font-mono:   ui-monospace, 'Cascadia Code', 'Fira Code', Menlo, Consolas, 'Liberation Mono', monospace;
@@ -458,6 +461,7 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-text--muted         { color: var(--vms-text-muted); font-size: var(--vms-text-sm); }
 .vms-text--strikethrough { color: var(--vms-done-text); text-decoration: line-through; }
 .vms-text--error         { color: var(--vms-error); font-size: var(--vms-text-base); }
+.vms-text--warning       { color: var(--vms-warning); font-size: var(--vms-text-base); }
 .vms-text--pre           { font-family: var(--vms-font-mono); white-space: pre; }
 
 /* ── Link ── */
@@ -472,6 +476,15 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   align-self: flex-start;
 }
 .vms-link:hover { border-bottom-color: var(--vms-accent); }
+
+/* ── Image ── */
+.vms-image { max-width: 100%; height: auto; display: block; }
+.vms-image--small  { width: var(--vms-image-small); }
+.vms-image--medium { width: var(--vms-image-medium); }
+.vms-image--large  { width: var(--vms-image-large); }
+.vms-image--full   { width: 100%; }
+/* Avatars: square-crop to a circle (object-fit avoids distortion on non-square sources). */
+.vms-image--circle { border-radius: 50%; aspect-ratio: 1; object-fit: cover; }
 
 /* ── Progress ── */
 .vms-progress { height: 3px; background: var(--vms-surface-2); border-radius: 99px; overflow: hidden; }
