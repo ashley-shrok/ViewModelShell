@@ -1227,6 +1227,25 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
       context: { ...(node.sortAction.context ?? {}), column: columnKey, direction },
     });
   };
+  // Selection — leading [x]/[ ] column. Dispatch payloads match BrowserAdapter:
+  // { id, checked } per row, { all: true, checked } for select-all.
+  const sel = node.selection;
+  const selectedSet = sel ? new Set(sel.selectedIds) : null;
+  const allOnPage =
+    sel != null && node.rows.length > 0 &&
+    node.rows.every((r) => r.id != null && selectedSet!.has(r.id));
+  const onToggleAll = sel
+    ? (): void => ctx.onAction({
+        name: sel.action.name,
+        context: { ...(sel.action.context ?? {}), all: true, checked: !allOnPage },
+      })
+    : undefined;
+  const onToggleRow = sel
+    ? (rowId: string, checked: boolean): void => ctx.onAction({
+        name: sel.action.name,
+        context: { ...(sel.action.context ?? {}), id: rowId, checked },
+      })
+    : undefined;
   return (
     <scrollbox
       focused={focused}
@@ -1239,6 +1258,11 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
       <box flexDirection="column">
         {/* Header row */}
         <box flexDirection="row" gap={2}>
+          {sel ? (
+            <text attributes={1 /* BOLD */} {...(onToggleAll ? { onMouseDown: onToggleAll } : {})}>
+              {allOnPage ? "[x]" : "[ ]"}
+            </text>
+          ) : null}
           {node.columns.map((c) => {
             const isSorted = node.sortColumn === c.key;
             const caret = isSorted ? (node.sortDirection === "desc" ? " ↓" : " ↑") : "";
@@ -1259,6 +1283,7 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
         {/* Filter row (read-only for B2; inputs in B3) */}
         {node.columns.some((c) => c.filterable) ? (
           <box flexDirection="row" gap={2}>
+            {sel ? <text fg="#888888">{"   "}</text> : null}
             {node.columns.map((c) => (
               <text key={c.key} fg="#888888">
                 {c.filterable ? (c.filterValue ? `[${c.filterValue}]` : "[filter]") : ""}
@@ -1279,6 +1304,18 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
               gap={2}
               {...(onRowClick ? { onMouseDown: onRowClick } : {})}
             >
+              {sel ? (() => {
+                const isSel = row.id != null && selectedSet!.has(row.id);
+                const rowId = row.id;
+                const onBox = rowId != null && onToggleRow
+                  ? (): void => onToggleRow(rowId, !isSel)
+                  : undefined;
+                return (
+                  <text fg={isSel ? "#88ff88" : "#888888"} {...(onBox ? { onMouseDown: onBox } : {})}>
+                    {isSel ? "[x]" : "[ ]"}
+                  </text>
+                );
+              })() : null}
               {node.columns.map((c) => {
                 const cell = row.cells[c.key] ?? "";
                 if (c.linkLabel != null && cell.length > 0) {
@@ -1310,6 +1347,31 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
             </box>
           );
         })}
+        {/* Pagination footer — range label + prev/next. Same { page } payload
+            as BrowserAdapter. The server slices rows; we only render controls. */}
+        {node.pagination ? (() => {
+          const pg = node.pagination!;
+          const totalPages = Math.max(1, Math.ceil(pg.totalRows / pg.pageSize));
+          const from = pg.totalRows === 0 ? 0 : (pg.page - 1) * pg.pageSize + 1;
+          const to = Math.min(pg.page * pg.pageSize, pg.totalRows);
+          const go = (p: number): void => ctx.onAction({
+            name: pg.action.name,
+            context: { ...(pg.action.context ?? {}), page: p },
+          });
+          const canPrev = pg.page > 1;
+          const canNext = pg.page < totalPages;
+          return (
+            <box flexDirection="row" gap={2}>
+              <text fg="#888888">{`${from}–${to} of ${pg.totalRows}`}</text>
+              <text fg={canPrev ? "#88aaff" : "#555555"} {...(canPrev ? { onMouseDown: (): void => go(pg.page - 1) } : {})}>
+                {"‹ Prev"}
+              </text>
+              <text fg={canNext ? "#88aaff" : "#555555"} {...(canNext ? { onMouseDown: (): void => go(pg.page + 1) } : {})}>
+                {"Next ›"}
+              </text>
+            </box>
+          );
+        })() : null}
       </box>
     </scrollbox>
   );

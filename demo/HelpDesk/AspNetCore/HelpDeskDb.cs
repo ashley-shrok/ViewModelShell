@@ -62,6 +62,36 @@ public class HelpDeskDb
         return list;
     }
 
+    // 0.12.0/#16: server-side pagination for the agent queue. Ordered by
+    // created_at DESC then id DESC (a total order, so the page boundaries are
+    // deterministic and match the bun twin row-for-row).
+    public List<Ticket> GetPage(string? status, int limit, int offset)
+    {
+        using var conn = Connect();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = status != null
+            ? "SELECT * FROM tickets WHERE status = @status ORDER BY created_at DESC, id DESC LIMIT @limit OFFSET @offset"
+            : "SELECT * FROM tickets ORDER BY created_at DESC, id DESC LIMIT @limit OFFSET @offset";
+        if (status != null) cmd.Parameters.AddWithValue("@status", status);
+        cmd.Parameters.AddWithValue("@limit",  limit);
+        cmd.Parameters.AddWithValue("@offset", offset);
+        using var reader = cmd.ExecuteReader();
+        var list = new List<Ticket>();
+        while (reader.Read()) list.Add(Map(reader));
+        return list;
+    }
+
+    public int Count(string? status)
+    {
+        using var conn = Connect();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = status != null
+            ? "SELECT COUNT(*) FROM tickets WHERE status = @status"
+            : "SELECT COUNT(*) FROM tickets";
+        if (status != null) cmd.Parameters.AddWithValue("@status", status);
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
     public Ticket? GetById(long id)
     {
         using var conn = Connect();

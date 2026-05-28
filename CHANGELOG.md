@@ -6,6 +6,34 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.12.0 — `TableNode` selection + pagination (npm + NuGet)
+
+**npm:** `0.12.0` (MINOR — two new optional `TableNode` fields + renderer/CSS) · **NuGet:** `0.12.0` (MINOR — `TableSelection` + `TablePagination` records, two new `TableNode` members)
+
+Both packages move together (AGENTS.md: a `ViewNode` wire change bumps both sides). Closes [#16](https://github.com/ashley-shrok/ViewModelShell/issues/16). Purely additive — every existing `TableNode` renders byte-identically.
+
+### Added
+
+- **`TableNode.selection`** (`{ selectedIds: string[]; action }`) — first-class bulk row selection. The adapter renders a leading checkbox column + a header select-all checkbox, tints selected rows with `.vms-table__row--selected`, and dispatches the action with merged `{ id, checked }` per row or `{ all: true, checked }` for select-all (where "all" = the rows currently rendered, i.e. the current page). `selectedIds` is **server-truth** and round-trips in state, so selection survives sort/filter/pagination independent of which rows are in view. Crucially, **`TableRow.action` stays free** — selection is its own seam, so a row can still be click-to-open *and* selectable. Buttons that act on the selection live outside the table as ordinary `ButtonNode`s reading `selectedIds` from state. The "select all N matching" (not just the page) affordance is the app's own node composed above the table — the framework ships the primitive, not the policy.
+- **`TableNode.pagination`** (`{ page; pageSize; totalRows; action }`) — server-driven pagination. The adapter renders an "X–Y of N" range + prev/next controls below the table (disabling the edges), and dispatches `{ page }`. **The server slices `rows` to the current page** — the adapter never paginates client-side (that would break for DB-backed tables, which are most of them). By convention `sortAction`/`filterAction` reset `page` to 1 server-side (documented at the type).
+- **CSS:** `.vms-table__row--selected` (accent tint via `color-mix`, recolors with the active theme — no literals), `.vms-table__th--select`/`.vms-table__td--select` (checkbox column), `.vms-table__select` (`accent-color` from `--vms-accent`), and `.vms-table__pagination*` (range + reused `.vms-button` controls). No new app CSS surface.
+
+### Cross-backend + tested
+
+- TS (`index.ts` + `browser.ts` + `tui.tsx`) and C# (`TableSelection`/`TablePagination` records, both carrying the null-omission attribute on the `TableNode` members) — kept byte-aligned by the parity suite. The `feature-probe` fixture grew a 14-step **selection × pagination × sort × filter** matrix proven identical across `dotnet`/`bun`/`node` backends; the `helpdesk` fixture grew a 6-step agent **bulk-action over SQLite** block (select-all, page, bulk reopen/start) proven identical across `dotnet`/`bun`.
+- 9 new BrowserAdapter unit tests (checkbox state, dispatch payloads, selected-row class, stopPropagation vs. row click, disabled-edge pagination) + a cross-adapter conformance fixture (browser + TUI both surface the controls).
+
+### Demos
+
+- **HelpDesk-Agent** ticket queue is now a real bulk-action workflow: selectable rows + SQL `LIMIT/OFFSET` pagination + "Mark In Progress / Mark Resolved / Reopen" buttons outside the table that act on the selection.
+- **FeatureProbe** gained a table feature-matrix section exercising every `TableNode` knob at once.
+
+### Consumers
+
+Nothing to do — additive. Existing tables are unaffected; opt into a feature by setting `selection` and/or `pagination` on a `TableNode`. See `MIGRATION.md`.
+
+---
+
 ## 0.11.0 — `ImageNode` + `TextNode` "warning" style + WCAG-AA hardening; TUI experimental (npm + NuGet)
 
 **npm:** `0.11.0` (MINOR — new `ImageNode`, `TextNode` style widened) · **NuGet:** `0.11.0` (MINOR — new `ImageNode` record + discriminator)

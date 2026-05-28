@@ -26,13 +26,57 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         string? Str(string key) =>
             payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
                 ? v.GetString() : null;
+        bool Bool(string key) =>
+            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.True;
+        int Int(string key, int dflt) =>
+            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.Number
+                ? v.GetInt32() : dflt;
 
         var state = payload.State with { NotesSaved = false };
 
         switch (payload.Name)
         {
             case "filter":
-                state = state with { Filter = Str("value") ?? "all" };
+                // Selection persists across filter changes (it's server-truth);
+                // the page resets, since the row window shifts underneath it.
+                state = state with { Filter = Str("value") ?? "all", Page = 1 };
+                break;
+
+            case "page":
+                state = state with { Page = Int("page", state.Page) };
+                break;
+
+            case "toggle-select":
+            {
+                var set = new HashSet<long>(state.SelectedIds.Select(long.Parse));
+                if (Bool("all"))
+                {
+                    // Select-all spans the visible page only.
+                    var pageIds = QueueWindow(state).Page.Select(t => t.Id);
+                    if (Bool("checked")) foreach (var id in pageIds) set.Add(id);
+                    else                 foreach (var id in pageIds) set.Remove(id);
+                }
+                else
+                {
+                    var id = Str("id");
+                    if (id != null && long.TryParse(id, out var tid))
+                    { if (Bool("checked")) set.Add(tid); else set.Remove(tid); }
+                }
+                state = state with { SelectedIds = set.OrderBy(x => x).Select(x => x.ToString()).ToList() };
+                break;
+            }
+
+            case "bulk-start":
+            case "bulk-resolve":
+            case "bulk-reopen":
+                var bulkStatus = payload.Name switch
+                {
+                    "bulk-start"  => "in-progress",
+                    "bulk-resolve" => "resolved",
+                    _              => "open",
+                };
+                foreach (var id in state.SelectedIds.Select(long.Parse)) db.UpdateStatus(id, bulkStatus);
+                state = state with { SelectedIds = [] };
                 break;
 
             case "select-ticket":
@@ -97,10 +141,25 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         return BuildQueuePage(state);
     }
 
+    private const int PageSize = 5;
+
+    // Filter → count → page-slice. The SERVER slices (SQL LIMIT/OFFSET); the
+    // adapter only renders the page controls. Also used by toggle-select-all so
+    // "select all" addresses exactly the visible page.
+    private (List<Ticket> Page, int Total, int ClampedPage) QueueWindow(AgentState state)
+    {
+        var status = state.Filter == "all" ? null : state.Filter;
+        var total = db.Count(status);
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)PageSize));
+        var page = Math.Clamp(state.Page, 1, totalPages);
+        var tickets = db.GetPage(status, PageSize, (page - 1) * PageSize);
+        return (tickets, total, page);
+    }
+
     private ViewNode BuildQueuePage(AgentState state)
     {
         var (open, inProgress, resolved) = db.GetCounts();
-        var tickets = db.GetAll(state.Filter == "all" ? null : state.Filter);
+        var (tickets, total, page) = QueueWindow(state);
 
         var rows = tickets.Select(t => new TableRow(
             Cells: new Dictionary<string, string>
@@ -112,11 +171,13 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                 ["due"]      = string.IsNullOrEmpty(t.DueDate) ? "—" : t.DueDate!,
             },
             Id:      t.Id.ToString(),
+            // Row click still opens the ticket — selection is its own column, so
+            // the two interactions no longer fight over TableRow.action.
             Action:  new ActionDescriptor("select-ticket", new() { ["id"] = t.Id.ToString() }),
             Variant: TicketVariant(t))).ToList();
 
-        return new PageNode("Help Desk — Agent",
-        [
+        var children = new List<ViewNode>
+        {
             new TextNode($"{open} open · {inProgress} in progress · {resolved} resolved", "muted"),
             new TabsNode(
                 Selected: state.Filter,
@@ -128,19 +189,38 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                     new TabItem("in-progress", "In Progress"),
                     new TabItem("resolved",    "Resolved"),
                 ]),
-            rows.Count == 0
-                ? new TextNode("No tickets in queue.", "muted")
-                : new TableNode(
-                    Columns:
-                    [
-                        new TableColumn("title",    "Title"),
-                        new TableColumn("type",     "Type"),
-                        new TableColumn("priority", "Priority"),
-                        new TableColumn("status",   "Status"),
-                        new TableColumn("due",      "Due"),
-                    ],
-                    Rows: rows),
-        ]);
+        };
+
+        // Bulk-action toolbar — OUTSIDE the table, reading SelectedIds from state.
+        // Rendered only when something is selected (the framework has no
+        // disabled-button primitive, and a bulk action over nothing is a no-op).
+        if (state.SelectedIds.Count > 0)
+        {
+            children.Add(new SectionNode(null,
+            [
+                new TextNode($"{state.SelectedIds.Count} selected", "muted"),
+                new ButtonNode("Mark In Progress", new ActionDescriptor("bulk-start"),   "secondary"),
+                new ButtonNode("Mark Resolved",    new ActionDescriptor("bulk-resolve"), "primary"),
+                new ButtonNode("Reopen",           new ActionDescriptor("bulk-reopen"),  "secondary"),
+            ], Variant: "card"));
+        }
+
+        children.Add(total == 0
+            ? new TextNode("No tickets in queue.", "muted")
+            : new TableNode(
+                Columns:
+                [
+                    new TableColumn("title",    "Title"),
+                    new TableColumn("type",     "Type"),
+                    new TableColumn("priority", "Priority"),
+                    new TableColumn("status",   "Status"),
+                    new TableColumn("due",      "Due"),
+                ],
+                Rows: rows,
+                Selection:  new TableSelection(state.SelectedIds, new ActionDescriptor("toggle-select")),
+                Pagination: new TablePagination(page, PageSize, total, new ActionDescriptor("page"))));
+
+        return new PageNode("Help Desk — Agent", children);
     }
 
     private ViewNode BuildTicketPage(Ticket ticket, AgentState state)

@@ -248,6 +248,34 @@ export interface TableRow {
   variant?: string;
 }
 
+export interface TableSelection {
+  /** Row ids currently selected — server-truth. The adapter checks each row
+   *  whose `id` is in this list and emits `.vms-table__row--selected` on it.
+   *  Selection survives sort/filter/pagination because it round-trips in state,
+   *  independent of which rows are currently in `rows`. */
+  selectedIds: string[];
+  /** Dispatched on a selection toggle. The adapter merges `{ id, checked }` for
+   *  a per-row checkbox, or `{ all: true, checked }` for the header select-all
+   *  checkbox (where "all" means the rows currently rendered — i.e. the current
+   *  page, never unloaded rows). The "select all N matching" affordance, when an
+   *  app wants it, is the app's own node composed above the table — the
+   *  framework gives the primitive, not the policy. */
+  action: ActionEvent;
+}
+
+export interface TablePagination {
+  /** 1-based current page. */
+  page: number;
+  /** Rows per page. Drives the "X–Y of N" range label and the last-page calc. */
+  pageSize: number;
+  /** Total rows across all pages — server-truth. The adapter renders the range
+   *  label and enables/disables prev/next from this; it does NOT slice. */
+  totalRows: number;
+  /** Dispatched on a page-control click. The adapter merges `{ page }` — the
+   *  target 1-based page. */
+  action: ActionEvent;
+}
+
 export interface TableNode {
   type: "table";
   columns: TableColumn[];
@@ -258,6 +286,18 @@ export interface TableNode {
   sortAction?: ActionEvent;
   /** Base action. Adapter merges { column, value, filters } into context on Enter. */
   filterAction?: ActionEvent;
+  /** Per-row multi-select. When set, the adapter renders a leading checkbox
+   *  column + a header select-all checkbox and tints selected rows. `TableRow.id`
+   *  is REQUIRED on every row when selection is set — it's the address the
+   *  toggle action reports back. */
+  selection?: TableSelection;
+  /** Server-driven pagination. When set, the adapter renders an "X–Y of N"
+   *  range + prev/next controls below the table. **The server slices `rows` to
+   *  the current page** — the adapter never paginates client-side (that would
+   *  break for DB-backed tables, which are most of them). By convention
+   *  `sortAction` / `filterAction` reset `page` to 1 on the server side, since
+   *  the row window changes underneath them. */
+  pagination?: TablePagination;
 }
 
 export interface CopyButtonNode {

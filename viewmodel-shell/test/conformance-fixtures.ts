@@ -163,6 +163,28 @@ export const FIXTURES: ConformanceFixture[] = [
     expect: ["Xray", "Zulu", "Alfa1", "Bravo1", "Echo1", "Golf1"],
   },
   {
+    // 0.12.0 (#16): selection + pagination. Selection glyph state is presentation
+    // (out of scope here — see rules); what's SHARED text is the cells/headers
+    // plus the pagination controls. "Prev"/"Next" are wrap-proof single words
+    // both adapters surface (browser button textContent; TUI <text>).
+    name: "table with selection + pagination (controls surface on both)",
+    ordered: true,
+    vm: {
+      type: "table",
+      columns: [
+        { key: "a", label: "Sierra3" },
+        { key: "b", label: "Tango3" },
+      ],
+      rows: [
+        { id: "r1", cells: { a: "Uniform3", b: "Victor3" } },
+        { id: "r2", cells: { a: "Whiskey3", b: "Xray3" } },
+      ],
+      selection: { selectedIds: ["r1"], action: { name: "sel" } },
+      pagination: { page: 1, pageSize: 2, totalRows: 6, action: { name: "pg" } },
+    },
+    expect: ["Sierra3", "Tango3", "Uniform3", "Victor3", "Whiskey3", "Xray3", "Prev", "Next"],
+  },
+  {
     name: "modal (title + body + footer button)",
     vm: {
       type: "modal",

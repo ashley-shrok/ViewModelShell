@@ -614,6 +614,30 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-table__link { color: var(--vms-accent); text-decoration: none; }
 .vms-table__link:hover { text-decoration: underline; }
 
+/* Selection — leading checkbox column + selected-row tint. The tint derives
+   from --vms-accent via color-mix, so a custom :root theme recolors it
+   automatically (same pattern as the status variants above). Selected wins
+   over the clickable-hover background so a selected row stays legible. */
+.vms-table__th--select,
+.vms-table__td--select { width: 1%; white-space: nowrap; text-align: center; padding-right: 0; }
+.vms-table__select { accent-color: var(--vms-accent); cursor: pointer; }
+.vms-table__row--selected { background: color-mix(in srgb, var(--vms-accent) 12%, transparent); }
+.vms-table__row--selected.vms-table__row--clickable:hover { background: color-mix(in srgb, var(--vms-accent) 18%, transparent); }
+
+/* Pagination footer — range label + prev/next, separated from the table by a
+   hairline. Buttons reuse .vms-button styling; only sizing/disabled is added. */
+.vms-table__pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--vms-space-sm);
+  padding-top: var(--vms-space-sm);
+  margin-top: var(--vms-space-xs);
+  border-top: 1px solid var(--vms-border);
+}
+.vms-table__pagination-range { color: var(--vms-text-muted); font-size: var(--vms-text-sm); margin-right: auto; }
+.vms-table__pagination-btn { padding: var(--vms-space-xs) var(--vms-space-sm); font-size: var(--vms-text-sm); }
+.vms-table__pagination-btn:disabled { opacity: 0.45; cursor: default; }
+
 /* ── Recommended error-banner pattern ──
    Apps typically render this from the `onError` callback. Not emitted by
    the framework; included here so apps can use the convention without

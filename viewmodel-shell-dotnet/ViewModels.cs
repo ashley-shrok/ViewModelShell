@@ -251,13 +251,35 @@ public record TableRow(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant = null
 );
 
+// Per-row multi-select metadata for TableNode. SelectedIds is server-truth;
+// the adapter checks rows whose Id is in it. Action is dispatched with merged
+// { id, checked } per row or { all: true, checked } for select-all. Both members
+// are required when Selection is present, so neither carries the null-omission
+// attribute.
+public record TableSelection(
+    IReadOnlyList<string> SelectedIds,
+    ActionDescriptor Action
+);
+
+// Server-driven pagination metadata for TableNode. The server slices Rows to the
+// current page; the adapter only renders the "X–Y of N" range + prev/next from
+// these numbers. Action is dispatched with merged { page } (target 1-based page).
+public record TablePagination(
+    int Page,
+    int PageSize,
+    int TotalRows,
+    ActionDescriptor Action
+);
+
 public record TableNode(
     IReadOnlyList<TableColumn> Columns,
     IReadOnlyList<TableRow> Rows,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SortColumn = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SortDirection = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? SortAction = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? FilterAction = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? FilterAction = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TableSelection? Selection = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TablePagination? Pagination = null
 ) : ViewNode;
 
 public record LinkNode(

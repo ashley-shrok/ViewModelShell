@@ -684,6 +684,28 @@ export class BrowserAdapter implements Adapter {
 
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
+
+    // Selection: a leading checkbox column. The header box is a select-all over
+    // the rows CURRENTLY rendered (the current page) — never unloaded rows.
+    const sel = n.selection;
+    const selectedSet = sel ? new Set(sel.selectedIds) : null;
+    if (sel) {
+      const th = document.createElement("th");
+      th.className = "vms-table__th vms-table__th--select";
+      const allOnPage = n.rows.length > 0 && n.rows.every(r => r.id != null && selectedSet!.has(r.id));
+      const someOnPage = n.rows.some(r => r.id != null && selectedSet!.has(r.id));
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.className = "vms-table__select vms-table__select--all";
+      box.checked = allOnPage;
+      box.indeterminate = someOnPage && !allOnPage;
+      const selAction = sel.action;
+      box.addEventListener("change", () =>
+        on({ name: selAction.name, context: { ...(selAction.context ?? {}), all: true, checked: box.checked } }));
+      th.appendChild(box);
+      headerRow.appendChild(th);
+    }
+
     n.columns.forEach(col => {
       const th = document.createElement("th");
       const isSorted = col.key === n.sortColumn;
@@ -710,6 +732,7 @@ export class BrowserAdapter implements Adapter {
       const filterAction = n.filterAction!;
       const filterRow = document.createElement("tr");
       filterRow.className = "vms-table__filter-row";
+      if (sel) filterRow.appendChild(document.createElement("th")); // align under the select column
       n.columns.forEach(col => {
         const th = document.createElement("th");
         if (col.filterable) {
@@ -743,11 +766,33 @@ export class BrowserAdapter implements Adapter {
       let rowClass = "vms-table__row";
       if (row.variant) rowClass += ` vms-table__row--${row.variant}`;
       if (row.action) rowClass += " vms-table__row--clickable";
+      const isSelected = sel != null && row.id != null && selectedSet!.has(row.id);
+      if (isSelected) rowClass += " vms-table__row--selected";
       tr.className = rowClass;
       if (row.id) tr.dataset.id = row.id;
       if (row.action) {
         const rowAction = row.action;
         tr.addEventListener("click", () => on(rowAction));
+      }
+      if (sel) {
+        const td = document.createElement("td");
+        td.className = "vms-table__td vms-table__td--select";
+        // A click in the checkbox cell must not also fire the row's click action.
+        td.addEventListener("click", (e) => e.stopPropagation());
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.className = "vms-table__select";
+        box.checked = isSelected;
+        if (row.id != null) {
+          const rowId = row.id;
+          const selAction = sel.action;
+          box.addEventListener("change", () =>
+            on({ name: selAction.name, context: { ...(selAction.context ?? {}), id: rowId, checked: box.checked } }));
+        } else {
+          box.disabled = true; // selection addresses rows by id; a row without one can't be selected
+        }
+        td.appendChild(box);
+        tr.appendChild(td);
       }
       n.columns.forEach(col => {
         const td = document.createElement("td");
@@ -773,6 +818,39 @@ export class BrowserAdapter implements Adapter {
     table.appendChild(tbody);
 
     wrapper.appendChild(table);
+
+    if (n.pagination) {
+      const pg = n.pagination;
+      const footer = document.createElement("div");
+      footer.className = "vms-table__pagination";
+
+      const totalPages = Math.max(1, Math.ceil(pg.totalRows / pg.pageSize));
+      const from = pg.totalRows === 0 ? 0 : (pg.page - 1) * pg.pageSize + 1;
+      const to = Math.min(pg.page * pg.pageSize, pg.totalRows);
+
+      const range = document.createElement("span");
+      range.className = "vms-table__pagination-range";
+      range.textContent = `${from}–${to} of ${pg.totalRows}`;
+      footer.appendChild(range);
+
+      const pgAction = pg.action;
+      const mkBtn = (label: string, targetPage: number, disabled: boolean): HTMLButtonElement => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "vms-button vms-button--secondary vms-table__pagination-btn";
+        b.textContent = label;
+        b.disabled = disabled;
+        if (!disabled)
+          b.addEventListener("click", () =>
+            on({ name: pgAction.name, context: { ...(pgAction.context ?? {}), page: targetPage } }));
+        return b;
+      };
+      footer.appendChild(mkBtn("‹ Prev", pg.page - 1, pg.page <= 1));
+      footer.appendChild(mkBtn("Next ›", pg.page + 1, pg.page >= totalPages));
+
+      wrapper.appendChild(footer);
+    }
+
     parent.appendChild(wrapper);
   }
 

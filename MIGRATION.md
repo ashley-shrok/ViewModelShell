@@ -6,6 +6,53 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `0.12.0` (`TableNode` selection + pagination — npm + NuGet)
+
+**Nothing to do** beyond taking the bump. `0.12.0` adds two optional fields to `TableNode` — `selection` and `pagination`. Every existing table renders byte-identically; you opt in per table.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.11.0` | **`0.12.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.11.0` | **`0.12.0`** |
+
+**Bulk row selection** — add `selection` to a `TableNode`, keep the selected ids in your state record, and put the bulk-action buttons *outside* the table:
+
+```csharp
+// state: IReadOnlyList<string> SelectedIds
+new TableNode(
+    Columns: [...], Rows: rows,
+    Selection: new TableSelection(state.SelectedIds, new ActionDescriptor("toggle-select")));
+// action handler:
+case "toggle-select":
+    var set = new HashSet<string>(state.SelectedIds);
+    if (Bool("all")) { /* add/remove the current page's row ids */ }
+    else { var id = Str("id"); if (Bool("checked")) set.Add(id!); else set.Remove(id!); }
+    state = state with { SelectedIds = /* materialize in a stable order */ };
+    break;
+case "bulk-archive":
+    foreach (var id in state.SelectedIds) _store.Archive(id);
+    state = state with { SelectedIds = [] };
+    break;
+```
+
+The adapter merges `{ id, checked }` per row and `{ all: true, checked }` for the header select-all (where "all" = the rendered page). `TableRow.action` is untouched — rows stay click-to-open *and* selectable. Keep `selectedIds` in a **deterministic order** (e.g. sorted) if you have a TypeScript backend twin that must match a C# one under parity. The "select all N matching, not just this page" pattern is your own node composed above the table.
+
+**Pagination** — add `pagination` and slice `rows` **server-side** (the adapter does not slice):
+
+```csharp
+new TableNode( Columns: [...], Rows: pageRows,   // already sliced to the page
+    Pagination: new TablePagination(page, pageSize, totalRows, new ActionDescriptor("page")));
+// action handler:
+case "page": state = state with { Page = Int("page", state.Page) }; break;
+// and reset Page = 1 inside your sort/filter handlers (the row window shifts).
+```
+
+The adapter renders "X–Y of N" + prev/next from these numbers and dispatches `{ page }`. For a DB-backed table this is just `LIMIT/OFFSET` + a `COUNT(*)` — see `demo/HelpDesk/AspNetCore/AgentController.cs` (and its bun twin) for the worked SQL example.
+
+**TypeScript backend** is the mirror shape: `selection: { selectedIds, action }`, `pagination: { page, pageSize, totalRows, action }` on the table node. **TUI** renders `[x]`/`[ ]` checkboxes and a text prev/next footer with the same dispatch payloads.
+
+---
+
 ## Upgrading to `0.11.0` (`ImageNode` + `TextNode` "warning" style + AA hardening — npm + NuGet)
 
 **Nothing to do** beyond taking the bump. `0.11.0` adds the `ImageNode` type, adds `"warning"` to the `TextNode.style` union, and darkens the `--vms-warning` token (default + light themes) so warning text clears WCAG-AA. Purely additive.

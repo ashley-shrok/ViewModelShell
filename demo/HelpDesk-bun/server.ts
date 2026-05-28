@@ -32,9 +32,13 @@ interface AgentState {
   selectedTicketId: number | null;
   filter: string;
   notesSaved: boolean;
+  // 0.12.0/#16: bulk-action queue — mirror of the C# twin. selectedIds is
+  // server-truth, kept numerically sorted so the array round-trips identically.
+  selectedIds: string[];
+  page: number;
 }
 function agentInitial(): AgentState {
-  return { view: "queue", selectedTicketId: null, filter: "all", notesSaved: false };
+  return { view: "queue", selectedTicketId: null, filter: "all", notesSaved: false, selectedIds: [], page: 1 };
 }
 
 interface RequesterState {
@@ -126,6 +130,26 @@ function dbGetAll(status: string | null): Ticket[] {
         "SELECT * FROM tickets ORDER BY created_at DESC"
       ).all();
   return rows.map(mapTicket);
+}
+
+// 0.12.0/#16: server-side pagination for the agent queue. Ordered created_at
+// DESC then id DESC (total order → deterministic page boundaries matching C#).
+function dbGetPage(status: string | null, limit: number, offset: number): Ticket[] {
+  const rows = status
+    ? db.query<TicketRow, [string, number, number]>(
+        "SELECT * FROM tickets WHERE status = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?"
+      ).all(status, limit, offset)
+    : db.query<TicketRow, [number, number]>(
+        "SELECT * FROM tickets ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?"
+      ).all(limit, offset);
+  return rows.map(mapTicket);
+}
+
+function dbCount(status: string | null): number {
+  const row = status
+    ? db.query<{ n: number }, [string]>("SELECT COUNT(*) AS n FROM tickets WHERE status = ?").get(status)
+    : db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM tickets").get();
+  return row?.n ?? 0;
 }
 
 function dbGetById(id: number): Ticket | null {
@@ -225,9 +249,22 @@ function formatDate(iso: string): string {
 // (TableNode; whole-row click opens the ticket) → a dedicated full
 // ticket PageNode. The navigate pattern real ticketing actually uses.
 
+const AGENT_PAGE_SIZE = 5;
+
+// Filter → count → page-slice. Server slices (SQL LIMIT/OFFSET); the adapter
+// only renders controls. Shared by the queue page and toggle-select-all.
+function agentQueueWindow(state: AgentState): { page: Ticket[]; total: number; clampedPage: number } {
+  const status = state.filter === "all" ? null : state.filter;
+  const total = dbCount(status);
+  const totalPages = Math.max(1, Math.ceil(total / AGENT_PAGE_SIZE));
+  const clampedPage = Math.min(Math.max(state.page, 1), totalPages);
+  const page = dbGetPage(status, AGENT_PAGE_SIZE, (clampedPage - 1) * AGENT_PAGE_SIZE);
+  return { page, total, clampedPage };
+}
+
 function agentBuildQueuePage(state: AgentState): ViewNode {
   const counts = dbGetCounts();
-  const tickets = dbGetAll(state.filter === "all" ? null : state.filter);
+  const { page: tickets, total, clampedPage } = agentQueueWindow(state);
 
   const rows = tickets.map(t => {
     const variant = ticketVariant(t);
@@ -268,9 +305,28 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
         { value: "resolved",    label: "Resolved" },
       ],
     },
-    rows.length === 0
+  ];
+
+  // Bulk-action toolbar — OUTSIDE the table, reading selectedIds from state.
+  // Rendered only when something is selected (no disabled-button primitive, and
+  // a bulk action over nothing is a no-op). Mirrors AgentController.cs.
+  if (state.selectedIds.length > 0) {
+    children.push({
+      type: "section",
+      variant: "card",
+      children: [
+        { type: "text", value: `${state.selectedIds.length} selected`, style: "muted" },
+        { type: "button", label: "Mark In Progress", action: { name: "bulk-start" },   variant: "secondary" },
+        { type: "button", label: "Mark Resolved",    action: { name: "bulk-resolve" }, variant: "primary" },
+        { type: "button", label: "Reopen",           action: { name: "bulk-reopen" },  variant: "secondary" },
+      ],
+    } as ViewNode);
+  }
+
+  children.push(
+    total === 0
       ? { type: "text", value: "No tickets in queue.", style: "muted" }
-      : {
+      : ({
           type: "table",
           columns: [
             { key: "title",    label: "Title",    sortable: false, filterable: false, linkExternal: false },
@@ -280,8 +336,11 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
             { key: "due",      label: "Due",      sortable: false, filterable: false, linkExternal: false },
           ],
           rows,
-        },
-  ];
+          // Row click still opens the ticket; selection is its own column.
+          selection: { selectedIds: state.selectedIds, action: { name: "toggle-select" } },
+          pagination: { page: clampedPage, pageSize: AGENT_PAGE_SIZE, totalRows: total, action: { name: "page" } },
+        } as ViewNode),
+  );
 
   return { type: "page", title: "Help Desk — Agent", children };
 }
@@ -383,12 +442,44 @@ function agentBuildVm(state: AgentState): ViewNode {
 const agentHandler = createAction<AgentState>(async (payload) => {
   const ctx = payload.context ?? {};
   const str = (k: string): string | null => (typeof ctx[k] === "string" ? (ctx[k] as string) : null);
+  const bool = (k: string): boolean => ctx[k] === true;
+  const int = (k: string, dflt: number): number => (typeof ctx[k] === "number" ? (ctx[k] as number) : dflt);
   let state: AgentState = { ...payload.state, notesSaved: false };
 
   switch (payload.name) {
     case "filter":
-      state = { ...state, filter: str("value") ?? "all" };
+      // Selection persists across filters (server-truth); page resets.
+      state = { ...state, filter: str("value") ?? "all", page: 1 };
       break;
+
+    case "page":
+      state = { ...state, page: int("page", state.page) };
+      break;
+
+    case "toggle-select": {
+      const set = new Set(state.selectedIds.map(Number));
+      if (bool("all")) {
+        const pageIds = agentQueueWindow(state).page.map((t) => t.id);
+        if (bool("checked")) for (const id of pageIds) set.add(id);
+        else                 for (const id of pageIds) set.delete(id);
+      } else {
+        const id = str("id");
+        const tid = id ? parseInt(id, 10) : NaN;
+        if (id && !isNaN(tid)) { if (bool("checked")) set.add(tid); else set.delete(tid); }
+      }
+      state = { ...state, selectedIds: [...set].sort((a, b) => a - b).map(String) };
+      break;
+    }
+
+    case "bulk-start":
+    case "bulk-resolve":
+    case "bulk-reopen": {
+      const bulkStatus = payload.name === "bulk-start" ? "in-progress"
+                       : payload.name === "bulk-resolve" ? "resolved" : "open";
+      for (const id of state.selectedIds.map(Number)) dbUpdateStatus(id, bulkStatus);
+      state = { ...state, selectedIds: [] };
+      break;
+    }
     case "select-ticket": {
       const id = str("id");
       const sid = id ? parseInt(id, 10) : NaN;

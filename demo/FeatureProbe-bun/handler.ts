@@ -14,10 +14,91 @@ interface FeatureProbeState {
   lastUploadName: string | null;
   lastUploadSize: number;
   lastSubmit?: string | null;   // 0.10.0/#15: "{action}: {note}" from the multi-action form
+  // 0.12.0/#16: table feature-matrix state — see the C# twin for the parity
+  // rationale (defaults must match byte-for-byte: "" and [] over null/undefined).
+  tableSortCol?: string | null;
+  tableSortDir?: string | null;
+  tableFilter: string;
+  tablePage: number;
+  tableSelected: string[];
 }
 
 function initialState(): FeatureProbeState {
-  return { pollCount: 0, lastUploadName: null, lastUploadSize: 0 };
+  return {
+    pollCount: 0, lastUploadName: null, lastUploadSize: 0,
+    tableFilter: "", tablePage: 1, tableSelected: [],
+  };
+}
+
+// Mirror of the C# seed — fixed order + ASCII so ordinal sort agrees.
+const PAGE_SIZE = 3;
+interface TableItem { id: string; name: string; status: string; }
+const ITEMS: TableItem[] = [
+  { id: "1", name: "Apple",      status: "active" },
+  { id: "2", name: "Banana",     status: "active" },
+  { id: "3", name: "Cherry",     status: "done" },
+  { id: "4", name: "Date",       status: "active" },
+  { id: "5", name: "Elderberry", status: "done" },
+  { id: "6", name: "Fig",        status: "active" },
+  { id: "7", name: "Grape",      status: "done" },
+];
+
+// Filter → sort → paginate. Server slices; the adapter only renders controls.
+// Sort: ordinal (code-unit) compare with id tiebreak — a total order, matching
+// the C# CompareOrdinal path so the two backends agree row-for-row.
+function tableWindow(s: FeatureProbeState): { page: TableItem[]; total: number; clampedPage: number } {
+  let rows = ITEMS.slice();
+  if (s.tableFilter) {
+    const f = s.tableFilter.toLowerCase();
+    rows = rows.filter((i) => i.name.toLowerCase().includes(f));
+  }
+  if (s.tableSortCol) {
+    const col = s.tableSortCol;
+    const dir = s.tableSortDir === "desc" ? -1 : 1;
+    rows.sort((a, b) => {
+      const av = col === "name" ? a.name : col === "status" ? a.status : "";
+      const bv = col === "name" ? b.name : col === "status" ? b.status : "";
+      let c = av < bv ? -1 : av > bv ? 1 : 0;
+      if (c === 0) c = a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+      return c * dir;
+    });
+  }
+  const total = rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const clampedPage = Math.min(Math.max(s.tablePage, 1), totalPages);
+  const page = rows.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
+  return { page, total, clampedPage };
+}
+
+function buildTableSection(state: FeatureProbeState): ViewNode {
+  const { page, total, clampedPage } = tableWindow(state);
+  const selected = state.tableSelected;
+  const table = {
+    type: "table",
+    columns: [
+      {
+        key: "name", label: "Name", sortable: true, filterable: true, linkExternal: false,
+        ...(state.tableFilter.length > 0 ? { filterValue: state.tableFilter } : {}),
+      },
+      { key: "status", label: "Status", sortable: true, filterable: false, linkExternal: false },
+    ],
+    rows: page.map((i) => ({ cells: { name: i.name, status: i.status }, id: i.id })),
+    ...(state.tableSortCol != null ? { sortColumn: state.tableSortCol } : {}),
+    ...(state.tableSortDir != null ? { sortDirection: state.tableSortDir } : {}),
+    sortAction: { name: "table-sort" },
+    filterAction: { name: "table-filter" },
+    selection: { selectedIds: selected, action: { name: "table-select" } },
+    pagination: { page: clampedPage, pageSize: PAGE_SIZE, totalRows: total, action: { name: "table-page" } },
+  } as ViewNode;
+  return {
+    type: "section",
+    heading: "Table matrix",
+    variant: "card",
+    children: [
+      { type: "text", value: `${selected.length} selected`, style: "muted" },
+      table,
+    ],
+  };
 }
 
 function buildVm(state: FeatureProbeState): ViewNode {
@@ -61,13 +142,15 @@ function buildVm(state: FeatureProbeState): ViewNode {
     title: "Feature Probe",
     density: "compact",
     layout: "cards",
-    children: [probeSection],
+    children: [probeSection, buildTableSection(state)],
   };
 }
 
 const actionHandler = createAction<FeatureProbeState>(async (payload) => {
   const ctx = payload.context ?? {};
   const str = (k: string): string | null => (typeof ctx[k] === "string" ? (ctx[k] as string) : null);
+  const bool = (k: string): boolean => ctx[k] === true;
+  const int = (k: string, dflt: number): number => (typeof ctx[k] === "number" ? (ctx[k] as number) : dflt);
 
   let state = payload.state;
 
@@ -129,6 +212,34 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
     case "reset":
       state = initialState();
       break;
+
+    // ── table feature-matrix (0.12.0/#16) ─ mirror of the C# twin ──────────
+    case "table-sort":
+      state = { ...state, tableSortCol: str("column"), tableSortDir: str("direction"), tablePage: 1 };
+      break;
+
+    case "table-filter":
+      state = { ...state, tableFilter: str("value") ?? "", tablePage: 1 };
+      break;
+
+    case "table-page":
+      state = { ...state, tablePage: int("page", state.tablePage) };
+      break;
+
+    case "table-select": {
+      const set = new Set(state.tableSelected);
+      if (bool("all")) {
+        const pageIds = tableWindow(state).page.map((i) => i.id);
+        if (bool("checked")) for (const id of pageIds) set.add(id);
+        else                 for (const id of pageIds) set.delete(id);
+      } else {
+        const id = str("id");
+        if (id != null) { if (bool("checked")) set.add(id); else set.delete(id); }
+      }
+      // Re-materialize in seed order so the array round-trips identically.
+      state = { ...state, tableSelected: ITEMS.filter((i) => set.has(i.id)).map((i) => i.id) };
+      break;
+    }
 
     default:
       throw new Error(`Unknown action: ${payload.name}`);
