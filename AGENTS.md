@@ -463,6 +463,20 @@ shell.load();
 
 No tab ID, no query parameters — multi-tab isolation comes from each tab carrying its own state.
 
+### Agent discoverability
+
+Every backend-bearing demo page in this repo carries a one-line HTML comment + a `<meta name="viewmodel-shell">` tag in `<head>` that announces "this is a VMS app — drive it via the JSON wire" and names the endpoint pair. Visible to any agent that reads the page's HTML, **including JS-less ones** (`curl`, `WebFetch`, basic crawlers) — which matters, because "agents can drive this without a browser" is the framework's pitch.
+
+```html
+<!-- Agent discoverability — this is a ViewModel Shell app: agents can drive it via the JSON wire
+     (GET endpoint → {vm, state}; POST actionEndpoint multipart {_action, _state}). Docs: https://github.com/ashley-shrok/ViewModelShell -->
+<meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/0.12","endpoint":"/api/<x>","actionEndpoint":"/api/<x>/action"}'>
+```
+
+The `protocol` token is `viewmodel-shell/<major.minor>` — bump only when the wire shape itself changes (additive wire changes within a minor, like `0.12.0`'s table selection/pagination, don't require a bump because old agents still work).
+
+**Convention rule:** any new demo page that mounts a VMS shell MUST include this meta (`grep -L 'viewmodel-shell"' demo/**/*.html` should return nothing among backend-bearing pages). Chooser/landing pages with no shell mount (e.g. `demo/HelpDesk/frontend/index.html`) and the pure-frontend `demo/Showcase/` don't carry it — they have no endpoint to advertise. The parity suite doesn't check it (it's an out-of-band discoverability signal, not part of the wire); reviewers do.
+
 ### MSBuild target
 
 Runs `npm run build` automatically before every `dotnet build` / Visual Studio F5:

@@ -49,6 +49,18 @@ If your backend is .NET: copy `demo/Tasks/AspNetCore/ViewModels.cs` from the [Gi
 
 For other backends, implement the same JSON shape: a `GET` returning `{ vm, state }`, and a `POST` that takes `multipart/form-data` with `_action` and `_state` form fields and returns the next `{ vm, state }`. See [AGENTS.md](https://github.com/ashley-shrok/ViewModelShell/blob/main/AGENTS.md) for the full wire format.
 
+## Agents
+
+Add one line to your page's `<head>` so agents reading the HTML know they can drive your app via the JSON wire instead of scraping the DOM. Visible to JS-less crawlers (`curl`, `WebFetch`):
+
+```html
+<!-- Agent discoverability — this is a ViewModel Shell app: agents can drive it via the JSON wire
+     (GET endpoint → {vm, state}; POST actionEndpoint multipart {_action, _state}). Docs: https://github.com/ashley-shrok/ViewModelShell -->
+<meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/0.12","endpoint":"/api/tasks","actionEndpoint":"/api/tasks/action"}'>
+```
+
+All shipped demos include this — it's the recommended convention for any VMS-driven page that mounts a shell.
+
 ## Themes
 
 The base stylesheet ships a **light** default (purple accent). To use a different look — including the prior dark-purple default — import a theme file on top:

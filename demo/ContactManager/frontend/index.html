@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Agent discoverability — this is a ViewModel Shell app: agents can drive it via the JSON wire
+       (GET endpoint → {vm, state}; POST actionEndpoint multipart {_action, _state}). Docs: https://github.com/ashley-shrok/ViewModelShell -->
+  <meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/0.12","endpoint":"/api/contacts","actionEndpoint":"/api/contacts/action"}'>
   <title>Contact Manager</title>
 </head>
 <body>
