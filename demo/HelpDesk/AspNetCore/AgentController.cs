@@ -26,11 +26,14 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         string? Str(string key) =>
             payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
                 ? v.GetString() : null;
-        bool Bool(string key) =>
-            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.True;
         int Int(string key, int dflt) =>
             payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.Number
                 ? v.GetInt32() : dflt;
+        // 0.13.0: bulk-action handlers read the harvested selection from context.
+        List<string> StrList(string key) =>
+            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.Array
+                ? v.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList()
+                : new List<string>();
 
         var state = payload.State with { NotesSaved = false };
 
@@ -46,26 +49,8 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                 state = state with { Page = Int("page", state.Page) };
                 break;
 
-            case "toggle-select":
-            {
-                var set = new HashSet<long>(state.SelectedIds.Select(long.Parse));
-                if (Bool("all"))
-                {
-                    // Select-all spans the visible page only.
-                    var pageIds = QueueWindow(state).Page.Select(t => t.Id);
-                    if (Bool("checked")) foreach (var id in pageIds) set.Add(id);
-                    else                 foreach (var id in pageIds) set.Remove(id);
-                }
-                else
-                {
-                    var id = Str("id");
-                    if (id != null && long.TryParse(id, out var tid))
-                    { if (Bool("checked")) set.Add(tid); else set.Remove(tid); }
-                }
-                state = state with { SelectedIds = set.OrderBy(x => x).Select(x => x.ToString()).ToList() };
-                break;
-            }
-
+            // 0.13.0 — toggle-select action removed. Selection is purely local
+            // (DOM-tracked by the adapter) until a bulk-action button fires.
             case "bulk-start":
             case "bulk-resolve":
             case "bulk-reopen":
@@ -75,8 +60,9 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                     "bulk-resolve" => "resolved",
                     _              => "open",
                 };
-                foreach (var id in state.SelectedIds.Select(long.Parse)) db.UpdateStatus(id, bulkStatus);
-                state = state with { SelectedIds = [] };
+                // selectedIds arrived in the action context, harvested by the
+                // adapter from the bulk button's TableNode.selection.buttons[] click.
+                foreach (var id in StrList("selectedIds").Select(long.Parse)) db.UpdateStatus(id, bulkStatus);
                 break;
 
             case "select-ticket":
@@ -191,20 +177,11 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                 ]),
         };
 
-        // Bulk-action toolbar — OUTSIDE the table, reading SelectedIds from state.
-        // Rendered only when something is selected (the framework has no
-        // disabled-button primitive, and a bulk action over nothing is a no-op).
-        if (state.SelectedIds.Count > 0)
-        {
-            children.Add(new SectionNode(null,
-            [
-                new TextNode($"{state.SelectedIds.Count} selected", "muted"),
-                new ButtonNode("Mark In Progress", new ActionDescriptor("bulk-start"),   "secondary"),
-                new ButtonNode("Mark Resolved",    new ActionDescriptor("bulk-resolve"), "primary"),
-                new ButtonNode("Reopen",           new ActionDescriptor("bulk-reopen"),  "secondary"),
-            ], Variant: "card"));
-        }
-
+        // 0.13.0 — bulk-action toolbar moved into TableNode.selection.buttons[].
+        // The adapter renders the toolbar above the table; each button's click
+        // harvests the checked rows and dispatches with `selectedIds` in context.
+        // Always rendered (server doesn't know selection count); the action
+        // handler is a no-op on an empty selection.
         children.Add(total == 0
             ? new TextNode("No tickets in queue.", "muted")
             : new TableNode(
@@ -217,7 +194,16 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                     new TableColumn("due",      "Due"),
                 ],
                 Rows: rows,
-                Selection:  new TableSelection(state.SelectedIds, new ActionDescriptor("toggle-select")),
+                // Local mode: omit `Action`. Selection is DOM-tracked, no
+                // per-toggle round-trip, no dropped clicks under the dispatch guard.
+                Selection: new TableSelection(
+                    SelectedIds: [],
+                    Buttons:
+                    [
+                        new ButtonNode("Mark In Progress", new ActionDescriptor("bulk-start"),   "secondary"),
+                        new ButtonNode("Mark Resolved",    new ActionDescriptor("bulk-resolve"), "primary"),
+                        new ButtonNode("Reopen",           new ActionDescriptor("bulk-reopen"),  "secondary"),
+                    ]),
                 Pagination: new TablePagination(page, PageSize, total, new ActionDescriptor("page"))));
 
         return new PageNode("Help Desk — Agent", children);

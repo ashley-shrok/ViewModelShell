@@ -6,6 +6,79 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `0.13.0` (`TableNode` local-mode selection + bulk-action toolbar — npm + NuGet)
+
+**Nothing to do for compatibility.** Every existing table that sets `selection.action` renders byte-identically. **You will almost certainly want to switch**, though — see below.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.12.0` | **`0.13.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.12.0` | **`0.13.0`** |
+
+### When to switch
+
+If your app has a table with selection checkboxes + bulk-action buttons (delete-selected, archive-selected, …), the 0.12.0 server-truth pattern has a real UX bug: when a user clicks checkboxes in quick succession, the framework's dispatch guard silently drops the second click and the in-flight server response wipes the visually-flipped checkbox on re-render. The user sees "I clicked it, why's it unchecked?" — and there's no consistent way to fix it from app-side in 0.12.0.
+
+Local mode in 0.13.0 fixes this by removing the round-trip per click. Toggles live in the DOM until a bulk-action button fires, which harvests the checked rows and dispatches once with `selectedIds` in context. **Recommended for every bulk-action workflow that doesn't need cross-page selection persistence.**
+
+### How to switch (minimal diff)
+
+Before (0.12.0 server-truth mode):
+```csharp
+// state: IReadOnlyList<string> SelectedIds
+new TableNode(
+    Columns: [...], Rows: rows,
+    Selection: new TableSelection(state.SelectedIds, new ActionDescriptor("toggle-select")));
+// + per-toggle action handler maintaining SelectedIds
+// + conditional bulk toolbar above the table, reading state.SelectedIds
+```
+
+After (0.13.0 local mode):
+```csharp
+// state: NO SelectedIds field — selection lives in the DOM
+new TableNode(
+    Columns: [...], Rows: rows,
+    Selection: new TableSelection(
+        SelectedIds: [],         // server doesn't pre-select; user toggles in DOM
+        Buttons: [               // adapter renders ABOVE the table; each click harvests
+            new ButtonNode("Archive Selected", new ActionDescriptor("bulk-archive"), "secondary"),
+            new ButtonNode("Delete Selected",  new ActionDescriptor("bulk-delete"),  "danger"),
+        ]));
+
+// Action handlers read selectedIds from CONTEXT, not state:
+case "bulk-archive":
+    foreach (var id in StrList("selectedIds")) _store.Archive(id);
+    break;
+```
+
+Where `StrList` is a small helper (see `demo/HelpDesk/AspNetCore/AgentController.cs`):
+```csharp
+List<string> StrList(string key) =>
+    payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.Array
+        ? v.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList()
+        : new List<string>();
+```
+
+**TypeScript backend** mirrors the same shape — `selection: { selectedIds: [], buttons: [...] }` on the table node; the action handler reads `selectedIds` from `payload.context` as a string array.
+
+### What you give up (be honest)
+
+- **Live "N selected" indicator.** Server doesn't see selection until a bulk button fires. The visual is row-tint via `.vms-table__row--selected` (driven by the DOM in local mode).
+- **Conditional bulk-toolbar render.** Buttons are always visible. Bulk handlers should be no-ops on empty selection (or return a "nothing selected" message).
+- **Cross-page selection persistence.** Paginating or filtering rebuilds the table → DOM resets → selection gone. Most bulk-action workflows select within a page anyway; if yours genuinely needs sweep-select-across-pages, stay in `selection.action` mode (the 0.12.0 behavior).
+
+### What you gain
+
+- **No dropped clicks ever.** No dispatch per toggle → the dispatch guard can't drop anything.
+- **Instant visual feedback.** DOM updates synchronously with no round-trip.
+- **Per-row validity feedback on click is natural.** Your bulk handler iterates `selectedIds` and returns a view tree that can say "processed 5, row 7 was protected because…" — no framework knowledge of per-row validity needed.
+
+### Worked example
+
+`demo/HelpDesk/AspNetCore/AgentController.cs` (+ bun twin at `demo/HelpDesk-bun/server.ts`) is the migrated reference — the same demo, switched from 0.12.0 server-truth to 0.13.0 local mode. Diff is small.
+
+---
+
 ## Upgrading to `0.12.0` (`TableNode` selection + pagination — npm + NuGet)
 
 **Nothing to do** beyond taking the bump. `0.12.0` adds two optional fields to `TableNode` — `selection` and `pagination`. Every existing table renders byte-identically; you opt in per table.

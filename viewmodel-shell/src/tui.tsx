@@ -1228,22 +1228,28 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
     });
   };
   // Selection — leading [x]/[ ] column. Dispatch payloads match BrowserAdapter:
-  // { id, checked } per row, { all: true, checked } for select-all.
+  // { id, checked } per row, { all: true, checked } for select-all (server-truth
+  // mode). 0.13.0: if `action` is omitted, this is LOCAL mode. The TUI renders
+  // checkboxes from `selectedIds` (the server's pre-selection); clicks are
+  // inert because the TUI doesn't track DOM-equivalent state across the
+  // hook-less conformance walker. The browser carries the real local-mode
+  // workflow; TUI is experimental — use the browser for interactive bulk
+  // selection. The selection.buttons[] toolbar still renders below.
   const sel = node.selection;
-  const selectedSet = sel ? new Set(sel.selectedIds) : null;
+  const effectiveSet = sel ? new Set(sel.selectedIds) : null;
   const allOnPage =
     sel != null && node.rows.length > 0 &&
-    node.rows.every((r) => r.id != null && selectedSet!.has(r.id));
-  const onToggleAll = sel
+    node.rows.every((r) => r.id != null && effectiveSet!.has(r.id));
+  const onToggleAll = sel?.action
     ? (): void => ctx.onAction({
-        name: sel.action.name,
-        context: { ...(sel.action.context ?? {}), all: true, checked: !allOnPage },
+        name: sel.action!.name,
+        context: { ...(sel.action!.context ?? {}), all: true, checked: !allOnPage },
       })
     : undefined;
-  const onToggleRow = sel
+  const onToggleRow = sel?.action
     ? (rowId: string, checked: boolean): void => ctx.onAction({
-        name: sel.action.name,
-        context: { ...(sel.action.context ?? {}), id: rowId, checked },
+        name: sel.action!.name,
+        context: { ...(sel.action!.context ?? {}), id: rowId, checked },
       })
     : undefined;
   return (
@@ -1256,6 +1262,26 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
       flexShrink={1}
     >
       <box flexDirection="column">
+        {/* 0.13.0 — bulk-action toolbar ABOVE the table (mirrors BrowserAdapter).
+            Each button harvests effectiveSet on click and dispatches with
+            `selectedIds: [...]` in context. */}
+        {sel?.buttons && sel.buttons.length > 0 ? (
+          <box flexDirection="row" gap={1}>
+            {sel.buttons.map((btn, i) => {
+              const harvestCtx: RCtx = {
+                ...ctx,
+                onAction: (action: ActionEvent): void => {
+                  const ids = [...effectiveSet!];
+                  ctx.onAction({
+                    name: action.name,
+                    context: { ...(action.context ?? {}), selectedIds: ids },
+                  });
+                },
+              };
+              return <ButtonView key={i} node={btn} ctx={harvestCtx} />;
+            })}
+          </box>
+        ) : null}
         {/* Header row */}
         <box flexDirection="row" gap={2}>
           {sel ? (
@@ -1305,7 +1331,7 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
               {...(onRowClick ? { onMouseDown: onRowClick } : {})}
             >
               {sel ? (() => {
-                const isSel = row.id != null && selectedSet!.has(row.id);
+                const isSel = row.id != null && effectiveSet!.has(row.id);
                 const rowId = row.id;
                 const onBox = rowId != null && onToggleRow
                   ? (): void => onToggleRow(rowId, !isSel)

@@ -218,3 +218,154 @@ describe("0.12.0 (#16) — TableNode.pagination", () => {
     expect(container.querySelector(".vms-table__pagination")).toBeNull();
   });
 });
+
+// 0.13.0 (#17) — local-mode selection + bulk-action buttons toolbar. selection.action
+// becomes optional; when omitted the adapter toggles the DOM checkbox + the row
+// class purely client-side (no dispatch, no dropped clicks under the dispatch
+// guard). selection.buttons[] renders a toolbar above the table; each click
+// harvests the currently-checked rows and dispatches with selectedIds in context.
+
+const localTable = (extra: Record<string, unknown> = {}): ViewNode =>
+  ({
+    type: "table",
+    columns: [
+      { key: "name", label: "Name" },
+      { key: "status", label: "Status" },
+    ],
+    rows: baseRows,
+    // No `action` — local mode.
+    selection: {
+      selectedIds: [],
+      buttons: [
+        { type: "button", label: "Bulk Resolve",  action: { name: "bulk-resolve" }, variant: "primary"   },
+        { type: "button", label: "Bulk Reopen",   action: { name: "bulk-reopen"  }, variant: "secondary" },
+      ],
+    },
+    ...extra,
+  }) as ViewNode;
+
+describe("0.13.0 — TableNode.selection local mode (action omitted)", () => {
+  it("toggling a row checkbox does NOT dispatch — pure DOM state", () => {
+    const dispatched: ActionEvent[] = [];
+    const container = freshContainer();
+    new BrowserAdapter(container).render(localTable(), (a) => dispatched.push(a));
+
+    const row = Array.from(container.querySelectorAll("tr.vms-table__row")).find(
+      (r) => (r as HTMLElement).dataset.id === "2",
+    )!;
+    const box = row.querySelector("input.vms-table__select") as HTMLInputElement;
+    box.checked = true;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+
+    // No round trip — local mode means no per-toggle dispatch.
+    expect(dispatched).toEqual([]);
+    // DOM and row class reflect the toggle.
+    expect(box.checked).toBe(true);
+    expect(row.classList.contains("vms-table__row--selected")).toBe(true);
+  });
+
+  it("header select-all toggles every row checkbox + class without dispatching", () => {
+    const dispatched: ActionEvent[] = [];
+    const container = freshContainer();
+    new BrowserAdapter(container).render(localTable(), (a) => dispatched.push(a));
+
+    const all = container.querySelector("input.vms-table__select--all") as HTMLInputElement;
+    all.checked = true;
+    all.dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect(dispatched).toEqual([]);
+    const rowBoxes = Array.from(
+      container.querySelectorAll("tbody input.vms-table__select"),
+    ) as HTMLInputElement[];
+    expect(rowBoxes.every((b) => b.checked)).toBe(true);
+    const rows = Array.from(container.querySelectorAll("tr.vms-table__row"));
+    expect(rows.every((r) => r.classList.contains("vms-table__row--selected"))).toBe(true);
+  });
+
+  it("toggling a single row reconciles the header select-all to indeterminate", () => {
+    const container = freshContainer();
+    new BrowserAdapter(container).render(localTable(), () => {});
+    const all = container.querySelector("input.vms-table__select--all") as HTMLInputElement;
+
+    const row2box = (Array.from(container.querySelectorAll("tr.vms-table__row")).find(
+      (r) => (r as HTMLElement).dataset.id === "2",
+    )!.querySelector("input.vms-table__select") as HTMLInputElement);
+    row2box.checked = true;
+    row2box.dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect(all.checked).toBe(false);
+    expect(all.indeterminate).toBe(true);
+  });
+});
+
+describe("0.13.0 — TableNode.selection.buttons[] bulk-action toolbar", () => {
+  it("renders the toolbar above the table as the wrapper's first child", () => {
+    const container = freshContainer();
+    new BrowserAdapter(container).render(localTable(), () => {});
+    const wrapper = container.querySelector(".vms-table-wrapper")!;
+    const first = wrapper.firstElementChild!;
+    expect(first.classList.contains("vms-table__bulk-actions")).toBe(true);
+    // Both buttons render.
+    const labels = Array.from(first.querySelectorAll("button")).map((b) => b.textContent);
+    expect(labels).toEqual(["Bulk Resolve", "Bulk Reopen"]);
+  });
+
+  it("clicking a bulk button harvests the checked row ids and dispatches with selectedIds in context", () => {
+    const dispatched: ActionEvent[] = [];
+    const container = freshContainer();
+    new BrowserAdapter(container).render(localTable(), (a) => dispatched.push(a));
+
+    // Check rows 1 and 3 (not 2).
+    const rows = Array.from(container.querySelectorAll("tr.vms-table__row"));
+    for (const id of ["1", "3"]) {
+      const r = rows.find((row) => (row as HTMLElement).dataset.id === id)!;
+      const b = r.querySelector("input.vms-table__select") as HTMLInputElement;
+      b.checked = true;
+      b.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    // Now click Bulk Resolve.
+    const resolveBtn = Array.from(container.querySelectorAll(".vms-table__bulk-actions button"))
+      .find((b) => b.textContent === "Bulk Resolve") as HTMLButtonElement;
+    resolveBtn.click();
+
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0]!.name).toBe("bulk-resolve");
+    expect(dispatched[0]!.context).toEqual({ selectedIds: ["1", "3"] });
+  });
+
+  it("clicking a bulk button on an empty selection dispatches with selectedIds: []", () => {
+    const dispatched: ActionEvent[] = [];
+    const container = freshContainer();
+    new BrowserAdapter(container).render(localTable(), (a) => dispatched.push(a));
+
+    const btn = Array.from(container.querySelectorAll(".vms-table__bulk-actions button"))
+      .find((b) => b.textContent === "Bulk Reopen") as HTMLButtonElement;
+    btn.click();
+
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0]!.context).toEqual({ selectedIds: [] });
+  });
+
+  it("buttons[] works in server-truth mode too (action set) — harvest matches selectedIds", () => {
+    const dispatched: ActionEvent[] = [];
+    const container = freshContainer();
+    const vm: ViewNode = {
+      type: "table",
+      columns: [{ key: "name", label: "Name" }],
+      rows: baseRows,
+      selection: {
+        selectedIds: ["1", "2"],
+        action: { name: "toggle-sel" },
+        buttons: [{ type: "button", label: "Process", action: { name: "process" } }],
+      },
+    } as ViewNode;
+    new BrowserAdapter(container).render(vm, (a) => dispatched.push(a));
+
+    const btn = container.querySelector(".vms-table__bulk-actions button") as HTMLButtonElement;
+    btn.click();
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0]!.name).toBe("process");
+    expect(dispatched[0]!.context).toEqual({ selectedIds: ["1", "2"] });
+  });
+});

@@ -6,6 +6,38 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.13.0 — `TableNode` local-mode selection + bulk-action toolbar (npm + NuGet)
+
+**npm:** `0.13.0` (MINOR — `selection.action` relaxed to optional + new `selection.buttons[]` + adapter changes) · **NuGet:** `0.13.0` (MINOR — `TableSelection.Action` becomes nullable + new `TableSelection.Buttons`)
+
+Both packages move together. Closes [#17](https://github.com/ashley-shrok/ViewModelShell/issues/17). Purely additive — every existing table that sets `selection.action` keeps the same behavior. The new shape is opt-in.
+
+### Why
+
+0.12.0's `selection.action` mode is server-truth: every checkbox click dispatches a round-trip toggle action, so the server can render "N selected" indicators, conditional toolbars, cross-page persistence, etc. It pays a real cost — when a user clicks checkboxes in quick succession, the dispatch guard (AGENTS.md non-obvious behavior #4) **silently drops** the second click while the first round-trip is in flight, *and* the in-flight response re-renders the table with server-truth `selectedIds` that wipes the second checkbox's DOM state. From the user's seat: "I clicked that box, why's it unchecked?" Reported in the field after the first 0.12.0 app shipped — and it's the framework's biggest UX limitation against rapid bulk-selection workflows.
+
+### Added
+
+- **`TableSelection.action` is now optional.** When omitted, the table enters **local mode**: the adapter toggles the DOM checkbox + the `.vms-table__row--selected` class purely client-side, no dispatch. No round-trip per click → the dispatch guard can't drop anything → no silently-wiped checkboxes. Selection still surfaces visually via the design-system class (no app CSS). `selectedIds` continues to drive *initial* / pre-selected rows; subsequent toggles live in the DOM. **Trade-off:** local-mode selection doesn't persist across server re-renders (paginating, filtering, polling rebuilds the table → DOM state resets). For server-truth selection that survives those transitions, keep using `action` mode.
+- **`TableSelection.buttons?: ButtonNode[]`** — bulk-action toolbar rendered ABOVE the table by the adapter (new CSS hook `.vms-table__bulk-actions`). On click, each button harvests the currently-checked row ids from the DOM and merges them as `selectedIds` into the action's context, then dispatches. Designed primarily to pair with local mode (it's how the server learns the selection at action time without a per-toggle round-trip), but works in server-truth mode too — the DOM mirrors `selectedIds` after each render, so the harvest matches state.
+- **CSS:** `.vms-table__bulk-actions` — flex row above the table with the standard spacing rhythm. Reuses `.vms-button` classes; no new color/size tokens.
+
+### TUI
+
+The TUI is **experimental** (per its 0.11.0 marking) and treats local mode as render-only: checkboxes show the server's `selectedIds`, clicks are inert, `buttons[]` toolbar renders and dispatches with whatever the server pre-selected. Interactive local-mode selection lives in the browser. The wire format and the cross-backend parity contract are unchanged.
+
+### Migrated
+
+`demo/HelpDesk/AspNetCore/AgentController.cs` (and its bun twin) switch from server-truth to local mode — drop `AgentState.SelectedIds`, drop the `toggle-select` action, move bulk buttons into `selection.buttons[]`. The helpdesk parity fixture replaces six toggle/page steps with four `bulk-*` steps that pass `selectedIds` in context. `dotnet-helpdesk` and `bun-helpdesk` agree byte-for-byte.
+
+### Consumers
+
+**If your app today uses `selection.action` with bulk-action buttons** — you should probably switch. The rapid-click bug is real; local mode kills it. See `MIGRATION.md` for the step-by-step.
+
+**If your app uses cross-page selection** (sweep-selecting across paginated rows) — stay in server-truth mode; that's its home turf. We may layer in a dispatch-queueing fix for that case in a future release.
+
+---
+
 ## 0.12.0 — `TableNode` selection + pagination (npm + NuGet)
 
 **npm:** `0.12.0` (MINOR — two new optional `TableNode` fields + renderer/CSS) · **NuGet:** `0.12.0` (MINOR — `TableSelection` + `TablePagination` records, two new `TableNode` members)

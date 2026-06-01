@@ -5,11 +5,12 @@ public record AgentState(
     long? SelectedTicketId,
     string Filter,                // "all" | "open" | "in-progress" | "resolved"
     bool NotesSaved,
-    // 0.12.0/#16: bulk-action queue. SelectedIds is server-truth (ticket ids as
-    // strings, kept numerically sorted so the array round-trips identically to
-    // the bun twin); Page is the 1-based queue page (server-sliced via SQL).
-    IReadOnlyList<string> SelectedIds,
-    int Page
+    int Page                      // 1-based queue page; SQL-sliced server-side
+    // 0.13.0: SelectedIds removed — local-mode selection lives in the DOM
+    // (TableNode.selection without an `action`). Bulk-action buttons live in
+    // TableNode.selection.buttons[]; the adapter harvests checked rows on
+    // click and merges them as `selectedIds` into the action's context. No
+    // per-toggle round-trip; no dropped clicks under the dispatch guard.
 )
 {
     public static AgentState Initial() => new(
@@ -17,7 +18,6 @@ public record AgentState(
         SelectedTicketId: null,
         Filter: "all",
         NotesSaved: false,
-        SelectedIds: [],
         Page: 1
     );
 }

@@ -699,9 +699,23 @@ export class BrowserAdapter implements Adapter {
       box.className = "vms-table__select vms-table__select--all";
       box.checked = allOnPage;
       box.indeterminate = someOnPage && !allOnPage;
-      const selAction = sel.action;
-      box.addEventListener("change", () =>
-        on({ name: selAction.name, context: { ...(selAction.context ?? {}), all: true, checked: box.checked } }));
+      box.addEventListener("change", () => {
+        const selAction = sel.action;
+        if (selAction) {
+          // Server-truth mode: dispatch; server re-renders with new selectedIds.
+          on({ name: selAction.name, context: { ...(selAction.context ?? {}), all: true, checked: box.checked } });
+        } else {
+          // Local mode (0.13.0): toggle every row checkbox + class in this table
+          // to match the header. No dispatch — the dispatch guard can't drop anything.
+          const want = box.checked;
+          table.querySelectorAll<HTMLInputElement>("tbody input.vms-table__select").forEach(rowBox => {
+            if (rowBox.disabled) return;
+            rowBox.checked = want;
+            const tr = rowBox.closest<HTMLElement>(".vms-table__row");
+            if (tr) tr.classList.toggle("vms-table__row--selected", want);
+          });
+        }
+      });
       th.appendChild(box);
       headerRow.appendChild(th);
     }
@@ -785,9 +799,26 @@ export class BrowserAdapter implements Adapter {
         box.checked = isSelected;
         if (row.id != null) {
           const rowId = row.id;
-          const selAction = sel.action;
-          box.addEventListener("change", () =>
-            on({ name: selAction.name, context: { ...(selAction.context ?? {}), id: rowId, checked: box.checked } }));
+          // data-id is what selection.buttons[] harvest reads on click.
+          box.dataset.id = rowId;
+          box.addEventListener("change", () => {
+            const selAction = sel.action;
+            if (selAction) {
+              on({ name: selAction.name, context: { ...(selAction.context ?? {}), id: rowId, checked: box.checked } });
+            } else {
+              // Local mode (0.13.0): flip the row class to mirror the box, then
+              // reconcile the header select-all (could now be all / some / none).
+              tr.classList.toggle("vms-table__row--selected", box.checked);
+              const headerBox = table.querySelector<HTMLInputElement>("thead input.vms-table__select--all");
+              if (headerBox) {
+                const all = table.querySelectorAll<HTMLInputElement>("tbody input.vms-table__select:not(:disabled)");
+                let checked = 0;
+                all.forEach(b => { if (b.checked) checked++; });
+                headerBox.checked = all.length > 0 && checked === all.length;
+                headerBox.indeterminate = checked > 0 && checked < all.length;
+              }
+            }
+          });
         } else {
           box.disabled = true; // selection addresses rows by id; a row without one can't be selected
         }
@@ -818,6 +849,25 @@ export class BrowserAdapter implements Adapter {
     table.appendChild(tbody);
 
     wrapper.appendChild(table);
+
+    // 0.13.0 — bulk-action toolbar rendered ABOVE the table. Each button's
+    // click harvests the table's currently-checked row ids and merges them as
+    // `selectedIds` into the action's context. Works with both server-truth
+    // mode (the DOM mirrors selectedIds so the harvest matches state) and
+    // local mode (the DOM is the only source of selection truth).
+    if (sel?.buttons && sel.buttons.length > 0) {
+      const toolbar = document.createElement("div");
+      toolbar.className = "vms-table__bulk-actions";
+      const harvest = (action: ActionEvent): void => {
+        const ids: string[] = [];
+        table.querySelectorAll<HTMLInputElement>("tbody input.vms-table__select:checked").forEach(b => {
+          if (b.dataset.id) ids.push(b.dataset.id);
+        });
+        on({ name: action.name, context: { ...(action.context ?? {}), selectedIds: ids } });
+      };
+      sel.buttons.forEach(btn => this.button(btn, toolbar, harvest));
+      wrapper.insertBefore(toolbar, table);
+    }
 
     if (n.pagination) {
       const pg = n.pagination;

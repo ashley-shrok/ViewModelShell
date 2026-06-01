@@ -23,12 +23,10 @@
     { "id": "agt-resolve-1",        "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "resolve-ticket", "context": { "id": "1" } } },
     { "id": "agt-back",             "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "back-to-queue" } },
 
-    { "id": "agt-toggle-all",       "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "toggle-select", "context": { "all": true, "checked": true } } },
-    { "id": "agt-toggle-2-off",     "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "toggle-select", "context": { "id": "2", "checked": false } } },
     { "id": "agt-page-clamp",       "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "page", "context": { "page": 2 } } },
-    { "id": "agt-bulk-reopen",      "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "bulk-reopen" } },
-    { "id": "agt-select-all-2",     "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "toggle-select", "context": { "all": true, "checked": true } } },
-    { "id": "agt-bulk-start",       "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "bulk-start" } },
+    { "id": "agt-bulk-reopen-1-2",  "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "bulk-reopen",  "context": { "selectedIds": ["1", "2"] } } },
+    { "id": "agt-bulk-start-1",     "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "bulk-start",   "context": { "selectedIds": ["1"] } } },
+    { "id": "agt-bulk-resolve-2",   "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "bulk-resolve", "context": { "selectedIds": ["2"] } } },
 
     { "id": "agt-filter-resolved",  "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "filter", "context": { "value": "resolved" } } },
 

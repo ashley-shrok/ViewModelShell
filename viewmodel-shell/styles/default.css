@@ -624,6 +624,17 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-table__row--selected { background: color-mix(in srgb, var(--vms-accent) 12%, transparent); }
 .vms-table__row--selected.vms-table__row--clickable:hover { background: color-mix(in srgb, var(--vms-accent) 18%, transparent); }
 
+/* 0.13.0 — bulk-action toolbar rendered ABOVE the table (when
+   TableNode.selection.buttons[] is set). Reuses .vms-button styling; only
+   layout is added — flex row, wrap on narrow, gap from the spacing rhythm. */
+.vms-table__bulk-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--vms-space-sm);
+  padding-bottom: var(--vms-space-sm);
+}
+
 /* Pagination footer — range label + prev/next, separated from the table by a
    hairline. Buttons reuse .vms-button styling; only sizing/disabled is added. */
 .vms-table__pagination {

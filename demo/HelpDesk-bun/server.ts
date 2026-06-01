@@ -32,13 +32,13 @@ interface AgentState {
   selectedTicketId: number | null;
   filter: string;
   notesSaved: boolean;
-  // 0.12.0/#16: bulk-action queue — mirror of the C# twin. selectedIds is
-  // server-truth, kept numerically sorted so the array round-trips identically.
-  selectedIds: string[];
+  // 0.13.0: selectedIds removed — local-mode selection lives in the DOM
+  // (TableNode.selection without an `action`). Bulk-action buttons harvest
+  // checked rows at click time and ship them in `selectedIds` context.
   page: number;
 }
 function agentInitial(): AgentState {
-  return { view: "queue", selectedTicketId: null, filter: "all", notesSaved: false, selectedIds: [], page: 1 };
+  return { view: "queue", selectedTicketId: null, filter: "all", notesSaved: false, page: 1 };
 }
 
 interface RequesterState {
@@ -307,22 +307,10 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
     },
   ];
 
-  // Bulk-action toolbar — OUTSIDE the table, reading selectedIds from state.
-  // Rendered only when something is selected (no disabled-button primitive, and
-  // a bulk action over nothing is a no-op). Mirrors AgentController.cs.
-  if (state.selectedIds.length > 0) {
-    children.push({
-      type: "section",
-      variant: "card",
-      children: [
-        { type: "text", value: `${state.selectedIds.length} selected`, style: "muted" },
-        { type: "button", label: "Mark In Progress", action: { name: "bulk-start" },   variant: "secondary" },
-        { type: "button", label: "Mark Resolved",    action: { name: "bulk-resolve" }, variant: "primary" },
-        { type: "button", label: "Reopen",           action: { name: "bulk-reopen" },  variant: "secondary" },
-      ],
-    } as ViewNode);
-  }
-
+  // 0.13.0 — bulk-action toolbar moved into TableNode.selection.buttons[]. The
+  // adapter renders it above the table; each button's click harvests checked
+  // rows and dispatches with `selectedIds` in context. Always rendered (server
+  // doesn't track selection in local mode); handler is a no-op on empty.
   children.push(
     total === 0
       ? { type: "text", value: "No tickets in queue.", style: "muted" }
@@ -336,8 +324,16 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
             { key: "due",      label: "Due",      sortable: false, filterable: false, linkExternal: false },
           ],
           rows,
-          // Row click still opens the ticket; selection is its own column.
-          selection: { selectedIds: state.selectedIds, action: { name: "toggle-select" } },
+          // Local mode: no `action`. Selection lives in the DOM until a button
+          // fires. The adapter harvests checked rows into `selectedIds`.
+          selection: {
+            selectedIds: [],
+            buttons: [
+              { type: "button", label: "Mark In Progress", action: { name: "bulk-start" },   variant: "secondary" },
+              { type: "button", label: "Mark Resolved",    action: { name: "bulk-resolve" }, variant: "primary" },
+              { type: "button", label: "Reopen",           action: { name: "bulk-reopen" },  variant: "secondary" },
+            ],
+          },
           pagination: { page: clampedPage, pageSize: AGENT_PAGE_SIZE, totalRows: total, action: { name: "page" } },
         } as ViewNode),
   );
@@ -442,13 +438,14 @@ function agentBuildVm(state: AgentState): ViewNode {
 const agentHandler = createAction<AgentState>(async (payload) => {
   const ctx = payload.context ?? {};
   const str = (k: string): string | null => (typeof ctx[k] === "string" ? (ctx[k] as string) : null);
-  const bool = (k: string): boolean => ctx[k] === true;
   const int = (k: string, dflt: number): number => (typeof ctx[k] === "number" ? (ctx[k] as number) : dflt);
+  // 0.13.0: bulk-action handlers read the harvested selection from context.
+  const strList = (k: string): string[] =>
+    Array.isArray(ctx[k]) ? ((ctx[k] as unknown[]).filter((x) => typeof x === "string") as string[]) : [];
   let state: AgentState = { ...payload.state, notesSaved: false };
 
   switch (payload.name) {
     case "filter":
-      // Selection persists across filters (server-truth); page resets.
       state = { ...state, filter: str("value") ?? "all", page: 1 };
       break;
 
@@ -456,28 +453,15 @@ const agentHandler = createAction<AgentState>(async (payload) => {
       state = { ...state, page: int("page", state.page) };
       break;
 
-    case "toggle-select": {
-      const set = new Set(state.selectedIds.map(Number));
-      if (bool("all")) {
-        const pageIds = agentQueueWindow(state).page.map((t) => t.id);
-        if (bool("checked")) for (const id of pageIds) set.add(id);
-        else                 for (const id of pageIds) set.delete(id);
-      } else {
-        const id = str("id");
-        const tid = id ? parseInt(id, 10) : NaN;
-        if (id && !isNaN(tid)) { if (bool("checked")) set.add(tid); else set.delete(tid); }
-      }
-      state = { ...state, selectedIds: [...set].sort((a, b) => a - b).map(String) };
-      break;
-    }
-
+    // 0.13.0 — toggle-select action removed (local-mode selection lives in DOM).
     case "bulk-start":
     case "bulk-resolve":
     case "bulk-reopen": {
       const bulkStatus = payload.name === "bulk-start" ? "in-progress"
                        : payload.name === "bulk-resolve" ? "resolved" : "open";
-      for (const id of state.selectedIds.map(Number)) dbUpdateStatus(id, bulkStatus);
-      state = { ...state, selectedIds: [] };
+      // selectedIds arrived in context, harvested by the adapter from the bulk
+      // button's TableNode.selection.buttons[] click.
+      for (const id of strList("selectedIds").map(Number)) dbUpdateStatus(id, bulkStatus);
       break;
     }
     case "select-ticket": {
