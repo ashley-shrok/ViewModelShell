@@ -72,6 +72,10 @@ export interface ShellResponseBody<TState> {
   redirect?: string;
   sideEffects?: ShellSideEffect[];
   nextPollIn?: number;
+  /** 0.14.0 — install / clear the browser's "warn before unload" guard. Omit
+   *  (or set false) to clear; set true while a long-running server action is
+   *  in flight so an accidental tab-close doesn't lose work. */
+  preventUnload?: boolean;
 }
 
 /** Build a redirect response (Vm and State omitted; shell navigates the browser). */

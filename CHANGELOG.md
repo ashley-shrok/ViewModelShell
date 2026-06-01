@@ -6,6 +6,28 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.14.0 — `ShellResponse.preventUnload` (warn-before-leave guard) (npm + NuGet)
+
+**npm:** `0.14.0` (MINOR — new optional wire field + new optional `Adapter` capability verb) · **NuGet:** `0.14.0` (MINOR — `ShellResponse.PreventUnload` property)
+
+Both packages move together (wire-format addition). Closes [#18](https://github.com/ashley-shrok/ViewModelShell/issues/18). Purely additive — every existing response renders byte-identically.
+
+### Added
+
+- **`ShellResponse.preventUnload?: bool`** (TS) / **`ShellResponse<TState>.PreventUnload: bool`** (C#, `WhenWritingDefault` → wire omits `false`). When `true`, the shell asks the adapter to install a "warn before navigating away" guard until the next response that clears it. The natural pattern is "set it on every response while server-side work is pending, omit it (or set false) once the work completes" — exactly the same shape `NextPollIn` uses for polling cadence, drives the same lock-and-release lifecycle.
+- **`Adapter.setPreventUnload?(active: boolean)`** — new optional capability verb. Called by the shell on every response (load + dispatch + push) with `body.preventUnload ?? false`. **Fail-quiet by absence** (unlike `navigate` / `storage` / `saveFile`): this is a UX safety net, not a security guarantee, and non-browser targets (TUI) have no terminal equivalent.
+- **`BrowserAdapter.setPreventUnload`** — installs / removes a `beforeunload` listener that calls `preventDefault()` + sets `returnValue` (the two-signal pattern modern browsers accept). Idempotent: install when already installed is a no-op; remove when not installed is a no-op. **Modern browsers control the dialog text** ("Leave site? Changes you made may not be saved") and do not allow custom messages — the API only signals *whether* to warn.
+
+### Demo
+
+`FeatureProbe` gains a "Start long action" button. The handler sets `LongActionPolls = 3` and returns `PreventUnload = true` + `NextPollIn = 100`; each subsequent `long-action-poll` tick decrements until 0, then clears both. Parity coverage: `feature-probe.json` adds a 5-step long-action block (`fresh-long` + `long-start` + 3 polls). `dotnet-probe` / `bun-probe` / `node-probe` agree byte-for-byte; the conditional spread on the bun side mirrors C#'s `WhenWritingDefault` (drops `preventUnload` from the wire when `false`).
+
+### Consumers
+
+Nothing to do — additive. To opt in, set `PreventUnload = state.IsWorkPending` from every render handler that has long-running server-side work; clear it (omit or set `false`) when the work completes. See `MIGRATION.md` for the pattern + `demo/FeatureProbe/AspNetCore/FeatureProbeController.cs` for a worked example.
+
+---
+
 ## 0.13.0 — `TableNode` local-mode selection + bulk-action toolbar (npm + NuGet)
 
 **npm:** `0.13.0` (MINOR — `selection.action` relaxed to optional + new `selection.buttons[]` + adapter changes) · **NuGet:** `0.13.0` (MINOR — `TableSelection.Action` becomes nullable + new `TableSelection.Buttons`)

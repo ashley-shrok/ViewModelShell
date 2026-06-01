@@ -122,6 +122,28 @@ export class BrowserAdapter implements Adapter {
     }
   }
 
+  /** 0.14.0 — install / clear the browser's `beforeunload` guard. The shell
+   *  calls this on every response with `response.preventUnload ?? false`, so
+   *  the lock-and-clear cycle is just "server sets preventUnload:true while
+   *  work is pending, omits it (or sets false) when done." Idempotent. */
+  private unloadHandler: ((e: BeforeUnloadEvent) => void) | null = null;
+  setPreventUnload(active: boolean): void {
+    if (active && this.unloadHandler == null) {
+      this.unloadHandler = (e: BeforeUnloadEvent): void => {
+        // Two signals because browsers historically disagreed on which they
+        // honor; modern Chromium/Firefox honor preventDefault, older Safari
+        // and ancient browsers look at returnValue. The dialog text itself is
+        // browser-controlled ("Leave site?…") and cannot be customized.
+        e.preventDefault();
+        e.returnValue = "";
+      };
+      window.addEventListener("beforeunload", this.unloadHandler);
+    } else if (!active && this.unloadHandler != null) {
+      window.removeEventListener("beforeunload", this.unloadHandler);
+      this.unloadHandler = null;
+    }
+  }
+
   async transport(
     input: string,
     init: { method?: string; headers?: Record<string, string>; body?: FormData | string },

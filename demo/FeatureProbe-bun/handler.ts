@@ -21,12 +21,17 @@ interface FeatureProbeState {
   tableFilter: string;
   tablePage: number;
   tableSelected: string[];
+  // 0.14.0/#18 — counts down while a long server action is in progress; while
+  // > 0 the response carries preventUnload=true + nextPollIn (the browser's
+  // beforeunload guard installs; framework auto-polls the tick action).
+  longActionPolls: number;
 }
 
 function initialState(): FeatureProbeState {
   return {
     pollCount: 0, lastUploadName: null, lastUploadSize: 0,
     tableFilter: "", tablePage: 1, tableSelected: [],
+    longActionPolls: 0,
   };
 }
 
@@ -120,6 +125,17 @@ function buildVm(state: FeatureProbeState): ViewNode {
   if (state.lastSubmit != null) {
     children.push({ type: "text", value: `Last submit: ${state.lastSubmit}`, style: "muted" });
   }
+  // 0.14.0/#18: long-running action button. Each tick decrements
+  // longActionPolls; while > 0 the response carries preventUnload=true.
+  children.push({ type: "button", label: "Start long action",
+    action: { name: "start-long-action" }, variant: "primary" });
+  if (state.longActionPolls > 0) {
+    children.push({
+      type: "text",
+      value: `Long action in progress · ${state.longActionPolls} tick${state.longActionPolls === 1 ? "" : "s"} remaining`,
+      style: "muted",
+    });
+  }
   // 0.10.0/#15: one form, shared "note" field, two buttons each dispatching a
   // DIFFERENT action carrying the field's current value.
   children.push({
@@ -212,6 +228,24 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
     case "reset":
       state = initialState();
       break;
+
+    // 0.14.0/#18 — long-running action with the beforeunload guard. Conditional
+    // spread keeps preventUnload absent on the wire when done (parity with C#'s
+    // WhenWritingDefault, which drops false from the JSON).
+    case "start-long-action":
+      state = { ...state, longActionPolls: 3 };
+      return { vm: buildVm(state), state, preventUnload: true, nextPollIn: 100 };
+
+    case "long-action-poll": {
+      const remaining = Math.max(0, state.longActionPolls - 1);
+      state = { ...state, longActionPolls: remaining };
+      const workDone = remaining === 0;
+      return {
+        vm: buildVm(state),
+        state,
+        ...(workDone ? {} : { preventUnload: true, nextPollIn: 100 }),
+      };
+    }
 
     // ── table feature-matrix (0.12.0/#16) ─ mirror of the C# twin ──────────
     case "table-sort":

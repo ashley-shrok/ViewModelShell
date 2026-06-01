@@ -6,6 +6,64 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `0.14.0` (warn-before-leave guard via `preventUnload` — npm + NuGet)
+
+**Nothing to do for compatibility.** Every existing response renders byte-identically — the new `preventUnload` field is opt-in.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.13.0` | **`0.14.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.13.0` | **`0.14.0`** |
+
+### When to use it
+
+Any long-running server action where an accidental tab-close (or refresh, or cross-origin nav) would lose in-flight work. The classic case: user clicks "Generate report"; the server kicks off something that takes 20s; while that's pending, the browser should warn before letting the user leave the page.
+
+### Pattern
+
+Server state tracks whether the work is pending; every render response includes `PreventUnload = isPending`. Mirrors how `NextPollIn` drives the poll cadence — set it on every response while you want the guard, omit/clear when done.
+
+```csharp
+case "start-report":
+    state = state with { ReportPending = true /* + kick off work */ };
+    return new ShellResponse<MyState>(BuildVm(state), state) {
+        PreventUnload = true,
+        NextPollIn = 1000,    // poll until done
+    };
+
+case "poll":   // auto-fired by the framework while NextPollIn is set
+    state = state with { ReportPending = !ReportDoneByNow() };
+    return new ShellResponse<MyState>(BuildVm(state), state) {
+        PreventUnload = state.ReportPending,
+        NextPollIn = state.ReportPending ? 1000 : null,    // omit to stop polling
+    };
+```
+
+TypeScript backend mirrors:
+```ts
+return {
+    vm: buildVm(state),
+    state,
+    ...(state.reportPending ? { preventUnload: true, nextPollIn: 1000 } : {}),
+};
+```
+
+The conditional spread on the bun side matches C#'s `WhenWritingDefault` (which drops `false` from the wire). Both sides emit `preventUnload: true` while pending and omit the field when done.
+
+### Honest constraint
+
+**Modern browsers don't let you customize the dialog text** (privacy / UX reasons — they show their own "Leave site? Changes you made may not be saved"). The API only signals *whether* to warn; the dialog itself is browser-controlled. For your case this is fine — you want *a* warning, not a custom message.
+
+### TUI
+
+The TUI doesn't implement `setPreventUnload` (terminals have no unload concept). The shell fail-quiets — sending `preventUnload: true` from a TUI-rendered backend is a no-op, not an error.
+
+### Worked example
+
+`demo/FeatureProbe/AspNetCore/FeatureProbeController.cs` (and its bun twin at `demo/FeatureProbe-bun/handler.ts`) — the "Start long action" button kicks off a 3-tick lifecycle: the `start-long-action` handler sets `LongActionPolls = 3` + returns `PreventUnload = true`, each `long-action-poll` tick decrements, the final tick clears both. Parity-tested.
+
+---
+
 ## Upgrading to `0.13.0` (`TableNode` local-mode selection + bulk-action toolbar — npm + NuGet)
 
 **Nothing to do for compatibility.** Every existing table that sets `selection.action` renders byte-identically. **You will almost certainly want to switch**, though — see below.

@@ -44,6 +44,16 @@ export interface Adapter {
    *  May return void or Promise<void>; the shell awaits the return value so
    *  async I/O errors surface via onError. */
   saveFile?(data: Blob, filename: string, contentType: string): void | Promise<void>;
+  /** 0.14.0 — install / clear a "warn before navigating away" guard, driven
+   *  by `ShellResponse.preventUnload` on every response (load, dispatch,
+   *  push). Idempotent: the shell calls with the boolean from each response,
+   *  the adapter installs when true / clears when false. Designed for
+   *  long-running server actions where an accidental tab close would lose
+   *  in-flight work. Fail-quiet by absence (unlike navigate/storage/saveFile)
+   *  — this is a UX safety net, not a security guarantee, and non-browser
+   *  targets (TUI) have no terminal equivalent. Modern browsers show a
+   *  generic "Leave site?" dialog; the message is not customizable. */
+  setPreventUnload?(active: boolean): void;
 }
 
 // ─── Node types ───────────────────────────────────────────────────────────────
@@ -376,6 +386,12 @@ export interface ShellResponse {
   sideEffects?: ShellSideEffect[];
   /** When set, schedules the next poll at this delay (ms). Overrides pollInterval for one tick. */
   nextPollIn?: number;
+  /** 0.14.0 — when true, the shell asks the adapter to install a "warn before
+   *  unload" guard; when false / absent, the guard is cleared. Drives long-
+   *  running-work workflows: while server-side work is in flight, return
+   *  `preventUnload: true` from each response; clear it when the work
+   *  completes (typically via polling). See `Adapter.setPreventUnload`. */
+  preventUnload?: boolean;
 }
 
 export class ViewModelShell {
@@ -398,6 +414,10 @@ export class ViewModelShell {
       const body = (await res.json()) as ShellResponse;
       this.currentVm = body.vm;
       this.currentState = body.state;
+      // 0.14.0 — apply the unload guard from the initial-load response too. The
+      // server may legitimately want it on at first paint (e.g. the page was
+      // refreshed mid-work and the long action is still pending server-side).
+      adapter.setPreventUnload?.(body.preventUnload ?? false);
       adapter.render(body.vm, (action) => this.dispatch(action));
       this.schedulePoll(body.nextPollIn);
     } catch (err) {
@@ -506,6 +526,11 @@ export class ViewModelShell {
         void this.download(effect.url, effect.filename);
       }
     }
+    // 0.14.0 — apply the unload guard before the redirect/render branch so it's
+    // in place (or cleared) consistently across both branches. A server that
+    // wants a redirect to NOT be blocked by its own guard simply omits
+    // preventUnload (or sets it false) on that response — standard pattern.
+    adapter.setPreventUnload?.(body.preventUnload ?? false);
     if (body.redirect) {
       if (this.options.onRedirect) {
         this.options.onRedirect(body.redirect);

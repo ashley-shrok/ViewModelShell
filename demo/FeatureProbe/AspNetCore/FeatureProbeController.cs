@@ -17,7 +17,12 @@ public record FeatureProbeState(
     string? TableSortDir = null,
     string TableFilter = "",
     int TablePage = 1,
-    IReadOnlyList<string>? TableSelected = null
+    IReadOnlyList<string>? TableSelected = null,
+    // 0.14.0/#18 — counts down while a long server action is in progress.
+    // While > 0, the response carries PreventUnload=true + NextPollIn (the
+    // browser's beforeunload guard installs; the framework auto-polls the
+    // tick action). Reaches 0 → guard clears, polling stops.
+    int LongActionPolls = 0
 )
 {
     public static FeatureProbeState Initial() => new(
@@ -130,6 +135,27 @@ public class FeatureProbeController : ControllerBase
                 state = FeatureProbeState.Initial();
                 break;
 
+            // 0.14.0/#18 — long-running action with the beforeunload guard.
+            case "start-long-action":
+                state = state with { LongActionPolls = 3 };
+                return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
+                {
+                    PreventUnload = true,
+                    NextPollIn = 100,
+                };
+
+            case "long-action-poll":
+            {
+                var remaining = Math.Max(0, state.LongActionPolls - 1);
+                state = state with { LongActionPolls = remaining };
+                var workDone = remaining == 0;
+                return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
+                {
+                    PreventUnload = !workDone,
+                    NextPollIn = workDone ? null : 100,
+                };
+            }
+
             // ── table feature-matrix (0.12.0/#16) ──────────────────────────
             // sort/filter reset the page to 1 (the documented convention — the
             // row window shifts underneath the cursor otherwise).
@@ -192,6 +218,16 @@ public class FeatureProbeController : ControllerBase
 
         if (state.LastSubmit != null)
             children.Add(new TextNode($"Last submit: {state.LastSubmit}", "muted"));
+
+        // 0.14.0/#18: long-running action button. Each tick (auto-polled via
+        // NextPollIn) decrements LongActionPolls; while > 0 the response carries
+        // PreventUnload=true so the browser warns on accidental tab close.
+        children.Add(new ButtonNode("Start long action",
+            new ActionDescriptor("start-long-action"), "primary"));
+        if (state.LongActionPolls > 0)
+            children.Add(new TextNode(
+                $"Long action in progress · {state.LongActionPolls} tick{(state.LongActionPolls == 1 ? "" : "s")} remaining",
+                "muted"));
 
         // 0.10.0/#15: one form, shared "note" field, two buttons each
         // dispatching a DIFFERENT action carrying the field's current value.

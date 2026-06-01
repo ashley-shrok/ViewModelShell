@@ -42,6 +42,12 @@
     { "id": "form-save-draft",   "method": "POST", "action": { "name": "save-draft", "context": { "note": "hello" } } },
     { "id": "form-publish",      "method": "POST", "action": { "name": "publish",    "context": { "note": "shipit" } } },
 
+    { "id": "fresh-long",        "method": "GET",  "freshState": true },
+    { "id": "long-start",        "method": "POST", "action": { "name": "start-long-action" } },
+    { "id": "long-poll-1",       "method": "POST", "action": { "name": "long-action-poll" } },
+    { "id": "long-poll-2",       "method": "POST", "action": { "name": "long-action-poll" } },
+    { "id": "long-poll-3",       "method": "POST", "action": { "name": "long-action-poll" } },
+
     { "id": "fresh-table",       "method": "GET", "freshState": true },
     { "id": "tbl-select-1",      "method": "POST", "action": { "name": "table-select", "context": { "id": "1", "checked": true } } },
     { "id": "tbl-select-2",      "method": "POST", "action": { "name": "table-select", "context": { "id": "2", "checked": true } } },

@@ -390,6 +390,7 @@ Every field except `Vm` and `State` is optional. The combination determines what
 | `Redirect` | `string?` | When set, the shell navigates to this URL instead of re-rendering. `Vm` and `State` are ignored. |
 | `SideEffects` | `IReadOnlyList<ShellSideEffect>?` | Applied in order before redirect/render. Built-in types: `"set-local-storage"`, `"set-session-storage"`, `"download"`. Unknown types are silently ignored (forward-compatible). |
 | `NextPollIn` | `int?` (ms) | Schedules the next poll at this delay. Falls back to `ShellOptions.pollInterval` if omitted. **Omit on a response with no `pollInterval` set to stop polling.** See the polling section for the fast-completion footgun. |
+| `PreventUnload` | `bool` (0.14.0) | When `true`, the shell asks the adapter to install a "warn before navigating away" guard (browser shows the native "Leave site?" dialog on tab-close / refresh / cross-origin nav). When `false` / omitted, the guard is cleared. **Idempotent on every response** — set it on each render while a long-running server action is pending; the next response that omits it (or sets it `false`) clears the guard. `BrowserAdapter` ships the implementation via `beforeunload`; the TUI is a no-op (terminals have no unload). Modern browsers control the dialog text; it is not customizable. |
 
 Factory methods on `ShellResponse<TState>`:
 - `ShellResponse<T>.RedirectTo(url)` — redirect response with `Vm`/`State` null.

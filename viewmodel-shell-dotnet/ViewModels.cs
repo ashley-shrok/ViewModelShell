@@ -99,7 +99,11 @@ public record ShellResponse<TState>(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TState? State,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Redirect = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ShellSideEffect>? SideEffects = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? NextPollIn = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? NextPollIn = null,
+    // 0.14.0 — install / clear the browser's "warn before unload" guard. False
+    // is the default and is dropped from the wire via WhenWritingDefault, so the
+    // wire stays clean (the field only appears on responses where it matters).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool PreventUnload = false
 )
 {
     public static ShellResponse<TState> RedirectTo(string url) =>
