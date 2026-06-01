@@ -722,21 +722,16 @@ export class BrowserAdapter implements Adapter {
       box.checked = allOnPage;
       box.indeterminate = someOnPage && !allOnPage;
       box.addEventListener("change", () => {
-        const selAction = sel.action;
-        if (selAction) {
-          // Server-truth mode: dispatch; server re-renders with new selectedIds.
-          on({ name: selAction.name, context: { ...(selAction.context ?? {}), all: true, checked: box.checked } });
-        } else {
-          // Local mode (0.13.0): toggle every row checkbox + class in this table
-          // to match the header. No dispatch — the dispatch guard can't drop anything.
-          const want = box.checked;
-          table.querySelectorAll<HTMLInputElement>("tbody input.vms-table__select").forEach(rowBox => {
-            if (rowBox.disabled) return;
-            rowBox.checked = want;
-            const tr = rowBox.closest<HTMLElement>(".vms-table__row");
-            if (tr) tr.classList.toggle("vms-table__row--selected", want);
-          });
-        }
+        // Toggle every row checkbox + class in this table to match the header.
+        // No dispatch — selection is purely DOM-local; bulk actions harvest the
+        // checked rows when a `selection.buttons[]` entry is clicked.
+        const want = box.checked;
+        table.querySelectorAll<HTMLInputElement>("tbody input.vms-table__select").forEach(rowBox => {
+          if (rowBox.disabled) return;
+          rowBox.checked = want;
+          const tr = rowBox.closest<HTMLElement>(".vms-table__row");
+          if (tr) tr.classList.toggle("vms-table__row--selected", want);
+        });
       });
       th.appendChild(box);
       headerRow.appendChild(th);
@@ -824,21 +819,17 @@ export class BrowserAdapter implements Adapter {
           // data-id is what selection.buttons[] harvest reads on click.
           box.dataset.id = rowId;
           box.addEventListener("change", () => {
-            const selAction = sel.action;
-            if (selAction) {
-              on({ name: selAction.name, context: { ...(selAction.context ?? {}), id: rowId, checked: box.checked } });
-            } else {
-              // Local mode (0.13.0): flip the row class to mirror the box, then
-              // reconcile the header select-all (could now be all / some / none).
-              tr.classList.toggle("vms-table__row--selected", box.checked);
-              const headerBox = table.querySelector<HTMLInputElement>("thead input.vms-table__select--all");
-              if (headerBox) {
-                const all = table.querySelectorAll<HTMLInputElement>("tbody input.vms-table__select:not(:disabled)");
-                let checked = 0;
-                all.forEach(b => { if (b.checked) checked++; });
-                headerBox.checked = all.length > 0 && checked === all.length;
-                headerBox.indeterminate = checked > 0 && checked < all.length;
-              }
+            // Flip the row class to mirror the box, then reconcile the header
+            // select-all (could now be all / some / none). No dispatch — bulk
+            // actions read the DOM via the selection.buttons[] harvest.
+            tr.classList.toggle("vms-table__row--selected", box.checked);
+            const headerBox = table.querySelector<HTMLInputElement>("thead input.vms-table__select--all");
+            if (headerBox) {
+              const all = table.querySelectorAll<HTMLInputElement>("tbody input.vms-table__select:not(:disabled)");
+              let checked = 0;
+              all.forEach(b => { if (b.checked) checked++; });
+              headerBox.checked = all.length > 0 && checked === all.length;
+              headerBox.indeterminate = checked > 0 && checked < all.length;
             }
           });
         } else {

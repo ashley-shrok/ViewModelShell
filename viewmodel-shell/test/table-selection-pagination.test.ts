@@ -46,11 +46,15 @@ const selectableTable = (selectedIds: string[], extra: Record<string, unknown> =
       { key: "status", label: "Status" },
     ],
     rows: baseRows,
-    selection: { selectedIds, action: { name: "toggle-sel" } },
+    selection: { selectedIds },
     ...extra,
   }) as ViewNode;
 
-describe("0.12.0 (#16) — TableNode.selection", () => {
+// TableNode.selection — rendering invariants. Selection is purely client-side
+// (0.15.0 removed the per-toggle dispatch "action" mode); the visible state
+// is driven by selectedIds + DOM toggles. Bulk actions live in
+// selection.buttons[] — see the dedicated describe block below.
+describe("TableNode.selection rendering", () => {
   it("renders a leading checkbox column only when selection is set", () => {
     const withSel = freshContainer();
     new BrowserAdapter(withSel).render(selectableTable([]), () => {});
@@ -83,24 +87,7 @@ describe("0.12.0 (#16) — TableNode.selection", () => {
     expect(box1.checked).toBe(false);
   });
 
-  it("toggling a row checkbox dispatches { id, checked }", () => {
-    const dispatched: ActionEvent[] = [];
-    const container = freshContainer();
-    new BrowserAdapter(container).render(selectableTable([]), (a) => dispatched.push(a));
-
-    const row3 = Array.from(container.querySelectorAll("tr.vms-table__row")).find(
-      (r) => (r as HTMLElement).dataset.id === "3",
-    )!;
-    const box = row3.querySelector("input.vms-table__select") as HTMLInputElement;
-    box.checked = true;
-    box.dispatchEvent(new Event("change", { bubbles: true }));
-
-    expect(dispatched).toHaveLength(1);
-    expect(dispatched[0]!.name).toBe("toggle-sel");
-    expect(dispatched[0]!.context).toEqual({ id: "3", checked: true });
-  });
-
-  it("a checkbox click does NOT also fire the row's click action", () => {
+  it("a checkbox click does NOT trigger the row's click action (stopPropagation)", () => {
     const dispatched: ActionEvent[] = [];
     const container = freshContainer();
     // rows carry their own click action (open-detail) alongside selection.
@@ -116,29 +103,13 @@ describe("0.12.0 (#16) — TableNode.selection", () => {
     const cell = row1.querySelector("td.vms-table__td--select") as HTMLElement;
     const box = cell.querySelector("input.vms-table__select") as HTMLInputElement;
 
-    // Toggle the checkbox (change) then bubble a click through the cell.
+    // Toggle the checkbox (change) then bubble a click through the cell. The
+    // cell's stopPropagation prevents the row's "open" action from firing.
     box.checked = true;
     box.dispatchEvent(new Event("change", { bubbles: true }));
     cell.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
-    // Only the selection toggle — never the row's "open" action.
-    expect(dispatched.map((d) => d.name)).toEqual(["toggle-sel"]);
     expect(dispatched.some((d) => d.name === "open")).toBe(false);
-  });
-
-  it("header select-all reflects all/some/none and dispatches { all, checked }", () => {
-    const dispatched: ActionEvent[] = [];
-    const container = freshContainer();
-    // all three rows selected → header checked, not indeterminate.
-    new BrowserAdapter(container).render(selectableTable(["1", "2", "3"]), (a) => dispatched.push(a));
-    const all = container.querySelector("input.vms-table__select--all") as HTMLInputElement;
-    expect(all.checked).toBe(true);
-    expect(all.indeterminate).toBe(false);
-
-    all.checked = false;
-    all.dispatchEvent(new Event("change", { bubbles: true }));
-    expect(dispatched[0]!.name).toBe("toggle-sel");
-    expect(dispatched[0]!.context).toEqual({ all: true, checked: false });
   });
 
   it("header select-all is indeterminate when only some rows are selected", () => {
@@ -155,7 +126,7 @@ describe("0.12.0 (#16) — TableNode.selection", () => {
       type: "table",
       columns: [{ key: "name", label: "Name" }],
       rows: [{ cells: { name: "Orphan" } }], // no id
-      selection: { selectedIds: [], action: { name: "toggle-sel" } },
+      selection: { selectedIds: [] },
     } as ViewNode;
     new BrowserAdapter(container).render(vm, () => {});
     const box = container.querySelector("tbody input.vms-table__select") as HTMLInputElement;
@@ -347,7 +318,7 @@ describe("0.13.0 — TableNode.selection.buttons[] bulk-action toolbar", () => {
     expect(dispatched[0]!.context).toEqual({ selectedIds: [] });
   });
 
-  it("buttons[] works in server-truth mode too (action set) — harvest matches selectedIds", () => {
+  it("buttons[] honors selectedIds pre-selection in the harvest", () => {
     const dispatched: ActionEvent[] = [];
     const container = freshContainer();
     const vm: ViewNode = {
@@ -356,12 +327,13 @@ describe("0.13.0 — TableNode.selection.buttons[] bulk-action toolbar", () => {
       rows: baseRows,
       selection: {
         selectedIds: ["1", "2"],
-        action: { name: "toggle-sel" },
         buttons: [{ type: "button", label: "Process", action: { name: "process" } }],
       },
     } as ViewNode;
     new BrowserAdapter(container).render(vm, (a) => dispatched.push(a));
 
+    // The two pre-selected rows render with checked boxes; clicking the button
+    // harvests them without any user interaction.
     const btn = container.querySelector(".vms-table__bulk-actions button") as HTMLButtonElement;
     btn.click();
     expect(dispatched).toHaveLength(1);

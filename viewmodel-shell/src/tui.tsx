@@ -1227,31 +1227,16 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
       context: { ...(node.sortAction.context ?? {}), column: columnKey, direction },
     });
   };
-  // Selection — leading [x]/[ ] column. Dispatch payloads match BrowserAdapter:
-  // { id, checked } per row, { all: true, checked } for select-all (server-truth
-  // mode). 0.13.0: if `action` is omitted, this is LOCAL mode. The TUI renders
-  // checkboxes from `selectedIds` (the server's pre-selection); clicks are
-  // inert because the TUI doesn't track DOM-equivalent state across the
-  // hook-less conformance walker. The browser carries the real local-mode
-  // workflow; TUI is experimental — use the browser for interactive bulk
-  // selection. The selection.buttons[] toolbar still renders below.
+  // Selection — leading [x]/[ ] column. TUI is render-only: checkboxes display
+  // selectedIds; clicks are inert (the TUI doesn't track DOM-equivalent state
+  // across the hook-less conformance walker). Bulk actions live in
+  // selection.buttons[]; the harvest reads sel.selectedIds (server's
+  // pre-selection). The browser carries the interactive surface.
   const sel = node.selection;
   const effectiveSet = sel ? new Set(sel.selectedIds) : null;
   const allOnPage =
     sel != null && node.rows.length > 0 &&
     node.rows.every((r) => r.id != null && effectiveSet!.has(r.id));
-  const onToggleAll = sel?.action
-    ? (): void => ctx.onAction({
-        name: sel.action!.name,
-        context: { ...(sel.action!.context ?? {}), all: true, checked: !allOnPage },
-      })
-    : undefined;
-  const onToggleRow = sel?.action
-    ? (rowId: string, checked: boolean): void => ctx.onAction({
-        name: sel.action!.name,
-        context: { ...(sel.action!.context ?? {}), id: rowId, checked },
-      })
-    : undefined;
   return (
     <scrollbox
       focused={focused}
@@ -1285,7 +1270,7 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
         {/* Header row */}
         <box flexDirection="row" gap={2}>
           {sel ? (
-            <text attributes={1 /* BOLD */} {...(onToggleAll ? { onMouseDown: onToggleAll } : {})}>
+            <text attributes={1 /* BOLD */}>
               {allOnPage ? "[x]" : "[ ]"}
             </text>
           ) : null}
@@ -1332,12 +1317,8 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
             >
               {sel ? (() => {
                 const isSel = row.id != null && effectiveSet!.has(row.id);
-                const rowId = row.id;
-                const onBox = rowId != null && onToggleRow
-                  ? (): void => onToggleRow(rowId, !isSel)
-                  : undefined;
                 return (
-                  <text fg={isSel ? "#88ff88" : "#888888"} {...(onBox ? { onMouseDown: onBox } : {})}>
+                  <text fg={isSel ? "#88ff88" : "#888888"}>
                     {isSel ? "[x]" : "[ ]"}
                   </text>
                 );

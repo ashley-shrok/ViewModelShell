@@ -256,21 +256,18 @@ public record TableRow(
 );
 
 // Per-row multi-select metadata for TableNode. SelectedIds drives initial /
-// pre-selected rows. Two modes (0.13.0+):
-//   • Server-truth mode — Action set. Every toggle dispatches Action with
-//     merged { id, checked } / { all, checked }; SelectedIds round-trips in
-//     state, survives sort/filter/pagination.
-//   • Local mode — Action null. Adapter toggles DOM + .vms-table__row--selected
-//     purely client-side; the server learns the selection only when a
-//     Buttons[] entry is clicked (the adapter harvests the checked rows and
-//     merges { selectedIds: [...] } into the button's action context). No
-//     dropped clicks under the dispatch guard.
+// pre-selected rows. Selection is LOCAL ONLY (0.15.0+): the adapter toggles
+// the DOM + .vms-table__row--selected purely client-side; the server learns
+// the selection only when a Buttons[] entry is clicked (the adapter harvests
+// the checked rows and merges { selectedIds: [...] } into the button's action
+// context). The earlier server-truth "Action" mode was removed because rapid
+// clicks were silently dropped under the dispatch guard and the in-flight
+// re-render wiped the visually-toggled checkbox — a latent foot-gun no app
+// depended on.
 // IReadOnlyList<ViewNode> for Buttons (NOT ButtonNode) so the polymorphic
-// "type":"button" discriminator emits — same maintainer rule that bit us in
-// 0.10.0/#15 when FormNode.Buttons was typed as ButtonNode.
+// "type":"button" discriminator emits — the maintainer rule from 0.10.0/#15.
 public record TableSelection(
     IReadOnlyList<string> SelectedIds,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Buttons = null
 );
 

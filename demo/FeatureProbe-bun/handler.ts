@@ -20,7 +20,6 @@ interface FeatureProbeState {
   tableSortDir?: string | null;
   tableFilter: string;
   tablePage: number;
-  tableSelected: string[];
   // 0.14.0/#18 — counts down while a long server action is in progress; while
   // > 0 the response carries preventUnload=true + nextPollIn (the browser's
   // beforeunload guard installs; framework auto-polls the tick action).
@@ -30,7 +29,7 @@ interface FeatureProbeState {
 function initialState(): FeatureProbeState {
   return {
     pollCount: 0, lastUploadName: null, lastUploadSize: 0,
-    tableFilter: "", tablePage: 1, tableSelected: [],
+    tableFilter: "", tablePage: 1,
     longActionPolls: 0,
   };
 }
@@ -77,7 +76,6 @@ function tableWindow(s: FeatureProbeState): { page: TableItem[]; total: number; 
 
 function buildTableSection(state: FeatureProbeState): ViewNode {
   const { page, total, clampedPage } = tableWindow(state);
-  const selected = state.tableSelected;
   const table = {
     type: "table",
     columns: [
@@ -92,17 +90,15 @@ function buildTableSection(state: FeatureProbeState): ViewNode {
     ...(state.tableSortDir != null ? { sortDirection: state.tableSortDir } : {}),
     sortAction: { name: "table-sort" },
     filterAction: { name: "table-filter" },
-    selection: { selectedIds: selected, action: { name: "table-select" } },
+    // 0.15.0 — selection removed from the matrix; HelpDesk-Agent carries
+    // selection.buttons[] parity coverage.
     pagination: { page: clampedPage, pageSize: PAGE_SIZE, totalRows: total, action: { name: "table-page" } },
   } as ViewNode;
   return {
     type: "section",
     heading: "Table matrix",
     variant: "card",
-    children: [
-      { type: "text", value: `${selected.length} selected`, style: "muted" },
-      table,
-    ],
+    children: [table],
   };
 }
 
@@ -165,7 +161,6 @@ function buildVm(state: FeatureProbeState): ViewNode {
 const actionHandler = createAction<FeatureProbeState>(async (payload) => {
   const ctx = payload.context ?? {};
   const str = (k: string): string | null => (typeof ctx[k] === "string" ? (ctx[k] as string) : null);
-  const bool = (k: string): boolean => ctx[k] === true;
   const int = (k: string, dflt: number): number => (typeof ctx[k] === "number" ? (ctx[k] as number) : dflt);
 
   let state = payload.state;
@@ -260,20 +255,9 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
       state = { ...state, tablePage: int("page", state.tablePage) };
       break;
 
-    case "table-select": {
-      const set = new Set(state.tableSelected);
-      if (bool("all")) {
-        const pageIds = tableWindow(state).page.map((i) => i.id);
-        if (bool("checked")) for (const id of pageIds) set.add(id);
-        else                 for (const id of pageIds) set.delete(id);
-      } else {
-        const id = str("id");
-        if (id != null) { if (bool("checked")) set.add(id); else set.delete(id); }
-      }
-      // Re-materialize in seed order so the array round-trips identically.
-      state = { ...state, tableSelected: ITEMS.filter((i) => set.has(i.id)).map((i) => i.id) };
-      break;
-    }
+    // 0.15.0 — `table-select` action removed alongside TableSelection.action.
+    // The matrix no longer exercises selection (HelpDesk-Agent carries
+    // selection.buttons[] parity coverage).
 
     default:
       throw new Error(`Unknown action: ${payload.name}`);

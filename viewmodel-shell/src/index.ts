@@ -259,31 +259,19 @@ export interface TableRow {
 }
 
 export interface TableSelection {
-  /** Row ids that should render PRE-SELECTED on this render. In server-truth
-   *  mode (`action` set) this is the live selection, round-tripped in state and
-   *  authoritative every render. In local mode (`action` omitted) this is the
-   *  server's initial pre-selection only — subsequent toggles are purely
-   *  client-side DOM state and the server doesn't see them until a `buttons[]`
-   *  click harvests them. */
+  /** Row ids that should render PRE-SELECTED on initial render — the server's
+   *  initial pre-selection. Subsequent toggles are purely client-side DOM state;
+   *  the server doesn't see them until a `buttons[]` click harvests them. */
   selectedIds: string[];
-  /** OPTIONAL (0.13.0). When present: server-truth mode — every checkbox toggle
-   *  dispatches this action with merged `{ id, checked }` per row or
-   *  `{ all: true, checked }` for the header select-all (where "all" = the
-   *  rendered page). Selection survives sort/filter/pagination via the state
-   *  round-trip. When OMITTED: local mode — the adapter toggles the DOM
-   *  checkbox + `.vms-table__row--selected` class purely client-side with no
-   *  dispatch. Local mode is the recommended pattern for rapid-selection
-   *  workflows (no dropped clicks under the dispatch guard); see `buttons` for
-   *  how bulk actions read the resulting selection. */
-  action?: ActionEvent;
-  /** OPTIONAL (0.13.0). When present, the adapter renders these as a bulk-action
-   *  toolbar ABOVE the table. On click, each button harvests the currently
-   *  checked rows from the DOM and dispatches its `action` with
-   *  `{ selectedIds: [...] }` merged into its `context`. Designed primarily to
-   *  pair with local mode (`action` absent) — it's how the server learns the
-   *  selection without a per-toggle round-trip — but works in server-truth mode
-   *  too (the harvest matches `selectedIds` since the DOM reflects server-truth
-   *  after each render). */
+  /** When present, the adapter renders these as a bulk-action toolbar ABOVE
+   *  the table. On click, each button harvests the currently-checked rows from
+   *  the DOM and dispatches its `action` with `{ selectedIds: [...] }` merged
+   *  into its `context`. This is the only way to act on the selection — there
+   *  is no per-toggle dispatch (0.15.0 removed the `action` mode that did,
+   *  because rapid clicks were dropped by the dispatch guard and the in-flight
+   *  response wiped the DOM). If a future release needs cross-page persistence
+   *  or live "N selected" indicators, the way back is a redesigned wire shape
+   *  (dispatch queueing + optimistic preservation), not the old `action` mode. */
   buttons?: ButtonNode[];
 }
 

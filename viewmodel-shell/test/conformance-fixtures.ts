@@ -179,7 +179,7 @@ export const FIXTURES: ConformanceFixture[] = [
         { id: "r1", cells: { a: "Uniform3", b: "Victor3" } },
         { id: "r2", cells: { a: "Whiskey3", b: "Xray3" } },
       ],
-      selection: { selectedIds: ["r1"], action: { name: "sel" } },
+      selection: { selectedIds: ["r1"] },
       pagination: { page: 1, pageSize: 2, totalRows: 6, action: { name: "pg" } },
     },
     expect: ["Sierra3", "Tango3", "Uniform3", "Victor3", "Whiskey3", "Xray3", "Prev", "Next"],

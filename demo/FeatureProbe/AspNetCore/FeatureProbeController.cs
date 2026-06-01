@@ -17,7 +17,6 @@ public record FeatureProbeState(
     string? TableSortDir = null,
     string TableFilter = "",
     int TablePage = 1,
-    IReadOnlyList<string>? TableSelected = null,
     // 0.14.0/#18 — counts down while a long server action is in progress.
     // While > 0, the response carries PreventUnload=true + NextPollIn (the
     // browser's beforeunload guard installs; the framework auto-polls the
@@ -28,8 +27,7 @@ public record FeatureProbeState(
     public static FeatureProbeState Initial() => new(
         PollCount: 0,
         LastUploadName: null,
-        LastUploadSize: 0,
-        TableSelected: []   // explicit so the wire shows [] (not null) on first load
+        LastUploadSize: 0
     );
 }
 
@@ -74,8 +72,6 @@ public class FeatureProbeController : ControllerBase
         string? Str(string key) =>
             payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
                 ? v.GetString() : null;
-        bool Bool(string key) =>
-            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.True;
         int Int(string key, int dflt) =>
             payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.Number
                 ? v.GetInt32() : dflt;
@@ -171,25 +167,9 @@ public class FeatureProbeController : ControllerBase
                 state = state with { TablePage = Int("page", state.TablePage) };
                 break;
 
-            case "table-select":
-            {
-                var set = new HashSet<string>(state.TableSelected ?? []);
-                if (Bool("all"))
-                {
-                    // Select-all spans the CURRENT PAGE only (the visible rows).
-                    var pageIds = Window(state).Page.Select(i => i.Id);
-                    if (Bool("checked")) foreach (var id in pageIds) set.Add(id);
-                    else                 foreach (var id in pageIds) set.Remove(id);
-                }
-                else
-                {
-                    var id = Str("id");
-                    if (id != null) { if (Bool("checked")) set.Add(id); else set.Remove(id); }
-                }
-                // Re-materialize in seed order so the array round-trips identically.
-                state = state with { TableSelected = Items.Where(i => set.Contains(i.Id)).Select(i => i.Id).ToList() };
-                break;
-            }
+            // 0.15.0 — `table-select` action removed alongside TableSelection.Action.
+            // The matrix no longer exercises selection (HelpDesk-Agent carries
+            // selection.buttons[] parity coverage).
 
             default:
                 return BadRequest($"Unknown action: {payload.Name}");
@@ -283,7 +263,6 @@ public class FeatureProbeController : ControllerBase
     private static SectionNode BuildTableSection(FeatureProbeState state)
     {
         var (pageRows, total, clampedPage) = Window(state);
-        var selected = state.TableSelected ?? [];
 
         var rows = pageRows.Select(i => new TableRow(
             Cells: new Dictionary<string, string> { ["name"] = i.Name, ["status"] = i.Status },
@@ -301,15 +280,12 @@ public class FeatureProbeController : ControllerBase
             SortDirection: state.TableSortDir,
             SortAction: new ActionDescriptor("table-sort"),
             FilterAction: new ActionDescriptor("table-filter"),
-            Selection: new TableSelection(selected, new ActionDescriptor("table-select")),
+            // 0.15.0 — selection removed from the matrix; HelpDesk-Agent
+            // carries selection.buttons[] parity coverage.
             Pagination: new TablePagination(clampedPage, PageSize, total, new ActionDescriptor("table-page")));
 
         return new SectionNode("Table matrix",
-            new List<ViewNode>
-            {
-                new TextNode($"{selected.Count} selected", "muted"),
-                table
-            },
+            new List<ViewNode> { table },
             Variant: "card");
     }
 }

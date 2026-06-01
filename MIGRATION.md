@@ -6,6 +6,55 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `0.15.0` (remove `TableSelection.action` — npm + NuGet)
+
+**Almost certainly nothing to do.** The 0.13.0 release deprecated this path in favor of `selection.buttons[]`, and the only worked example using it (HelpDesk-Agent) was already migrated in 0.13.0. If you happened to wire `selection.action` somewhere yourself, see the diff below.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.14.0` | **`0.15.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.14.0` | **`0.15.0`** |
+
+### If you were using `selection.action`
+
+The whole point of removing it: it had a UX foot-gun (rapid clicks silently dropped under the dispatch guard, in-flight re-render wiped DOM). Swap to `selection.buttons[]` — the bulk-action button(s) harvest the checked rows on click, exactly the pattern HelpDesk-Agent has used since 0.13.0:
+
+```diff
+- // Before (0.14.0 and earlier)
+- // state: IReadOnlyList<string> SelectedIds
+- new TableNode(
+-     Columns: [...], Rows: rows,
+-     Selection: new TableSelection(state.SelectedIds, new ActionDescriptor("toggle-select")));
+- // + a per-toggle handler maintaining SelectedIds
+- // + bulk handlers reading state.SelectedIds
+
++ // After (0.15.0)
++ // state: NO SelectedIds field
++ new TableNode(
++     Columns: [...], Rows: rows,
++     Selection: new TableSelection(
++         SelectedIds: [],
++         Buttons: [
++             new ButtonNode("Archive", new ActionDescriptor("bulk-archive"), "secondary"),
++         ]));
++
++ case "bulk-archive":
++     foreach (var id in StrList("selectedIds")) _store.Archive(id);
++     break;
+```
+
+TypeScript backend mirrors. See `demo/HelpDesk/AspNetCore/AgentController.cs` (+ bun twin) for the worked diff.
+
+### Why this is OK as a pre-1.0 minor
+
+`TableSelection.action` shipped in 0.12.0, was made optional in 0.13.0 alongside the recommended `selection.buttons[]` path, stayed optional through 0.14.0. By 0.15.0 we had direct visibility that no app in the framework's orbit was using it. Pre-1.0 semver tolerates this kind of pruning; the alternative was carrying a known-buggy code path with no users for an unknown amount of time.
+
+### If we ever bring it back
+
+It will come back through a redesigned wire shape with dispatch queueing + optimistic DOM preservation — not as the old `action` field. The current name is reserved for that future work.
+
+---
+
 ## Upgrading to `0.14.0` (warn-before-leave guard via `preventUnload` — npm + NuGet)
 
 **Nothing to do for compatibility.** Every existing response renders byte-identically — the new `preventUnload` field is opt-in.

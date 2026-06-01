@@ -6,6 +6,37 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.15.0 — Remove `TableSelection.action` (server-truth toggle mode) (npm + NuGet)
+
+**npm:** `0.15.0` (MINOR — breaking removal in pre-1.0, but no app in our orbit was using it) · **NuGet:** `0.15.0` (MINOR — same)
+
+Both packages move together. Intentional pruning, not a deprecation.
+
+### Removed (breaking)
+
+- **`TableSelection.action`** — the per-toggle round-trip "server-truth" mode. It had a known UX foot-gun (rapid checkbox clicks were silently dropped by the dispatch guard while a round-trip was in flight, and the in-flight response then re-rendered the table with stale `selectedIds` that wiped the visually-flipped checkbox). The 0.13.0 release made it optional and added `selection.buttons[]` as the recommended path; this release deletes the mode entirely so the latent bug can't bite anyone who happens to wire it up later. The way back, if it ever turns out we need it, is a redesigned wire shape (dispatch queueing + optimistic DOM preservation), not the original `action` field.
+- **`TableSelection.Action`** parameter (C#) removed from the record. Now only `(IReadOnlyList<string> SelectedIds, IReadOnlyList<ViewNode>? Buttons = null)`.
+
+### Adapters simplified
+
+- **`BrowserAdapter`** — header select-all and per-row checkbox handlers are now single-path: toggle DOM + `.vms-table__row--selected` class. No more dispatch branch.
+- **`TuiAdapter`** — checkbox column is render-only (was already inert in local mode); the `onToggleAll`/`onToggleRow` callbacks are gone since they had no purpose left.
+- **CSS** unchanged. **`selection.buttons[]` unchanged.**
+
+### Migration
+
+If you happened to wire `selection.action` somewhere, the 60-second swap is documented in `MIGRATION.md` — drop the field, move bulk handlers from "read state.SelectedIds" to "read context selectedIds harvested by `selection.buttons[]`" (the pattern HelpDesk-Agent uses since 0.13.0). For everyone else: nothing to do.
+
+### Demo + parity
+
+`FeatureProbe`'s table-matrix demo had selection wired through the removed `action` path. Selection is now stripped from that matrix — sort / filter / pagination coverage stays. Selection.buttons[] parity coverage lives in HelpDesk-Agent (unchanged). The feature-probe fixture loses 6 `tbl-select-*` steps; helpdesk still validates the bulk-action-with-`selectedIds`-in-context flow end-to-end.
+
+### Why now
+
+The framework's first-app shipping caught the bug in the wild. With direct visibility that no other consumer was using the mode, removing it is cheaper than carrying a known-buggy code path "for completeness." This is the same principle as the AGENTS.md "if your app needs a workaround, that's a signal the framework needs a new primitive" — the inverse: if a primitive is known-buggy and no one needs it, remove it.
+
+---
+
 ## 0.14.0 — `ShellResponse.preventUnload` (warn-before-leave guard) (npm + NuGet)
 
 **npm:** `0.14.0` (MINOR — new optional wire field + new optional `Adapter` capability verb) · **NuGet:** `0.14.0` (MINOR — `ShellResponse.PreventUnload` property)
