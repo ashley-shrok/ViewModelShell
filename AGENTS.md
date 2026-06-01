@@ -347,6 +347,24 @@ return new ShellResponse<MyState>(BuildVm(state), state)
 
 Draft text, focus, caret position, and scroll positions are all preserved across poll/push re-renders — same as user-action re-renders.
 
+### Tables in VMS — the canonical workflow pattern
+
+`TableNode` is composable enough to express several UX shapes. The framework supports them all, but **for workflow apps — the dominant case VMS targets — there is one canonical shape, and demos / new code should follow it.** Naming the shapes explicitly so consumers (and agents helping them) know which to reach for:
+
+| Mode | Shape on `TableNode` | When to use | Selection? |
+|---|---|---|---|
+| **A. Workflow (canonical)** — filter narrows to ≤ cap, show all matches, act on the chunk | `filterAction` set (status tabs + a free-text column filter via `TableColumn.filterable: true`); **no** `pagination`; `selection.buttons[]` set when matches are within the cap; the controller renders a `TextNode("Refine your filter — N matches, max is X")` when matches exceed the cap and emits an empty `rows: []` so the filter input stays accessible | Workflow / queue / admin tools where the user almost always knows what they're looking for. **This is the default to reach for.** | ✓ yes |
+| **B. Browse + pagination** — page through everything, no selection | `pagination` set; `filterAction` optional; **no** `selection` | Pure browse without a selection step (a tickets list a user just reads through, an archived-records search results page) | ✗ no |
+| **C. Browse + selection** (rare) | Not first-class. Apps compose `pagination` + `selection.buttons[]` and accept the cross-page-selection cost (paginating wipes the local selection set; document the limitation in the UI or work around it with an explicit "select all N matching" button — see below). | Gmail-style "select all 1,247 conversations" workflows. Rare in workflow apps. | partial, app-built |
+
+**Why filter-narrow is canonical** — it sidesteps a whole class of UX bugs by construction. The old per-toggle round-trip `selection.action` (removed in 0.15.0) had the rapid-click + DOM-wipe bug specifically *because* selection had to survive across re-renders; with mode A there's no pagination, no re-renders that lose selection, no cross-page sweep. Users select within the visible chunk and act. If they need to act on rows they haven't narrowed to, their UX is probably wrong.
+
+**The cap is the app's choice.** A claims-investigation tool might cap at 200; a quick-pick admin tool at 25; a tool with very lightweight rows might cap at 500. The framework doesn't have an opinion — pick what makes sense for your row weight and the user's working memory. The controller enforces it server-side (`if (matches > cap) renderTooBroadMessage()`).
+
+**"Select all N matching" pattern** — when an app needs the Gmail affordance, **no framework primitive is needed.** Compose a regular `ButtonNode` (or `selection.buttons[]` entry) that dispatches a bulk action with **the current filter** in its context. The server runs the bulk against the filter query server-side, not against a row-id list. The framework already gives you everything: the filter is in state (round-tripped), the button is just a button, the action handler queries by filter and acts. No row-ids on the wire.
+
+**Worked example:** `demo/HelpDesk/AspNetCore/AgentController.cs` (+ bun twin at `demo/HelpDesk-bun/server.ts`) is the canonical reference. It seeds ~80 tickets so the cap actually fires; tabs narrow by status; the Title column has a free-text filter input; matches ≤ cap render with `selection.buttons[]` for bulk close/start/reopen; matches > cap render a "narrow further" message with the filter input still accessible.
+
 ### Action payload — JSON body (curl/agent ergonomics)
 
 The TypeScript shell always submits actions as `multipart/form-data` (because of file uploads). For human-driven or agent-driven callers using curl/PowerShell, multipart's two-layer escaping (JSON inside form field inside multipart) is friction. Controllers can opt into accepting `application/json` as a fallback content-type using `ActionPayload<TState>.ParseJson(jsonBody)`:

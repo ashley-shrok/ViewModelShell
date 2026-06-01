@@ -88,7 +88,7 @@
       "cleanupFiles": ["helpdesk-parity-dotnet.db"],
       "start": "dotnet",
       "args": ["run", "--no-build", "--no-launch-profile", "--urls", "http://localhost:5009"],
-      "env": { "HELPDESK_DB": "helpdesk-parity-dotnet.db" },
+      "env": { "HELPDESK_DB": "helpdesk-parity-dotnet.db", "HELPDESK_SEED": "0" },
       "baseUrl": "http://localhost:5009",
       "ready": "/api/requester",
       "fixtures": ["helpdesk"]
@@ -99,7 +99,7 @@
       "cleanupFiles": ["helpdesk-parity-bun.db"],
       "start": "bun",
       "args": ["run", "server.ts"],
-      "env": { "PORT": "5010", "HELPDESK_DB": "helpdesk-parity-bun.db" },
+      "env": { "PORT": "5010", "HELPDESK_DB": "helpdesk-parity-bun.db", "HELPDESK_SEED": "0" },
       "baseUrl": "http://localhost:5010",
       "ready": "/api/requester",
       "fixtures": ["helpdesk"]

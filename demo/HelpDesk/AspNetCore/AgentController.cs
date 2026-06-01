@@ -26,9 +26,6 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         string? Str(string key) =>
             payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
                 ? v.GetString() : null;
-        int Int(string key, int dflt) =>
-            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.Number
-                ? v.GetInt32() : dflt;
         // 0.13.0: bulk-action handlers read the harvested selection from context.
         List<string> StrList(string key) =>
             payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.Array
@@ -40,13 +37,14 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         switch (payload.Name)
         {
             case "filter":
-                // Selection persists across filter changes (it's server-truth);
-                // the page resets, since the row window shifts underneath it.
-                state = state with { Filter = Str("value") ?? "all", Page = 1 };
+                state = state with { Filter = Str("value") ?? "all" };
                 break;
 
-            case "page":
-                state = state with { Page = Int("page", state.Page) };
+            // 0.15.1 — free-text title filter dispatched by the Title column's
+            // Filterable input. Adapter sends { column, value, filters }; we
+            // only care about `value`. Empty string clears the filter.
+            case "filter-text":
+                state = state with { TitleFilter = Str("value") ?? "" };
                 break;
 
             // 0.13.0 — toggle-select action removed. Selection is purely local
@@ -127,40 +125,21 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         return BuildQueuePage(state);
     }
 
-    private const int PageSize = 5;
-
-    // Filter → count → page-slice. The SERVER slices (SQL LIMIT/OFFSET); the
-    // adapter only renders the page controls. Also used by toggle-select-all so
-    // "select all" addresses exactly the visible page.
-    private (List<Ticket> Page, int Total, int ClampedPage) QueueWindow(AgentState state)
-    {
-        var status = state.Filter == "all" ? null : state.Filter;
-        var total = db.Count(status);
-        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)PageSize));
-        var page = Math.Clamp(state.Page, 1, totalPages);
-        var tickets = db.GetPage(status, PageSize, (page - 1) * PageSize);
-        return (tickets, total, page);
-    }
+    // 0.15.1 — canonical workflow pattern: filter narrows under the cap, then
+    // the table shows ALL matches (no pagination), with selection.buttons[]
+    // for bulk actions on the visible chunk. If the filter is too broad
+    // (matches > Cap), the controller renders a "narrow your filter" message
+    // and an empty table (keeping the column filter input accessible). Pick
+    // Cap to fit your row weight + the user's working memory; for a ticket
+    // queue, 25 is comfortable. See AGENTS.md "Tables in VMS" for the rules.
+    private const int Cap = 25;
 
     private ViewNode BuildQueuePage(AgentState state)
     {
         var (open, inProgress, resolved) = db.GetCounts();
-        var (tickets, total, page) = QueueWindow(state);
-
-        var rows = tickets.Select(t => new TableRow(
-            Cells: new Dictionary<string, string>
-            {
-                ["title"]    = t.Title,
-                ["type"]     = TypeLabel(t.Type),
-                ["priority"] = PriorityLabel(t.Priority),
-                ["status"]   = StatusLabel(t.Status),
-                ["due"]      = string.IsNullOrEmpty(t.DueDate) ? "—" : t.DueDate!,
-            },
-            Id:      t.Id.ToString(),
-            // Row click still opens the ticket — selection is its own column, so
-            // the two interactions no longer fight over TableRow.action.
-            Action:  new ActionDescriptor("select-ticket", new() { ["id"] = t.Id.ToString() }),
-            Variant: TicketVariant(t))).ToList();
+        var status = state.Filter == "all" ? null : state.Filter;
+        var matching = db.CountMatching(status, state.TitleFilter);
+        var withinCap = matching <= Cap;
 
         var children = new List<ViewNode>
         {
@@ -177,34 +156,54 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                 ]),
         };
 
-        // 0.13.0 — bulk-action toolbar moved into TableNode.selection.buttons[].
-        // The adapter renders the toolbar above the table; each button's click
-        // harvests the checked rows and dispatches with `selectedIds` in context.
-        // Always rendered (server doesn't know selection count); the action
-        // handler is a no-op on an empty selection.
-        children.Add(total == 0
-            ? new TextNode("No tickets in queue.", "muted")
-            : new TableNode(
-                Columns:
+        // "Too many matches" notice rendered ABOVE the table so the filter
+        // input (in the table header) stays accessible to the user.
+        if (!withinCap)
+        {
+            children.Add(new TextNode(
+                $"{matching} tickets match — refine the filter (max {Cap} shown).",
+                "warning"));
+        }
+
+        // Fetch rows only when within the cap; over-cap renders an empty body.
+        var tickets = withinCap ? db.GetMatching(status, state.TitleFilter, Cap) : new List<Ticket>();
+        var rows = tickets.Select(t => new TableRow(
+            Cells: new Dictionary<string, string>
+            {
+                ["title"]    = t.Title,
+                ["type"]     = TypeLabel(t.Type),
+                ["priority"] = PriorityLabel(t.Priority),
+                ["status"]   = StatusLabel(t.Status),
+                ["due"]      = string.IsNullOrEmpty(t.DueDate) ? "—" : t.DueDate!,
+            },
+            Id:      t.Id.ToString(),
+            Action:  new ActionDescriptor("select-ticket", new() { ["id"] = t.Id.ToString() }),
+            Variant: TicketVariant(t))).ToList();
+
+        TableSelection? selection = withinCap && rows.Count > 0
+            ? new TableSelection(
+                SelectedIds: [],
+                Buttons:
                 [
-                    new TableColumn("title",    "Title"),
-                    new TableColumn("type",     "Type"),
-                    new TableColumn("priority", "Priority"),
-                    new TableColumn("status",   "Status"),
-                    new TableColumn("due",      "Due"),
-                ],
-                Rows: rows,
-                // Local mode: omit `Action`. Selection is DOM-tracked, no
-                // per-toggle round-trip, no dropped clicks under the dispatch guard.
-                Selection: new TableSelection(
-                    SelectedIds: [],
-                    Buttons:
-                    [
-                        new ButtonNode("Mark In Progress", new ActionDescriptor("bulk-start"),   "secondary"),
-                        new ButtonNode("Mark Resolved",    new ActionDescriptor("bulk-resolve"), "primary"),
-                        new ButtonNode("Reopen",           new ActionDescriptor("bulk-reopen"),  "secondary"),
-                    ]),
-                Pagination: new TablePagination(page, PageSize, total, new ActionDescriptor("page"))));
+                    new ButtonNode("Mark In Progress", new ActionDescriptor("bulk-start"),   "secondary"),
+                    new ButtonNode("Mark Resolved",    new ActionDescriptor("bulk-resolve"), "primary"),
+                    new ButtonNode("Reopen",           new ActionDescriptor("bulk-reopen"),  "secondary"),
+                ])
+            : null;
+
+        children.Add(new TableNode(
+            Columns:
+            [
+                new TableColumn("title",    "Title", Filterable: true,
+                    FilterValue: state.TitleFilter.Length > 0 ? state.TitleFilter : null),
+                new TableColumn("type",     "Type"),
+                new TableColumn("priority", "Priority"),
+                new TableColumn("status",   "Status"),
+                new TableColumn("due",      "Due"),
+            ],
+            Rows: rows,
+            FilterAction: new ActionDescriptor("filter-text"),
+            Selection: selection));
 
         return new PageNode("Help Desk — Agent", children);
     }

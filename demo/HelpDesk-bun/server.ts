@@ -32,13 +32,13 @@ interface AgentState {
   selectedTicketId: number | null;
   filter: string;
   notesSaved: boolean;
-  // 0.13.0: selectedIds removed — local-mode selection lives in the DOM
-  // (TableNode.selection without an `action`). Bulk-action buttons harvest
-  // checked rows at click time and ship them in `selectedIds` context.
-  page: number;
+  // 0.15.1 — canonical workflow pattern: filter narrows under the cap, no
+  // pagination. titleFilter is the free-text Title column input. (page was
+  // removed; selectedIds was removed in 0.13.0.)
+  titleFilter: string;
 }
 function agentInitial(): AgentState {
-  return { view: "queue", selectedTicketId: null, filter: "all", notesSaved: false, page: 1 };
+  return { view: "queue", selectedTicketId: null, filter: "all", notesSaved: false, titleFilter: "" };
 }
 
 interface RequesterState {
@@ -66,6 +66,10 @@ function requesterInitial(): RequesterState {
 
 const dbPath = process.env.HELPDESK_DB ?? "./helpdesk.db";
 const db = new Database(dbPath);
+// 0.15.1 — seed flag mirrors the C# twin. Default seeds on first init for the
+// canonical workflow demo; HELPDESK_SEED=0 disables (parity sets this so IDs
+// stay stable for the fixture).
+const SEED_ENABLED = process.env.HELPDESK_SEED !== "0";
 db.exec(`
   CREATE TABLE IF NOT EXISTS tickets (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -151,6 +155,74 @@ function dbCount(status: string | null): number {
     : db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM tickets").get();
   return row?.n ?? 0;
 }
+
+// 0.15.1 — canonical workflow pattern: combined status + title-text filter.
+function dbCountMatching(status: string | null, titleFilter: string): number {
+  const clauses: string[] = [];
+  const params: (string | number)[] = [];
+  if (status) { clauses.push("status = ?"); params.push(status); }
+  if (titleFilter) { clauses.push("title LIKE ?"); params.push(`%${titleFilter}%`); }
+  const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
+  const row = db.query<{ n: number }, (string | number)[]>(`SELECT COUNT(*) AS n FROM tickets${where}`).all(...params)[0];
+  return row?.n ?? 0;
+}
+
+function dbGetMatching(status: string | null, titleFilter: string, limit: number): Ticket[] {
+  const clauses: string[] = [];
+  const params: (string | number)[] = [];
+  if (status) { clauses.push("status = ?"); params.push(status); }
+  if (titleFilter) { clauses.push("title LIKE ?"); params.push(`%${titleFilter}%`); }
+  const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
+  params.push(limit);
+  const rows = db.query<TicketRow, (string | number)[]>(
+    `SELECT * FROM tickets${where} ORDER BY created_at DESC, id DESC LIMIT ?`
+  ).all(...params);
+  return rows.map(mapTicket);
+}
+
+// 0.15.1 — seed demo data so the canonical pattern is visible locally.
+// Idempotent (skips if table has rows). HELPDESK_SEED=0 disables (parity).
+function seedDemoDataIfNeeded(): void {
+  if (!SEED_ENABLED) return;
+  if (dbCount(null) > 0) return;
+  const titles = [
+    "Laptop won't boot",          "VPN client crashes on login",  "Email rules not applying",
+    "Outlook search index corrupt", "Slow file server response",  "Printer driver missing",
+    "Monitor displays artifacts", "Keyboard keys stuck",          "Webcam not detected",
+    "Headset audio cutting out",  "Excel macros disabled",        "Teams meetings drop randomly",
+    "OneDrive sync stuck",        "Browser bookmarks lost",       "Disk space low warning",
+    "New laptop request",         "Add user to billing group",    "Reset password — Salesforce",
+    "Increase file share quota",  "Mobile device enrollment",     "Two-factor enrollment failing",
+    "Software install — Figma",   "License renewal — Adobe CC",   "Software update fails — Office",
+    "Hardware refresh — desktop", "Phone hand-off issue",         "Bluetooth pairing fails",
+  ];
+  const types = ["hardware", "software", "access"];
+  const priorities = ["low", "medium", "medium", "high", "critical"];
+  const distribution: [number, string][] = [[35, "open"], [22, "in-progress"], [23, "resolved"]];
+
+  const insert = db.query(
+    "INSERT INTO tickets (title, type, priority, status, created_at) VALUES (?, ?, ?, ?, ?)"
+  );
+  const now = Date.now();
+  db.exec("BEGIN");
+  let idx = 0;
+  for (const [count, status] of distribution) {
+    for (let i = 0; i < count; i++) {
+      const base = titles[idx % titles.length];
+      const title = idx < titles.length ? base : `${base} (#${idx - titles.length + 2})`;
+      insert.run(
+        title,
+        types[idx % types.length],
+        priorities[idx % priorities.length],
+        status,
+        new Date(now - idx * 3600_000).toISOString(),
+      );
+      idx++;
+    }
+  }
+  db.exec("COMMIT");
+}
+seedDemoDataIfNeeded();
 
 function dbGetById(id: number): Ticket | null {
   const row = db.query<TicketRow, [number]>(
@@ -249,22 +321,18 @@ function formatDate(iso: string): string {
 // (TableNode; whole-row click opens the ticket) → a dedicated full
 // ticket PageNode. The navigate pattern real ticketing actually uses.
 
-const AGENT_PAGE_SIZE = 5;
-
-// Filter → count → page-slice. Server slices (SQL LIMIT/OFFSET); the adapter
-// only renders controls. Shared by the queue page and toggle-select-all.
-function agentQueueWindow(state: AgentState): { page: Ticket[]; total: number; clampedPage: number } {
-  const status = state.filter === "all" ? null : state.filter;
-  const total = dbCount(status);
-  const totalPages = Math.max(1, Math.ceil(total / AGENT_PAGE_SIZE));
-  const clampedPage = Math.min(Math.max(state.page, 1), totalPages);
-  const page = dbGetPage(status, AGENT_PAGE_SIZE, (clampedPage - 1) * AGENT_PAGE_SIZE);
-  return { page, total, clampedPage };
-}
+// 0.15.1 — canonical workflow pattern (see AGENTS.md "Tables in VMS"):
+// filter narrows under the cap → show ALL matches with selection.buttons[];
+// over cap → "narrow further" notice + empty table (filter input stays
+// accessible). Pick AGENT_CAP to fit row weight + working memory.
+const AGENT_CAP = 25;
 
 function agentBuildQueuePage(state: AgentState): ViewNode {
   const counts = dbGetCounts();
-  const { page: tickets, total, clampedPage } = agentQueueWindow(state);
+  const status = state.filter === "all" ? null : state.filter;
+  const matching = dbCountMatching(status, state.titleFilter);
+  const withinCap = matching <= AGENT_CAP;
+  const tickets = withinCap ? dbGetMatching(status, state.titleFilter, AGENT_CAP) : [];
 
   const rows = tickets.map(t => {
     const variant = ticketVariant(t);
@@ -307,36 +375,46 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
     },
   ];
 
-  // 0.13.0 — bulk-action toolbar moved into TableNode.selection.buttons[]. The
-  // adapter renders it above the table; each button's click harvests checked
-  // rows and dispatches with `selectedIds` in context. Always rendered (server
-  // doesn't track selection in local mode); handler is a no-op on empty.
-  children.push(
-    total === 0
-      ? { type: "text", value: "No tickets in queue.", style: "muted" }
-      : ({
-          type: "table",
-          columns: [
-            { key: "title",    label: "Title",    sortable: false, filterable: false, linkExternal: false },
-            { key: "type",     label: "Type",     sortable: false, filterable: false, linkExternal: false },
-            { key: "priority", label: "Priority", sortable: false, filterable: false, linkExternal: false },
-            { key: "status",   label: "Status",   sortable: false, filterable: false, linkExternal: false },
-            { key: "due",      label: "Due",      sortable: false, filterable: false, linkExternal: false },
-          ],
-          rows,
-          // Local mode: no `action`. Selection lives in the DOM until a button
-          // fires. The adapter harvests checked rows into `selectedIds`.
-          selection: {
-            selectedIds: [],
-            buttons: [
-              { type: "button", label: "Mark In Progress", action: { name: "bulk-start" },   variant: "secondary" },
-              { type: "button", label: "Mark Resolved",    action: { name: "bulk-resolve" }, variant: "primary" },
-              { type: "button", label: "Reopen",           action: { name: "bulk-reopen" },  variant: "secondary" },
-            ],
-          },
-          pagination: { page: clampedPage, pageSize: AGENT_PAGE_SIZE, totalRows: total, action: { name: "page" } },
-        } as ViewNode),
-  );
+  // Over-cap notice rendered ABOVE the table so the filter input (in the
+  // table header) stays accessible.
+  if (!withinCap) {
+    children.push({
+      type: "text",
+      value: `${matching} tickets match — refine the filter (max ${AGENT_CAP} shown).`,
+      style: "warning",
+    });
+  }
+
+  // Title column is filterable; FilterAction dispatches with { column, value, filters }.
+  // selection.buttons[] only present when within-cap and rows exist.
+  const titleCol: Record<string, unknown> = {
+    key: "title", label: "Title", sortable: false, filterable: true, linkExternal: false,
+  };
+  if (state.titleFilter.length > 0) titleCol.filterValue = state.titleFilter;
+
+  const table: Record<string, unknown> = {
+    type: "table",
+    columns: [
+      titleCol,
+      { key: "type",     label: "Type",     sortable: false, filterable: false, linkExternal: false },
+      { key: "priority", label: "Priority", sortable: false, filterable: false, linkExternal: false },
+      { key: "status",   label: "Status",   sortable: false, filterable: false, linkExternal: false },
+      { key: "due",      label: "Due",      sortable: false, filterable: false, linkExternal: false },
+    ],
+    rows,
+    filterAction: { name: "filter-text" },
+  };
+  if (withinCap && rows.length > 0) {
+    table.selection = {
+      selectedIds: [],
+      buttons: [
+        { type: "button", label: "Mark In Progress", action: { name: "bulk-start" },   variant: "secondary" },
+        { type: "button", label: "Mark Resolved",    action: { name: "bulk-resolve" }, variant: "primary" },
+        { type: "button", label: "Reopen",           action: { name: "bulk-reopen" },  variant: "secondary" },
+      ],
+    };
+  }
+  children.push(table as unknown as ViewNode);
 
   return { type: "page", title: "Help Desk — Agent", children };
 }
@@ -438,7 +516,6 @@ function agentBuildVm(state: AgentState): ViewNode {
 const agentHandler = createAction<AgentState>(async (payload) => {
   const ctx = payload.context ?? {};
   const str = (k: string): string | null => (typeof ctx[k] === "string" ? (ctx[k] as string) : null);
-  const int = (k: string, dflt: number): number => (typeof ctx[k] === "number" ? (ctx[k] as number) : dflt);
   // 0.13.0: bulk-action handlers read the harvested selection from context.
   const strList = (k: string): string[] =>
     Array.isArray(ctx[k]) ? ((ctx[k] as unknown[]).filter((x) => typeof x === "string") as string[]) : [];
@@ -446,11 +523,12 @@ const agentHandler = createAction<AgentState>(async (payload) => {
 
   switch (payload.name) {
     case "filter":
-      state = { ...state, filter: str("value") ?? "all", page: 1 };
+      state = { ...state, filter: str("value") ?? "all" };
       break;
 
-    case "page":
-      state = { ...state, page: int("page", state.page) };
+    // 0.15.1 — free-text title filter from the Title column's Filterable input.
+    case "filter-text":
+      state = { ...state, titleFilter: str("value") ?? "" };
       break;
 
     // 0.13.0 — toggle-select action removed (local-mode selection lives in DOM).
