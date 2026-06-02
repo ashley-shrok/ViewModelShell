@@ -6,6 +6,39 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 0.16.0 — `ShellResponse.busy` (UI lockout) + generic per-round-trip lock (npm + NuGet)
+
+**npm:** `0.16.0` (MINOR — new optional wire field + new optional `Adapter` capability verb + default CSS rule) · **NuGet:** `0.16.0` (MINOR — `ShellResponse.Busy` property)
+
+Both packages move together (wire-format addition). Purely additive — every existing response renders byte-identically.
+
+### Why
+
+Two interaction-honesty problems we kept brushing against:
+
+1. **Rapid clicks during a single round-trip silently mislead** — the dispatch guard drops them (correct behavior), but the DOM-default checkbox flip / button depression *happens visually* before the dispatch is dropped. The user sees a state that the framework never accepted. This is what made `TableSelection.action` un-shippable in 0.15.0.
+2. **Long-running server actions have no client-side lockout** — the server can render a "Working…" view, but between polls the user can still keyboard-activate elements behind the modal, race the first response, etc. The server-side gate catches it after the dispatch reaches the server, which is too late.
+
+Both reduce to one principle: **when a user dispatch is going to be dropped, the UI must not appear responsive**. 0.16.0 wires that principle into the framework.
+
+### Added
+
+- **`ShellResponse.busy?: bool`** (TS) / **`ShellResponse<TState>.Busy: bool`** (C#, `WhenWritingDefault` → wire omits `false`). When `true`, the shell drops user-initiated dispatches client-side; polls (`silent: true`) bypass so the server can clear the state. Same idempotent on-every-response shape as `PreventUnload`; the two pair naturally for long-running server actions.
+- **`Adapter.setBusy?(active: boolean)`** — new optional capability verb. Shell calls it on every transition with `serverBusy || userDispatching`. Fail-quiet by absence (TUI has no equivalent).
+- **`BrowserAdapter.setBusy`** — toggles `.vms-busy` on the container. Idempotent.
+- **Default CSS:** `.vms-busy { cursor: wait }` + `pointer-events: none` on interactive descendants. The lock is **honest**: clicks never reach the input, so checkboxes can't visually flip during a round-trip; buttons can't depress.
+- **Generic per-round-trip lock** (the lesson from `TableSelection.action`): the shell *also* applies `.vms-busy` for the duration of every user-initiated dispatch automatically — no server flag required. Polls (silent dispatches) don't toggle the class, so a long action with `busy: true` + polling stays continuously locked without flicker.
+
+### Demo + parity
+
+FeatureProbe's "Start long action" handler now returns both `PreventUnload = true` AND `Busy = true` (and clears both on completion). Existing fixture steps validate the pairing across all 7 backend groups (dotnet-probe / bun-probe / node-probe).
+
+### Consumers
+
+Nothing to do — additive. To opt into the explicit long-action lockout, return `Busy = true` from every render handler while server-side work is pending; clear it (omit or set `false`) when the work completes. The implicit per-round-trip lock applies to every existing app automatically; the dispatch guard's UX is now visually honest by default.
+
+---
+
 ## 0.15.0 — Remove `TableSelection.action` (server-truth toggle mode) (npm + NuGet)
 
 **npm:** `0.15.0` (MINOR — breaking removal in pre-1.0, but no app in our orbit was using it) · **NuGet:** `0.15.0` (MINOR — same)

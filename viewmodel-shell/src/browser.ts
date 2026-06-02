@@ -122,6 +122,14 @@ export class BrowserAdapter implements Adapter {
     }
   }
 
+  /** 0.16.0 — toggle the `.vms-busy` class on the container. Default CSS makes
+   *  every interactive descendant non-clickable (cursor:wait + pointer-events:
+   *  none), so a rapid checkbox click during a round-trip never visually flips
+   *  the box. Idempotent (classList.toggle with a force value). */
+  setBusy(active: boolean): void {
+    this.container.classList.toggle("vms-busy", active);
+  }
+
   /** 0.14.0 — install / clear the browser's `beforeunload` guard. The shell
    *  calls this on every response with `response.preventUnload ?? false`, so
    *  the lock-and-clear cycle is just "server sets preventUnload:true while

@@ -6,6 +6,63 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `0.16.0` (busy lockout + generic per-round-trip lock — npm + NuGet)
+
+**Nothing to do for compatibility.** Every existing response renders byte-identically. The new `busy` field is opt-in for the explicit long-action lockout, and the implicit per-round-trip lock applies to your app automatically (it makes the dispatch guard's behavior visually honest — rapid clicks during a round-trip no longer flip checkboxes / depress buttons before being dropped).
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.15.0` | **`0.16.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.15.0` | **`0.16.0`** |
+
+### What changed automatically (no opt-in)
+
+The shell now applies `.vms-busy` to the `BrowserAdapter` container for the duration of every user-initiated dispatch. Default CSS (`cursor: wait` + `pointer-events: none` on interactive descendants) makes the lock visually honest — clicks during the round-trip never reach inputs. **If your app has its own custom CSS that depends on interactive descendants being clickable during a brief moment after click**, you may notice a slight UX change. The behavior is correct; just be aware.
+
+Polls (silent dispatches) don't trigger the class, so background polling doesn't flicker.
+
+### Opting into the explicit lockout (long-running server actions)
+
+Same pattern as `PreventUnload`. While server-side work is pending, return `Busy = true` from each render; clear when done:
+
+```csharp
+case "start-report":
+    state = state with { ReportPending = true /* + kick off work */ };
+    return new ShellResponse<MyState>(BuildVm(state), state) {
+        PreventUnload = true,
+        Busy = true,
+        NextPollIn = 1000,
+    };
+
+case "poll":
+    state = state with { ReportPending = !ReportDoneByNow() };
+    return new ShellResponse<MyState>(BuildVm(state), state) {
+        PreventUnload = state.ReportPending,
+        Busy = state.ReportPending,
+        NextPollIn = state.ReportPending ? 1000 : null,
+    };
+```
+
+TypeScript mirrors with conditional spread (matches C#'s `WhenWritingDefault`):
+
+```ts
+return {
+    vm: buildVm(state),
+    state,
+    ...(state.reportPending
+        ? { preventUnload: true, busy: true, nextPollIn: 1000 }
+        : {}),
+};
+```
+
+The result: while the work is pending, the page is **continuously** locked (cursor wait + interactive elements non-clickable) — no per-poll flicker — until the next response that clears the flag.
+
+### Worked example
+
+`demo/FeatureProbe/AspNetCore/FeatureProbeController.cs` (+ bun twin) — the "Start long action" button pairs `Busy + PreventUnload + NextPollIn` for the whole 3-tick lifecycle. Parity-tested.
+
+---
+
 ## Upgrading to `0.15.0` (remove `TableSelection.action` — npm + NuGet)
 
 **Almost certainly nothing to do.** The 0.13.0 release deprecated this path in favor of `selection.buttons[]`, and the only worked example using it (HelpDesk-Agent) was already migrated in 0.13.0. If you happened to wire `selection.action` somewhere yourself, see the diff below.

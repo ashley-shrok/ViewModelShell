@@ -103,7 +103,12 @@ public record ShellResponse<TState>(
     // 0.14.0 — install / clear the browser's "warn before unload" guard. False
     // is the default and is dropped from the wire via WhenWritingDefault, so the
     // wire stays clean (the field only appears on responses where it matters).
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool PreventUnload = false
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool PreventUnload = false,
+    // 0.16.0 — lock the UI (shell drops user dispatches; BrowserAdapter applies
+    // .vms-busy → cursor:wait + pointer-events:none on interactive descendants).
+    // Polls bypass so the server can clear the state. WhenWritingDefault drops
+    // false from the wire.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Busy = false
 )
 {
     public static ShellResponse<TState> RedirectTo(string url) =>

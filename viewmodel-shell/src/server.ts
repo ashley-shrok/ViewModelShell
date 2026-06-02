@@ -76,6 +76,12 @@ export interface ShellResponseBody<TState> {
    *  (or set false) to clear; set true while a long-running server action is
    *  in flight so an accidental tab-close doesn't lose work. */
   preventUnload?: boolean;
+  /** 0.16.0 — lock the UI: the shell drops user-initiated dispatches client-
+   *  side and the BrowserAdapter applies `.vms-busy` (cursor:wait + pointer-
+   *  events:none on interactive descendants). Polls bypass so the server can
+   *  clear the state. Naturally paired with `preventUnload` for long-running
+   *  server actions. */
+  busy?: boolean;
 }
 
 /** Build a redirect response (Vm and State omitted; shell navigates the browser). */

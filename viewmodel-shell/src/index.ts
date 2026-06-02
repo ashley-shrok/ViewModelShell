@@ -54,6 +54,16 @@ export interface Adapter {
    *  targets (TUI) have no terminal equivalent. Modern browsers show a
    *  generic "Leave site?" dialog; the message is not customizable. */
   setPreventUnload?(active: boolean): void;
+  /** 0.16.0 — visually lock the UI during periods where user dispatches will
+   *  be dropped. Called by the shell on every transition with `active = true`
+   *  when EITHER a user-initiated dispatch is in flight OR the server returned
+   *  `ShellResponse.busy: true` on its most recent response. Polls (silent
+   *  dispatches) bypass — they're the only way out of a server-busy state.
+   *  `BrowserAdapter` toggles `.vms-busy` on its container; default CSS makes
+   *  every interactive descendant non-clickable (cursor: wait + pointer-events:
+   *  none), so a rapid checkbox click during an in-flight round-trip never
+   *  visually flips the box. Fail-quiet by absence (TUI has no equivalent). */
+  setBusy?(active: boolean): void;
 }
 
 // ─── Node types ───────────────────────────────────────────────────────────────
@@ -380,6 +390,10 @@ export interface ShellResponse {
    *  `preventUnload: true` from each response; clear it when the work
    *  completes (typically via polling). See `Adapter.setPreventUnload`. */
   preventUnload?: boolean;
+  /** 0.16.0 — when true, the shell locks the UI (drops user-initiated
+   *  dispatches; the adapter applies `.vms-busy` for the visual cue). Polls
+   *  bypass so the server can clear the state. See `Adapter.setBusy`. */
+  busy?: boolean;
 }
 
 export class ViewModelShell {
@@ -387,8 +401,18 @@ export class ViewModelShell {
   private currentState: unknown = null;
   private dispatching = false;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
+  // 0.16.0 — busy = serverBusy OR a user-initiated dispatch is in flight.
+  // Polls (silent=true dispatches) don't flip userDispatching so they never
+  // toggle the busy class — that's how a server-busy state stays continuously
+  // locked across many ticks without flicker.
+  private serverBusy = false;
+  private userDispatching = false;
 
   constructor(private options: ShellOptions) {}
+
+  private syncBusy(): void {
+    this.options.adapter.setBusy?.(this.serverBusy || this.userDispatching);
+  }
 
   async load(params?: Record<string, string>): Promise<void> {
     const { endpoint, adapter, onError, onLoading } = this.options;
@@ -406,6 +430,9 @@ export class ViewModelShell {
       // server may legitimately want it on at first paint (e.g. the page was
       // refreshed mid-work and the long action is still pending server-side).
       adapter.setPreventUnload?.(body.preventUnload ?? false);
+      // 0.16.0 — same for the busy lockout.
+      this.serverBusy = body.busy ?? false;
+      this.syncBusy();
       adapter.render(body.vm, (action) => this.dispatch(action));
       this.schedulePoll(body.nextPollIn);
     } catch (err) {
@@ -417,6 +444,9 @@ export class ViewModelShell {
   }
 
   async dispatch(action: ActionEvent, silent = false): Promise<void> {
+    // 0.16.0 — drop user-initiated dispatches while server-busy. Polls (silent)
+    // bypass so the server can clear the busy state.
+    if (!silent && this.serverBusy) return;
     if (this.dispatching) return;
     const { actionEndpoint, onError, onLoading } = this.options;
     if (this.currentState === null) {
@@ -429,7 +459,16 @@ export class ViewModelShell {
     }
     try {
       this.dispatching = true;
-      if (!silent) onLoading?.(true);
+      if (!silent) {
+        // 0.16.0 — flag a user dispatch as in-flight + apply .vms-busy. This
+        // is what kills the "rapid clicks during a round-trip silently flip the
+        // checkbox" UX bug: by the time the user's second click arrives, the
+        // container has pointer-events: none and the click never reaches the
+        // input.
+        this.userDispatching = true;
+        this.syncBusy();
+        onLoading?.(true);
+      }
       const form = new FormData();
       form.append("_action", JSON.stringify({ name: action.name, context: action.context ?? {} }));
       form.append("_state", JSON.stringify(this.currentState));
@@ -469,7 +508,11 @@ export class ViewModelShell {
       }
     } finally {
       this.dispatching = false;
-      if (!silent) onLoading?.(false);
+      if (!silent) {
+        this.userDispatching = false;
+        this.syncBusy();
+        onLoading?.(false);
+      }
     }
   }
 
@@ -519,6 +562,9 @@ export class ViewModelShell {
     // wants a redirect to NOT be blocked by its own guard simply omits
     // preventUnload (or sets it false) on that response — standard pattern.
     adapter.setPreventUnload?.(body.preventUnload ?? false);
+    // 0.16.0 — likewise for the busy lockout.
+    this.serverBusy = body.busy ?? false;
+    this.syncBusy();
     if (body.redirect) {
       if (this.options.onRedirect) {
         this.options.onRedirect(body.redirect);

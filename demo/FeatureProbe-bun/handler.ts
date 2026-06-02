@@ -224,12 +224,13 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
       state = initialState();
       break;
 
-    // 0.14.0/#18 — long-running action with the beforeunload guard. Conditional
-    // spread keeps preventUnload absent on the wire when done (parity with C#'s
-    // WhenWritingDefault, which drops false from the JSON).
+    // 0.14.0/#18 — long-running action with the beforeunload guard;
+    // 0.16.0 — paired with busy=true so the page is visually locked for the
+    // whole lifecycle. Conditional spread keeps both flags absent on the wire
+    // when done (parity with C#'s WhenWritingDefault).
     case "start-long-action":
       state = { ...state, longActionPolls: 3 };
-      return { vm: buildVm(state), state, preventUnload: true, nextPollIn: 100 };
+      return { vm: buildVm(state), state, preventUnload: true, busy: true, nextPollIn: 100 };
 
     case "long-action-poll": {
       const remaining = Math.max(0, state.longActionPolls - 1);
@@ -238,7 +239,7 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
       return {
         vm: buildVm(state),
         state,
-        ...(workDone ? {} : { preventUnload: true, nextPollIn: 100 }),
+        ...(workDone ? {} : { preventUnload: true, busy: true, nextPollIn: 100 }),
       };
     }
 

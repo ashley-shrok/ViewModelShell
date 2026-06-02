@@ -649,6 +649,18 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-table__pagination-btn { padding: var(--vms-space-xs) var(--vms-space-sm); font-size: var(--vms-text-sm); }
 .vms-table__pagination-btn:disabled { opacity: 0.45; cursor: default; }
 
+/* 0.16.0 — `.vms-busy` is applied by BrowserAdapter when the shell is in a
+   busy state (a user-initiated dispatch is in flight OR the server returned
+   ShellResponse.busy: true). cursor: wait communicates the state; pointer-
+   events: none on interactive descendants makes the lock honest — rapid
+   clicks during a round-trip never visually flip checkboxes / depress buttons
+   because the click never reaches them. Polls (silent dispatches) bypass the
+   class so a long-running action stays continuously locked across many ticks
+   without flickering. */
+.vms-busy { cursor: wait; }
+.vms-busy a, .vms-busy button, .vms-busy input, .vms-busy textarea,
+.vms-busy select, .vms-busy [role="button"], .vms-busy [data-id] { pointer-events: none; }
+
 /* ── Recommended error-banner pattern ──
    Apps typically render this from the `onError` callback. Not emitted by
    the framework; included here so apps can use the convention without

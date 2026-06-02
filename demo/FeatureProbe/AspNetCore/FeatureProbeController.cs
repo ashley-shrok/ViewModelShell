@@ -131,12 +131,16 @@ public class FeatureProbeController : ControllerBase
                 state = FeatureProbeState.Initial();
                 break;
 
-            // 0.14.0/#18 — long-running action with the beforeunload guard.
+            // 0.14.0/#18 — long-running action with the beforeunload guard;
+            // 0.16.0 pairs it with Busy=true so the page is also visually
+            // locked (cursor:wait + interactive elements non-clickable) for
+            // the whole lifecycle, not just per round-trip.
             case "start-long-action":
                 state = state with { LongActionPolls = 3 };
                 return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
                 {
                     PreventUnload = true,
+                    Busy = true,
                     NextPollIn = 100,
                 };
 
@@ -148,6 +152,7 @@ public class FeatureProbeController : ControllerBase
                 return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
                 {
                     PreventUnload = !workDone,
+                    Busy = !workDone,
                     NextPollIn = workDone ? null : 100,
                 };
             }
