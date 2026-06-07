@@ -123,6 +123,13 @@ const actionHandler = createAction<ReorderState>(async (payload) => {
       if (moving) {
         const rest = state.items.filter(i => i.id !== state.movingId);
         const idx = rest.findIndex(i => i.id === beforeId);
+        if (idx < 0) {
+          // Match .NET List<T>.Insert(-1, ...) which throws — silent
+          // splice(-1, 0, item) would insert before the LAST element of
+          // rest, producing different behavior than the .NET twin on the
+          // same malformed input.
+          throw new Error(`beforeId '${beforeId}' not found in items`);
+        }
         rest.splice(idx, 0, moving);
         state = { ...state, items: rest, movingId: null };
       } else {
