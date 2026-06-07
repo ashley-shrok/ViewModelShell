@@ -25,6 +25,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- ShellExceptionFilter uses ASP.NET MVC filter interfaces (IAsyncExceptionFilter,
+         IAsyncResultFilter, ExceptionContext, ResultExecutingContext, BadRequestObjectResult, etc.).
+         This FrameworkReference keeps those types available without pulling in a NuGet package,
+         matching the pattern used in every demo's AspNetCore.Tests project. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
