@@ -115,7 +115,7 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
   4. npm `@ashley-shrok/viewmodel-shell` and NuGet `AshleyShrok.ViewModelShell` ship aligned at `1.0.0`; MIGRATION.md documents context-payload elimination, bind-path requirements, action-name uniqueness, and the error envelope as breaking changes with a per-app migration recipe; CHANGELOG.md has a 1.0.0 entry with crisp before/after framing (RELEASE-01, RELEASE-02, RELEASE-03).
   5. AGENTS.md "Critical gotchas" section is rewritten for the new model (no context references, bind-path pattern, unique-action-name rule, error envelope); vitest, dotnet test, and cross-backend parity suite are all green with new tests covering bind-path round-trip, action-name uniqueness enforcement, and error-envelope shape (RELEASE-04, RELEASE-05).
 **Plans**: 5 plans
-  - [ ] 07-01-PLAN.md — Framework envelope wire types + UnknownActionError/Exception + createAction envelope wrap (ERROR-01, ERROR-02, ERROR-03)
+  - [x] 07-01-PLAN.md — Framework envelope wire types + UnknownActionError/Exception + createAction envelope wrap (ERROR-01, ERROR-02, ERROR-03)
   - [ ] 07-02-PLAN.md — Shell-side parse-then-branch + VmsActionError + ok? field on ShellResponse interface (ERROR-01, ERROR-02, ERROR-03)
   - [ ] 07-03-PLAN.md — Demo controller sweep (.NET filter + 7 controllers + 7 TS servers) + FeatureProbe `boom` action (ERROR-02, ERROR-03)
   - [ ] 07-04-PLAN.md — Parity ok:true sweep + new feature-probe-envelope fixture across 3 backends + expectStatus support (ERROR-01, ERROR-02, ERROR-03, RELEASE-05)
@@ -135,4 +135,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. Preset-Grid Layout | 0.4.0 | 4/4 | Complete | 2026-05-18 |
 | 5. Canonical Examples + 0.4.0 Closeout | 0.4.0 | 6/6 | Complete | 2026-05-18 |
 | 6. Wire Shape Change | 1.0.0 | 5/5 | Complete   | 2026-06-07 |
-| 7. Error Envelope + ok Flag + 1.0.0 Closeout | 1.0.0 | 0/5 | Planning | - |
+| 7. Error Envelope + ok Flag + 1.0.0 Closeout | 1.0.0 | 1/5 | In Progress|  |
