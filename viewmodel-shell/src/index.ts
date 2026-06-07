@@ -2,7 +2,6 @@
 
 export interface ActionEvent {
   name: string;
-  context?: Record<string, unknown>;
   files?: Record<string, File>;
 }
 
@@ -154,9 +153,10 @@ export interface FieldNode {
     | "textarea" | "hidden" | "file"
     | "select" | "select-multiple" | "checkbox"
     | "code";
+  /** Path into state where this input reads its current value and writes user changes (e.g. `fields.title`). */
+  bind: string;
   label?: string;
   placeholder?: string;
-  value?: string;
   required?: boolean;
   options?: Array<{ value: string; label: string }>;
   /** Optional language hint for `inputType: "code"`. Emitted as a class
@@ -164,16 +164,19 @@ export interface FieldNode {
    *  library (CodeMirror, Monaco, etc.) — the framework only ships
    *  monospaced editable text, no coloring. */
   language?: string;
-  /** Dispatched when Enter is pressed (text-like inputs only). Adapter merges { [name]: value } into context. */
+  /** Dispatched when Enter is pressed (text-like inputs only). Carries an
+   *  action name only — the current value is already in state at the bind path. */
   action?: ActionEvent;
 }
 
 export interface CheckboxNode {
   type: "checkbox";
   name: string;
-  checked: boolean;
+  /** Path into state where this input reads its current value and writes user changes (e.g. `fields.title`). */
+  bind: string;
   label?: string;
-  /** Dispatched immediately on change. Adapter merges { checked: boolean } into context. */
+  /** Dispatched immediately on change. Carries an action name only — the new
+   *  checked value is already in state at the bind path. */
   action?: ActionEvent;
 }
 
@@ -226,9 +229,12 @@ export interface StatBarNode {
 export interface TabsNode {
   type: "tabs";
   selected: string;
-  /** Base action. Adapter merges { value: tab.value } into context on click. */
-  action: ActionEvent;
-  tabs: Array<{ value: string; label: string }>;
+  /** Path into state where this input reads its current value and writes user changes (e.g. `fields.title`). */
+  bind: string;
+  /** Each tab declares its own action — the framework requires a unique action
+   *  name per tab (e.g. `select-tab-pending`, `select-tab-active`). The renderer
+   *  writes `value` to the bound state path before dispatching the action. */
+  tabs: Array<{ value: string; label: string; action: ActionEvent }>;
 }
 
 export interface ProgressNode {
@@ -264,25 +270,11 @@ export interface TableColumn {
 export interface TableRow {
   id?: string;
   cells: Record<string, string>;
-  action?: ActionEvent;
+  /** Per-row action buttons. Each is a full ButtonNode with its own unique
+   *  action name (e.g. `delete-row-42`, `close-ticket-42`) — per-row identity
+   *  is encoded in the name, not as a separate context payload. */
+  actions?: ButtonNode[];
   variant?: string;
-}
-
-export interface TableSelection {
-  /** Row ids that should render PRE-SELECTED on initial render — the server's
-   *  initial pre-selection. Subsequent toggles are purely client-side DOM state;
-   *  the server doesn't see them until a `buttons[]` click harvests them. */
-  selectedIds: string[];
-  /** When present, the adapter renders these as a bulk-action toolbar ABOVE
-   *  the table. On click, each button harvests the currently-checked rows from
-   *  the DOM and dispatches its `action` with `{ selectedIds: [...] }` merged
-   *  into its `context`. This is the only way to act on the selection — there
-   *  is no per-toggle dispatch (0.15.0 removed the `action` mode that did,
-   *  because rapid clicks were dropped by the dispatch guard and the in-flight
-   *  response wiped the DOM). If a future release needs cross-page persistence
-   *  or live "N selected" indicators, the way back is a redesigned wire shape
-   *  (dispatch queueing + optimistic preservation), not the old `action` mode. */
-  buttons?: ButtonNode[];
 }
 
 export interface TablePagination {
@@ -293,31 +285,39 @@ export interface TablePagination {
   /** Total rows across all pages — server-truth. The adapter renders the range
    *  label and enables/disables prev/next from this; it does NOT slice. */
   totalRows: number;
-  /** Dispatched on a page-control click. The adapter merges `{ page }` — the
-   *  target 1-based page. */
-  action: ActionEvent;
+  /** Dispatched on the prev page-control click. Carries an action name only —
+   *  the renderer writes the target page to TableNode.paginationBind before dispatch. */
+  prevAction?: ActionEvent;
+  /** Dispatched on the next page-control click. Carries an action name only —
+   *  the renderer writes the target page to TableNode.paginationBind before dispatch. */
+  nextAction?: ActionEvent;
 }
 
 export interface TableNode {
   type: "table";
   columns: TableColumn[];
   rows: TableRow[];
-  sortColumn?: string;
-  sortDirection?: "asc" | "desc";
-  /** Base action. Adapter merges { column, direction } into context on header click. */
-  sortAction?: ActionEvent;
-  /** Base action. Adapter merges { column, value, filters } into context on Enter. */
+  /** Path into state where the current sort intent (`{column, direction}`) is read/written. */
+  sortBind?: string;
+  /** Per-column filter input bind paths. The renderer reads/writes filter
+   *  values at these paths; the values then travel with the next dispatch. */
+  filterBinds?: Record<string, string>;
+  /** Path into state where the renderer writes the target page number before
+   *  firing `pagination.prevAction` / `pagination.nextAction`. */
+  paginationBind?: string;
+  /** Per-column sort header click actions, keyed by column key. Each carries a
+   *  unique action name — the renderer writes the new sort intent to `sortBind`
+   *  before dispatching. */
+  sortActions?: Record<string, ActionEvent>;
+  /** One filter-dispatch action per table. The renderer fires this when the
+   *  user submits the filter form; per-column filter values are already in
+   *  state at the `filterBinds` paths. */
   filterAction?: ActionEvent;
-  /** Per-row multi-select. When set, the adapter renders a leading checkbox
-   *  column + a header select-all checkbox and tints selected rows. `TableRow.id`
-   *  is REQUIRED on every row when selection is set — it's the address the
-   *  toggle action reports back. */
-  selection?: TableSelection;
   /** Server-driven pagination. When set, the adapter renders an "X–Y of N"
    *  range + prev/next controls below the table. **The server slices `rows` to
    *  the current page** — the adapter never paginates client-side (that would
    *  break for DB-backed tables, which are most of them). By convention
-   *  `sortAction` / `filterAction` reset `page` to 1 on the server side, since
+   *  filter dispatches reset `page` to 1 on the server side, since
    *  the row window changes underneath them. */
   pagination?: TablePagination;
 }
@@ -470,7 +470,7 @@ export class ViewModelShell {
         onLoading?.(true);
       }
       const form = new FormData();
-      form.append("_action", JSON.stringify({ name: action.name, context: action.context ?? {} }));
+      form.append("_action", JSON.stringify({ name: action.name }));
       form.append("_state", JSON.stringify(this.currentState));
       if (action.files) {
         for (const [name, file] of Object.entries(action.files)) {

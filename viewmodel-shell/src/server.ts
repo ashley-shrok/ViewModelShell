@@ -16,7 +16,6 @@ export * from "./index.js";
 
 export interface ActionPayload<TState> {
   name: string;
-  context: Record<string, unknown> | null;
   state: TState;
   /** Populated only on multipart submissions (FormData). Empty for JSON bodies. */
   files: Record<string, File>;
@@ -29,7 +28,7 @@ export function parseFormDataAction<TState>(formData: FormData): ActionPayload<T
   if (typeof actionRaw !== "string" || typeof stateRaw !== "string") {
     throw new Error("Missing _action or _state form field");
   }
-  const action = JSON.parse(actionRaw) as { name: string; context?: Record<string, unknown> };
+  const action = JSON.parse(actionRaw) as { name: string };
   const state = JSON.parse(stateRaw) as TState;
   const files: Record<string, File> = {};
   for (const [key, value] of formData.entries()) {
@@ -44,20 +43,18 @@ export function parseFormDataAction<TState>(formData: FormData): ActionPayload<T
   }
   return {
     name: action.name,
-    context: action.context ?? null,
     state,
     files,
   };
 }
 
-/** Parse a flat JSON action body — { name, context, state }. For curl/agent callers. */
+/** Parse a flat JSON action body — `{name, state}`. For curl/agent callers. */
 export function parseJsonAction<TState>(body: string | object): ActionPayload<TState> {
   const parsed = typeof body === "string"
-    ? (JSON.parse(body) as { name: string; context?: Record<string, unknown>; state: TState })
-    : (body as { name: string; context?: Record<string, unknown>; state: TState });
+    ? (JSON.parse(body) as { name: string; state: TState })
+    : (body as { name: string; state: TState });
   return {
     name: parsed.name,
-    context: parsed.context ?? null,
     state: parsed.state,
     files: {},
   };
