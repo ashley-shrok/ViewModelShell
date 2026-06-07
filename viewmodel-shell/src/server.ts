@@ -258,8 +258,11 @@ export function parseFormDataAction<TState>(formData: FormData): ActionPayload<T
 /** Parse a flat JSON action body — `{name, state}`. For curl/agent callers. */
 export function parseJsonAction<TState>(body: string | object): ActionPayload<TState> {
   const parsed = typeof body === "string"
-    ? (JSON.parse(body) as { name: string; state: TState })
-    : (body as { name: string; state: TState });
+    ? (JSON.parse(body) as { name?: string; state: TState })
+    : (body as { name?: string; state: TState });
+  if (typeof parsed.name !== "string" || parsed.name === "") {
+    throw new Error("Missing required 'name' field in action payload");
+  }
   return {
     name: parsed.name,
     state: parsed.state,
@@ -315,14 +318,105 @@ export const shellSideEffect = {
  * Thrown by an action handler to signal a malformed/invalid request. The
  * createAction wrapper catches this and returns a 400 with the error
  * message in the body, matching the .NET twin's BadRequest("...") path.
- * Any other thrown Error propagates to the runtime (Bun.serve / Hono /
- * etc.) as a 500.
+ * Reserved for "structurally invalid request the user can't see" (missing
+ * required action field, etc.) — NOT for routine app validation (that stays
+ * state-based per gotcha #4). No `code` is set on the wire entry (D-08).
  */
 export class BadRequestError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "BadRequestError";
   }
+}
+
+/**
+ * Thrown by an action handler to signal that the dispatched action name is
+ * not recognised. The createAction wrapper catches this and returns a 400
+ * with `code: "unknown_action"` in the envelope, allowing agents to distinguish
+ * "I sent a name your tree doesn't expose" from "your handler crashed."
+ *
+ * Usage — add a default arm to your dispatch switch:
+ *   default: throw new UnknownActionError(payload.name);
+ *
+ * Mirrors .NET `UnknownActionException` — both backends use the same wire code.
+ */
+export class UnknownActionError extends Error {
+  /** The offending action name sent by the client. */
+  readonly actionName: string;
+  constructor(actionName: string) {
+    super(`Unknown action: ${actionName}`);
+    this.name = "UnknownActionError";
+    this.actionName = actionName;
+  }
+}
+
+/**
+ * The entry shape inside the `errors[]` array of an `ok: false` envelope.
+ * `path` and `code` are optional — absent (not null) when not applicable,
+ * per the WhenWritingNull / conditional-spread null-omission contract.
+ */
+export interface ErrorEntry {
+  path?: string;
+  message: string;
+  code?: string;
+}
+
+/**
+ * Stable, framework-only error code vocabulary. Apps MUST NOT set these —
+ * the framework sets `code` on framework-detected failures only. Agents
+ * that want generic handling check `ok`; agents that want to branch by
+ * failure class check `code` against these constants.
+ *
+ * D-03 lock: "small, stable, framework-only set."
+ */
+export const ERR_CODES = {
+  /** Malformed / unparseable request body. HTTP 400. */
+  PARSE: "parse_error",
+  /** App threw `UnknownActionError` (action name not recognised). HTTP 400. */
+  UNKNOWN_ACTION: "unknown_action",
+  /** Built view tree violates the action-name uniqueness rule. HTTP 500. */
+  INVALID_TREE: "invalid_tree",
+  /** App handler threw an unrecognised exception. HTTP 500. */
+  UNCAUGHT: "uncaught_exception",
+} as const;
+
+/** Union type of the framework error codes from ERR_CODES. Useful for narrowing `errors[0].code`. */
+export type ErrCode = typeof ERR_CODES[keyof typeof ERR_CODES];
+
+/**
+ * Build a JSON-stringified `{ok: false, errors: [...]}` envelope.
+ * Uses the conditional-spread pattern to omit `path` and `code` when
+ * undefined — matching the .NET WhenWritingNull null-omission contract.
+ */
+function errorEnvelope(entries: ErrorEntry[]): string {
+  const serialized = entries.map(({ message, path, code }) => ({
+    message,
+    ...(path != null ? { path } : {}),
+    ...(code != null ? { code } : {}),
+  }));
+  return JSON.stringify({ ok: false, errors: serialized });
+}
+
+/**
+ * Derive a safe wire message from an unknown thrown value.
+ * T1 info-disclosure mitigation: only copies `Error.prototype.message`
+ * for Error instances; substitutes a generic string for non-Error throws
+ * so unknown shapes never reach the wire.
+ */
+function errorMessageFromUnknownThrow(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return "Internal server error";
+}
+
+/**
+ * Shared response factory — deduplicates the JSON + Content-Type header
+ * boilerplate across the four error cases and the success path.
+ */
+function jsonResponse(body: string, status: number): Response {
+  return new Response(body, {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 /**
@@ -354,22 +448,37 @@ export function createAction<TState>(
         payload = parseFormDataAction<TState>(await request.formData());
       }
     } catch (err) {
-      return new Response(JSON.stringify({ error: (err as Error).message }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
+      // Parse failure — client sent malformed input. 400.
+      return jsonResponse(
+        errorEnvelope([{ message: (err as Error).message, code: ERR_CODES.PARSE }]),
+        400,
+      );
     }
     let result: ShellResponseBody<TState>;
     try {
       result = await handler(payload);
     } catch (err) {
       if (err instanceof BadRequestError) {
-        return new Response(JSON.stringify({ error: err.message }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
+        // Structurally invalid request — no `code` per D-08.
+        return jsonResponse(
+          errorEnvelope([{ message: err.message }]),
+          400,
+        );
       }
-      throw err;
+      if (err instanceof UnknownActionError) {
+        // App threw to signal an unknown action name. 400 per D-11.
+        return jsonResponse(
+          errorEnvelope([{ message: err.message, code: ERR_CODES.UNKNOWN_ACTION }]),
+          400,
+        );
+      }
+      // Any other throw: server-side failure. Log server-side for observability
+      // (T1: stack trace stays on the server, only safe message reaches the wire).
+      console.error("[ViewModelShell] Uncaught exception in action handler:", err);
+      return jsonResponse(
+        errorEnvelope([{ message: errorMessageFromUnknownThrow(err), code: ERR_CODES.UNCAUGHT }]),
+        500,
+      );
     }
     // Phase 06 / WIRE-05 — enforce action-name uniqueness on the built tree
     // before it leaves the server. A violation here is a server-side bug, so
@@ -380,14 +489,14 @@ export function createAction<TState>(
       try {
         validateActionNames(result.vm);
       } catch (err) {
-        return new Response(JSON.stringify({ error: (err as Error).message }), {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        });
+        return jsonResponse(
+          errorEnvelope([{ message: (err as Error).message, code: ERR_CODES.INVALID_TREE }]),
+          500,
+        );
       }
     }
-    return new Response(JSON.stringify(result), {
-      headers: { "Content-Type": "application/json" },
-    });
+    // Phase 07 / ERROR-01 — every successful response acquires ok:true at the
+    // response edge. Controllers / app handlers do NOT set ok themselves.
+    return jsonResponse(JSON.stringify({ ok: true, ...result }), 200);
   };
 }

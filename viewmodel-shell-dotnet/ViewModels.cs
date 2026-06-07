@@ -82,6 +82,76 @@ public record ShellSideEffect(
         new("download", Url: url, Filename: filename);
 }
 
+/// <summary>
+/// The entry shape inside the <c>errors[]</c> array of an <c>ok: false</c>
+/// response envelope. <c>Path</c> and <c>Code</c> are optional — absent (not null)
+/// when not applicable, per the WhenWritingNull null-omission contract.
+/// </summary>
+public record ErrorEntry(
+    string Message,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Path = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Code = null
+);
+
+/// <summary>
+/// Stable, framework-only error code vocabulary. Apps MUST NOT set these —
+/// the framework sets <c>code</c> on framework-detected failures only.
+/// D-03 lock: "small, stable, framework-only set." Mirrors the TS twin's
+/// <c>ERR_CODES</c> so both backends are byte-aligned on the wire.
+/// </summary>
+public static class ErrorCodes
+{
+    /// <summary>Malformed / unparseable request body. HTTP 400.</summary>
+    public const string Parse = "parse_error";
+    /// <summary>App threw <see cref="UnknownActionException"/> (action name not recognised). HTTP 400.</summary>
+    public const string UnknownAction = "unknown_action";
+    /// <summary>Built view tree violates the action-name uniqueness rule. HTTP 500.</summary>
+    public const string InvalidTree = "invalid_tree";
+    /// <summary>App handler threw an unrecognised exception. HTTP 500.</summary>
+    public const string Uncaught = "uncaught_exception";
+}
+
+/// <summary>
+/// Framework-owned error response envelope. The <c>ok</c> property is
+/// <c>false</c> by default so construction sites are self-documenting.
+/// Apps do NOT supply this record — the framework constructs it from caught
+/// exceptions at the response edge (D-06).
+/// </summary>
+public record ShellErrorResponse(
+    IReadOnlyList<ErrorEntry> Errors,
+    bool Ok = false
+)
+{
+    /// <summary>Malformed / unparseable request body. HTTP 400.</summary>
+    public static ShellErrorResponse OfParseError(string message) =>
+        new([new ErrorEntry(message, Code: ErrorCodes.Parse)]);
+
+    /// <summary>
+    /// Structurally invalid request the user can't see. HTTP 400.
+    /// No <c>code</c> per D-08 (reserved for framework-classified failures).
+    /// </summary>
+    public static ShellErrorResponse OfBadRequest(string message) =>
+        new([new ErrorEntry(message)]);
+
+    /// <summary>App threw <see cref="UnknownActionException"/>. HTTP 400.</summary>
+    public static ShellErrorResponse OfUnknownAction(string actionName) =>
+        new([new ErrorEntry($"Unknown action: {actionName}", Code: ErrorCodes.UnknownAction)]);
+
+    /// <summary>Built view tree violates the action-name uniqueness rule. HTTP 500.</summary>
+    public static ShellErrorResponse OfInvalidTree(string message) =>
+        new([new ErrorEntry(message, Code: ErrorCodes.InvalidTree)]);
+
+    /// <summary>
+    /// App handler threw an unrecognised exception. HTTP 500.
+    /// T1 info-disclosure mitigation: reads ONLY <see cref="Exception.Message"/> —
+    /// never <see cref="Exception.ToString()"/>, <see cref="Exception.StackTrace"/>,
+    /// or <see cref="Exception.GetType()"/>.<see cref="Type.FullName"/>. Stack traces and
+    /// internal type names never reach the wire.
+    /// </summary>
+    public static ShellErrorResponse OfUncaught(Exception ex) =>
+        new([new ErrorEntry(ex.Message, Code: ErrorCodes.Uncaught)]);
+}
+
 public record ShellResponse<TState>(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Vm,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TState? State,
@@ -96,7 +166,13 @@ public record ShellResponse<TState>(
     // .vms-busy → cursor:wait + pointer-events:none on interactive descendants).
     // Polls bypass so the server can clear the state. WhenWritingDefault drops
     // false from the wire.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Busy = false
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Busy = false,
+    // Phase 07 / ERROR-01 — every successful response carries ok:true on the
+    // wire. Set by the framework at the response edge — controllers / app handlers
+    // do NOT set this. Non-nullable with default true; deliberately does NOT carry
+    // WhenWritingDefault so it serializes on EVERY response (per D-04: "uniform on
+    // every response, no per-shape conditionals").
+    bool Ok = true
 )
 {
     public static ShellResponse<TState> RedirectTo(string url) =>
@@ -490,5 +566,30 @@ public static class ViewTreeValidation
         List<(string Name, FormNode? EnclosingForm)> sink)
     {
         sink.Add((action.Name, enclosingForm));
+    }
+}
+
+/// <summary>
+/// Thrown by an action handler to signal that the dispatched action name is
+/// not recognised by the dispatch switch. The framework catches this and
+/// returns a 400 with <c>code: "unknown_action"</c> in the error envelope,
+/// allowing agents to distinguish "I sent a name your tree doesn't expose"
+/// from "your handler crashed."
+/// <para>
+/// Usage — add a <c>default:</c> case to your dispatch switch:<br/>
+/// <c>default: throw new UnknownActionException(payload.Name);</c>
+/// </para>
+/// Mirrors the TS <c>UnknownActionError</c> class — both backends use the same
+/// wire code (<see cref="ErrorCodes.UnknownAction"/>).
+/// </summary>
+public class UnknownActionException : Exception
+{
+    /// <summary>The offending action name sent by the client.</summary>
+    public string ActionName { get; }
+
+    public UnknownActionException(string actionName)
+        : base($"Unknown action: {actionName}")
+    {
+        ActionName = actionName;
     }
 }
