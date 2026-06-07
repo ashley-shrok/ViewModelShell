@@ -309,21 +309,12 @@ function driveRender(opts: {
         children: ViewNode[];
         submitAction: ActionEvent;
       };
+      // Phase 6: name-only dispatch. Field values live in state at each
+      // input's bind path and travel with the dispatch's `_state` payload;
+      // the action carries no context. Mirrors FormView.submitFormWith in
+      // src/tui.tsx.
       const submit = (): void => {
-        const merged: Record<string, unknown> = {
-          ...(formNode.submitAction.context ?? {}),
-        };
-        const collect = (m: ViewNode): void => {
-          if (m.type === "field") {
-            const wire = m.value ?? "";
-            const v = resolveFieldValue(opts.adapter)(m.name, wire);
-            merged[m.name] = m.inputType === "checkbox" ? v === "true" : v;
-          }
-          const cs = (m as { children?: ViewNode[] }).children;
-          if (cs) for (const c of cs) collect(c);
-        };
-        for (const c of formNode.children) collect(c);
-        onAction({ name: formNode.submitAction.name, context: merged });
+        onAction({ name: formNode.submitAction.name });
       };
       submitters.push({ name: formNode.submitAction.name, fn: submit });
       // Don't recurse further into the form for submit-finding (submit was
@@ -352,7 +343,7 @@ function driveRender(opts: {
 }
 
 describe("0.6.0 — B3 field state + form submit", () => {
-  it("draft preservation: server re-renders with the same wire value preserve the user's edit", () => {
+  it("draft preservation: server re-renders preserve the user's edit (Phase 6 — bind only, wire value is empty pending Phase 7 bindable read)", () => {
     const adapter = new TuiAdapter();
     const vm: ViewNode = {
       type: "form",
@@ -362,13 +353,13 @@ describe("0.6.0 — B3 field state + form submit", () => {
         {
           type: "field",
           name: "title",
+          bind: "fields.title",
           inputType: "text",
           label: "Title",
-          value: "initial",
         },
       ],
     };
-    // First render — imprints wire value "initial" onto the adapter.
+    // First render — imprints the empty wire value onto the adapter.
     driveRender({ adapter, vm });
     // User edits the field to "user-edit".
     driveRender({ adapter, vm, typeInto: { title: "user-edit" } });
@@ -387,44 +378,35 @@ describe("0.6.0 — B3 field state + form submit", () => {
     // pending Phase-7 TUI bindable wiring; see comment above.
   });
 
-  it("form submit: collects current field values (typed + un-typed) and dispatches submitAction with merged context", () => {
-    const adapter = new TuiAdapter();
-    const vm: ViewNode = {
-      type: "form",
-      submitAction: { name: "save", context: { source: "test" } },
-      children: [
-        { type: "field", name: "title", inputType: "text", label: "Title", value: "" },
-        { type: "field", name: "notes", inputType: "textarea", label: "Notes", value: "default-notes" },
-        { type: "field", name: "active", inputType: "checkbox", label: "Active", value: "true" },
-        { type: "field", name: "hidden_id", inputType: "hidden", value: "h-123" },
-      ],
-    };
-    // User types into title only; leaves notes, checkbox, hidden untouched.
-    driveRender({ adapter, vm, typeInto: { title: "fresh title" } });
-    const { dispatched } = driveRender({ adapter, vm, submitOn: "save" });
-    expect(dispatched).toHaveLength(1);
-    const action = dispatched[0]!;
-    expect(action.name).toBe("save");
-    expect(action.context).toEqual({
-      source: "test",         // preserved from submitAction.context
-      title: "fresh title",   // user's edit
-      notes: "default-notes", // wire value (untouched)
-      active: true,           // checkbox coerced to boolean
-      hidden_id: "h-123",     // hidden field included in submission
-    });
-  });
-
-  it("checkbox field submits as boolean (true/false)", () => {
+  it("form submit: dispatches submitAction with name only (Phase 6 — field values travel via state at each input's bind path, not action context)", () => {
     const adapter = new TuiAdapter();
     const vm: ViewNode = {
       type: "form",
       submitAction: { name: "save" },
       children: [
-        { type: "field", name: "subscribed", inputType: "checkbox", label: "Subscribe", value: "false" },
+        { type: "field", name: "title",     bind: "fields.title",     inputType: "text",     label: "Title" },
+        { type: "field", name: "notes",     bind: "fields.notes",     inputType: "textarea", label: "Notes" },
+        { type: "field", name: "active",    bind: "fields.active",    inputType: "checkbox", label: "Active" },
+        { type: "field", name: "hidden_id", bind: "fields.hidden_id", inputType: "hidden" },
+      ],
+    };
+    // User types into title only; leaves notes, checkbox, hidden untouched.
+    driveRender({ adapter, vm, typeInto: { title: "fresh title" } });
+    const { dispatched } = driveRender({ adapter, vm, submitOn: "save" });
+    expect(dispatched).toEqual([{ name: "save" }]);
+  });
+
+  it("checkbox field: form submit dispatches name only — checkbox state lives at bind path, not action context (Phase 6)", () => {
+    const adapter = new TuiAdapter();
+    const vm: ViewNode = {
+      type: "form",
+      submitAction: { name: "save" },
+      children: [
+        { type: "field", name: "subscribed", bind: "fields.subscribed", inputType: "checkbox", label: "Subscribe" },
       ],
     };
     const { dispatched } = driveRender({ adapter, vm, submitOn: "save" });
-    expect(dispatched[0]!.context).toEqual({ subscribed: false });
+    expect(dispatched).toEqual([{ name: "save" }]);
   });
 });
 
@@ -752,7 +734,7 @@ describe("0.6.0 — B5 activatePane (Enter / Space keyboard activation)", () => 
           type: "section",
           heading: "Actions",
           children: [
-            { type: "button", label: "Save", action: { name: "save", context: { id: 42 } } },
+            { type: "button", label: "Save", action: { name: "save" } },
           ],
         },
       ],
@@ -761,7 +743,7 @@ describe("0.6.0 — B5 activatePane (Enter / Space keyboard activation)", () => 
     a.pending = { vm, onAction: (act) => dispatched.push(act) };
     a.focusedPaneIndex = 0;
     a.activatePane("enter");
-    expect(dispatched).toEqual([{ name: "save", context: { id: 42 } }]);
+    expect(dispatched).toEqual([{ name: "save" }]);
   });
 
   it("Enter on a focused pane with NO actionable → no-op (does NOT throw)", () => {
@@ -794,7 +776,7 @@ describe("0.6.0 — B5 activatePane (Enter / Space keyboard activation)", () => 
           type: "section",
           heading: "Form",
           children: [
-            { type: "field", name: "title", inputType: "text", label: "Title", value: "" },
+            { type: "field", name: "title", bind: "fields.title", inputType: "text", label: "Title" },
             // A button is present, but the field's existence makes Enter ours.
             { type: "button", label: "Submit", action: { name: "submit" } },
           ],
