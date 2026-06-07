@@ -2,18 +2,18 @@
   "name": "contacts",
   "endpoint": "/api/contacts",
   "actionEndpoint": "/api/contacts/action",
-  "$comment": "Exercises ContactManager's full navigation surface: list view, search, detail navigation, list return, and search-empty roundtrip. Add/edit are deferred because they generate IDs and timestamps that require special handling.",
+  "$comment": "Phase 6 wire shape: _action carries {name} only. The search FieldNode binds to state.searchQuery — the fixture's search steps simulate the bind write via stateMutations. Per-row navigate-to-detail-${id} / delete-contact-${id} carry the id in the action name; navigate-to-list takes no params.",
   "steps": [
     { "id": "initial-load",     "method": "GET" },
-    { "id": "search-alice",     "method": "POST", "action": { "name": "search", "context": { "query": "alice" } } },
-    { "id": "search-clear",     "method": "POST", "action": { "name": "search", "context": { "query": "" } } },
-    { "id": "search-example",   "method": "POST", "action": { "name": "search", "context": { "query": "example" } } },
-    { "id": "search-clear-2",   "method": "POST", "action": { "name": "search", "context": { "query": "" } } },
-    { "id": "view-bob",         "method": "POST", "action": { "name": "navigate-to-detail", "context": { "id": "c2" } } },
+    { "id": "search-alice",     "method": "POST", "action": { "name": "search" }, "stateMutations": [{ "path": "searchQuery", "value": "alice" }] },
+    { "id": "search-clear",     "method": "POST", "action": { "name": "search" }, "stateMutations": [{ "path": "searchQuery", "value": "" }] },
+    { "id": "search-example",   "method": "POST", "action": { "name": "search" }, "stateMutations": [{ "path": "searchQuery", "value": "example" }] },
+    { "id": "search-clear-2",   "method": "POST", "action": { "name": "search" }, "stateMutations": [{ "path": "searchQuery", "value": "" }] },
+    { "id": "view-bob",         "method": "POST", "action": { "name": "navigate-to-detail-c2" } },
     { "id": "back-to-list",     "method": "POST", "action": { "name": "navigate-to-list" } },
-    { "id": "view-carol",       "method": "POST", "action": { "name": "navigate-to-detail", "context": { "id": "c3" } } },
+    { "id": "view-carol",       "method": "POST", "action": { "name": "navigate-to-detail-c3" } },
     { "id": "back-to-list-2",   "method": "POST", "action": { "name": "navigate-to-list" } },
-    { "id": "delete-eva",       "method": "POST", "action": { "name": "delete-contact", "context": { "id": "c5" } } },
-    { "id": "search-eva-after", "method": "POST", "action": { "name": "search", "context": { "query": "eva" } } }
+    { "id": "delete-eva",       "method": "POST", "action": { "name": "delete-contact-c5" } },
+    { "id": "search-eva-after", "method": "POST", "action": { "name": "search" }, "stateMutations": [{ "path": "searchQuery", "value": "eva" }] }
   ]
 }
