@@ -1,6 +1,5 @@
 namespace HelpDesk.Controllers;
 
-using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using ViewModelShell;
 
@@ -12,7 +11,7 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
     public ShellResponse<RequesterState> Get()
     {
         var state = RequesterState.Initial();
-        return new(BuildVm(state), state);
+        return new ShellResponse<RequesterState>(BuildVm(state), state).Validate();
     }
 
     [HttpPost("action")]
@@ -23,81 +22,86 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
             Request.Form["_action"].ToString(),
             Request.Form["_state"].ToString());
 
-        string? Str(string key) =>
-            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
-                ? v.GetString() : null;
-
         var state = payload.State;
+        var name = payload.Name;
 
-        switch (payload.Name)
+        if (name.StartsWith("filter-"))
         {
-            case "filter":
-                state = state with { Filter = Str("value") ?? "all" };
-                break;
-
-            case "select-ticket":
-                var selId = Str("id");
-                if (selId != null && long.TryParse(selId, out var sid))
-                    state = state with { SelectedTicketId = sid, View = "detail" };
-                break;
-
-            case "back-to-list":
-                state = state with { View = "list", SelectedTicketId = null, ValidationError = null };
-                break;
-
-            case "start-create":
-                state = state with
-                {
-                    View = "create",
-                    CreateType = "hardware",
-                    CreatePriority = "medium",
-                    CreateAccessLevel = "read",
-                    ValidationError = null
-                };
-                break;
-
-            case "cancel-create":
-                state = state with { View = "list", ValidationError = null };
-                break;
-
-            case "set-type":
-                state = state with { CreateType = Str("value") ?? "hardware", ValidationError = null };
-                break;
-
-            case "set-priority":
-                state = state with { CreatePriority = Str("value") ?? "medium" };
-                break;
-
-            case "set-access-level":
-                state = state with { CreateAccessLevel = Str("value") ?? "read" };
-                break;
-
-            case "create-ticket":
-                var title = Str("title");
-                if (string.IsNullOrWhiteSpace(title))
-                {
-                    state = state with { ValidationError = "Title is required." };
-                    break;
-                }
+            // Filter is already in state via the TabsNode bind.
+        }
+        else if (name.StartsWith("select-ticket-"))
+        {
+            if (long.TryParse(name["select-ticket-".Length..], out var sid))
+                state = state with { SelectedTicketId = sid, View = "detail" };
+        }
+        else if (name == "back-to-list")
+        {
+            state = state with { View = "list", SelectedTicketId = null, ValidationError = null };
+        }
+        else if (name == "start-create")
+        {
+            state = state with
+            {
+                View = "create",
+                CreateType = "hardware",
+                CreatePriority = "medium",
+                CreateAccessLevel = "read",
+                ValidationError = null,
+                DraftTitle = "",
+                DraftDescription = "",
+                DraftDueDate = "",
+                DraftDeviceModel = "",
+                DraftApplication = "",
+                DraftSystemName = "",
+            };
+        }
+        else if (name == "cancel-create")
+        {
+            state = state with { View = "list", ValidationError = null };
+        }
+        else if (name.StartsWith("set-type-"))
+        {
+            // CreateType is already in state via the TabsNode bind. Clear any
+            // stale validation error so the form revalidates on next submit.
+            state = state with { ValidationError = null };
+        }
+        else if (name.StartsWith("set-priority-"))
+        {
+            // CreatePriority is already in state via the TabsNode bind.
+        }
+        else if (name.StartsWith("set-access-level-"))
+        {
+            // CreateAccessLevel is already in state via the TabsNode bind.
+        }
+        else if (name == "create-ticket")
+        {
+            var title = (state.DraftTitle ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                state = state with { ValidationError = "Title is required." };
+            }
+            else
+            {
                 db.Create(
-                    title:       title.Trim(),
-                    type:        Str("type")         ?? "hardware",
-                    priority:    Str("priority")     ?? "medium",
-                    description: Str("description"),
-                    dueDate:     Str("due_date"),
-                    deviceModel: Str("device_model"),
-                    application: Str("application"),
-                    systemName:  Str("system_name"),
-                    accessLevel: Str("access_level")
+                    title:       title,
+                    type:        state.CreateType,
+                    priority:    state.CreatePriority,
+                    description: string.IsNullOrEmpty(state.DraftDescription) ? null : state.DraftDescription,
+                    dueDate:     string.IsNullOrEmpty(state.DraftDueDate)     ? null : state.DraftDueDate,
+                    deviceModel: state.CreateType == "hardware" && !string.IsNullOrEmpty(state.DraftDeviceModel) ? state.DraftDeviceModel : null,
+                    application: state.CreateType == "software" && !string.IsNullOrEmpty(state.DraftApplication) ? state.DraftApplication : null,
+                    systemName:  state.CreateType == "access"   && !string.IsNullOrEmpty(state.DraftSystemName)  ? state.DraftSystemName  : null,
+                    accessLevel: state.CreateType == "access"   ? state.CreateAccessLevel : null
                 );
                 state = state with { ValidationError = null, View = "list" };
-                break;
-
-            default:
-                return BadRequest($"Unknown action: {payload.Name}");
+            }
+        }
+        else
+        {
+            return BadRequest($"Unknown action: {name}");
         }
 
-        return new ShellResponse<RequesterState>(BuildVm(state), state);
+        return new ShellResponse<RequesterState>(BuildVm(state), state).Validate();
     }
 
     private ViewNode BuildVm(RequesterState state) => state.View switch
@@ -120,8 +124,9 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
                 new TextNode(t.Title, "subheading"),
                 new TextNode($"{TypeLabel(t.Type)} · {PriorityLabel(t.Priority)}", "muted"),
                 new TextNode(StatusLabel(t.Status), "muted"),
+                // Per-row View — unique action name per ticket.
                 new ButtonNode("View",
-                    new ActionDescriptor("select-ticket", new() { ["id"] = t.Id.ToString() }),
+                    new ActionDescriptor($"select-ticket-{t.Id}"),
                     "secondary"),
             ]
         )).ToList();
@@ -139,13 +144,13 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
             ]),
             new TabsNode(
                 Selected: state.Filter,
-                Action:   new ActionDescriptor("filter"),
+                Bind:     "filter",
                 Tabs:
                 [
-                    new TabItem("all",         "All"),
-                    new TabItem("open",        "Open"),
-                    new TabItem("in-progress", "In Progress"),
-                    new TabItem("resolved",    "Resolved"),
+                    new TabItem("all",         "All",         new ActionDescriptor("filter-all")),
+                    new TabItem("open",        "Open",        new ActionDescriptor("filter-open")),
+                    new TabItem("in-progress", "In Progress", new ActionDescriptor("filter-in-progress")),
+                    new TabItem("resolved",    "Resolved",    new ActionDescriptor("filter-resolved")),
                 ]
             ),
             new ListNode(items),
@@ -160,47 +165,39 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
         if (state.ValidationError != null)
             formChildren.Add(new TextNode(state.ValidationError, "error"));
 
-        formChildren.Add(new FieldNode("title", "text", "Title",
-            "Brief description of the issue", null, Required: true));
+        formChildren.Add(new FieldNode("title", "text", "draftTitle", "Title",
+            "Brief description of the issue", Required: true));
 
         switch (state.CreateType)
         {
             case "hardware":
-                formChildren.Add(new FieldNode("device_model", "text", "Device / Model",
-                    "e.g. Dell XPS 15, iPhone 15", null));
+                formChildren.Add(new FieldNode("device_model", "text", "draftDeviceModel", "Device / Model",
+                    "e.g. Dell XPS 15, iPhone 15"));
                 break;
             case "software":
-                formChildren.Add(new FieldNode("application", "text", "Application",
-                    "e.g. Microsoft Excel, Slack", null));
+                formChildren.Add(new FieldNode("application", "text", "draftApplication", "Application",
+                    "e.g. Microsoft Excel, Slack"));
                 break;
             case "access":
-                formChildren.Add(new FieldNode("system_name", "text", "System / Resource",
-                    "e.g. VPN, GitHub, Salesforce", null));
+                formChildren.Add(new FieldNode("system_name", "text", "draftSystemName", "System / Resource",
+                    "e.g. VPN, GitHub, Salesforce"));
                 break;
         }
 
-        formChildren.Add(new FieldNode("description", "textarea", "Description",
-            "Provide additional details…", null));
-        formChildren.Add(new FieldNode("due_date", "date", "Due By", null, null));
-
-        var baked = new Dictionary<string, object>
-        {
-            ["type"]     = state.CreateType,
-            ["priority"] = state.CreatePriority,
-        };
-        if (state.CreateType == "access")
-            baked["access_level"] = state.CreateAccessLevel;
+        formChildren.Add(new FieldNode("description", "textarea", "draftDescription", "Description",
+            "Provide additional details…"));
+        formChildren.Add(new FieldNode("due_date", "date", "draftDueDate", "Due By", null));
 
         var pageChildren = new List<ViewNode>
         {
             new TabsNode(
                 Selected: state.CreateType,
-                Action:   new ActionDescriptor("set-type"),
+                Bind:     "createType",
                 Tabs:
                 [
-                    new TabItem("hardware", "Hardware"),
-                    new TabItem("software", "Software"),
-                    new TabItem("access",   "Access Request"),
+                    new TabItem("hardware", "Hardware",       new ActionDescriptor("set-type-hardware")),
+                    new TabItem("software", "Software",       new ActionDescriptor("set-type-software")),
+                    new TabItem("access",   "Access Request", new ActionDescriptor("set-type-access")),
                 ]
             ),
         };
@@ -209,30 +206,30 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
         {
             pageChildren.Add(new TabsNode(
                 Selected: state.CreateAccessLevel,
-                Action:   new ActionDescriptor("set-access-level"),
+                Bind:     "createAccessLevel",
                 Tabs:
                 [
-                    new TabItem("read",  "Read"),
-                    new TabItem("write", "Write"),
-                    new TabItem("admin", "Admin"),
+                    new TabItem("read",  "Read",  new ActionDescriptor("set-access-level-read")),
+                    new TabItem("write", "Write", new ActionDescriptor("set-access-level-write")),
+                    new TabItem("admin", "Admin", new ActionDescriptor("set-access-level-admin")),
                 ]
             ));
         }
 
         pageChildren.Add(new TabsNode(
             Selected: state.CreatePriority,
-            Action:   new ActionDescriptor("set-priority"),
+            Bind:     "createPriority",
             Tabs:
             [
-                new TabItem("low",      "Low"),
-                new TabItem("medium",   "Medium"),
-                new TabItem("high",     "High"),
-                new TabItem("critical", "Critical"),
+                new TabItem("low",      "Low",      new ActionDescriptor("set-priority-low")),
+                new TabItem("medium",   "Medium",   new ActionDescriptor("set-priority-medium")),
+                new TabItem("high",     "High",     new ActionDescriptor("set-priority-high")),
+                new TabItem("critical", "Critical", new ActionDescriptor("set-priority-critical")),
             ]
         ));
 
         pageChildren.Add(new FormNode(
-            SubmitAction: new ActionDescriptor("create-ticket", baked),
+            SubmitAction: new ActionDescriptor("create-ticket"),
             SubmitLabel:  "Submit Ticket",
             Children:     formChildren
         ));
