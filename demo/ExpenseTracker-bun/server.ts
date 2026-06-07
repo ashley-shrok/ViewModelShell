@@ -8,6 +8,12 @@
 // Amount/Budget stored as numbers; JSON.parse normalizes trailing zeros, so
 // 12.50 (C# decimal) and 12.5 (JS number) compare equal after the harness
 // parses both. Money/percent formatting mirrors the controller exactly.
+//
+// Phase 6 wire-shape migration (0.17.0 / WIRE-07): inputs declare `bind` paths
+// into state slots (filterCategory, addCategory, draftAmount, draftNote);
+// each filter tab and category tab carries its own unique action name
+// (filter-{id} / select-category-{id}); the action handler reads from state
+// rather than a context payload.
 
 import {
   createAction,
@@ -33,6 +39,9 @@ interface ExpensesState {
   filterCategory: string; // "all" or a category id
   addCategory: string; // category for new transactions
   adding: boolean; // is the add-transaction modal open
+  // Phase 6 — bind slots for the add-transaction form. Reset on add/close.
+  draftAmount: string;
+  draftNote: string;
 }
 
 function initialState(): ExpensesState {
@@ -55,14 +64,14 @@ function initialState(): ExpensesState {
     filterCategory: "all",
     addCategory: "food",
     adding: false,
+    draftAmount: "",
+    draftNote: "",
   };
 }
 
 const f2 = (n: number) => n.toFixed(2);
 
 // Mirror of C# DateTimeOffset.LocalDateTime.ToString("MMM d, h:mm tt").
-// NOTE: like the controller this derives a display string from a volatile
-// timestamp; cross-backend it varies by host TZ/culture (parity risk noted).
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
@@ -79,10 +88,6 @@ function fmtDate(iso: string): string {
   return `${mon} ${day}, ${h}:${min} ${ampm}`;
 }
 
-// Realistic YNAB/Mint finance app as a real app shell
-// (page.layout:"sidebar"): a thin left "Overview" rail (headline
-// numbers + per-category budget progress) next to a wide main area
-// (add transaction + the transactions ledger).
 function buildVm(state: ExpensesState): ViewNode {
   const totalBudget = state.categories.reduce((s, c) => s + c.budget, 0);
   const totalSpent = state.categories.reduce(
@@ -132,8 +137,12 @@ function buildVm(state: ExpensesState): ViewNode {
   // MAIN — "+ Add" opens a modal; the main area is the ledger.
 
   const filterTabs = [
-    { value: "all", label: "All" },
-    ...state.categories.map(c => ({ value: c.id, label: c.name })),
+    { value: "all", label: "All", action: { name: "filter-all" } },
+    ...state.categories.map(c => ({
+      value: c.id,
+      label: c.name,
+      action: { name: `filter-${c.id}` },
+    })),
   ];
 
   const filteredTx = (
@@ -164,7 +173,7 @@ function buildVm(state: ExpensesState): ViewNode {
       {
         type: "tabs",
         selected: state.filterCategory,
-        action: { name: "filter" },
+        bind: "filterCategory",
         tabs: filterTabs,
       },
       {
@@ -197,8 +206,12 @@ function buildVm(state: ExpensesState): ViewNode {
         {
           type: "tabs",
           selected: state.addCategory,
-          action: { name: "select-category" },
-          tabs: state.categories.map(c => ({ value: c.id, label: c.name })),
+          bind: "addCategory",
+          tabs: state.categories.map(c => ({
+            value: c.id,
+            label: c.name,
+            action: { name: `select-category-${c.id}` },
+          })),
         },
         {
           type: "form",
@@ -209,6 +222,7 @@ function buildVm(state: ExpensesState): ViewNode {
               type: "field",
               name: "amount",
               inputType: "number",
+              bind: "draftAmount",
               label: "Amount ($)",
               placeholder: "0.00",
               required: true,
@@ -217,6 +231,7 @@ function buildVm(state: ExpensesState): ViewNode {
               type: "field",
               name: "note",
               inputType: "text",
+              bind: "draftNote",
               label: "Note",
               placeholder: "Coffee, lunch…",
               required: false,
@@ -239,67 +254,41 @@ function buildVm(state: ExpensesState): ViewNode {
 }
 
 const actionHandler = createAction<ExpensesState>(async payload => {
-  const ctx = payload.context ?? {};
-  const str = (k: string): string | null =>
-    typeof ctx[k] === "string" ? (ctx[k] as string) : null;
-
   let state = payload.state;
+  const name = payload.name;
 
-  switch (payload.name) {
-    case "add": {
-      const amountStr = str("amount");
-      const note = str("note") ?? "";
-      const amount = amountStr ? parseFloat(amountStr) : NaN;
-      if (!isFinite(amount) || amount <= 0)
-        throw new Error("amount must be a positive number");
-      const added: Transaction = {
-        id: Array.from({ length: 8 }, () =>
-          Math.floor(Math.random() * 16).toString(16),
-        ).join(""),
-        categoryId: state.addCategory,
-        amount,
-        note: note.trim(),
-        createdAt: new Date().toISOString(),
-      };
-      state = {
-        ...state,
-        transactions: [...state.transactions, added],
-        adding: false,
-      };
-      break;
-    }
-    case "delete": {
-      // Retained as a valid action; not surfaced in the realistic
-      // read-only ledger table (option A — TableNode cells are
-      // text-only; no per-row action buttons. Logged limitation).
-      const id = str("id");
-      if (id !== null)
-        state = {
-          ...state,
-          transactions: state.transactions.filter(t => t.id !== id),
-        };
-      break;
-    }
-    case "filter": {
-      const value = str("value");
-      if (value !== null) state = { ...state, filterCategory: value };
-      break;
-    }
-    case "select-category": {
-      const value = str("value");
-      if (value !== null) state = { ...state, addCategory: value };
-      break;
-    }
-    case "show-add": {
-      state = { ...state, adding: true };
-      break;
-    }
-    case "hide-add": {
-      state = { ...state, adding: false };
-      break;
-    }
-    default:
-      throw new Error(`Unknown action: ${payload.name}`);
+  if (name === "add") {
+    const amount = state.draftAmount ? parseFloat(state.draftAmount) : NaN;
+    const note = state.draftNote ?? "";
+    if (!isFinite(amount) || amount <= 0)
+      throw new Error("amount must be a positive number");
+    const added: Transaction = {
+      id: Array.from({ length: 8 }, () =>
+        Math.floor(Math.random() * 16).toString(16),
+      ).join(""),
+      categoryId: state.addCategory,
+      amount,
+      note: note.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    state = {
+      ...state,
+      transactions: [...state.transactions, added],
+      adding: false,
+      draftAmount: "",
+      draftNote: "",
+    };
+  } else if (name.startsWith("filter-")) {
+    // filterCategory is already in state via the bind path; the server just
+    // acknowledges by re-rendering against the new value.
+  } else if (name.startsWith("select-category-")) {
+    // addCategory is already in state via the bind path; same pattern.
+  } else if (name === "show-add") {
+    state = { ...state, adding: true };
+  } else if (name === "hide-add") {
+    state = { ...state, adding: false, draftAmount: "", draftNote: "" };
+  } else {
+    throw new Error(`Unknown action: ${name}`);
   }
 
   return { vm: buildVm(state), state };

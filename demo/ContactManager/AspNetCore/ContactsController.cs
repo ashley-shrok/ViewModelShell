@@ -1,6 +1,5 @@
 namespace ContactManager.Controllers;
 
-using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using ContactManager.State;
 using ViewModelShell;
@@ -13,7 +12,7 @@ public class ContactsController : ControllerBase
     public ShellResponse<ContactsState> Get()
     {
         var state = ContactsState.Initial();
-        return new(BuildVm(state), state);
+        return new ShellResponse<ContactsState>(BuildVm(state), state).Validate();
     }
 
     [HttpPost("action")]
@@ -24,80 +23,92 @@ public class ContactsController : ControllerBase
             Request.Form["_action"].ToString(),
             Request.Form["_state"].ToString());
 
-        string? Str(string key) =>
-            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
-                ? v.GetString() : null;
-
         var state = payload.State;
+        var name = payload.Name;
 
-        switch (payload.Name)
+        // Phase 6 (WIRE-07) — dispatch envelope is {name, state} only. Per-row
+        // identity is encoded in the action name; values flow through state at
+        // the input's bind path.
+        if (name.StartsWith("navigate-to-detail-"))
         {
-            case "navigate-to-detail":
-                var detailId = Str("id");
-                if (detailId == null) return BadRequest("id required");
-                state = state with { SelectedId = detailId, CurrentView = "detail" };
-                break;
-
-            case "navigate-to-add":
-                state = state with { CurrentView = "add", SelectedId = null };
-                break;
-
-            case "navigate-to-list":
-                state = state with { CurrentView = "list", SelectedId = null };
-                break;
-
-            case "save-contact":
-                var name = Str("name");
-                if (string.IsNullOrWhiteSpace(name)) return BadRequest("name required");
-                var email  = (Str("email")  ?? "").Trim();
-                var phone  = (Str("phone")  ?? "").Trim();
-                var notes  = (Str("notes")  ?? "").Trim();
-                var trimmedName = name.Trim();
-                var editId = Str("id");
-                if (!string.IsNullOrEmpty(editId))
-                {
-                    state = state with
-                    {
-                        Contacts = [.. state.Contacts.Select(c =>
-                            c.Id == editId ? c with { Name = trimmedName, Email = email, Phone = phone, Notes = notes } : c)],
-                        SelectedId = editId,
-                        CurrentView = "detail"
-                    };
-                }
-                else
-                {
-                    var added = new ContactRecord(
-                        Id:        Guid.NewGuid().ToString("N")[..8],
-                        Name:      trimmedName,
-                        Email:     email,
-                        Phone:     phone,
-                        Notes:     notes,
-                        CreatedAt: DateTimeOffset.UtcNow);
-                    state = state with
-                    {
-                        Contacts    = [.. state.Contacts, added],
-                        SelectedId  = added.Id,
-                        CurrentView = "detail"
-                    };
-                }
-                break;
-
-            case "delete-contact":
-                var deleteId = Str("id");
-                if (deleteId != null)
-                    state = state with { Contacts = [.. state.Contacts.Where(c => c.Id != deleteId)] };
-                state = state with { CurrentView = "list", SelectedId = null };
-                break;
-
-            case "search":
-                state = state with { SearchQuery = Str("query") ?? "" };
-                break;
-
-            default:
-                return BadRequest($"Unknown action: {payload.Name}");
+            var id = name["navigate-to-detail-".Length..];
+            var c = state.Contacts.FirstOrDefault(x => x.Id == id);
+            if (c is null) return BadRequest("id not found");
+            state = state with
+            {
+                SelectedId = id,
+                CurrentView = "detail",
+                DraftForm = DraftForm.From(c),
+            };
+        }
+        else if (name == "navigate-to-add")
+        {
+            state = state with { CurrentView = "add", SelectedId = null, DraftForm = DraftForm.Empty() };
+        }
+        else if (name == "navigate-to-list")
+        {
+            state = state with { CurrentView = "list", SelectedId = null, DraftForm = DraftForm.Empty() };
+        }
+        else if (name == "save-contact-new")
+        {
+            var draft = state.DraftForm;
+            var trimmedName = (draft.Name ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(trimmedName)) return BadRequest("name required");
+            var added = new ContactRecord(
+                Id:        Guid.NewGuid().ToString("N")[..8],
+                Name:      trimmedName,
+                Email:     (draft.Email ?? "").Trim(),
+                Phone:     (draft.Phone ?? "").Trim(),
+                Notes:     (draft.Notes ?? "").Trim(),
+                CreatedAt: DateTimeOffset.UtcNow);
+            state = state with
+            {
+                Contacts    = [.. state.Contacts, added],
+                SelectedId  = added.Id,
+                CurrentView = "detail",
+                DraftForm   = DraftForm.From(added),
+            };
+        }
+        else if (name.StartsWith("save-contact-edit-"))
+        {
+            var editId = name["save-contact-edit-".Length..];
+            var draft = state.DraftForm;
+            var trimmedName = (draft.Name ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(trimmedName)) return BadRequest("name required");
+            var email = (draft.Email ?? "").Trim();
+            var phone = (draft.Phone ?? "").Trim();
+            var notes = (draft.Notes ?? "").Trim();
+            state = state with
+            {
+                Contacts = [.. state.Contacts.Select(c =>
+                    c.Id == editId ? c with { Name = trimmedName, Email = email, Phone = phone, Notes = notes } : c)],
+                SelectedId = editId,
+                CurrentView = "detail",
+                DraftForm = new DraftForm(trimmedName, email, phone, notes),
+            };
+        }
+        else if (name.StartsWith("delete-contact-"))
+        {
+            var deleteId = name["delete-contact-".Length..];
+            state = state with
+            {
+                Contacts    = [.. state.Contacts.Where(c => c.Id != deleteId)],
+                CurrentView = "list",
+                SelectedId  = null,
+                DraftForm   = DraftForm.Empty(),
+            };
+        }
+        else if (name == "search")
+        {
+            // SearchQuery is already in state via the field's bind path; the
+            // server just acknowledges with a re-render driven by the new query.
+        }
+        else
+        {
+            return BadRequest($"Unknown action: {name}");
         }
 
-        return new ShellResponse<ContactsState>(BuildVm(state), state);
+        return new ShellResponse<ContactsState>(BuildVm(state), state).Validate();
     }
 
     // Realistic CRM / Google-Contacts shape: ONE page, persistent
@@ -140,7 +151,7 @@ public class ContactsController : ControllerBase
                     SubmitLabel:  "Search",
                     Children:
                     [
-                        new FieldNode("query", "text", null, "Search by name or email…", state.SearchQuery,
+                        new FieldNode("query", "text", "searchQuery", null, "Search by name or email…",
                             Action: new ActionDescriptor("search"))
                     ]),
 
@@ -162,11 +173,10 @@ public class ContactsController : ControllerBase
                             [
                                 new TextNode(c.Name,  null),
                                 new TextNode(c.Email, "muted"),
-                                // Finding B (deferred): ListItemNode has no row
-                                // Action — per-row button is the honest affordance.
+                                // Per-row "Open" — unique action name per contact.
                                 new ButtonNode(
                                     Label:   "Open",
-                                    Action:  new ActionDescriptor("navigate-to-detail", new() { ["id"] = c.Id }),
+                                    Action:  new ActionDescriptor($"navigate-to-detail-{c.Id}"),
                                     Variant: null)
                             ]))
                         .ToList())
@@ -184,14 +194,14 @@ public class ContactsController : ControllerBase
                 Children:
                 [
                     new FormNode(
-                        SubmitAction: new ActionDescriptor("save-contact"),
+                        SubmitAction: new ActionDescriptor("save-contact-new"),
                         SubmitLabel:  "Create Contact",
                         Children:
                         [
-                            new FieldNode("name",  "text",     "Name",  "Full name",        null, Required: true),
-                            new FieldNode("email", "email",    "Email", "email@example.com", null),
-                            new FieldNode("phone", "text",     "Phone", "555-0100",          null),
-                            new FieldNode("notes", "textarea", "Notes", "Any notes…",        null)
+                            new FieldNode("name",  "text",     "draftForm.name",  "Name",  "Full name",          Required: true),
+                            new FieldNode("email", "email",    "draftForm.email", "Email", "email@example.com"),
+                            new FieldNode("phone", "text",     "draftForm.phone", "Phone", "555-0100"),
+                            new FieldNode("notes", "textarea", "draftForm.notes", "Notes", "Any notes…")
                         ]),
                     new ButtonNode("Cancel", new ActionDescriptor("navigate-to-list"), Variant: null)
                 ]);
@@ -218,16 +228,16 @@ public class ContactsController : ControllerBase
             Children:
             [
                 new FormNode(
-                    SubmitAction: new ActionDescriptor("save-contact", new() { ["id"] = contact.Id }),
+                    SubmitAction: new ActionDescriptor($"save-contact-edit-{contact.Id}"),
                     SubmitLabel:  "Save",
                     Children:
                     [
-                        new FieldNode("name",  "text",     "Name",  null, contact.Name, Required: true),
-                        new FieldNode("email", "email",    "Email", null, contact.Email),
-                        new FieldNode("phone", "text",     "Phone", null, contact.Phone),
-                        new FieldNode("notes", "textarea", "Notes", null, contact.Notes)
+                        new FieldNode("name",  "text",     "draftForm.name",  "Name",  null, Required: true),
+                        new FieldNode("email", "email",    "draftForm.email", "Email", null),
+                        new FieldNode("phone", "text",     "draftForm.phone", "Phone", null),
+                        new FieldNode("notes", "textarea", "draftForm.notes", "Notes", null)
                     ]),
-                new ButtonNode("Delete", new ActionDescriptor("delete-contact", new() { ["id"] = contact.Id }), Variant: "danger")
+                new ButtonNode("Delete", new ActionDescriptor($"delete-contact-{contact.Id}"), Variant: "danger")
             ]);
     }
 }

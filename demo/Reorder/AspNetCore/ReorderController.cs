@@ -1,6 +1,5 @@
 namespace Reorder.Controllers;
 
-using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using ViewModelShell;
 
@@ -35,7 +34,7 @@ public class ReorderController : ControllerBase
     public ShellResponse<ReorderState> Get()
     {
         var state = ReorderState.Initial();
-        return new(BuildVm(state), state);
+        return new ShellResponse<ReorderState>(BuildVm(state), state).Validate();
     }
 
     [HttpPost("action")]
@@ -46,30 +45,29 @@ public class ReorderController : ControllerBase
             Request.Form["_action"].ToString(),
             Request.Form["_state"].ToString());
 
-        string? Str(string key) =>
-            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
-                ? v.GetString() : null;
-
         var state = payload.State;
+        var name = payload.Name;
 
-        switch (payload.Name)
+        // Phase 6 (WIRE-07) — per-item identity is encoded in the action name.
+        if (name.StartsWith("move-start-"))
         {
-            case "move-start":
-                var startId = Str("id");
-                if (startId != null) state = state with { MovingId = startId };
-                break;
-
-            case "move-cancel":
-                state = state with { MovingId = null };
-                break;
-
-            case "move-before":
-                var beforeId = Str("id");
-                if (state.MovingId != null && beforeId != null && beforeId != state.MovingId)
+            var id = name["move-start-".Length..];
+            state = state with { MovingId = id };
+        }
+        else if (name == "move-cancel")
+        {
+            state = state with { MovingId = null };
+        }
+        else if (name.StartsWith("move-before-"))
+        {
+            var beforeId = name["move-before-".Length..];
+            if (state.MovingId != null && beforeId != state.MovingId)
+            {
+                var moving = state.Items.FirstOrDefault(i => i.Id == state.MovingId);
+                if (moving is not null)
                 {
-                    var moving = state.Items.First(i => i.Id == state.MovingId);
-                    var rest   = state.Items.Where(i => i.Id != state.MovingId).ToList();
-                    var idx    = rest.FindIndex(i => i.Id == beforeId);
+                    var rest = state.Items.Where(i => i.Id != state.MovingId).ToList();
+                    var idx  = rest.FindIndex(i => i.Id == beforeId);
                     rest.Insert(idx, moving);
                     state = state with { Items = rest, MovingId = null };
                 }
@@ -77,23 +75,31 @@ public class ReorderController : ControllerBase
                 {
                     state = state with { MovingId = null };
                 }
-                break;
-
-            case "move-to-end":
-                if (state.MovingId != null)
+            }
+            else
+            {
+                state = state with { MovingId = null };
+            }
+        }
+        else if (name == "move-to-end")
+        {
+            if (state.MovingId != null)
+            {
+                var moving = state.Items.FirstOrDefault(i => i.Id == state.MovingId);
+                if (moving is not null)
                 {
-                    var moving = state.Items.First(i => i.Id == state.MovingId);
-                    var rest   = state.Items.Where(i => i.Id != state.MovingId).ToList();
+                    var rest = state.Items.Where(i => i.Id != state.MovingId).ToList();
                     rest.Add(moving);
                     state = state with { Items = rest, MovingId = null };
                 }
-                break;
-
-            default:
-                return BadRequest($"Unknown action: {payload.Name}");
+            }
+        }
+        else
+        {
+            return BadRequest($"Unknown action: {name}");
         }
 
-        return new ShellResponse<ReorderState>(BuildVm(state), state);
+        return new ShellResponse<ReorderState>(BuildVm(state), state).Validate();
     }
 
     private static ViewNode BuildVm(ReorderState state)
@@ -128,7 +134,7 @@ public class ReorderController : ControllerBase
                 [
                     new TextNode(item.Label, null),
                     new ButtonNode("Place here",
-                        new ActionDescriptor("move-before", new() { ["id"] = item.Id }),
+                        new ActionDescriptor($"move-before-{item.Id}"),
                         "primary"),
                 ]));
             }
@@ -138,7 +144,7 @@ public class ReorderController : ControllerBase
                 [
                     new TextNode(item.Label, null),
                     new ButtonNode("Move",
-                        new ActionDescriptor("move-start", new() { ["id"] = item.Id }),
+                        new ActionDescriptor($"move-start-{item.Id}"),
                         "secondary"),
                 ]));
             }

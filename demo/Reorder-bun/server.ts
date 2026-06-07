@@ -1,6 +1,11 @@
 // Reorder demo — TypeScript mirror of demo/Reorder/AspNetCore/.
 // Prototype evaluating the click-to-select-then-place reorder pattern with
 // ZERO framework changes: just state + actions + ButtonNode.
+//
+// Phase 6 wire-shape migration (0.17.0 / WIRE-07): per-item Move / Place
+// buttons carry unique action names (`move-start-${id}` / `move-before-${id}`)
+// — per-row identity is encoded in the action name itself. No `bind` paths
+// are needed: this demo has no input fields, only buttons.
 
 import {
   createAction,
@@ -66,7 +71,7 @@ function buildVm(state: ReorderState): ViewNode {
           {
             type: "button",
             label: "Place here",
-            action: { name: "move-before", context: { id: item.id } },
+            action: { name: `move-before-${item.id}` },
             variant: "primary",
           },
         ],
@@ -80,7 +85,7 @@ function buildVm(state: ReorderState): ViewNode {
         {
           type: "button",
           label: "Move",
-          action: { name: "move-start", context: { id: item.id } },
+          action: { name: `move-start-${item.id}` },
           variant: "secondary",
         },
       ],
@@ -102,24 +107,19 @@ function buildVm(state: ReorderState): ViewNode {
 }
 
 const actionHandler = createAction<ReorderState>(async (payload) => {
-  const ctx = payload.context ?? {};
-  const str = (k: string): string | null => (typeof ctx[k] === "string" ? (ctx[k] as string) : null);
-
   let state = payload.state;
+  const name = payload.name;
 
-  switch (payload.name) {
-    case "move-start": {
-      const id = str("id");
-      if (id !== null) state = { ...state, movingId: id };
-      break;
-    }
-    case "move-cancel":
-      state = { ...state, movingId: null };
-      break;
-    case "move-before": {
-      const beforeId = str("id");
-      if (state.movingId !== null && beforeId !== null && beforeId !== state.movingId) {
-        const moving = state.items.find(i => i.id === state.movingId)!;
+  if (name.startsWith("move-start-")) {
+    const id = name.slice("move-start-".length);
+    state = { ...state, movingId: id };
+  } else if (name === "move-cancel") {
+    state = { ...state, movingId: null };
+  } else if (name.startsWith("move-before-")) {
+    const beforeId = name.slice("move-before-".length);
+    if (state.movingId !== null && beforeId !== state.movingId) {
+      const moving = state.items.find(i => i.id === state.movingId);
+      if (moving) {
         const rest = state.items.filter(i => i.id !== state.movingId);
         const idx = rest.findIndex(i => i.id === beforeId);
         rest.splice(idx, 0, moving);
@@ -127,19 +127,20 @@ const actionHandler = createAction<ReorderState>(async (payload) => {
       } else {
         state = { ...state, movingId: null };
       }
-      break;
+    } else {
+      state = { ...state, movingId: null };
     }
-    case "move-to-end": {
-      if (state.movingId !== null) {
-        const moving = state.items.find(i => i.id === state.movingId)!;
+  } else if (name === "move-to-end") {
+    if (state.movingId !== null) {
+      const moving = state.items.find(i => i.id === state.movingId);
+      if (moving) {
         const rest = state.items.filter(i => i.id !== state.movingId);
         rest.push(moving);
         state = { ...state, items: rest, movingId: null };
       }
-      break;
     }
-    default:
-      throw new Error(`Unknown action: ${payload.name}`);
+  } else {
+    throw new Error(`Unknown action: ${name}`);
   }
 
   return { vm: buildVm(state), state };

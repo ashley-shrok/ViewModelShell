@@ -1,6 +1,5 @@
 namespace ExpenseTracker.Controllers;
 
-using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using ExpenseTracker.State;
 using ViewModelShell;
@@ -13,7 +12,7 @@ public class ExpensesController : ControllerBase
     public ShellResponse<ExpensesState> Get()
     {
         var state = ExpensesState.Initial();
-        return new(BuildVm(state), state);
+        return new ShellResponse<ExpensesState>(BuildVm(state), state).Validate();
     }
 
     [HttpPost("action")]
@@ -24,66 +23,55 @@ public class ExpensesController : ControllerBase
             Request.Form["_action"].ToString(),
             Request.Form["_state"].ToString());
 
-        string? Str(string key) =>
-            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
-                ? v.GetString() : null;
-
         var state = payload.State;
+        var name = payload.Name;
 
-        switch (payload.Name)
+        // Phase 6 (WIRE-07) — dispatch envelope is {name, state} only.
+        // Per-tab actions encode the tab value in the name itself; the
+        // bind path has already written the corresponding state slot.
+        if (name == "add")
         {
-            case "add":
-                var amountStr = Str("amount");
-                var note      = Str("note") ?? "";
-                if (!decimal.TryParse(amountStr, out var amount) || amount <= 0)
-                    return BadRequest("amount must be a positive number");
-                var added = new Transaction(
-                    Id:         Guid.NewGuid().ToString("N")[..8],
-                    CategoryId: state.AddCategory,
-                    Amount:     amount,
-                    Note:       note.Trim(),
-                    CreatedAt:  DateTimeOffset.UtcNow);
-                state = state with { Transactions = [.. state.Transactions, added], Adding = false };
-                break;
-
-            case "delete":
-                // Retained as a valid action; not surfaced in the realistic
-                // read-only ledger table (option A — TableNode cells are
-                // text-only; no per-row action buttons. Logged limitation).
-                var deleteId = Str("id");
-                if (deleteId != null)
-                    state = state with { Transactions = [.. state.Transactions.Where(t => t.Id != deleteId)] };
-                break;
-
-            case "filter":
-                var filterValue = Str("value");
-                if (filterValue != null) state = state with { FilterCategory = filterValue };
-                break;
-
-            case "select-category":
-                var catValue = Str("value");
-                if (catValue != null) state = state with { AddCategory = catValue };
-                break;
-
-            case "show-add":
-                state = state with { Adding = true };
-                break;
-
-            case "hide-add":
-                state = state with { Adding = false };
-                break;
-
-            default:
-                return BadRequest($"Unknown action: {payload.Name}");
+            var amountStr = state.DraftAmount;
+            if (!decimal.TryParse(amountStr, out var amount) || amount <= 0)
+                return BadRequest("amount must be a positive number");
+            var added = new Transaction(
+                Id:         Guid.NewGuid().ToString("N")[..8],
+                CategoryId: state.AddCategory,
+                Amount:     amount,
+                Note:       (state.DraftNote ?? "").Trim(),
+                CreatedAt:  DateTimeOffset.UtcNow);
+            state = state with
+            {
+                Transactions = [.. state.Transactions, added],
+                Adding = false,
+                DraftAmount = "",
+                DraftNote = "",
+            };
+        }
+        else if (name.StartsWith("filter-"))
+        {
+            // FilterCategory is already in state via the tab's bind path.
+        }
+        else if (name.StartsWith("select-category-"))
+        {
+            // AddCategory is already in state via the tab's bind path.
+        }
+        else if (name == "show-add")
+        {
+            state = state with { Adding = true };
+        }
+        else if (name == "hide-add")
+        {
+            state = state with { Adding = false, DraftAmount = "", DraftNote = "" };
+        }
+        else
+        {
+            return BadRequest($"Unknown action: {name}");
         }
 
-        return new ShellResponse<ExpensesState>(BuildVm(state), state);
+        return new ShellResponse<ExpensesState>(BuildVm(state), state).Validate();
     }
 
-    // Realistic YNAB/Mint finance app as a real app shell
-    // (page.layout:"sidebar"): a thin left "Overview" rail (headline
-    // numbers + per-category budget progress) next to a wide main area
-    // (add transaction + the transactions ledger).
     private static ViewNode BuildVm(ExpensesState state)
     {
         var totalBudget = state.Categories.Sum(c => c.Budget);
@@ -110,9 +98,13 @@ public class ExpensesController : ControllerBase
         var rail = new SectionNode("Overview", railChildren, Variant: "card");
 
         // MAIN — "+ Add" opens a modal; the main area is the ledger.
-
-        var filterTabs = new List<TabItem> { new("all", "All") };
-        filterTabs.AddRange(state.Categories.Select(c => new TabItem(c.Id, c.Name)));
+        // Each filter tab carries a unique action name (filter-{id}).
+        var filterTabs = new List<TabItem>
+        {
+            new("all", "All", new ActionDescriptor("filter-all"))
+        };
+        filterTabs.AddRange(state.Categories.Select(c =>
+            new TabItem(c.Id, c.Name, new ActionDescriptor($"filter-{c.Id}"))));
 
         var filteredTx = (state.FilterCategory == "all"
                 ? state.Transactions.AsEnumerable()
@@ -139,7 +131,7 @@ public class ExpensesController : ControllerBase
             [
                 new TabsNode(
                     Selected: state.FilterCategory,
-                    Action:   new ActionDescriptor("filter"),
+                    Bind:     "filterCategory",
                     Tabs:     filterTabs),
                 new TableNode(
                     Columns:
@@ -165,15 +157,16 @@ public class ExpensesController : ControllerBase
                 [
                     new TabsNode(
                         Selected: state.AddCategory,
-                        Action:   new ActionDescriptor("select-category"),
-                        Tabs:     state.Categories.Select(c => new TabItem(c.Id, c.Name)).ToList()),
+                        Bind:     "addCategory",
+                        Tabs:     state.Categories.Select(c =>
+                            new TabItem(c.Id, c.Name, new ActionDescriptor($"select-category-{c.Id}"))).ToList()),
                     new FormNode(
                         SubmitAction: new ActionDescriptor("add"),
                         SubmitLabel:  "Add",
                         Children:
                         [
-                            new FieldNode("amount", "number", "Amount ($)", "0.00",          null, true),
-                            new FieldNode("note",   "text",   "Note",       "Coffee, lunch…", null)
+                            new FieldNode("amount", "number", "draftAmount", "Amount ($)", "0.00",          Required: true),
+                            new FieldNode("note",   "text",   "draftNote",   "Note",       "Coffee, lunch…")
                         ])
                 ],
                 DismissAction: new ActionDescriptor("hide-add"),

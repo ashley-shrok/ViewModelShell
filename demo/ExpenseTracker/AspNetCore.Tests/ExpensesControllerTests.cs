@@ -8,18 +8,17 @@ using ExpenseTracker.Controllers;
 using ExpenseTracker.State;
 using ViewModelShell;
 
-// Asserts the 0.4.0 realistic-demo redesign tree:
+// Asserts the 0.4.0 realistic-demo redesign tree under the Phase 6 wire shape:
 //   PageNode(Layout:"sidebar") children:
-//     [0] SectionNode("Overview", Variant:"card")  — left rail:
-//           TextNode($remaining,"heading"), TextNode("remaining this month","muted"),
-//           TextNode("Spent … % used","muted"),
-//           then per category: TextNode(name,"subheading"),
-//                               TextNode("$spent / $budget", over?"error":"muted"),
-//                               ProgressNode(pct)
+//     [0] SectionNode("Overview", Variant:"card")  — left rail.
 //     [1] SectionNode(null) — main:
 //           ButtonNode("+ Add Transaction", show-add, "primary"),
-//           SectionNode("Transactions") { TabsNode(filter), TableNode(read-only ledger) },
-//           ModalNode("Add Transaction", …, hide-add, "narrow")  — ONLY when state.Adding
+//           SectionNode("Transactions") {
+//             TabsNode(bind:"filterCategory", per-tab actions filter-{id}),
+//             TableNode(read-only ledger) },
+//           ModalNode("Add Transaction", …, hide-add, "narrow") — when state.Adding
+//             { TabsNode(bind:"addCategory", per-tab select-category-{id}),
+//               FormNode(submit "add", bind paths draftAmount + draftNote) }
 public class ExpensesControllerTests
 {
     private static ExpensesController CreateController()
@@ -32,18 +31,10 @@ public class ExpensesControllerTests
         return controller;
     }
 
-    private static Dictionary<string, JsonElement> Ctx(object obj)
-    {
-        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(obj));
-        return doc.RootElement.EnumerateObject()
-            .ToDictionary(p => p.Name, p => p.Value.Clone());
-    }
-
     private static ActionResult<ShellResponse<ExpensesState>> Act(
-        ExpensesController ctrl, ExpensesState state, string name,
-        Dictionary<string, JsonElement>? ctx = null)
+        ExpensesController ctrl, ExpensesState state, string name)
     {
-        var actionJson = JsonSerializer.Serialize(new { name, context = ctx });
+        var actionJson = JsonSerializer.Serialize(new { name });
         var stateJson  = JsonSerializer.Serialize(state);
         ctrl.ControllerContext.HttpContext.Request.Form = new FormCollection(
             new Dictionary<string, StringValues>
@@ -59,9 +50,8 @@ public class ExpensesControllerTests
 
     // ── tree navigation helpers ──────────────────────────────────────────────────
 
-    private static PageNode Page(ViewNode vm) => Assert.IsType<PageNode>(vm);
+    private static PageNode Page(ViewNode? vm) => Assert.IsType<PageNode>(vm);
 
-    /// Left "Overview" rail — the first child, a card section.
     private static SectionNode Rail(PageNode page)
     {
         var rail = Assert.IsType<SectionNode>(page.Children[0]);
@@ -70,7 +60,6 @@ public class ExpensesControllerTests
         return rail;
     }
 
-    /// Main area — the second (heading-less) child section.
     private static SectionNode Main(PageNode page)
     {
         var main = Assert.IsType<SectionNode>(page.Children[1]);
@@ -101,7 +90,7 @@ public class ExpensesControllerTests
 
     /// Round-trip an arbitrary state through BuildVm via a benign no-op action.
     private static ViewNode BuildVm(ExpensesState s) =>
-        Ok(Act(CreateController(), s, "filter", Ctx(new { value = s.FilterCategory }))).Vm;
+        Ok(Act(CreateController(), s, $"filter-{s.FilterCategory}")).Vm!;
 
     // ── GET ──────────────────────────────────────────────────────────────────────
 
@@ -118,11 +107,14 @@ public class ExpensesControllerTests
     public void Get_ReturnsInitialState_IncludingAdding()
     {
         var resp = CreateController().Get();
-        Assert.Equal(4, resp.State.Categories.Count);
+        Assert.NotNull(resp.State);
+        Assert.Equal(4, resp.State!.Categories.Count);
         Assert.Equal(5, resp.State.Transactions.Count);
         Assert.Equal("all", resp.State.FilterCategory);
         Assert.Equal("food", resp.State.AddCategory);
         Assert.False(resp.State.Adding); // new field defaults closed
+        Assert.Equal("", resp.State.DraftAmount);
+        Assert.Equal("", resp.State.DraftNote);
     }
 
     [Fact]
@@ -189,7 +181,6 @@ public class ExpensesControllerTests
         Assert.Equal(
             new[] { "date", "category", "note", "amount" },
             table.Columns.Select(c => c.Key).ToArray());
-        // read-only ledger — columns are not sortable/filterable
         Assert.All(table.Columns, c =>
         {
             Assert.False(c.Sortable);
@@ -208,8 +199,8 @@ public class ExpensesControllerTests
             Assert.NotNull(r.Id);
             Assert.True(r.Cells.ContainsKey("amount"));
             Assert.StartsWith("$", r.Cells["amount"]);
-            // read-only ledger — no per-row action
-            Assert.Null(r.Action);
+            // Phase 6 read-only ledger — no per-row Actions array.
+            Assert.Null(r.Actions);
         });
     }
 
@@ -222,12 +213,17 @@ public class ExpensesControllerTests
     }
 
     [Fact]
-    public void Get_FilterTabs_IncludesAllAndEachCategory()
+    public void Get_FilterTabs_IncludesAllAndEachCategory_WithUniqueActionNames()
     {
         var tabs = FilterTabs(Page(CreateController().Get().Vm));
         Assert.Equal(5, tabs.Tabs.Count);
         Assert.Equal("all", tabs.Selected);
-        Assert.Equal("filter", tabs.Action.Name);
+        Assert.Equal("filterCategory", tabs.Bind);
+        // Phase 6 — each tab carries a unique action name; the framework's
+        // uniqueness check would otherwise fire on tree build.
+        Assert.Equal("filter-all", tabs.Tabs[0].Action.Name);
+        Assert.Equal(new[] { "filter-all", "filter-food", "filter-transport", "filter-entertainment", "filter-bills" },
+            tabs.Tabs.Select(t => t.Action.Name).ToArray());
     }
 
     [Fact]
@@ -242,7 +238,8 @@ public class ExpensesControllerTests
     public void Action_ShowAdd_OpensModal_AndSetsAddingState()
     {
         var resp = Ok(Act(CreateController(), ExpensesState.Initial(), "show-add"));
-        Assert.True(resp.State.Adding);
+        Assert.NotNull(resp.State);
+        Assert.True(resp.State!.Adding);
         var modal = AddModal(Page(resp.Vm));
         Assert.NotNull(modal);
         Assert.Equal("Add Transaction", modal!.Title);
@@ -256,24 +253,29 @@ public class ExpensesControllerTests
     {
         var ctrl = CreateController();
         var opened = Ok(Act(ctrl, ExpensesState.Initial(), "show-add"));
-        Assert.True(opened.State.Adding);
+        Assert.NotNull(opened.State);
+        Assert.True(opened.State!.Adding);
         var closed = Ok(Act(ctrl, opened.State, "hide-add"));
-        Assert.False(closed.State.Adding);
+        Assert.NotNull(closed.State);
+        Assert.False(closed.State!.Adding);
         Assert.Null(AddModal(Page(closed.Vm)));
     }
 
     [Fact]
-    public void Action_AddModal_FormSubmitsAddAction()
+    public void Action_AddModal_FormSubmitsAddAction_WithBoundFields()
     {
         var resp = Ok(Act(CreateController(), ExpensesState.Initial(), "show-add"));
         var modal = AddModal(Page(resp.Vm))!;
         var form  = modal.Children.OfType<FormNode>().Single();
-        Assert.Equal("add", form.SubmitAction.Name);
+        Assert.NotNull(form.SubmitAction);
+        Assert.Equal("add", form.SubmitAction!.Name);
         Assert.Equal("Add", form.SubmitLabel);
         var amount = form.Children.OfType<FieldNode>().Single(f => f.Name == "amount");
         Assert.True(amount.Required);
+        Assert.Equal("draftAmount", amount.Bind);
         var note = form.Children.OfType<FieldNode>().Single(f => f.Name == "note");
         Assert.False(note.Required);
+        Assert.Equal("draftNote", note.Bind);
     }
 
     // ── action: add ──────────────────────────────────────────────────────────────
@@ -283,32 +285,40 @@ public class ExpensesControllerTests
     {
         var ctrl = CreateController();
         var opened = Ok(Act(ctrl, ExpensesState.Initial(), "show-add"));
-        var before = opened.State.Transactions.Count;
-        var resp = Ok(Act(ctrl, opened.State, "add", Ctx(new { amount = "25.00", note = "Groceries" })));
-        Assert.Equal(before + 1, resp.State.Transactions.Count);
+        Assert.NotNull(opened.State);
+        var staged = opened.State! with { DraftAmount = "25.00", DraftNote = "Groceries" };
+        var before = staged.Transactions.Count;
+        var resp = Ok(Act(ctrl, staged, "add"));
+        Assert.NotNull(resp.State);
+        Assert.Equal(before + 1, resp.State!.Transactions.Count);
         Assert.Equal(before + 1, LedgerTable(Page(resp.Vm)).Rows.Count);
         Assert.False(resp.State.Adding); // add closes the modal
         Assert.Null(AddModal(Page(resp.Vm)));
+        Assert.Equal("", resp.State.DraftAmount);
+        Assert.Equal("", resp.State.DraftNote);
     }
 
     [Fact]
     public void Action_Add_ZeroAmount_ReturnsBadRequest()
     {
-        var result = Act(CreateController(), ExpensesState.Initial(), "add", Ctx(new { amount = "0", note = "" }));
+        var state = ExpensesState.Initial() with { DraftAmount = "0", DraftNote = "" };
+        var result = Act(CreateController(), state, "add");
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     [Fact]
     public void Action_Add_NegativeAmount_ReturnsBadRequest()
     {
-        var result = Act(CreateController(), ExpensesState.Initial(), "add", Ctx(new { amount = "-5", note = "" }));
+        var state = ExpensesState.Initial() with { DraftAmount = "-5", DraftNote = "" };
+        var result = Act(CreateController(), state, "add");
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     [Fact]
     public void Action_Add_InvalidAmount_ReturnsBadRequest()
     {
-        var result = Act(CreateController(), ExpensesState.Initial(), "add", Ctx(new { amount = "abc", note = "" }));
+        var state = ExpensesState.Initial() with { DraftAmount = "abc", DraftNote = "" };
+        var result = Act(CreateController(), state, "add");
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
@@ -316,10 +326,18 @@ public class ExpensesControllerTests
     public void Action_Add_UsesSelectedAddCategory()
     {
         var ctrl = CreateController();
-        var step1 = Ok(Act(ctrl, ExpensesState.Initial(), "select-category", Ctx(new { value = "transport" })));
-        var step2 = Ok(Act(ctrl, step1.State, "add", Ctx(new { amount = "30.00", note = "Bus" })));
-        var step3 = Ok(Act(ctrl, step2.State, "filter", Ctx(new { value = "transport" })));
-        var rows  = LedgerTable(Page(step3.Vm)).Rows;
+        // The bind has already written addCategory to state; we model that here.
+        var staged = ExpensesState.Initial() with
+        {
+            AddCategory = "transport",
+            DraftAmount = "30.00",
+            DraftNote = "Bus",
+        };
+        var afterAdd = Ok(Act(ctrl, staged, "add"));
+        Assert.NotNull(afterAdd.State);
+        var filtered = afterAdd.State! with { FilterCategory = "transport" };
+        var resp = Ok(Act(ctrl, filtered, "filter-transport"));
+        var rows = LedgerTable(Page(resp.Vm)).Rows;
         Assert.Contains(rows, r => r.Cells.TryGetValue("note", out var n) && n == "Bus");
     }
 
@@ -329,8 +347,9 @@ public class ExpensesControllerTests
         var ctrl = CreateController();
         var initial = ExpensesState.Initial();
         var before = ((TextNode)Rail(Page(BuildVm(initial))).Children[0]).Value;
-        var resp = Ok(Act(ctrl, initial, "add", Ctx(new { amount = "100.00", note = "Test" })));
-        var after = ((TextNode)Rail(Page(resp.Vm)).Children[0]).Value;
+        var staged = initial with { DraftAmount = "100.00", DraftNote = "Test" };
+        var resp = Ok(Act(ctrl, staged, "add"));
+        var after = ((TextNode)Rail(Page(resp.Vm!)).Children[0]).Value;
         Assert.NotEqual(before, after);
     }
 
@@ -338,63 +357,34 @@ public class ExpensesControllerTests
     public void Action_Add_AppearsInLedgerWithFormattedAmount()
     {
         var ctrl = CreateController();
-        var resp = Ok(Act(ctrl, ExpensesState.Initial(), "add", Ctx(new { amount = "12.5", note = "Snack" })));
-        var rows = LedgerTable(Page(resp.Vm)).Rows;
+        var staged = ExpensesState.Initial() with { DraftAmount = "12.5", DraftNote = "Snack" };
+        var resp = Ok(Act(ctrl, staged, "add"));
+        var rows = LedgerTable(Page(resp.Vm!)).Rows;
         Assert.Contains(rows, r =>
             r.Cells.TryGetValue("note", out var n) && n == "Snack" &&
             r.Cells.TryGetValue("amount", out var a) && a == "$12.50");
     }
 
-    // ── action: delete ───────────────────────────────────────────────────────────
-
-    [Fact]
-    public void Action_Delete_RemovesTransaction()
-    {
-        var ctrl = CreateController();
-        var initial = ExpensesState.Initial();
-        var firstId = initial.Transactions[0].Id;
-        var resp = Ok(Act(ctrl, initial, "delete", Ctx(new { id = firstId })));
-        Assert.Equal(initial.Transactions.Count - 1, LedgerTable(Page(resp.Vm)).Rows.Count);
-        Assert.Equal(initial.Transactions.Count - 1, resp.State.Transactions.Count);
-    }
-
-    [Fact]
-    public void Action_Delete_RemovedItemNotInLedger()
-    {
-        var ctrl = CreateController();
-        var initial = ExpensesState.Initial();
-        var firstId = initial.Transactions[0].Id;
-        var resp = Ok(Act(ctrl, initial, "delete", Ctx(new { id = firstId })));
-        Assert.DoesNotContain(LedgerTable(Page(resp.Vm)).Rows, r => r.Id == firstId);
-    }
-
-    [Fact]
-    public void Action_Delete_PreservesAddingState()
-    {
-        var ctrl = CreateController();
-        var opened = Ok(Act(ctrl, ExpensesState.Initial(), "show-add"));
-        Assert.True(opened.State.Adding);
-        var resp = Ok(Act(ctrl, opened.State, "delete", Ctx(new { id = "3" })));
-        Assert.True(resp.State.Adding); // delete does not touch the modal
-        Assert.NotNull(AddModal(Page(resp.Vm)));
-    }
-
-    // ── action: filter ───────────────────────────────────────────────────────────
+    // ── action: filter-{id} ──────────────────────────────────────────────────────
+    // The TabsNode bind has already written FilterCategory; the action is just
+    // an explicit dispatch by name. Tests pre-populate state to model this.
 
     [Fact]
     public void Action_Filter_Food_UpdatesSelectedTab()
     {
         var ctrl = CreateController();
-        var resp = Ok(Act(ctrl, ExpensesState.Initial(), "filter", Ctx(new { value = "food" })));
-        Assert.Equal("food", FilterTabs(Page(resp.Vm)).Selected);
+        var staged = ExpensesState.Initial() with { FilterCategory = "food" };
+        var resp = Ok(Act(ctrl, staged, "filter-food"));
+        Assert.Equal("food", FilterTabs(Page(resp.Vm!)).Selected);
     }
 
     [Fact]
     public void Action_Filter_Food_ShowsOnlyFoodTransactions()
     {
         var ctrl = CreateController();
-        var resp = Ok(Act(ctrl, ExpensesState.Initial(), "filter", Ctx(new { value = "food" })));
-        var rows = LedgerTable(Page(resp.Vm)).Rows;
+        var staged = ExpensesState.Initial() with { FilterCategory = "food" };
+        var resp = Ok(Act(ctrl, staged, "filter-food"));
+        var rows = LedgerTable(Page(resp.Vm!)).Rows;
         Assert.True(rows.Count > 0);
         Assert.All(rows, r => Assert.Equal("Food", r.Cells["category"]));
     }
@@ -404,42 +394,38 @@ public class ExpensesControllerTests
     {
         var ctrl = CreateController();
         var initial = ExpensesState.Initial();
-        var step1 = Ok(Act(ctrl, initial, "filter", Ctx(new { value = "food" })));
-        var step2 = Ok(Act(ctrl, step1.State, "filter", Ctx(new { value = "all" })));
-        Assert.Equal(initial.Transactions.Count, LedgerTable(Page(step2.Vm)).Rows.Count);
+        var step1 = Ok(Act(ctrl, initial with { FilterCategory = "food" }, "filter-food"));
+        Assert.NotNull(step1.State);
+        var step2 = Ok(Act(ctrl, step1.State! with { FilterCategory = "all" }, "filter-all"));
+        Assert.Equal(initial.Transactions.Count, LedgerTable(Page(step2.Vm!)).Rows.Count);
     }
 
-    // ── action: select-category ──────────────────────────────────────────────────
+    // ── action: select-category-{id} ─────────────────────────────────────────────
 
     [Fact]
     public void Action_SelectCategory_UpdatesAddModalTabs()
     {
         var ctrl = CreateController();
-        // selecting a category does not by itself open the modal; open it first
         var opened = Ok(Act(ctrl, ExpensesState.Initial(), "show-add"));
-        var resp = Ok(Act(ctrl, opened.State, "select-category", Ctx(new { value = "bills" })));
-        Assert.Equal("bills", resp.State.AddCategory);
-        Assert.Equal("bills", AddCategoryTabs(Page(resp.Vm)).Selected);
-    }
-
-    [Fact]
-    public void Action_SelectCategory_EntertainmentBecomesSelected()
-    {
-        var ctrl = CreateController();
-        var opened = Ok(Act(ctrl, ExpensesState.Initial(), "show-add"));
-        var resp = Ok(Act(ctrl, opened.State, "select-category", Ctx(new { value = "entertainment" })));
-        Assert.Equal("entertainment", resp.State.AddCategory);
-        Assert.Equal("entertainment", AddCategoryTabs(Page(resp.Vm)).Selected);
+        Assert.NotNull(opened.State);
+        var staged = opened.State! with { AddCategory = "bills" };
+        var resp = Ok(Act(ctrl, staged, "select-category-bills"));
+        Assert.NotNull(resp.State);
+        Assert.Equal("bills", resp.State!.AddCategory);
+        Assert.Equal("bills", AddCategoryTabs(Page(resp.Vm!)).Selected);
     }
 
     [Fact]
     public void Action_SelectCategory_PersistsThroughAdd()
     {
         var ctrl = CreateController();
-        var step1 = Ok(Act(ctrl, ExpensesState.Initial(), "select-category", Ctx(new { value = "bills" })));
-        Assert.Equal("bills", step1.State.AddCategory);
-        var step2 = Ok(Act(ctrl, step1.State, "add", Ctx(new { amount = "10.00", note = "X" })));
-        Assert.Equal("bills", step2.State.AddCategory); // selection survives the add
+        // Open + select bills (bind+action writes to state).
+        var opened = Ok(Act(ctrl, ExpensesState.Initial(), "show-add"));
+        Assert.NotNull(opened.State);
+        var staged = opened.State! with { AddCategory = "bills", DraftAmount = "10.00", DraftNote = "X" };
+        var afterAdd = Ok(Act(ctrl, staged, "add"));
+        Assert.NotNull(afterAdd.State);
+        Assert.Equal("bills", afterAdd.State!.AddCategory); // selection survives the add
     }
 
     // ── action: unknown ──────────────────────────────────────────────────────────
