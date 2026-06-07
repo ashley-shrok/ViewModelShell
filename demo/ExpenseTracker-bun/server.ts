@@ -17,6 +17,7 @@
 
 import {
   createAction,
+  validateActionNames,
   type ViewNode,
 } from "@ashley-shrok/viewmodel-shell/server";
 
@@ -302,7 +303,9 @@ Bun.serve({
     const url = new URL(request.url);
     if (url.pathname === "/api/expenses" && request.method === "GET") {
       const state = initialState();
-      return Response.json({ vm: buildVm(state), state });
+      const vm = buildVm(state);
+      validateActionNames(vm);
+      return Response.json({ vm, state });
     }
     if (url.pathname === "/api/expenses/action" && request.method === "POST") {
       return actionHandler(request);

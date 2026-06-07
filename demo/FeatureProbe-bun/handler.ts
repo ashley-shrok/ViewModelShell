@@ -14,6 +14,7 @@ import {
   createAction,
   shellRedirect,
   shellSideEffect,
+  validateActionNames,
   type ViewNode,
 } from "@ashley-shrok/viewmodel-shell/server";
 
@@ -277,7 +278,9 @@ export async function fetchHandler(request: Request): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/api/probe" && request.method === "GET") {
     const state = initialState();
-    return Response.json({ vm: buildVm(state), state });
+    const vm = buildVm(state);
+    validateActionNames(vm);
+    return Response.json({ vm, state });
   }
   if (url.pathname === "/api/probe/action" && request.method === "POST") {
     return actionHandler(request);

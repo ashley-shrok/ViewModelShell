@@ -21,6 +21,7 @@
 
 import {
   createAction,
+  validateActionNames,
   type ViewNode,
 } from "@ashley-shrok/viewmodel-shell/server";
 import { Database } from "bun:sqlite";
@@ -862,14 +863,18 @@ Bun.serve({
     const url = new URL(request.url);
     if (url.pathname === "/api/agent" && request.method === "GET") {
       const state = agentInitial();
-      return Response.json({ vm: agentBuildVm(state), state });
+      const vm = agentBuildVm(state);
+      validateActionNames(vm);
+      return Response.json({ vm, state });
     }
     if (url.pathname === "/api/agent/action" && request.method === "POST") {
       return agentHandler(request);
     }
     if (url.pathname === "/api/requester" && request.method === "GET") {
       const state = requesterInitial();
-      return Response.json({ vm: requesterBuildVm(state), state });
+      const vm = requesterBuildVm(state);
+      validateActionNames(vm);
+      return Response.json({ vm, state });
     }
     if (url.pathname === "/api/requester/action" && request.method === "POST") {
       return requesterHandler(request);

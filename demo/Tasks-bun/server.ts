@@ -16,6 +16,7 @@
 
 import {
   createAction,
+  validateActionNames,
   type ViewNode,
 } from "@ashley-shrok/viewmodel-shell/server";
 
@@ -229,7 +230,9 @@ if (import.meta.main) {
       const url = new URL(request.url);
       if (url.pathname === "/api/tasks" && request.method === "GET") {
         const state = initialState();
-        return Response.json({ vm: buildVm(state), state });
+        const vm = buildVm(state);
+        validateActionNames(vm);
+        return Response.json({ vm, state });
       }
       if (url.pathname === "/api/tasks/action" && request.method === "POST") {
         return actionHandler(request);
