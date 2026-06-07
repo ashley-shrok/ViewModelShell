@@ -12,6 +12,7 @@
 
 import {
   BadRequestError,
+  UnknownActionError,
   createAction,
   shellRedirect,
   shellSideEffect,
@@ -268,8 +269,15 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
     // (Server just re-renders the slice for the new page.)
   } else if (name === "table-page-next") {
     // Same as prev.
+  } else if (name === "boom") {
+    // Deliberate uncaught throw — exercises the generic-Error path through
+    // createAction's catch arm. Used by the Plan 04 parity fixture to verify
+    // that ALL backends return byte-identical {ok:false, errors:[{message:
+    // "deliberate test failure", code:"uncaught_exception"}]} envelopes.
+    // Dev/parity use only; this demo is never deployed to production (T-07-09).
+    throw new Error("deliberate test failure");
   } else {
-    throw new BadRequestError(`Unknown action: ${name}`);
+    throw new UnknownActionError(name);
   }
 
   return { vm: buildVm(state), state };

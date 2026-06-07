@@ -16,6 +16,7 @@
 
 import {
   BadRequestError,
+  UnknownActionError,
   createAction,
   validateActionNames,
   type ViewNode,
@@ -299,7 +300,7 @@ const actionHandler = createAction<ContactsState>(async (payload) => {
     // searchQuery is already in state via the field's bind path; the server
     // just acknowledges with a re-render driven by the new query.
   } else {
-    throw new BadRequestError(`Unknown action: ${name}`);
+    throw new UnknownActionError(name);
   }
 
   return { vm: buildVm(state), state };

@@ -14,6 +14,7 @@
 
 import {
   BadRequestError,
+  UnknownActionError,
   createAction,
   validateActionNames,
   type PageNode,
@@ -230,7 +231,7 @@ const actionHandler = createAction<RetroState>(async (payload) => {
     // The checkbox bind has already written the new boolean to
     // state.actionItems[i].resolved. Just acknowledge with a re-render.
   } else {
-    throw new BadRequestError(`Unknown action: ${name}`);
+    throw new UnknownActionError(name);
   }
 
   return { vm: buildVm(state), state };

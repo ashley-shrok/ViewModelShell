@@ -17,6 +17,7 @@
 
 import {
   BadRequestError,
+  UnknownActionError,
   createAction,
   validateActionNames,
   type ViewNode,
@@ -290,7 +291,7 @@ const actionHandler = createAction<ExpensesState>(async payload => {
   } else if (name === "hide-add") {
     state = { ...state, adding: false, draftAmount: "", draftNote: "" };
   } else {
-    throw new BadRequestError(`Unknown action: ${name}`);
+    throw new UnknownActionError(name);
   }
 
   return { vm: buildVm(state), state };

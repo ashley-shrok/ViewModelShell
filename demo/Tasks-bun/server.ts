@@ -16,6 +16,7 @@
 
 import {
   BadRequestError,
+  UnknownActionError,
   createAction,
   validateActionNames,
   type ViewNode,
@@ -218,7 +219,7 @@ export const actionHandler = createAction<TasksState>(async (payload) => {
     const value = name.slice("filter-".length);
     state = { ...state, filter: value };
   } else {
-    throw new BadRequestError(`Unknown action: ${name}`);
+    throw new UnknownActionError(name);
   }
 
   return { vm: buildVm(state), state };

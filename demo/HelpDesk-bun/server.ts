@@ -21,6 +21,7 @@
 
 import {
   BadRequestError,
+  UnknownActionError,
   createAction,
   validateActionNames,
   type ViewNode,
@@ -598,7 +599,7 @@ const agentHandler = createAction<AgentState>(async (payload) => {
       state = { ...state, notesSaved: true };
     }
   } else {
-    throw new BadRequestError(`Unknown action: ${name}`);
+    throw new UnknownActionError(name);
   }
 
   return { vm: agentBuildVm(state), state };
@@ -848,7 +849,7 @@ const requesterHandler = createAction<RequesterState>(async (payload) => {
       state = { ...state, validationError: null, view: "list" };
     }
   } else {
-    throw new BadRequestError(`Unknown action: ${name}`);
+    throw new UnknownActionError(name);
   }
 
   return { vm: requesterBuildVm(state), state };
