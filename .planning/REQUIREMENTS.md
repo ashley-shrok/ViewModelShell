@@ -13,14 +13,14 @@ Requirements for milestone 1.0.0. Each maps to exactly one roadmap phase (number
 
 The protocol contract change — Phase 6.
 
-- [ ] **WIRE-01**: Every input node (text/number/email/password/date/time/datetime/textarea/select/checkbox/file) declares a `bind` path naming where in state its value lives. The renderer reads/writes through that path; an agent reading the JSON sees the same declaration and can mutate state directly at that path.
-- [ ] **WIRE-02**: The client maintains a locally-mutable copy of state. Typing in an input, changing a select, toggling a checkbox, or picking a file mutates that local state at the declared bind path in place — no DOM-only form state that has to be "harvested" later.
-- [ ] **WIRE-03**: The dispatch wire carries only `{action, state, files?}`. The `context` field is removed from the protocol entirely. Files remain on the multipart side channel (the only path exempt from "everything lives in state").
-- [ ] **WIRE-04**: Every dispatch-bearing node (button, table sort header / filter input / pagination / selection button, tabs, fields with action-on-Enter, checkbox-on-change) carries an action name only — no embedded context payload. Per-row identity (the old `context: {id: 42}` pattern) is encoded in the action name itself; the app picks its naming style.
-- [ ] **WIRE-05**: The framework enforces "one action name = one operation" at tree-build time. Two nodes can share an action name only if they fire the same operation; declaring the same name for semantically distinct operations is an error caught when the tree is built.
-- [ ] **WIRE-06**: The renderer (`viewmodel-shell/src/browser.ts`) is rewritten as a thin interpreter. The seven distinct context-assembly paths identified by the codebase audit collapse into one declarative bind-path path. No DOM harvest, no implicit scope rules, no synthetic context.
-- [ ] **WIRE-07**: Every demo app — `demo/Tasks`, `ContactManager`, `ExpenseTracker`, `RetroBoard`, `HelpDesk`, `FeatureProbe`, `Reorder`, Showcase, and every `-bun` twin — is migrated to the new shape. Action handlers read from state, never from a context payload; state records carry per-input values at the bound paths.
-- [ ] **WIRE-08**: Cross-backend parity suite (`parity/`) green across .NET / Bun / Node — every fixture rewritten to the new wire shape, every backend agrees byte-for-byte. Existing CI gates (`check:core-globals`, parity workflow) stay green.
+- [x] **WIRE-01**: Every input node (text/number/email/password/date/time/datetime/textarea/select/checkbox/file) declares a `bind` path naming where in state its value lives. The renderer reads/writes through that path; an agent reading the JSON sees the same declaration and can mutate state directly at that path.
+- [x] **WIRE-02**: The client maintains a locally-mutable copy of state. Typing in an input, changing a select, toggling a checkbox, or picking a file mutates that local state at the declared bind path in place — no DOM-only form state that has to be "harvested" later.
+- [x] **WIRE-03**: The dispatch wire carries only `{action, state, files?}`. The `context` field is removed from the protocol entirely. Files remain on the multipart side channel (the only path exempt from "everything lives in state").
+- [x] **WIRE-04**: Every dispatch-bearing node (button, table sort header / filter input / pagination / selection button, tabs, fields with action-on-Enter, checkbox-on-change) carries an action name only — no embedded context payload. Per-row identity (the old `context: {id: 42}` pattern) is encoded in the action name itself; the app picks its naming style.
+- [x] **WIRE-05**: The framework enforces "one action name = one operation" at tree-build time. Two nodes can share an action name only if they fire the same operation; declaring the same name for semantically distinct operations is an error caught when the tree is built.
+- [x] **WIRE-06**: The renderer (`viewmodel-shell/src/browser.ts`) is rewritten as a thin interpreter. The seven distinct context-assembly paths identified by the codebase audit collapse into one declarative bind-path path. No DOM harvest, no implicit scope rules, no synthetic context.
+- [x] **WIRE-07**: Every demo app — `demo/Tasks`, `ContactManager`, `ExpenseTracker`, `RetroBoard`, `HelpDesk`, `FeatureProbe`, `Reorder`, Showcase, and every `-bun` twin — is migrated to the new shape. Action handlers read from state, never from a context payload; state records carry per-input values at the bound paths.
+- [x] **WIRE-08**: Cross-backend parity suite (`parity/`) green across .NET / Bun / Node — every fixture rewritten to the new wire shape, every backend agrees byte-for-byte. Existing CI gates (`check:core-globals`, parity workflow) stay green.
 
 ### Error
 
@@ -65,14 +65,14 @@ Which phases cover which requirements. Phase numbering continues from 0.4.0 (Pha
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WIRE-01 | Phase 6 | Pending |
-| WIRE-02 | Phase 6 | Pending |
-| WIRE-03 | Phase 6 | Pending |
-| WIRE-04 | Phase 6 | Pending |
-| WIRE-05 | Phase 6 | Pending |
-| WIRE-06 | Phase 6 | Pending |
-| WIRE-07 | Phase 6 | Pending |
-| WIRE-08 | Phase 6 | Pending |
+| WIRE-01 | Phase 6 | Complete |
+| WIRE-02 | Phase 6 | Complete |
+| WIRE-03 | Phase 6 | Complete |
+| WIRE-04 | Phase 6 | Complete |
+| WIRE-05 | Phase 6 | Complete |
+| WIRE-06 | Phase 6 | Complete |
+| WIRE-07 | Phase 6 | Complete |
+| WIRE-08 | Phase 6 | Complete |
 | ERROR-01 | Phase 7 | Pending |
 | ERROR-02 | Phase 7 | Pending |
 | ERROR-03 | Phase 7 | Pending |
