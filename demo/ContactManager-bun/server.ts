@@ -6,6 +6,13 @@
 // with a split master/detail layout. Left = searchable contact list (master);
 // right = a card panel showing the selected contact / add form / empty state.
 // Mirrors ContactsController.BuildVm exactly.
+//
+// Phase 6 wire-shape migration (0.17.0 / WIRE-07): inputs carry `bind` paths
+// instead of values; per-row "Open" buttons use unique action names
+// (`navigate-to-detail-${id}`); the action handler reads from state, not
+// from a `context` payload. `state.draftForm` holds the in-flight edit/add
+// form values; the search query lives in `state.searchQuery` (unchanged
+// shape, now bind-driven).
 
 import {
   createAction,
@@ -21,12 +28,25 @@ interface ContactRecord {
   createdAt: string;
 }
 
+interface DraftForm {
+  name: string;
+  email: string;
+  phone: string;
+  notes: string;
+}
+
 interface ContactsState {
   contacts: ContactRecord[];
   currentView: string;   // "list" | "detail" | "add"
   selectedId: string | null;
   searchQuery: string;
+  // Phase 6 — typed values of the right-pane add/edit form. Lives in state so
+  // the renderer's bind seam can read/write each field; the "save-contact"
+  // handler reads them and resets after a save.
+  draftForm: DraftForm;
 }
+
+const emptyDraft = (): DraftForm => ({ name: "", email: "", phone: "", notes: "" });
 
 function initialState(): ContactsState {
   const day = 24 * 3_600_000;
@@ -50,6 +70,7 @@ function initialState(): ContactsState {
     currentView: "list",
     selectedId: null,
     searchQuery: "",
+    draftForm: emptyDraft(),
   };
 }
 
@@ -82,8 +103,8 @@ function buildMaster(state: ContactsState): ViewNode {
             type: "field",
             name: "query",
             inputType: "text",
+            bind: "searchQuery",
             placeholder: "Search by name or email…",
-            value: state.searchQuery,
             required: false,
             action: { name: "search" },
           },
@@ -113,7 +134,7 @@ function buildMaster(state: ContactsState): ViewNode {
               {
                 type: "button",
                 label: "Open",
-                action: { name: "navigate-to-detail", context: { id: c.id } },
+                action: { name: `navigate-to-detail-${c.id}` },
               },
             ],
           })),
@@ -132,13 +153,13 @@ function buildDetail(state: ContactsState): ViewNode {
       children: [
         {
           type: "form",
-          submitAction: { name: "save-contact" },
+          submitAction: { name: "save-contact-new" },
           submitLabel: "Create Contact",
           children: [
-            { type: "field", name: "name",  inputType: "text",     label: "Name",  placeholder: "Full name",          required: true  },
-            { type: "field", name: "email", inputType: "email",    label: "Email", placeholder: "email@example.com",  required: false },
-            { type: "field", name: "phone", inputType: "text",     label: "Phone", placeholder: "555-0100",           required: false },
-            { type: "field", name: "notes", inputType: "textarea", label: "Notes", placeholder: "Any notes…",         required: false },
+            { type: "field", name: "name",  inputType: "text",     bind: "draftForm.name",  label: "Name",  placeholder: "Full name",          required: true  },
+            { type: "field", name: "email", inputType: "email",    bind: "draftForm.email", label: "Email", placeholder: "email@example.com",  required: false },
+            { type: "field", name: "phone", inputType: "text",     bind: "draftForm.phone", label: "Phone", placeholder: "555-0100",           required: false },
+            { type: "field", name: "notes", inputType: "textarea", bind: "draftForm.notes", label: "Notes", placeholder: "Any notes…",         required: false },
           ],
         },
         { type: "button", label: "Cancel", action: { name: "navigate-to-list" } },
@@ -168,19 +189,19 @@ function buildDetail(state: ContactsState): ViewNode {
     children: [
       {
         type: "form",
-        submitAction: { name: "save-contact", context: { id: contact.id } },
+        submitAction: { name: `save-contact-edit-${contact.id}` },
         submitLabel: "Save",
         children: [
-          { type: "field", name: "name",  inputType: "text",     label: "Name",  value: contact.name,  required: true  },
-          { type: "field", name: "email", inputType: "email",    label: "Email", value: contact.email, required: false },
-          { type: "field", name: "phone", inputType: "text",     label: "Phone", value: contact.phone, required: false },
-          { type: "field", name: "notes", inputType: "textarea", label: "Notes", value: contact.notes, required: false },
+          { type: "field", name: "name",  inputType: "text",     bind: "draftForm.name",  label: "Name",  required: true  },
+          { type: "field", name: "email", inputType: "email",    bind: "draftForm.email", label: "Email", required: false },
+          { type: "field", name: "phone", inputType: "text",     bind: "draftForm.phone", label: "Phone", required: false },
+          { type: "field", name: "notes", inputType: "textarea", bind: "draftForm.notes", label: "Notes", required: false },
         ],
       },
       {
         type: "button",
         label: "Delete",
-        action: { name: "delete-contact", context: { id: contact.id } },
+        action: { name: `delete-contact-${contact.id}` },
         variant: "danger",
       },
     ],
@@ -208,70 +229,75 @@ function generateId(): string {
 }
 
 const actionHandler = createAction<ContactsState>(async (payload) => {
-  const ctx = payload.context ?? {};
-  const str = (k: string): string | null => (typeof ctx[k] === "string" ? (ctx[k] as string) : null);
-
   let state = payload.state;
+  const name = payload.name;
 
-  switch (payload.name) {
-    case "navigate-to-detail": {
-      const id = str("id");
-      if (!id) throw new Error("id required");
-      state = { ...state, selectedId: id, currentView: "detail" };
-      break;
-    }
-    case "navigate-to-add":
-      state = { ...state, currentView: "add", selectedId: null };
-      break;
-    case "navigate-to-list":
-      state = { ...state, currentView: "list", selectedId: null };
-      break;
-    case "save-contact": {
-      const name = str("name");
-      if (!name || !name.trim()) throw new Error("name required");
-      const trimmedName = name.trim();
-      const email = (str("email") ?? "").trim();
-      const phone = (str("phone") ?? "").trim();
-      const notes = (str("notes") ?? "").trim();
-      const editId = str("id");
-      if (editId) {
-        state = {
-          ...state,
-          contacts: state.contacts.map(c =>
-            c.id === editId ? { ...c, name: trimmedName, email, phone, notes } : c
-          ),
-          selectedId: editId,
-          currentView: "detail",
-        };
-      } else {
-        const added: ContactRecord = {
-          id: generateId(),
-          name: trimmedName,
-          email,
-          phone,
-          notes,
-          createdAt: new Date().toISOString(),
-        };
-        state = {
-          ...state,
-          contacts: [...state.contacts, added],
-          selectedId: added.id,
-          currentView: "detail",
-        };
-      }
-      break;
-    }
-    case "delete-contact": {
-      const id = str("id");
-      if (id) state = { ...state, contacts: state.contacts.filter(c => c.id !== id) };
-      state = { ...state, currentView: "list", selectedId: null };
-      break;
-    }
-    case "search":
-      state = { ...state, searchQuery: str("query") ?? "" };
-      break;
-    default:
-      throw new Error(`Unknown action: ${payload.name}`);
+  if (name.startsWith("navigate-to-detail-")) {
+    const id = name.slice("navigate-to-detail-".length);
+    const c = state.contacts.find(c => c.id === id);
+    if (!c) throw new Error("id not found");
+    // Seed the draft form with the contact's current values so the bound
+    // edit fields render correctly on first paint.
+    state = {
+      ...state,
+      selectedId: id,
+      currentView: "detail",
+      draftForm: { name: c.name, email: c.email, phone: c.phone, notes: c.notes },
+    };
+  } else if (name === "navigate-to-add") {
+    state = { ...state, currentView: "add", selectedId: null, draftForm: emptyDraft() };
+  } else if (name === "navigate-to-list") {
+    state = { ...state, currentView: "list", selectedId: null, draftForm: emptyDraft() };
+  } else if (name === "save-contact-new") {
+    const draft = state.draftForm;
+    const trimmedName = (draft.name ?? "").trim();
+    if (!trimmedName) throw new Error("name required");
+    const added: ContactRecord = {
+      id: generateId(),
+      name: trimmedName,
+      email: (draft.email ?? "").trim(),
+      phone: (draft.phone ?? "").trim(),
+      notes: (draft.notes ?? "").trim(),
+      createdAt: new Date().toISOString(),
+    };
+    state = {
+      ...state,
+      contacts: [...state.contacts, added],
+      selectedId: added.id,
+      currentView: "detail",
+      draftForm: { name: added.name, email: added.email, phone: added.phone, notes: added.notes },
+    };
+  } else if (name.startsWith("save-contact-edit-")) {
+    const editId = name.slice("save-contact-edit-".length);
+    const draft = state.draftForm;
+    const trimmedName = (draft.name ?? "").trim();
+    if (!trimmedName) throw new Error("name required");
+    const email = (draft.email ?? "").trim();
+    const phone = (draft.phone ?? "").trim();
+    const notes = (draft.notes ?? "").trim();
+    state = {
+      ...state,
+      contacts: state.contacts.map(c =>
+        c.id === editId ? { ...c, name: trimmedName, email, phone, notes } : c
+      ),
+      selectedId: editId,
+      currentView: "detail",
+      draftForm: { name: trimmedName, email, phone, notes },
+    };
+  } else if (name.startsWith("delete-contact-")) {
+    const id = name.slice("delete-contact-".length);
+    state = {
+      ...state,
+      contacts: state.contacts.filter(c => c.id !== id),
+      currentView: "list",
+      selectedId: null,
+      draftForm: emptyDraft(),
+    };
+  } else if (name === "search") {
+    // searchQuery is already in state via the field's bind path; the server
+    // just acknowledges with a re-render driven by the new query.
+  } else {
+    throw new Error(`Unknown action: ${name}`);
   }
 
   return { vm: buildVm(state), state };

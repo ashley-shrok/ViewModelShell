@@ -20,18 +20,10 @@ public class RetroBoardControllerTests
         return controller;
     }
 
-    private static Dictionary<string, JsonElement> Ctx(object obj)
-    {
-        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(obj));
-        return doc.RootElement.EnumerateObject()
-            .ToDictionary(p => p.Name, p => p.Value.Clone());
-    }
-
     private static ActionResult<ShellResponse<RetroState>> Act(
-        RetroBoardController ctrl, RetroState state, string name,
-        Dictionary<string, JsonElement>? ctx = null)
+        RetroBoardController ctrl, RetroState state, string name)
     {
-        var actionJson = JsonSerializer.Serialize(new { name, context = ctx });
+        var actionJson = JsonSerializer.Serialize(new { name });
         var stateJson  = JsonSerializer.Serialize(state);
         ctrl.ControllerContext.HttpContext.Request.Form = new FormCollection(
             new Dictionary<string, StringValues>
@@ -46,34 +38,27 @@ public class RetroBoardControllerTests
         result.Value ?? throw new Xunit.Sdk.XunitException("Expected a value, got " + result.Result?.GetType().Name);
 
     // ── Tree navigation helpers (redesign 0.4.0) ─────────────────────────────────
-    // PageNode(Layout:"cards") → 3 SectionNode lanes (Variant:"card"),
-    // each lane = [FormNode, ListNode of ListItemNode cards]. No StatBar.
-
-    private static PageNode Page(ViewNode vm) => Assert.IsType<PageNode>(vm);
+    private static PageNode Page(ViewNode? vm) => Assert.IsType<PageNode>(vm);
     private static IReadOnlyList<SectionNode> Sections(PageNode page) => page.Children.OfType<SectionNode>().ToList();
     private static ListNode CardList(SectionNode section) => section.Children.OfType<ListNode>().Single();
     private static IReadOnlyList<ListItemNode> Cards(SectionNode section) =>
         CardList(section).Children.Cast<ListItemNode>().ToList();
 
     private static ButtonNode UpvoteButton(ListItemNode card) =>
-        card.Children.OfType<ButtonNode>().Single(b => b.Action.Name == "upvote-card");
+        card.Children.OfType<ButtonNode>().Single(b => b.Action.Name.StartsWith("upvote-card-"));
 
-    /// <summary>Total card count across the three lanes (StatBar replacement — coverage intent preserved).</summary>
     private static int TotalCards(PageNode page) =>
         Sections(page).Sum(s => Cards(s).Count);
 
-    /// <summary>Total votes across all cards (parsed from "▲ N" upvote button labels).</summary>
     private static int TotalVotes(PageNode page) =>
         Sections(page)
             .SelectMany(Cards)
             .Select(c => int.Parse(UpvoteButton(c).Label.Replace("▲", "").Trim()))
             .Sum();
 
-    /// <summary>Open (unresolved) action items — lane index 2, list-item without "done" variant.</summary>
     private static int OpenActionItems(PageNode page) =>
         Cards(Sections(page)[2]).Count(c => c.Variant != "done");
 
-    /// <summary>Resolved action items — lane index 2, list-item with "done" variant.</summary>
     private static int ResolvedActionItems(PageNode page) =>
         Cards(Sections(page)[2]).Count(c => c.Variant == "done");
 
@@ -104,9 +89,11 @@ public class RetroBoardControllerTests
     public void Get_ReturnsInitialState()
     {
         var resp = CreateController().Get();
-        Assert.Single(resp.State.WentWell);
+        Assert.NotNull(resp.State);
+        Assert.Single(resp.State!.WentWell);
         Assert.Single(resp.State.DidntGoWell);
         Assert.Single(resp.State.ActionItems);
+        Assert.Equal("", resp.State.Drafts.WentWell);
     }
 
     [Fact]
@@ -132,12 +119,19 @@ public class RetroBoardControllerTests
     }
 
     [Fact]
-    public void Get_EachSection_HasFormAndList()
+    public void Get_EachSection_HasFormAndList_WithUniqueAddActionAndBoundField()
     {
-        foreach (var section in Sections(Page(CreateController().Get().Vm)))
+        var sections = Sections(Page(CreateController().Get().Vm));
+        var expectedAdds = new[] { "add-card-went-well", "add-card-didnt-go-well", "add-card-action-items" };
+        var expectedBinds = new[] { "drafts.wentWell", "drafts.didntGoWell", "drafts.actionItems" };
+        for (var i = 0; i < 3; i++)
         {
-            Assert.Contains(section.Children, c => c is FormNode);
-            Assert.Contains(section.Children, c => c is ListNode);
+            var form = sections[i].Children.OfType<FormNode>().Single();
+            Assert.NotNull(form.SubmitAction);
+            Assert.Equal(expectedAdds[i], form.SubmitAction!.Name);
+            var field = form.Children.OfType<FieldNode>().Single();
+            Assert.Equal(expectedBinds[i], field.Bind);
+            Assert.Contains(sections[i].Children, c => c is ListNode);
         }
     }
 
@@ -166,11 +160,14 @@ public class RetroBoardControllerTests
     }
 
     [Fact]
-    public void Get_ActionItems_CardHasCheckbox()
+    public void Get_ActionItems_CardHasCheckboxBoundByIndex()
     {
         var sections = Sections(Page(CreateController().Get().Vm));
         var card = Assert.IsType<ListItemNode>(CardList(sections[2]).Children.Single());
-        Assert.Contains(card.Children, c => c is CheckboxNode);
+        var cb = card.Children.OfType<CheckboxNode>().Single();
+        Assert.Equal("actionItems.0.resolved", cb.Bind);
+        Assert.NotNull(cb.Action);
+        Assert.StartsWith("resolve-card-", cb.Action!.Name);
     }
 
     [Fact]
@@ -182,15 +179,15 @@ public class RetroBoardControllerTests
     }
 
     [Fact]
-    public void Get_EachCard_HasTextUpvoteButtonAndDeleteButton()
+    public void Get_EachCard_HasTextUniqueUpvoteAndUniqueDeleteAction()
     {
         foreach (var section in Sections(Page(CreateController().Get().Vm)))
         {
             foreach (var node in Cards(section))
             {
                 Assert.Contains(node.Children, c => c is TextNode);
-                Assert.Contains(node.Children, c => c is ButtonNode b && b.Action.Name == "upvote-card");
-                Assert.Contains(node.Children, c => c is ButtonNode b && b.Action.Name == "delete-card");
+                Assert.Contains(node.Children, c => c is ButtonNode b && b.Action.Name == $"upvote-card-{node.Id}");
+                Assert.Contains(node.Children, c => c is ButtonNode b && b.Action.Name == $"delete-card-{node.Id}");
             }
         }
     }
@@ -203,7 +200,7 @@ public class RetroBoardControllerTests
             foreach (var node in Cards(section))
             {
                 var deleteBtn = node.Children.OfType<ButtonNode>()
-                    .Single(b => b.Action.Name == "delete-card");
+                    .Single(b => b.Action.Name.StartsWith("delete-card-"));
                 Assert.Equal("✕", deleteBtn.Label);
                 Assert.Equal("danger", deleteBtn.Variant);
             }
@@ -232,24 +229,32 @@ public class RetroBoardControllerTests
         Assert.DoesNotContain(card.Children.OfType<TextNode>(), t => t.Style == "strikethrough");
     }
 
-    // ── add-card ────────────────────────────────────────────────────────────────
+    // ── add-card-{section} ──────────────────────────────────────────────────────
 
     [Fact]
     public void Action_AddCard_AppendsToCorrectSection()
     {
         var ctrl = CreateController();
-        var resp = Ok(Act(ctrl, RetroState.Initial(), "add-card",
-            Ctx(new { section = "went-well", text = "Great sprint velocity" })));
+        var staged = RetroState.Initial() with
+        {
+            Drafts = RetroState.Initial().Drafts with { WentWell = "Great sprint velocity" }
+        };
+        var resp = Ok(Act(ctrl, staged, "add-card-went-well"));
+        Assert.NotNull(resp.State);
         Assert.Equal(2, Cards(Sections(Page(resp.Vm))[0]).Count);
-        Assert.Equal(2, resp.State.WentWell.Count);
+        Assert.Equal(2, resp.State!.WentWell.Count);
+        Assert.Equal("", resp.State.Drafts.WentWell); // draft cleared
     }
 
     [Fact]
     public void Action_AddCard_DoesNotAffectOtherSections()
     {
         var ctrl = CreateController();
-        var resp = Ok(Act(ctrl, RetroState.Initial(), "add-card",
-            Ctx(new { section = "went-well", text = "Great sprint velocity" })));
+        var staged = RetroState.Initial() with
+        {
+            Drafts = RetroState.Initial().Drafts with { WentWell = "Great sprint velocity" }
+        };
+        var resp = Ok(Act(ctrl, staged, "add-card-went-well"));
         Assert.Equal(1, Cards(Sections(Page(resp.Vm))[1]).Count);
         Assert.Equal(1, Cards(Sections(Page(resp.Vm))[2]).Count);
     }
@@ -258,28 +263,37 @@ public class RetroBoardControllerTests
     public void Action_AddCard_UpdatesTotalCardCount()
     {
         var ctrl = CreateController();
-        var resp = Ok(Act(ctrl, RetroState.Initial(), "add-card",
-            Ctx(new { section = "went-well", text = "New card" })));
+        var staged = RetroState.Initial() with
+        {
+            Drafts = RetroState.Initial().Drafts with { WentWell = "New card" }
+        };
+        var resp = Ok(Act(ctrl, staged, "add-card-went-well"));
         Assert.Equal(4, TotalCards(Page(resp.Vm)));
     }
 
     [Fact]
     public void Action_AddCard_EmptyText_ReturnsBadRequest()
     {
-        var result = Act(CreateController(), RetroState.Initial(), "add-card",
-            Ctx(new { section = "went-well", text = "" }));
+        var state = RetroState.Initial() with
+        {
+            Drafts = RetroState.Initial().Drafts with { WentWell = "" }
+        };
+        var result = Act(CreateController(), state, "add-card-went-well");
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     [Fact]
     public void Action_AddCard_WhitespaceText_ReturnsBadRequest()
     {
-        var result = Act(CreateController(), RetroState.Initial(), "add-card",
-            Ctx(new { section = "went-well", text = "   " }));
+        var state = RetroState.Initial() with
+        {
+            Drafts = RetroState.Initial().Drafts with { WentWell = "   " }
+        };
+        var result = Act(CreateController(), state, "add-card-went-well");
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
-    // ── delete-card ─────────────────────────────────────────────────────────────
+    // ── delete-card-{id} ────────────────────────────────────────────────────────
 
     [Fact]
     public void Action_DeleteCard_RemovesCard()
@@ -287,7 +301,7 @@ public class RetroBoardControllerTests
         var ctrl = CreateController();
         var initial = RetroState.Initial();
         var cardId = initial.WentWell.First().Id;
-        var resp = Ok(Act(ctrl, initial, "delete-card", Ctx(new { id = cardId })));
+        var resp = Ok(Act(ctrl, initial, $"delete-card-{cardId}"));
         Assert.Equal(0, Cards(Sections(Page(resp.Vm))[0]).Count);
     }
 
@@ -297,11 +311,11 @@ public class RetroBoardControllerTests
         var ctrl = CreateController();
         var initial = RetroState.Initial();
         var cardId = initial.WentWell.First().Id;
-        var resp = Ok(Act(ctrl, initial, "delete-card", Ctx(new { id = cardId })));
+        var resp = Ok(Act(ctrl, initial, $"delete-card-{cardId}"));
         Assert.Equal(2, TotalCards(Page(resp.Vm)));
     }
 
-    // ── upvote-card ─────────────────────────────────────────────────────────────
+    // ── upvote-card-{id} ────────────────────────────────────────────────────────
 
     [Fact]
     public void Action_UpvoteCard_IncrementsTotalVotes()
@@ -309,7 +323,7 @@ public class RetroBoardControllerTests
         var ctrl = CreateController();
         var initial = RetroState.Initial();
         var cardId = initial.WentWell.First().Id;
-        var resp = Ok(Act(ctrl, initial, "upvote-card", Ctx(new { id = cardId })));
+        var resp = Ok(Act(ctrl, initial, $"upvote-card-{cardId}"));
         Assert.Equal(1, TotalVotes(Page(resp.Vm)));
     }
 
@@ -319,12 +333,15 @@ public class RetroBoardControllerTests
         var ctrl = CreateController();
         var initial = RetroState.Initial();
         var cardId = initial.WentWell.First().Id;
-        var resp = Ok(Act(ctrl, initial, "upvote-card", Ctx(new { id = cardId })));
+        var resp = Ok(Act(ctrl, initial, $"upvote-card-{cardId}"));
         var upvoteBtn = UpvoteButton(Cards(Sections(Page(resp.Vm))[0]).First());
         Assert.Equal("▲ 1", upvoteBtn.Label);
     }
 
-    // ── resolve-card ────────────────────────────────────────────────────────────
+    // ── resolve-card-{id} ───────────────────────────────────────────────────────
+    // Phase 6: the checkbox bind has already written the new boolean to
+    // state.ActionItems[i].Resolved before the action fires. Tests pre-populate
+    // that slot to model the renderer's write.
 
     [Fact]
     public void Action_ResolveCard_MarksItemWithDoneVariant()
@@ -332,7 +349,12 @@ public class RetroBoardControllerTests
         var ctrl = CreateController();
         var initial = RetroState.Initial();
         var actionId = initial.ActionItems.First().Id;
-        var resp = Ok(Act(ctrl, initial, "resolve-card", Ctx(new { id = actionId, @checked = true })));
+        var staged = initial with
+        {
+            ActionItems = [.. initial.ActionItems.Select(c =>
+                c.Id == actionId ? c with { Resolved = true } : c)]
+        };
+        var resp = Ok(Act(ctrl, staged, $"resolve-card-{actionId}"));
         var item = Cards(Sections(Page(resp.Vm))[2]).First();
         Assert.Equal("done", item.Variant);
     }
@@ -343,7 +365,12 @@ public class RetroBoardControllerTests
         var ctrl = CreateController();
         var initial = RetroState.Initial();
         var actionId = initial.ActionItems.First().Id;
-        var resp = Ok(Act(ctrl, initial, "resolve-card", Ctx(new { id = actionId, @checked = true })));
+        var staged = initial with
+        {
+            ActionItems = [.. initial.ActionItems.Select(c =>
+                c.Id == actionId ? c with { Resolved = true } : c)]
+        };
+        var resp = Ok(Act(ctrl, staged, $"resolve-card-{actionId}"));
         var item = Cards(Sections(Page(resp.Vm))[2]).First();
         Assert.Contains(item.Children.OfType<TextNode>(), t => t.Style == "strikethrough");
     }
@@ -354,7 +381,12 @@ public class RetroBoardControllerTests
         var ctrl = CreateController();
         var initial = RetroState.Initial();
         var actionId = initial.ActionItems.First().Id;
-        var resp = Ok(Act(ctrl, initial, "resolve-card", Ctx(new { id = actionId, @checked = true })));
+        var staged = initial with
+        {
+            ActionItems = [.. initial.ActionItems.Select(c =>
+                c.Id == actionId ? c with { Resolved = true } : c)]
+        };
+        var resp = Ok(Act(ctrl, staged, $"resolve-card-{actionId}"));
         var page = Page(resp.Vm);
         Assert.Equal(0, OpenActionItems(page));
         Assert.Equal(1, ResolvedActionItems(page));
@@ -366,22 +398,19 @@ public class RetroBoardControllerTests
         var ctrl = CreateController();
         var initial = RetroState.Initial();
         var actionId = initial.ActionItems.First().Id;
-        var step1 = Ok(Act(ctrl, initial, "resolve-card", Ctx(new { id = actionId, @checked = true })));
-        var step2 = Ok(Act(ctrl, step1.State, "resolve-card", Ctx(new { id = actionId, @checked = false })));
-        var item = Cards(Sections(Page(step2.Vm))[2]).First();
+        var resolved = initial with
+        {
+            ActionItems = [.. initial.ActionItems.Select(c =>
+                c.Id == actionId ? c with { Resolved = true } : c)]
+        };
+        var unresolved = resolved with
+        {
+            ActionItems = [.. resolved.ActionItems.Select(c =>
+                c.Id == actionId ? c with { Resolved = false } : c)]
+        };
+        var resp = Ok(Act(ctrl, unresolved, $"resolve-card-{actionId}"));
+        var item = Cards(Sections(Page(resp.Vm))[2]).First();
         Assert.Null(item.Variant);
-    }
-
-    [Fact]
-    public void Action_ResolveCard_OnlyAffectsActionItemsLane()
-    {
-        var ctrl = CreateController();
-        var initial = RetroState.Initial();
-        // Resolving the WentWell seed id must NOT change anything (controller only mutates ActionItems).
-        var wentWellId = initial.WentWell.First().Id;
-        var resp = Ok(Act(ctrl, initial, "resolve-card", Ctx(new { id = wentWellId, @checked = true })));
-        Assert.Null(Cards(Sections(Page(resp.Vm))[0]).First().Variant);
-        Assert.Equal(1, OpenActionItems(Page(resp.Vm)));
     }
 
     // ── unknown action ──────────────────────────────────────────────────────────

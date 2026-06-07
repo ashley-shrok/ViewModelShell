@@ -7,7 +7,14 @@ public record RequesterState(
     string CreateType,            // "hardware" | "software" | "access"
     string CreatePriority,        // "low" | "medium" | "high" | "critical"
     string CreateAccessLevel,     // "read" | "write" | "admin"
-    string? ValidationError
+    string? ValidationError,
+    // Phase 6 (WIRE-07) — bind slots for the create-ticket form fields.
+    string DraftTitle,
+    string DraftDescription,
+    string DraftDueDate,
+    string DraftDeviceModel,
+    string DraftApplication,
+    string DraftSystemName
 )
 {
     public static RequesterState Initial() => new(
@@ -17,6 +24,12 @@ public record RequesterState(
         CreateType: "hardware",
         CreatePriority: "medium",
         CreateAccessLevel: "read",
-        ValidationError: null
+        ValidationError: null,
+        DraftTitle: "",
+        DraftDescription: "",
+        DraftDueDate: "",
+        DraftDeviceModel: "",
+        DraftApplication: "",
+        DraftSystemName: ""
     );
 }

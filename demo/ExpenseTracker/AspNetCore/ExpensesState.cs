@@ -8,7 +8,12 @@ public record ExpensesState(
     IReadOnlyList<Transaction> Transactions,
     string FilterCategory,    // "all" or a category id
     string AddCategory,       // category for new transactions
-    bool Adding               // is the add-transaction modal open
+    bool Adding,              // is the add-transaction modal open
+    // Phase 6 (WIRE-07) — typed values of the add-transaction modal form.
+    // The renderer reads/writes these via bind paths on FieldNodes; the
+    // "add" handler reads them and resets to "" after a successful add.
+    string DraftAmount,
+    string DraftNote
 )
 {
     public static ExpensesState Initial() => new(
@@ -29,6 +34,8 @@ public record ExpensesState(
         ],
         FilterCategory: "all",
         AddCategory:    "food",
-        Adding:         false
+        Adding:         false,
+        DraftAmount:    "",
+        DraftNote:      ""
     );
 }

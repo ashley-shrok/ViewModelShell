@@ -1,38 +1,58 @@
 namespace FeatureProbe.Controllers;
 
-using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using ViewModelShell;
+
+// Phase 6 (WIRE-07): per-row identity moves into action names; every input
+// value flows through state at a bind path. Parity-driven action parameters
+// (redirect-to, storage values, download URL/filename) live in dedicated
+// state slots; the renderer's bind seam keeps them populated.
+
+public record SortIntent(
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Column,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Direction
+);
+
+public record TableFilters(string Name);
 
 public record FeatureProbeState(
     int PollCount,
     string? LastUploadName,
     long LastUploadSize,
-    string? LastSubmit = null,   // 0.10.0/#15: "{action}: {note}" from the multi-action form
-    // 0.12.0/#16: table feature-matrix state — exercises selection × pagination
-    // × sort × filter all at once. Defaults are chosen so the initial wire is
-    // byte-identical to the bun twin: "" and [] serialize the same on both, and
-    // the null sort fields drop out under parity normalization (null == absent).
-    string? TableSortCol = null,
-    string? TableSortDir = null,
-    string TableFilter = "",
-    int TablePage = 1,
-    // 0.14.0/#18 — counts down while a long server action is in progress.
-    // While > 0, the response carries PreventUnload=true + NextPollIn (the
-    // browser's beforeunload guard installs; the framework auto-polls the
-    // tick action). Reaches 0 → guard clears, polling stops.
-    int LongActionPolls = 0
+    string? LastSubmit,
+    // Table feature-matrix state — bind targets for sort/filter/pagination.
+    SortIntent SortIntent,
+    TableFilters TableFilters,
+    int TablePage,
+    int LongActionPolls,
+    // Phase 6 bind slots:
+    string Note,
+    // Parameters previously read from context by parity-driven actions.
+    string RedirectTo,
+    string LocalValue,
+    string SessionValue,
+    string DownloadUrl,
+    string DownloadFilename
 )
 {
     public static FeatureProbeState Initial() => new(
         PollCount: 0,
         LastUploadName: null,
-        LastUploadSize: 0
+        LastUploadSize: 0,
+        LastSubmit: null,
+        SortIntent: new SortIntent(null, null),
+        TableFilters: new TableFilters(""),
+        TablePage: 1,
+        LongActionPolls: 0,
+        Note: "",
+        RedirectTo: "",
+        LocalValue: "",
+        SessionValue: "",
+        DownloadUrl: "",
+        DownloadFilename: ""
     );
 }
 
-// Synthetic rows for the table feature-matrix. Fixed + ASCII so the sort order
-// is identical (ordinal) across the C# and TS backends.
 public record TableItem(string Id, string Name, string Status);
 
 [ApiController]
@@ -41,8 +61,6 @@ public class FeatureProbeController : ControllerBase
 {
     private const int PageSize = 3;
 
-    // Seed in a fixed order. Selection is always materialized back into this
-    // order (below), so the `tableSelected` array round-trips deterministically.
     private static readonly TableItem[] Items =
     [
         new("1", "Apple",      "active"),
@@ -58,7 +76,7 @@ public class FeatureProbeController : ControllerBase
     public ShellResponse<FeatureProbeState> Get()
     {
         var state = FeatureProbeState.Initial();
-        return new(BuildVm(state), state);
+        return new ShellResponse<FeatureProbeState>(BuildVm(state), state).Validate();
     }
 
     [HttpPost("action")]
@@ -69,118 +87,113 @@ public class FeatureProbeController : ControllerBase
             Request.Form["_action"].ToString(),
             Request.Form["_state"].ToString());
 
-        string? Str(string key) =>
-            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
-                ? v.GetString() : null;
-        int Int(string key, int dflt) =>
-            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.Number
-                ? v.GetInt32() : dflt;
-
         var state = payload.State;
+        var name = payload.Name;
 
-        switch (payload.Name)
+        if (name == "trigger-redirect")
         {
-            case "trigger-redirect":
-                return ShellResponse<FeatureProbeState>.RedirectTo(Str("to") ?? "/default-redirect");
-
-            case "set-storage":
-                return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
-                    .WithEffect(ShellSideEffect.SetLocalStorage("probe-local", Str("local-value") ?? "default-local"))
-                    .WithEffect(ShellSideEffect.SetSessionStorage("probe-session", Str("session-value") ?? "default-session"));
-
-            case "trigger-download":
-                return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
-                    .WithEffect(ShellSideEffect.Download(
-                        Str("url")      ?? "/api/probe/file/hello.txt",
-                        Str("filename") ?? "hello.txt"));
-
-            case "do-poll":
-                state = state with { PollCount = state.PollCount + 1 };
-                var done = state.PollCount >= 3;
-                return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
-                {
-                    NextPollIn = done ? null : 100
-                };
-
-            case "upload":
-                var file = Request.Form.Files.GetFile("attachment");
-                if (file != null)
-                {
-                    state = state with
-                    {
-                        LastUploadName = file.FileName,
-                        LastUploadSize = file.Length
-                    };
-                }
-                break;
-
-            case "show-copy-button":
-                break;  // state unchanged; BuildVm always includes the copy-button node
-
-            // 0.10.0/#15: two buttons[] on ONE form, sharing the "note" field.
-            // Each harvests the live field value into its own action — proving
-            // the input reaches the server via whichever button fires.
-            case "save-draft":
-                state = state with { LastSubmit = $"draft: {Str("note") ?? ""}" };
-                break;
-            case "publish":
-                state = state with { LastSubmit = $"published: {Str("note") ?? ""}" };
-                break;
-
-            case "reset":
-                state = FeatureProbeState.Initial();
-                break;
-
-            // 0.14.0/#18 — long-running action with the beforeunload guard;
-            // 0.16.0 pairs it with Busy=true so the page is also visually
-            // locked (cursor:wait + interactive elements non-clickable) for
-            // the whole lifecycle, not just per round-trip.
-            case "start-long-action":
-                state = state with { LongActionPolls = 3 };
-                return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
-                {
-                    PreventUnload = true,
-                    Busy = true,
-                    NextPollIn = 100,
-                };
-
-            case "long-action-poll":
-            {
-                var remaining = Math.Max(0, state.LongActionPolls - 1);
-                state = state with { LongActionPolls = remaining };
-                var workDone = remaining == 0;
-                return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
-                {
-                    PreventUnload = !workDone,
-                    Busy = !workDone,
-                    NextPollIn = workDone ? null : 100,
-                };
-            }
-
-            // ── table feature-matrix (0.12.0/#16) ──────────────────────────
-            // sort/filter reset the page to 1 (the documented convention — the
-            // row window shifts underneath the cursor otherwise).
-            case "table-sort":
-                state = state with { TableSortCol = Str("column"), TableSortDir = Str("direction"), TablePage = 1 };
-                break;
-
-            case "table-filter":
-                state = state with { TableFilter = Str("value") ?? "", TablePage = 1 };
-                break;
-
-            case "table-page":
-                state = state with { TablePage = Int("page", state.TablePage) };
-                break;
-
-            // 0.15.0 — `table-select` action removed alongside TableSelection.Action.
-            // The matrix no longer exercises selection (HelpDesk-Agent carries
-            // selection.buttons[] parity coverage).
-
-            default:
-                return BadRequest($"Unknown action: {payload.Name}");
+            return ShellResponse<FeatureProbeState>.RedirectTo(
+                string.IsNullOrEmpty(state.RedirectTo) ? "/default-redirect" : state.RedirectTo);
         }
 
-        return new ShellResponse<FeatureProbeState>(BuildVm(state), state);
+        if (name == "set-storage")
+        {
+            return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
+                .WithEffect(ShellSideEffect.SetLocalStorage(
+                    "probe-local",
+                    string.IsNullOrEmpty(state.LocalValue) ? "default-local" : state.LocalValue))
+                .WithEffect(ShellSideEffect.SetSessionStorage(
+                    "probe-session",
+                    string.IsNullOrEmpty(state.SessionValue) ? "default-session" : state.SessionValue))
+                .Validate();
+        }
+
+        if (name == "trigger-download")
+        {
+            return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
+                .WithEffect(ShellSideEffect.Download(
+                    string.IsNullOrEmpty(state.DownloadUrl) ? "/api/probe/file/hello.txt" : state.DownloadUrl,
+                    string.IsNullOrEmpty(state.DownloadFilename) ? "hello.txt" : state.DownloadFilename))
+                .Validate();
+        }
+
+        if (name == "do-poll")
+        {
+            state = state with { PollCount = state.PollCount + 1 };
+            var done = state.PollCount >= 3;
+            return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
+            {
+                NextPollIn = done ? null : 100
+            }.Validate();
+        }
+
+        if (name == "upload")
+        {
+            var file = Request.Form.Files.GetFile("attachment");
+            if (file != null)
+            {
+                state = state with
+                {
+                    LastUploadName = file.FileName,
+                    LastUploadSize = file.Length
+                };
+            }
+        }
+        else if (name == "show-copy-button") { /* unchanged */ }
+        else if (name == "save-draft")
+        {
+            state = state with { LastSubmit = $"draft: {state.Note ?? ""}" };
+        }
+        else if (name == "publish")
+        {
+            state = state with { LastSubmit = $"published: {state.Note ?? ""}" };
+        }
+        else if (name == "reset")
+        {
+            state = FeatureProbeState.Initial();
+        }
+        else if (name == "start-long-action")
+        {
+            state = state with { LongActionPolls = 3 };
+            return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
+            {
+                PreventUnload = true,
+                Busy = true,
+                NextPollIn = 100,
+            }.Validate();
+        }
+        else if (name == "long-action-poll")
+        {
+            var remaining = Math.Max(0, state.LongActionPolls - 1);
+            state = state with { LongActionPolls = remaining };
+            var workDone = remaining == 0;
+            return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
+            {
+                PreventUnload = !workDone,
+                Busy = !workDone,
+                NextPollIn = workDone ? null : 100,
+            }.Validate();
+        }
+        else if (name == "table-sort-name" || name == "table-sort-status")
+        {
+            // SortIntent has been written to state by the renderer; reset page.
+            state = state with { TablePage = 1 };
+        }
+        else if (name == "table-filter")
+        {
+            // TableFilters.Name has been written to state by the renderer; reset page.
+            state = state with { TablePage = 1 };
+        }
+        else if (name == "table-page-prev" || name == "table-page-next")
+        {
+            // Renderer wrote target page to state.TablePage before dispatch.
+        }
+        else
+        {
+            return BadRequest($"Unknown action: {name}");
+        }
+
+        return new ShellResponse<FeatureProbeState>(BuildVm(state), state).Validate();
     }
 
     private static ViewNode BuildVm(FeatureProbeState state)
@@ -196,17 +209,13 @@ public class FeatureProbeController : ControllerBase
             "npx @ashley-shrok/viewmodel-shell",
             "Copy install command",
             "Copied!",
-            Variant: "secondary"));   // 0.9.0/#14: read distinctly from neighboring default buttons
+            Variant: "secondary"));
 
-        // 0.11.0/#5: ImageNode — exercises src/alt/size/shape on the parity wire.
         children.Add(new ImageNode("/logo.png", Alt: "ViewModel Shell logo", Size: "small", Shape: "circle"));
 
         if (state.LastSubmit != null)
             children.Add(new TextNode($"Last submit: {state.LastSubmit}", "muted"));
 
-        // 0.14.0/#18: long-running action button. Each tick (auto-polled via
-        // NextPollIn) decrements LongActionPolls; while > 0 the response carries
-        // PreventUnload=true so the browser warns on accidental tab close.
         children.Add(new ButtonNode("Start long action",
             new ActionDescriptor("start-long-action"), "primary"));
         if (state.LongActionPolls > 0)
@@ -214,12 +223,12 @@ public class FeatureProbeController : ControllerBase
                 $"Long action in progress · {state.LongActionPolls} tick{(state.LongActionPolls == 1 ? "" : "s")} remaining",
                 "muted"));
 
-        // 0.10.0/#15: one form, shared "note" field, two buttons each
-        // dispatching a DIFFERENT action carrying the field's current value.
+        // Multi-action form: shared "note" field bound to state.Note; two
+        // buttons, each dispatching a unique-named action.
         children.Add(new FormNode(
-            SubmitAction: null,   // buttons[]-only form — no default submit
+            SubmitAction: null,
             SubmitLabel: null,
-            Children: [new FieldNode("note", "text", "Note", "Type a note…", null)],
+            Children: [new FieldNode("note", "text", "note", "Note", "Type a note…")],
             Buttons:
             [
                 new ButtonNode("Save Draft", new ActionDescriptor("save-draft"), "secondary"),
@@ -232,19 +241,16 @@ public class FeatureProbeController : ControllerBase
             Density: "compact", Layout: "cards");
     }
 
-    // Filter → sort → paginate. The SERVER slices; the adapter only renders the
-    // page controls. Sort is ordinal with an id tiebreak (a total order, so no
-    // sort-stability dependence) — that's what lets C# and TS agree row-for-row.
     private static (List<TableItem> Page, int Total, int ClampedPage) Window(FeatureProbeState s)
     {
         IEnumerable<TableItem> q = Items;
-        if (!string.IsNullOrEmpty(s.TableFilter))
-            q = q.Where(i => i.Name.Contains(s.TableFilter, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrEmpty(s.TableFilters.Name))
+            q = q.Where(i => i.Name.Contains(s.TableFilters.Name, StringComparison.OrdinalIgnoreCase));
         var rows = q.ToList();
 
-        if (s.TableSortCol is { } col)
+        if (s.SortIntent.Column is { } col)
         {
-            var dir = s.TableSortDir == "desc" ? -1 : 1;
+            var dir = s.SortIntent.Direction == "desc" ? -1 : 1;
             rows.Sort((a, b) =>
             {
                 var c = col switch
@@ -277,17 +283,23 @@ public class FeatureProbeController : ControllerBase
             Columns:
             [
                 new TableColumn("name", "Name", Sortable: true, Filterable: true,
-                    FilterValue: state.TableFilter.Length > 0 ? state.TableFilter : null),
+                    FilterValue: state.TableFilters.Name.Length > 0 ? state.TableFilters.Name : null),
                 new TableColumn("status", "Status", Sortable: true)
             ],
             Rows: rows,
-            SortColumn: state.TableSortCol,
-            SortDirection: state.TableSortDir,
-            SortAction: new ActionDescriptor("table-sort"),
+            SortBind: "sortIntent",
+            FilterBinds: new Dictionary<string, string> { ["name"] = "tableFilters.name" },
+            PaginationBind: "tablePage",
+            SortActions: new Dictionary<string, ActionDescriptor>
+            {
+                ["name"]   = new ActionDescriptor("table-sort-name"),
+                ["status"] = new ActionDescriptor("table-sort-status"),
+            },
             FilterAction: new ActionDescriptor("table-filter"),
-            // 0.15.0 — selection removed from the matrix; HelpDesk-Agent
-            // carries selection.buttons[] parity coverage.
-            Pagination: new TablePagination(clampedPage, PageSize, total, new ActionDescriptor("table-page")));
+            Pagination: new TablePagination(
+                clampedPage, PageSize, total,
+                PrevAction: new ActionDescriptor("table-page-prev"),
+                NextAction: new ActionDescriptor("table-page-next")));
 
         return new SectionNode("Table matrix",
             new List<ViewNode> { table },

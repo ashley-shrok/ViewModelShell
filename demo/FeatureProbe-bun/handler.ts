@@ -1,6 +1,14 @@
 // FeatureProbe — runtime-neutral request handler.
 // Imported by server.ts (Bun) and server-node.ts (Node 22+) to prove the
 // same TypeScript code runs unchanged on multiple Web Fetch runtimes.
+//
+// Phase 6 wire-shape migration (0.17.0 / WIRE-07): every input on the wire
+// declares a `bind` path; per-tab/per-row identity moves into action names
+// (no more `context: {column: "name", direction: "asc"}` payloads). For the
+// parity fixtures that programmatically dispatch trigger-redirect /
+// set-storage / trigger-download / table-page / etc., the parameters now
+// live in dedicated state slots (redirectTo, localValue, downloadUrl, …)
+// — parity sets them via state before dispatching.
 
 import {
   createAction,
@@ -9,32 +17,50 @@ import {
   type ViewNode,
 } from "@ashley-shrok/viewmodel-shell/server";
 
+interface SortIntent {
+  column: string | null;
+  direction: string | null;
+}
+
 interface FeatureProbeState {
   pollCount: number;
   lastUploadName: string | null;
   lastUploadSize: number;
-  lastSubmit?: string | null;   // 0.10.0/#15: "{action}: {note}" from the multi-action form
-  // 0.12.0/#16: table feature-matrix state — see the C# twin for the parity
-  // rationale (defaults must match byte-for-byte: "" and [] over null/undefined).
-  tableSortCol?: string | null;
-  tableSortDir?: string | null;
-  tableFilter: string;
+  lastSubmit?: string | null;
+  // Table feature-matrix state — bind targets for sort/filter/pagination.
+  sortIntent: SortIntent;
+  tableFilters: { name: string };
   tablePage: number;
-  // 0.14.0/#18 — counts down while a long server action is in progress; while
-  // > 0 the response carries preventUnload=true + nextPollIn (the browser's
-  // beforeunload guard installs; framework auto-polls the tick action).
   longActionPolls: number;
+  // Phase 6 bind slots:
+  //   note: bound by the multi-action form's "Note" FieldNode.
+  note: string;
+  //   Parameters previously read from context by parity-driven actions.
+  redirectTo: string;
+  localValue: string;
+  sessionValue: string;
+  downloadUrl: string;
+  downloadFilename: string;
 }
 
 function initialState(): FeatureProbeState {
   return {
-    pollCount: 0, lastUploadName: null, lastUploadSize: 0,
-    tableFilter: "", tablePage: 1,
+    pollCount: 0,
+    lastUploadName: null,
+    lastUploadSize: 0,
+    sortIntent: { column: null, direction: null },
+    tableFilters: { name: "" },
+    tablePage: 1,
     longActionPolls: 0,
+    note: "",
+    redirectTo: "",
+    localValue: "",
+    sessionValue: "",
+    downloadUrl: "",
+    downloadFilename: "",
   };
 }
 
-// Mirror of the C# seed — fixed order + ASCII so ordinal sort agrees.
 const PAGE_SIZE = 3;
 interface TableItem { id: string; name: string; status: string; }
 const ITEMS: TableItem[] = [
@@ -47,18 +73,15 @@ const ITEMS: TableItem[] = [
   { id: "7", name: "Grape",      status: "done" },
 ];
 
-// Filter → sort → paginate. Server slices; the adapter only renders controls.
-// Sort: ordinal (code-unit) compare with id tiebreak — a total order, matching
-// the C# CompareOrdinal path so the two backends agree row-for-row.
 function tableWindow(s: FeatureProbeState): { page: TableItem[]; total: number; clampedPage: number } {
   let rows = ITEMS.slice();
-  if (s.tableFilter) {
-    const f = s.tableFilter.toLowerCase();
+  if (s.tableFilters.name) {
+    const f = s.tableFilters.name.toLowerCase();
     rows = rows.filter((i) => i.name.toLowerCase().includes(f));
   }
-  if (s.tableSortCol) {
-    const col = s.tableSortCol;
-    const dir = s.tableSortDir === "desc" ? -1 : 1;
+  if (s.sortIntent.column) {
+    const col = s.sortIntent.column;
+    const dir = s.sortIntent.direction === "desc" ? -1 : 1;
     rows.sort((a, b) => {
       const av = col === "name" ? a.name : col === "status" ? a.status : "";
       const bv = col === "name" ? b.name : col === "status" ? b.status : "";
@@ -76,29 +99,39 @@ function tableWindow(s: FeatureProbeState): { page: TableItem[]; total: number; 
 
 function buildTableSection(state: FeatureProbeState): ViewNode {
   const { page, total, clampedPage } = tableWindow(state);
-  const table = {
+  const nameCol: Record<string, unknown> = {
+    key: "name", label: "Name", sortable: true, filterable: true, linkExternal: false,
+  };
+  if (state.tableFilters.name.length > 0) nameCol.filterValue = state.tableFilters.name;
+
+  const table: Record<string, unknown> = {
     type: "table",
     columns: [
-      {
-        key: "name", label: "Name", sortable: true, filterable: true, linkExternal: false,
-        ...(state.tableFilter.length > 0 ? { filterValue: state.tableFilter } : {}),
-      },
+      nameCol,
       { key: "status", label: "Status", sortable: true, filterable: false, linkExternal: false },
     ],
     rows: page.map((i) => ({ cells: { name: i.name, status: i.status }, id: i.id })),
-    ...(state.tableSortCol != null ? { sortColumn: state.tableSortCol } : {}),
-    ...(state.tableSortDir != null ? { sortDirection: state.tableSortDir } : {}),
-    sortAction: { name: "table-sort" },
+    sortBind: "sortIntent",
+    filterBinds: { name: "tableFilters.name" },
+    paginationBind: "tablePage",
+    sortActions: {
+      name:   { name: "table-sort-name" },
+      status: { name: "table-sort-status" },
+    },
     filterAction: { name: "table-filter" },
-    // 0.15.0 — selection removed from the matrix; HelpDesk-Agent carries
-    // selection.buttons[] parity coverage.
-    pagination: { page: clampedPage, pageSize: PAGE_SIZE, totalRows: total, action: { name: "table-page" } },
-  } as ViewNode;
+    pagination: {
+      page: clampedPage,
+      pageSize: PAGE_SIZE,
+      totalRows: total,
+      prevAction: { name: "table-page-prev" },
+      nextAction: { name: "table-page-next" },
+    },
+  };
   return {
     type: "section",
     heading: "Table matrix",
     variant: "card",
-    children: [table],
+    children: [table as unknown as ViewNode],
   };
 }
 
@@ -114,15 +147,12 @@ function buildVm(state: FeatureProbeState): ViewNode {
     });
   }
   children.push(
-    { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!", variant: "secondary" } as ViewNode,   // 0.9.0/#14
+    { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!", variant: "secondary" } as ViewNode,
   );
-  // 0.11.0/#5: ImageNode — exercises src/alt/size/shape on the parity wire.
   children.push({ type: "image", src: "/logo.png", alt: "ViewModel Shell logo", size: "small", shape: "circle" } as ViewNode);
   if (state.lastSubmit != null) {
     children.push({ type: "text", value: `Last submit: ${state.lastSubmit}`, style: "muted" });
   }
-  // 0.14.0/#18: long-running action button. Each tick decrements
-  // longActionPolls; while > 0 the response carries preventUnload=true.
   children.push({ type: "button", label: "Start long action",
     action: { name: "start-long-action" }, variant: "primary" });
   if (state.longActionPolls > 0) {
@@ -132,11 +162,11 @@ function buildVm(state: FeatureProbeState): ViewNode {
       style: "muted",
     });
   }
-  // 0.10.0/#15: one form, shared "note" field, two buttons each dispatching a
-  // DIFFERENT action carrying the field's current value.
+  // Multi-action form: shared "note" field bound to state.note; two buttons,
+  // each dispatching a unique-named action (save-draft / publish).
   children.push({
     type: "form",
-    children: [{ type: "field", name: "note", inputType: "text", label: "Note", placeholder: "Type a note…", required: false }],
+    children: [{ type: "field", name: "note", inputType: "text", bind: "note", label: "Note", placeholder: "Type a note…", required: false }],
     buttons: [
       { type: "button", label: "Save Draft", action: { name: "save-draft" }, variant: "secondary" },
       { type: "button", label: "Publish", action: { name: "publish" }, variant: "primary" },
@@ -159,109 +189,85 @@ function buildVm(state: FeatureProbeState): ViewNode {
 }
 
 const actionHandler = createAction<FeatureProbeState>(async (payload) => {
-  const ctx = payload.context ?? {};
-  const str = (k: string): string | null => (typeof ctx[k] === "string" ? (ctx[k] as string) : null);
-  const int = (k: string, dflt: number): number => (typeof ctx[k] === "number" ? (ctx[k] as number) : dflt);
-
   let state = payload.state;
+  const name = payload.name;
 
-  switch (payload.name) {
-    case "trigger-redirect":
-      return shellRedirect<FeatureProbeState>(str("to") ?? "/default-redirect");
+  if (name === "trigger-redirect") {
+    return shellRedirect<FeatureProbeState>(state.redirectTo || "/default-redirect");
+  }
 
-    case "set-storage":
-      return {
-        vm: buildVm(state),
-        state,
-        sideEffects: [
-          shellSideEffect.setLocalStorage("probe-local",   str("local-value")   ?? "default-local"),
-          shellSideEffect.setSessionStorage("probe-session", str("session-value") ?? "default-session"),
-        ],
-      };
+  if (name === "set-storage") {
+    return {
+      vm: buildVm(state),
+      state,
+      sideEffects: [
+        shellSideEffect.setLocalStorage("probe-local",   state.localValue   || "default-local"),
+        shellSideEffect.setSessionStorage("probe-session", state.sessionValue || "default-session"),
+      ],
+    };
+  }
 
-    case "trigger-download":
-      return {
-        vm: buildVm(state),
-        state,
-        sideEffects: [
-          shellSideEffect.download(
-            str("url")      ?? "/api/probe/file/hello.txt",
-            str("filename") ?? "hello.txt",
-          ),
-        ],
-      };
+  if (name === "trigger-download") {
+    return {
+      vm: buildVm(state),
+      state,
+      sideEffects: [
+        shellSideEffect.download(
+          state.downloadUrl      || "/api/probe/file/hello.txt",
+          state.downloadFilename || "hello.txt",
+        ),
+      ],
+    };
+  }
 
-    case "do-poll": {
-      state = { ...state, pollCount: state.pollCount + 1 };
-      const done = state.pollCount >= 3;
-      return {
-        vm: buildVm(state),
-        state,
-        ...(done ? {} : { nextPollIn: 100 }),
-      };
+  if (name === "do-poll") {
+    state = { ...state, pollCount: state.pollCount + 1 };
+    const done = state.pollCount >= 3;
+    return {
+      vm: buildVm(state),
+      state,
+      ...(done ? {} : { nextPollIn: 100 }),
+    };
+  }
+
+  if (name === "upload") {
+    const file = payload.files["attachment"];
+    if (file) {
+      state = { ...state, lastUploadName: file.name, lastUploadSize: file.size };
     }
-
-    case "upload": {
-      const file = payload.files["attachment"];
-      if (file) {
-        state = { ...state, lastUploadName: file.name, lastUploadSize: file.size };
-      }
-      break;
-    }
-
-    case "show-copy-button":
-      break;  // state unchanged; buildVm always includes the copy-button node
-
-    // 0.10.0/#15: two buttons[] on ONE form sharing the "note" field.
-    case "save-draft":
-      state = { ...state, lastSubmit: `draft: ${str("note") ?? ""}` };
-      break;
-    case "publish":
-      state = { ...state, lastSubmit: `published: ${str("note") ?? ""}` };
-      break;
-
-    case "reset":
-      state = initialState();
-      break;
-
-    // 0.14.0/#18 — long-running action with the beforeunload guard;
-    // 0.16.0 — paired with busy=true so the page is visually locked for the
-    // whole lifecycle. Conditional spread keeps both flags absent on the wire
-    // when done (parity with C#'s WhenWritingDefault).
-    case "start-long-action":
-      state = { ...state, longActionPolls: 3 };
-      return { vm: buildVm(state), state, preventUnload: true, busy: true, nextPollIn: 100 };
-
-    case "long-action-poll": {
-      const remaining = Math.max(0, state.longActionPolls - 1);
-      state = { ...state, longActionPolls: remaining };
-      const workDone = remaining === 0;
-      return {
-        vm: buildVm(state),
-        state,
-        ...(workDone ? {} : { preventUnload: true, busy: true, nextPollIn: 100 }),
-      };
-    }
-
-    // ── table feature-matrix (0.12.0/#16) ─ mirror of the C# twin ──────────
-    case "table-sort":
-      state = { ...state, tableSortCol: str("column"), tableSortDir: str("direction"), tablePage: 1 };
-      break;
-
-    case "table-filter":
-      state = { ...state, tableFilter: str("value") ?? "", tablePage: 1 };
-      break;
-
-    case "table-page":
-      state = { ...state, tablePage: int("page", state.tablePage) };
-      break;
-
-    // 0.15.0 — `table-select` action removed alongside TableSelection.action.
-    // The matrix no longer exercises selection (HelpDesk-Agent carries
-    // selection.buttons[] parity coverage).
-
-    default:
-      throw new Error(`Unknown action: ${payload.name}`);
+  } else if (name === "show-copy-button") {
+    // state unchanged.
+  } else if (name === "save-draft") {
+    state = { ...state, lastSubmit: `draft: ${state.note ?? ""}` };
+  } else if (name === "publish") {
+    state = { ...state, lastSubmit: `published: ${state.note ?? ""}` };
+  } else if (name === "reset") {
+    state = initialState();
+  } else if (name === "start-long-action") {
+    state = { ...state, longActionPolls: 3 };
+    return { vm: buildVm(state), state, preventUnload: true, busy: true, nextPollIn: 100 };
+  } else if (name === "long-action-poll") {
+    const remaining = Math.max(0, state.longActionPolls - 1);
+    state = { ...state, longActionPolls: remaining };
+    const workDone = remaining === 0;
+    return {
+      vm: buildVm(state),
+      state,
+      ...(workDone ? {} : { preventUnload: true, busy: true, nextPollIn: 100 }),
+    };
+  } else if (name === "table-sort-name" || name === "table-sort-status") {
+    // sortIntent has been written to state by the renderer; reset to page 1.
+    state = { ...state, tablePage: 1 };
+  } else if (name === "table-filter") {
+    // tableFilters.name has been written to state by the renderer; reset page.
+    state = { ...state, tablePage: 1 };
+  } else if (name === "table-page-prev") {
+    // The renderer writes the target page to tablePage before dispatch.
+    // (Server just re-renders the slice for the new page.)
+  } else if (name === "table-page-next") {
+    // Same as prev.
+  } else {
+    throw new Error(`Unknown action: ${name}`);
   }
 
   return { vm: buildVm(state), state };

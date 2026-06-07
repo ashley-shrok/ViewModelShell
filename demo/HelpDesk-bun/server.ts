@@ -1,6 +1,23 @@
 // HelpDesk demo — TypeScript backend mirror of demo/HelpDesk/AspNetCore/.
 // Two controllers (Agent + Requester) sharing a SQLite DB. Faithful port of
 // the wire format, action semantics, label formatting, and SQL schema.
+//
+// Phase 6 wire-shape migration (0.17.0 / WIRE-07):
+//
+//   - State holds slots for every input value the renderer used to harvest
+//     into a context payload: agentNotes textarea, the create-ticket form
+//     fields (title / description / dueDate / deviceModel / application /
+//     systemName), and per-row selection.
+//   - selectedIds is a Record<string, true> keyed by ticket id; per-row
+//     CheckboxNodes bind to `selectedIds.${id}` so the renderer writes
+//     true/false directly to that slot on toggle. Bulk action handlers read
+//     the keys of selectedIds whose values are truthy.
+//   - Filter tabs / set-type tabs / etc. all carry unique action names
+//     (filter-all, set-type-hardware, …). TabsNode.bind writes the value
+//     to state so the server can render the next view from state alone.
+//   - Per-row View button uses select-ticket-${id}; per-ticket-page action
+//     buttons stay singular (start-ticket / resolve-ticket / reopen-ticket /
+//     save-notes) — only one ticket is on the detail page at a time.
 
 import {
   createAction,
@@ -33,12 +50,25 @@ interface AgentState {
   filter: string;
   notesSaved: boolean;
   // 0.15.1 — canonical workflow pattern: filter narrows under the cap, no
-  // pagination. titleFilter is the free-text Title column input. (page was
-  // removed; selectedIds was removed in 0.13.0.)
+  // pagination. titleFilter is the free-text Title column input.
   titleFilter: string;
+  // Phase 6 — bind slots:
+  //   selectedIds: keyed by ticket id, value true = selected (per-row
+  //   CheckboxNode binds to `selectedIds.${id}`).
+  //   agentNotes: bound by the textarea in the ticket page's notes form.
+  selectedIds: Record<string, boolean>;
+  agentNotes: string;
 }
 function agentInitial(): AgentState {
-  return { view: "queue", selectedTicketId: null, filter: "all", notesSaved: false, titleFilter: "" };
+  return {
+    view: "queue",
+    selectedTicketId: null,
+    filter: "all",
+    notesSaved: false,
+    titleFilter: "",
+    selectedIds: {},
+    agentNotes: "",
+  };
 }
 
 interface RequesterState {
@@ -49,6 +79,13 @@ interface RequesterState {
   createPriority: string;
   createAccessLevel: string;
   validationError: string | null;
+  // Phase 6 — bind slots for the create-ticket form fields.
+  draftTitle: string;
+  draftDescription: string;
+  draftDueDate: string;
+  draftDeviceModel: string;
+  draftApplication: string;
+  draftSystemName: string;
 }
 function requesterInitial(): RequesterState {
   return {
@@ -59,6 +96,12 @@ function requesterInitial(): RequesterState {
     createPriority: "medium",
     createAccessLevel: "read",
     validationError: null,
+    draftTitle: "",
+    draftDescription: "",
+    draftDueDate: "",
+    draftDeviceModel: "",
+    draftApplication: "",
+    draftSystemName: "",
   };
 }
 
@@ -66,9 +109,6 @@ function requesterInitial(): RequesterState {
 
 const dbPath = process.env.HELPDESK_DB ?? "./helpdesk.db";
 const db = new Database(dbPath);
-// 0.15.1 — seed flag mirrors the C# twin. Default seeds on first init for the
-// canonical workflow demo; HELPDESK_SEED=0 disables (parity sets this so IDs
-// stay stable for the fixture).
 const SEED_ENABLED = process.env.HELPDESK_SEED !== "0";
 db.exec(`
   CREATE TABLE IF NOT EXISTS tickets (
@@ -136,19 +176,6 @@ function dbGetAll(status: string | null): Ticket[] {
   return rows.map(mapTicket);
 }
 
-// 0.12.0/#16: server-side pagination for the agent queue. Ordered created_at
-// DESC then id DESC (total order → deterministic page boundaries matching C#).
-function dbGetPage(status: string | null, limit: number, offset: number): Ticket[] {
-  const rows = status
-    ? db.query<TicketRow, [string, number, number]>(
-        "SELECT * FROM tickets WHERE status = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?"
-      ).all(status, limit, offset)
-    : db.query<TicketRow, [number, number]>(
-        "SELECT * FROM tickets ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?"
-      ).all(limit, offset);
-  return rows.map(mapTicket);
-}
-
 function dbCount(status: string | null): number {
   const row = status
     ? db.query<{ n: number }, [string]>("SELECT COUNT(*) AS n FROM tickets WHERE status = ?").get(status)
@@ -156,7 +183,6 @@ function dbCount(status: string | null): number {
   return row?.n ?? 0;
 }
 
-// 0.15.1 — canonical workflow pattern: combined status + title-text filter.
 function dbCountMatching(status: string | null, titleFilter: string): number {
   const clauses: string[] = [];
   const params: (string | number)[] = [];
@@ -180,8 +206,6 @@ function dbGetMatching(status: string | null, titleFilter: string, limit: number
   return rows.map(mapTicket);
 }
 
-// 0.15.1 — seed demo data so the canonical pattern is visible locally.
-// Idempotent (skips if table has rows). HELPDESK_SEED=0 disables (parity).
 function seedDemoDataIfNeeded(): void {
   if (!SEED_ENABLED) return;
   if (dbCount(null) > 0) return;
@@ -312,19 +336,11 @@ const ticketVariant = (t: Ticket): string | undefined =>
 function formatDate(iso: string): string {
   const dt = new Date(iso);
   if (isNaN(dt.getTime())) return iso;
-  // Match C#'s "MMM d, yyyy" with ToLocalTime()
   return dt.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
 // ─── Agent controller ───────────────────────────────────────────────────────
-// Mirrors AgentController.cs: a full-width filterable ticket queue
-// (TableNode; whole-row click opens the ticket) → a dedicated full
-// ticket PageNode. The navigate pattern real ticketing actually uses.
 
-// 0.15.1 — canonical workflow pattern (see AGENTS.md "Tables in VMS"):
-// filter narrows under the cap → show ALL matches with selection.buttons[];
-// over cap → "narrow further" notice + empty table (filter input stays
-// accessible). Pick AGENT_CAP to fit row weight + working memory.
 const AGENT_CAP = 25;
 
 function agentBuildQueuePage(state: AgentState): ViewNode {
@@ -336,10 +352,26 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
 
   const rows = tickets.map(t => {
     const variant = ticketVariant(t);
+    const rowActions: ViewNode[] = [
+      // Per-row selection checkbox bound to `selectedIds.${id}` (renderer
+      // writes true/false directly to that slot on click; no dispatch needed).
+      {
+        type: "checkbox",
+        name: `select-${t.id}`,
+        bind: `selectedIds.${t.id}`,
+      },
+      // Per-row "Open" button — unique action name per row.
+      {
+        type: "button",
+        label: "Open",
+        action: { name: `select-ticket-${t.id}` },
+        variant: "secondary",
+      },
+    ];
     const row: {
       cells: Record<string, string>;
       id?: string;
-      action?: { name: string; context?: Record<string, unknown> };
+      actions?: ViewNode[];
       variant?: string;
     } = {
       cells: {
@@ -350,7 +382,7 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
         due:      !t.dueDate ? "—" : t.dueDate,
       },
       id: String(t.id),
-      action: { name: "select-ticket", context: { id: String(t.id) } },
+      actions: rowActions,
     };
     if (variant !== undefined) row.variant = variant;
     return row;
@@ -365,18 +397,29 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
     {
       type: "tabs",
       selected: state.filter,
-      action: { name: "filter" },
+      bind: "filter",
       tabs: [
-        { value: "all",         label: "All" },
-        { value: "open",        label: "Open" },
-        { value: "in-progress", label: "In Progress" },
-        { value: "resolved",    label: "Resolved" },
+        { value: "all",         label: "All",         action: { name: "filter-all" } },
+        { value: "open",        label: "Open",        action: { name: "filter-open" } },
+        { value: "in-progress", label: "In Progress", action: { name: "filter-in-progress" } },
+        { value: "resolved",    label: "Resolved",    action: { name: "filter-resolved" } },
       ],
     },
   ];
 
-  // Over-cap notice rendered ABOVE the table so the filter input (in the
-  // table header) stays accessible.
+  // Bulk action toolbar — visible when there are matches within the cap.
+  if (withinCap && rows.length > 0) {
+    children.push({
+      type: "section",
+      children: [
+        { type: "button", label: "Mark In Progress", action: { name: "bulk-start" },   variant: "secondary" },
+        { type: "button", label: "Mark Resolved",    action: { name: "bulk-resolve" }, variant: "primary" },
+        { type: "button", label: "Reopen",           action: { name: "bulk-reopen" },  variant: "secondary" },
+      ],
+    });
+  }
+
+  // Over-cap notice rendered above the table so the filter input stays accessible.
   if (!withinCap) {
     children.push({
       type: "text",
@@ -385,46 +428,40 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
     });
   }
 
-  // Title column is filterable; FilterAction dispatches with { column, value, filters }.
-  // selection.buttons[] only present when within-cap and rows exist.
-  const titleCol: Record<string, unknown> = {
-    key: "title", label: "Title", sortable: false, filterable: true, linkExternal: false,
-  };
-  if (state.titleFilter.length > 0) titleCol.filterValue = state.titleFilter;
-
-  const table: Record<string, unknown> = {
-    type: "table",
-    columns: [
-      titleCol,
-      { key: "type",     label: "Type",     sortable: false, filterable: false, linkExternal: false },
-      { key: "priority", label: "Priority", sortable: false, filterable: false, linkExternal: false },
-      { key: "status",   label: "Status",   sortable: false, filterable: false, linkExternal: false },
-      { key: "due",      label: "Due",      sortable: false, filterable: false, linkExternal: false },
-    ],
-    rows,
-    filterAction: { name: "filter-text" },
-  };
-  if (withinCap && rows.length > 0) {
-    table.selection = {
-      selectedIds: [],
-      buttons: [
-        { type: "button", label: "Mark In Progress", action: { name: "bulk-start" },   variant: "secondary" },
-        { type: "button", label: "Mark Resolved",    action: { name: "bulk-resolve" }, variant: "primary" },
-        { type: "button", label: "Reopen",           action: { name: "bulk-reopen" },  variant: "secondary" },
-      ],
+  // Empty-state message (the demo-friendly fallback for the empty-queue case).
+  if (withinCap && rows.length === 0 && counts.open + counts.inProgress + counts.resolved === 0) {
+    children.push({ type: "text", value: "No tickets in queue.", style: "muted" });
+  } else {
+    const titleCol: Record<string, unknown> = {
+      key: "title", label: "Title", sortable: false, filterable: true, linkExternal: false,
     };
+    if (state.titleFilter.length > 0) titleCol.filterValue = state.titleFilter;
+
+    const table: Record<string, unknown> = {
+      type: "table",
+      columns: [
+        titleCol,
+        { key: "type",     label: "Type",     sortable: false, filterable: false, linkExternal: false },
+        { key: "priority", label: "Priority", sortable: false, filterable: false, linkExternal: false },
+        { key: "status",   label: "Status",   sortable: false, filterable: false, linkExternal: false },
+        { key: "due",      label: "Due",      sortable: false, filterable: false, linkExternal: false },
+      ],
+      rows,
+      filterBinds: { title: "titleFilter" },
+      filterAction: { name: "filter-text" },
+    };
+    children.push(table as unknown as ViewNode);
   }
-  children.push(table as unknown as ViewNode);
 
   return { type: "page", title: "Help Desk — Agent", children };
 }
 
 function agentBuildTicketPage(ticket: Ticket, state: AgentState): ViewNode {
   const info: ViewNode[] = [
-    { type: "text", value: `Status: ${statusLabel(ticket.status)}`,      style: "muted" },
-    { type: "text", value: `Type: ${typeLabel(ticket.type)}`,            style: "muted" },
-    { type: "text", value: `Priority: ${priorityLabel(ticket.priority)}`, style: "muted" },
-    { type: "text", value: `Submitted: ${formatDate(ticket.createdAt)}`,  style: "muted" },
+    { type: "text", value: `Status: ${statusLabel(ticket.status)}`,       style: "muted" },
+    { type: "text", value: `Type: ${typeLabel(ticket.type)}`,             style: "muted" },
+    { type: "text", value: `Priority: ${priorityLabel(ticket.priority)}`,  style: "muted" },
+    { type: "text", value: `Submitted: ${formatDate(ticket.createdAt)}`,    style: "muted" },
   ];
 
   if (ticket.type === "hardware" && ticket.deviceModel) {
@@ -444,7 +481,7 @@ function agentBuildTicketPage(ticket: Ticket, state: AgentState): ViewNode {
     case "open":
       actionChildren.push({
         type: "button", label: "Mark In Progress",
-        action: { name: "start-ticket", context: { id: String(ticket.id) } },
+        action: { name: "start-ticket" },
         variant: "primary",
         pendingLabel: "Marking…",
       });
@@ -452,7 +489,7 @@ function agentBuildTicketPage(ticket: Ticket, state: AgentState): ViewNode {
     case "in-progress":
       actionChildren.push({
         type: "button", label: "Mark Resolved",
-        action: { name: "resolve-ticket", context: { id: String(ticket.id) } },
+        action: { name: "resolve-ticket" },
         variant: "primary",
         pendingLabel: "Resolving…",
       });
@@ -460,7 +497,7 @@ function agentBuildTicketPage(ticket: Ticket, state: AgentState): ViewNode {
     case "resolved":
       actionChildren.push({
         type: "button", label: "Reopen",
-        action: { name: "reopen-ticket", context: { id: String(ticket.id) } },
+        action: { name: "reopen-ticket" },
         variant: "secondary",
         pendingLabel: "Reopening…",
       });
@@ -474,9 +511,9 @@ function agentBuildTicketPage(ticket: Ticket, state: AgentState): ViewNode {
 
   const notesField: ViewNode = {
     type: "field", name: "agent_notes", inputType: "textarea",
+    bind: "agentNotes",
     placeholder: "Add notes…", required: false,
   };
-  if (ticket.agentNotes != null) (notesField as { value?: string }).value = ticket.agentNotes;
   const notesChildren: ViewNode[] = [notesField];
   if (state.notesSaved) {
     notesChildren.push({ type: "text", value: "Notes saved.", style: "muted" });
@@ -494,7 +531,7 @@ function agentBuildTicketPage(ticket: Ticket, state: AgentState): ViewNode {
         children: [
           {
             type: "form",
-            submitAction: { name: "save-notes", context: { id: String(ticket.id) } },
+            submitAction: { name: "save-notes" },
             submitLabel: "Save Notes",
             children: notesChildren,
           },
@@ -514,76 +551,52 @@ function agentBuildVm(state: AgentState): ViewNode {
 }
 
 const agentHandler = createAction<AgentState>(async (payload) => {
-  const ctx = payload.context ?? {};
-  const str = (k: string): string | null => (typeof ctx[k] === "string" ? (ctx[k] as string) : null);
-  // 0.13.0: bulk-action handlers read the harvested selection from context.
-  const strList = (k: string): string[] =>
-    Array.isArray(ctx[k]) ? ((ctx[k] as unknown[]).filter((x) => typeof x === "string") as string[]) : [];
   let state: AgentState = { ...payload.state, notesSaved: false };
+  const name = payload.name;
 
-  switch (payload.name) {
-    case "filter":
-      state = { ...state, filter: str("value") ?? "all" };
-      break;
-
-    // 0.15.1 — free-text title filter from the Title column's Filterable input.
-    case "filter-text":
-      state = { ...state, titleFilter: str("value") ?? "" };
-      break;
-
-    // 0.13.0 — toggle-select action removed (local-mode selection lives in DOM).
-    case "bulk-start":
-    case "bulk-resolve":
-    case "bulk-reopen": {
-      const bulkStatus = payload.name === "bulk-start" ? "in-progress"
-                       : payload.name === "bulk-resolve" ? "resolved" : "open";
-      // selectedIds arrived in context, harvested by the adapter from the bulk
-      // button's TableNode.selection.buttons[] click.
-      for (const id of strList("selectedIds").map(Number)) dbUpdateStatus(id, bulkStatus);
-      break;
+  if (name.startsWith("filter-") && name !== "filter-text") {
+    // filter is already in state via the TabsNode bind; no action needed.
+  } else if (name === "filter-text") {
+    // titleFilter is already in state via the column filterBind.
+  } else if (name === "bulk-start" || name === "bulk-resolve" || name === "bulk-reopen") {
+    const bulkStatus = name === "bulk-start" ? "in-progress"
+                     : name === "bulk-resolve" ? "resolved" : "open";
+    // Read selected ticket IDs from state.selectedIds (set true via per-row
+    // checkbox binds). The bind path was `selectedIds.${id}`.
+    const ids = Object.entries(state.selectedIds ?? {})
+      .filter(([, v]) => v === true)
+      .map(([k]) => Number(k))
+      .filter(n => !isNaN(n));
+    for (const id of ids) dbUpdateStatus(id, bulkStatus);
+    // Clear selection after the bulk action.
+    state = { ...state, selectedIds: {} };
+  } else if (name.startsWith("select-ticket-")) {
+    const sid = Number(name.slice("select-ticket-".length));
+    if (!isNaN(sid)) {
+      const ticket = dbGetById(sid);
+      // Seed agentNotes from the DB so the textarea renders the existing notes.
+      state = {
+        ...state,
+        selectedTicketId: sid,
+        view: "detail",
+        agentNotes: ticket?.agentNotes ?? "",
+      };
     }
-    case "select-ticket": {
-      const id = str("id");
-      const sid = id ? parseInt(id, 10) : NaN;
-      if (id && !isNaN(sid)) state = { ...state, selectedTicketId: sid, view: "detail" };
-      break;
+  } else if (name === "back-to-queue") {
+    state = { ...state, view: "queue", selectedTicketId: null, agentNotes: "" };
+  } else if (name === "start-ticket") {
+    if (state.selectedTicketId != null) dbUpdateStatus(state.selectedTicketId, "in-progress");
+  } else if (name === "resolve-ticket") {
+    if (state.selectedTicketId != null) dbUpdateStatus(state.selectedTicketId, "resolved");
+  } else if (name === "reopen-ticket") {
+    if (state.selectedTicketId != null) dbUpdateStatus(state.selectedTicketId, "open");
+  } else if (name === "save-notes") {
+    if (state.selectedTicketId != null) {
+      dbUpdateAgentNotes(state.selectedTicketId, state.agentNotes);
+      state = { ...state, notesSaved: true };
     }
-    case "back-to-queue":
-      state = { ...state, view: "queue", selectedTicketId: null };
-      break;
-    case "start-ticket": {
-      const id = str("id");
-      const sid = id ? parseInt(id, 10) : NaN;
-      if (id && !isNaN(sid)) {
-        dbUpdateStatus(sid, "in-progress");
-        if (state.view === "detail") state = { ...state, selectedTicketId: sid };
-      }
-      break;
-    }
-    case "resolve-ticket": {
-      const id = str("id");
-      const sid = id ? parseInt(id, 10) : NaN;
-      if (id && !isNaN(sid)) dbUpdateStatus(sid, "resolved");
-      break;
-    }
-    case "reopen-ticket": {
-      const id = str("id");
-      const sid = id ? parseInt(id, 10) : NaN;
-      if (id && !isNaN(sid)) dbUpdateStatus(sid, "open");
-      break;
-    }
-    case "save-notes": {
-      const id = str("id");
-      const notes = str("agent_notes");
-      const sid = id ? parseInt(id, 10) : NaN;
-      if (id && !isNaN(sid)) {
-        dbUpdateAgentNotes(sid, notes);
-        state = { ...state, notesSaved: true };
-      }
-      break;
-    }
-    default:
-      throw new Error(`Unknown action: ${payload.name}`);
+  } else {
+    throw new Error(`Unknown action: ${name}`);
   }
 
   return { vm: agentBuildVm(state), state };
@@ -605,7 +618,7 @@ function requesterBuildListView(state: RequesterState): ViewNode {
       { type: "text", value: statusLabel(t.status), style: "muted" },
       {
         type: "button", label: "View",
-        action: { name: "select-ticket", context: { id: String(t.id) } },
+        action: { name: `select-ticket-${t.id}` },
         variant: "secondary",
       },
     ],
@@ -630,12 +643,12 @@ function requesterBuildListView(state: RequesterState): ViewNode {
       {
         type: "tabs",
         selected: state.filter,
-        action: { name: "filter" },
+        bind: "filter",
         tabs: [
-          { value: "all",         label: "All" },
-          { value: "open",        label: "Open" },
-          { value: "in-progress", label: "In Progress" },
-          { value: "resolved",    label: "Resolved" },
+          { value: "all",         label: "All",         action: { name: "filter-all" } },
+          { value: "open",        label: "Open",        action: { name: "filter-open" } },
+          { value: "in-progress", label: "In Progress", action: { name: "filter-in-progress" } },
+          { value: "resolved",    label: "Resolved",    action: { name: "filter-resolved" } },
         ],
       },
       { type: "list", children: items },
@@ -651,48 +664,48 @@ function requesterBuildCreateView(state: RequesterState): ViewNode {
   }
   formChildren.push({
     type: "field", name: "title", inputType: "text",
+    bind: "draftTitle",
     label: "Title", placeholder: "Brief description of the issue", required: true,
   });
   if (state.createType === "hardware") {
     formChildren.push({
       type: "field", name: "device_model", inputType: "text",
+      bind: "draftDeviceModel",
       label: "Device / Model", placeholder: "e.g. Dell XPS 15, iPhone 15", required: false,
     });
   } else if (state.createType === "software") {
     formChildren.push({
       type: "field", name: "application", inputType: "text",
+      bind: "draftApplication",
       label: "Application", placeholder: "e.g. Microsoft Excel, Slack", required: false,
     });
   } else if (state.createType === "access") {
     formChildren.push({
       type: "field", name: "system_name", inputType: "text",
+      bind: "draftSystemName",
       label: "System / Resource", placeholder: "e.g. VPN, GitHub, Salesforce", required: false,
     });
   }
   formChildren.push({
     type: "field", name: "description", inputType: "textarea",
+    bind: "draftDescription",
     label: "Description", placeholder: "Provide additional details…", required: false,
   });
   formChildren.push({
     type: "field", name: "due_date", inputType: "date",
+    bind: "draftDueDate",
     label: "Due By", required: false,
   });
-
-  const baked: Record<string, unknown> = {
-    type: state.createType,
-    priority: state.createPriority,
-  };
-  if (state.createType === "access") baked.access_level = state.createAccessLevel;
 
   const pageChildren: ViewNode[] = [
     {
       type: "tabs",
       selected: state.createType,
-      action: { name: "set-type" },
+      bind: "createType",
       tabs: [
-        { value: "hardware", label: "Hardware" },
-        { value: "software", label: "Software" },
-        { value: "access",   label: "Access Request" },
+        { value: "hardware", label: "Hardware",       action: { name: "set-type-hardware" } },
+        { value: "software", label: "Software",       action: { name: "set-type-software" } },
+        { value: "access",   label: "Access Request", action: { name: "set-type-access" } },
       ],
     },
   ];
@@ -701,11 +714,11 @@ function requesterBuildCreateView(state: RequesterState): ViewNode {
     pageChildren.push({
       type: "tabs",
       selected: state.createAccessLevel,
-      action: { name: "set-access-level" },
+      bind: "createAccessLevel",
       tabs: [
-        { value: "read",  label: "Read" },
-        { value: "write", label: "Write" },
-        { value: "admin", label: "Admin" },
+        { value: "read",  label: "Read",  action: { name: "set-access-level-read" } },
+        { value: "write", label: "Write", action: { name: "set-access-level-write" } },
+        { value: "admin", label: "Admin", action: { name: "set-access-level-admin" } },
       ],
     });
   }
@@ -713,18 +726,18 @@ function requesterBuildCreateView(state: RequesterState): ViewNode {
   pageChildren.push({
     type: "tabs",
     selected: state.createPriority,
-    action: { name: "set-priority" },
+    bind: "createPriority",
     tabs: [
-      { value: "low",      label: "Low" },
-      { value: "medium",   label: "Medium" },
-      { value: "high",     label: "High" },
-      { value: "critical", label: "Critical" },
+      { value: "low",      label: "Low",      action: { name: "set-priority-low" } },
+      { value: "medium",   label: "Medium",   action: { name: "set-priority-medium" } },
+      { value: "high",     label: "High",     action: { name: "set-priority-high" } },
+      { value: "critical", label: "Critical", action: { name: "set-priority-critical" } },
     ],
   });
 
   pageChildren.push({
     type: "form",
-    submitAction: { name: "create-ticket", context: baked },
+    submitAction: { name: "create-ticket" },
     submitLabel: "Submit Ticket",
     children: formChildren,
   });
@@ -779,67 +792,61 @@ function requesterBuildVm(state: RequesterState): ViewNode {
 }
 
 const requesterHandler = createAction<RequesterState>(async (payload) => {
-  const ctx = payload.context ?? {};
-  const str = (k: string): string | null => (typeof ctx[k] === "string" ? (ctx[k] as string) : null);
   let state = payload.state;
+  const name = payload.name;
 
-  switch (payload.name) {
-    case "filter":
-      state = { ...state, filter: str("value") ?? "all" };
-      break;
-    case "select-ticket": {
-      const id = str("id");
-      const sid = id ? parseInt(id, 10) : NaN;
-      if (id && !isNaN(sid)) state = { ...state, selectedTicketId: sid, view: "detail" };
-      break;
-    }
-    case "back-to-list":
-      state = { ...state, view: "list", selectedTicketId: null, validationError: null };
-      break;
-    case "start-create":
-      state = {
-        ...state,
-        view: "create",
-        createType: "hardware",
-        createPriority: "medium",
-        createAccessLevel: "read",
-        validationError: null,
-      };
-      break;
-    case "cancel-create":
-      state = { ...state, view: "list", validationError: null };
-      break;
-    case "set-type":
-      state = { ...state, createType: str("value") ?? "hardware", validationError: null };
-      break;
-    case "set-priority":
-      state = { ...state, createPriority: str("value") ?? "medium" };
-      break;
-    case "set-access-level":
-      state = { ...state, createAccessLevel: str("value") ?? "read" };
-      break;
-    case "create-ticket": {
-      const title = str("title");
-      if (!title || !title.trim()) {
-        state = { ...state, validationError: "Title is required." };
-        break;
-      }
+  if (name.startsWith("filter-")) {
+    // filter is already in state via the TabsNode bind.
+  } else if (name.startsWith("select-ticket-")) {
+    const sid = Number(name.slice("select-ticket-".length));
+    if (!isNaN(sid)) state = { ...state, selectedTicketId: sid, view: "detail" };
+  } else if (name === "back-to-list") {
+    state = { ...state, view: "list", selectedTicketId: null, validationError: null };
+  } else if (name === "start-create") {
+    state = {
+      ...state,
+      view: "create",
+      createType: "hardware",
+      createPriority: "medium",
+      createAccessLevel: "read",
+      validationError: null,
+      draftTitle: "",
+      draftDescription: "",
+      draftDueDate: "",
+      draftDeviceModel: "",
+      draftApplication: "",
+      draftSystemName: "",
+    };
+  } else if (name === "cancel-create") {
+    state = { ...state, view: "list", validationError: null };
+  } else if (name.startsWith("set-type-")) {
+    // createType is already in state via the TabsNode bind. Clear any stale
+    // validation error so the form revalidates on next submit.
+    state = { ...state, validationError: null };
+  } else if (name.startsWith("set-priority-")) {
+    // createPriority is already in state via the TabsNode bind.
+  } else if (name.startsWith("set-access-level-")) {
+    // createAccessLevel is already in state via the TabsNode bind.
+  } else if (name === "create-ticket") {
+    const title = (state.draftTitle ?? "").trim();
+    if (!title) {
+      state = { ...state, validationError: "Title is required." };
+    } else {
       dbCreate({
-        title: title.trim(),
-        type: str("type") ?? "hardware",
-        priority: str("priority") ?? "medium",
-        description: str("description"),
-        dueDate: str("due_date"),
-        deviceModel: str("device_model"),
-        application: str("application"),
-        systemName: str("system_name"),
-        accessLevel: str("access_level"),
+        title,
+        type: state.createType,
+        priority: state.createPriority,
+        description: (state.draftDescription ?? "") || null,
+        dueDate: (state.draftDueDate ?? "") || null,
+        deviceModel: state.createType === "hardware" ? ((state.draftDeviceModel ?? "") || null) : null,
+        application: state.createType === "software" ? ((state.draftApplication ?? "") || null) : null,
+        systemName:  state.createType === "access"   ? ((state.draftSystemName  ?? "") || null) : null,
+        accessLevel: state.createType === "access"   ? state.createAccessLevel : null,
       });
       state = { ...state, validationError: null, view: "list" };
-      break;
     }
-    default:
-      throw new Error(`Unknown action: ${payload.name}`);
+  } else {
+    throw new Error(`Unknown action: ${name}`);
   }
 
   return { vm: requesterBuildVm(state), state };

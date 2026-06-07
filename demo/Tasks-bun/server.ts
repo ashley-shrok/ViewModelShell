@@ -8,6 +8,11 @@
 // PageNode("Tasks",[rail,main],layout:"sidebar"); rail is a "Views" card
 // section with a nav ListNode; main has progress text, progress bar, an
 // inline add form, and the task list.
+//
+// Phase 6 wire-shape migration (0.17.0 / WIRE-07): inputs carry `bind` paths
+// instead of values; per-row buttons and per-tab nav use unique action names
+// (`delete-row-${id}`, `filter-all` / `filter-active` / `filter-completed`);
+// the action handler reads from state, not from a `context` payload.
 
 import {
   createAction,
@@ -30,6 +35,10 @@ export interface TaskRecord {
 export interface TasksState {
   items: TaskRecord[];
   filter: string;
+  /** Phase 6 — typed value of the inline add-task input. Lives in state so
+   *  the renderer's bind seam can read/write it; the "add" handler reads it
+   *  and resets to "" after appending the new task. */
+  draftTitle: string;
 }
 
 export function initialState(): TasksState {
@@ -45,6 +54,7 @@ export function initialState(): TasksState {
       { id: "3", title: "Write the render function", completed: false, createdAt: new Date(now - 20 * 60_000).toISOString() },
     ],
     filter: "all",
+    draftTitle: "",
   };
 }
 
@@ -60,7 +70,8 @@ export function buildVm(state: TasksState): ViewNode {
     :                                state.items;
 
   // LEFT RAIL — Todoist-style view nav; current view = active variant.
-  // ListItemNode(id, filter==id ? "active" : null, [ButtonNode("{label} ({count})", filter)])
+  // Each nav button gets a unique action name (`filter-all` / `filter-active` /
+  // `filter-completed`) — per-row identity-in-name, no context payload.
   const navItem = (id: string, label: string, count: number): ViewNode => ({
     type: "list-item",
     id,
@@ -69,7 +80,7 @@ export function buildVm(state: TasksState): ViewNode {
       {
         type: "button",
         label: `${label} (${count})`,
-        action: { name: "filter", context: { value: id } },
+        action: { name: `filter-${id}` },
         // ButtonNode.Variant is null here → omitted under normalize().
       },
     ],
@@ -95,30 +106,36 @@ export function buildVm(state: TasksState): ViewNode {
   const taskItems: ViewNode[] = filtered
     .slice()
     .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
-    .map<ViewNode>(t => ({
-      type: "list-item",
-      id: t.id,
-      variant: t.completed ? "done" : undefined,
-      children: [
-        {
-          type: "checkbox",
-          name: "completed",
-          checked: t.completed,
-          action: { name: "toggle", context: { id: t.id } },
-        },
-        {
-          type: "text",
-          value: t.title,
-          style: t.completed ? "strikethrough" : undefined,
-        },
-        {
-          type: "button",
-          label: "✕",
-          action: { name: "delete", context: { id: t.id } },
-          variant: "danger",
-        },
-      ],
-    }));
+    .map<ViewNode>((t, idx) => {
+      // Find the index in the unsorted items[] array so the bind path
+      // (`items.${i}.completed`) points at the correct slot. The renderer
+      // writes the new value to state before the action fires.
+      const i = state.items.findIndex(x => x.id === t.id);
+      return {
+        type: "list-item",
+        id: t.id,
+        variant: t.completed ? "done" : undefined,
+        children: [
+          {
+            type: "checkbox",
+            name: "completed",
+            bind: `items.${i}.completed`,
+            action: { name: `toggle-row-${t.id}` },
+          },
+          {
+            type: "text",
+            value: t.title,
+            style: t.completed ? "strikethrough" : undefined,
+          },
+          {
+            type: "button",
+            label: "✕",
+            action: { name: `delete-row-${t.id}` },
+            variant: "danger",
+          },
+        ],
+      };
+    });
   if (taskItems.length === 0) {
     taskItems.push({ type: "text", value: "Nothing here.", style: "muted" });
   }
@@ -138,8 +155,9 @@ export function buildVm(state: TasksState): ViewNode {
             type: "field",
             name: "title",
             inputType: "text",
+            bind: "draftTitle",
             placeholder: "Add a task…",
-            // FieldNode.Label and .Value are null → omitted.
+            // FieldNode.Label is null → omitted.
             // FieldNode.Required is non-nullable bool → MUST emit required:false.
             required: false,
           },
@@ -166,54 +184,33 @@ function generateId(): string {
 }
 
 export const actionHandler = createAction<TasksState>(async (payload) => {
-  const ctx = payload.context ?? {};
-  const str  = (k: string): string | null  => (typeof ctx[k] === "string"  ? (ctx[k] as string)  : null);
-  const bool = (k: string): boolean | null => (typeof ctx[k] === "boolean" ? (ctx[k] as boolean) : null);
-
   let state = payload.state;
+  const name = payload.name;
 
-  switch (payload.name) {
-    case "add": {
-      const title = str("title");
-      if (!title || !title.trim()) {
-        throw new Error("title required");
-      }
-      const newTask: TaskRecord = {
-        id: generateId(),
-        title: title.trim(),
-        completed: false,
-        createdAt: new Date().toISOString(),
-      };
-      state = { ...state, items: [...state.items, newTask] };
-      break;
+  if (name === "add") {
+    const title = state.draftTitle?.trim() ?? "";
+    if (!title) {
+      throw new Error("title required");
     }
-    case "toggle": {
-      const id = str("id");
-      const checked = bool("checked");
-      if (id !== null && checked !== null) {
-        state = {
-          ...state,
-          items: state.items.map(t => (t.id === id ? { ...t, completed: checked } : t)),
-        };
-      }
-      break;
-    }
-    case "delete": {
-      const id = str("id");
-      if (id !== null) {
-        state = { ...state, items: state.items.filter(t => t.id !== id) };
-      }
-      break;
-    }
-    case "filter": {
-      const value = str("value");
-      if (value !== null) {
-        state = { ...state, filter: value };
-      }
-      break;
-    }
-    default:
-      throw new Error(`Unknown action: ${payload.name}`);
+    const newTask: TaskRecord = {
+      id: generateId(),
+      title,
+      completed: false,
+      createdAt: new Date().toISOString(),
+    };
+    state = { ...state, items: [...state.items, newTask], draftTitle: "" };
+  } else if (name.startsWith("toggle-row-")) {
+    // The renderer has already written the new `completed` boolean into
+    // state at `items.${i}.completed`. The server just acknowledges with
+    // a re-render — state is the source of truth.
+  } else if (name.startsWith("delete-row-")) {
+    const id = name.slice("delete-row-".length);
+    state = { ...state, items: state.items.filter(t => t.id !== id) };
+  } else if (name.startsWith("filter-")) {
+    const value = name.slice("filter-".length);
+    state = { ...state, filter: value };
+  } else {
+    throw new Error(`Unknown action: ${name}`);
   }
 
   return { vm: buildVm(state), state };

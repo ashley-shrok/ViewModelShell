@@ -1,6 +1,5 @@
 namespace ViewModelShell.Controllers;
 
-using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using ViewModelShell.State;
 using ViewModelShell;
@@ -13,7 +12,7 @@ public class TasksController : ControllerBase
     public ShellResponse<TasksState> Get()
     {
         var state = TasksState.Initial();
-        return new(BuildVm(state), state);
+        return new ShellResponse<TasksState>(BuildVm(state), state).Validate();
     }
 
     [HttpPost("action")]
@@ -24,64 +23,46 @@ public class TasksController : ControllerBase
             Request.Form["_action"].ToString(),
             Request.Form["_state"].ToString());
 
-        string? Str(string key) =>
-            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
-                ? v.GetString() : null;
-
-        bool? Bool(string key) =>
-            payload.Context?.TryGetValue(key, out var v) == true
-                ? v.ValueKind switch
-                {
-                    JsonValueKind.True  => true,
-                    JsonValueKind.False => false,
-                    _ => (bool?)null
-                }
-                : null;
-
         var state = payload.State;
+        var name = payload.Name;
 
-        switch (payload.Name)
+        // Phase 6 wire-shape break (WIRE-07): the dispatch envelope carries
+        // `{name, state}` only — no `context` payload. Per-row identity moves
+        // into the action name itself; values flow through `state` at the
+        // input's bind path.
+        if (name == "add")
         {
-            case "add":
-                var title = Str("title");
-                if (string.IsNullOrWhiteSpace(title)) return BadRequest("title required");
-                var newTask = new TaskRecord(
-                    Id: Guid.NewGuid().ToString("N")[..8],
-                    Title: title.Trim(),
-                    Completed: false,
-                    CreatedAt: DateTimeOffset.UtcNow);
-                state = state with { Items = [.. state.Items, newTask] };
-                break;
-
-            case "toggle":
-                var toggleId  = Str("id");
-                var isChecked = Bool("checked");
-                if (toggleId != null && isChecked.HasValue)
-                {
-                    state = state with
-                    {
-                        Items = [.. state.Items.Select(t =>
-                            t.Id == toggleId ? t with { Completed = isChecked.Value } : t)]
-                    };
-                }
-                break;
-
-            case "delete":
-                var deleteId = Str("id");
-                if (deleteId != null)
-                    state = state with { Items = [.. state.Items.Where(t => t.Id != deleteId)] };
-                break;
-
-            case "filter":
-                var value = Str("value");
-                if (value != null) state = state with { Filter = value };
-                break;
-
-            default:
-                return BadRequest($"Unknown action: {payload.Name}");
+            var title = (state.DraftTitle ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(title)) return BadRequest("title required");
+            var newTask = new TaskRecord(
+                Id: Guid.NewGuid().ToString("N")[..8],
+                Title: title,
+                Completed: false,
+                CreatedAt: DateTimeOffset.UtcNow);
+            state = state with { Items = [.. state.Items, newTask], DraftTitle = "" };
+        }
+        else if (name.StartsWith("toggle-row-"))
+        {
+            // The renderer has already written the new `completed` boolean to
+            // state at items.${i}.completed. State is the source of truth; the
+            // server just acknowledges with a re-render.
+        }
+        else if (name.StartsWith("delete-row-"))
+        {
+            var id = name["delete-row-".Length..];
+            state = state with { Items = [.. state.Items.Where(t => t.Id != id)] };
+        }
+        else if (name.StartsWith("filter-"))
+        {
+            var value = name["filter-".Length..];
+            state = state with { Filter = value };
+        }
+        else
+        {
+            return BadRequest($"Unknown action: {name}");
         }
 
-        return new ShellResponse<TasksState>(BuildVm(state), state);
+        return new ShellResponse<TasksState>(BuildVm(state), state).Validate();
     }
 
     private static ViewNode BuildVm(TasksState state)
@@ -99,10 +80,12 @@ public class TasksController : ControllerBase
         };
 
         // LEFT RAIL — Todoist-style view nav; current view = D-27 active.
+        // Each nav button gets a unique action name (filter-all / filter-active
+        // / filter-completed) — per-row identity-in-name, no context payload.
         ViewNode NavItem(string id, string label, int count) => new ListItemNode(
             id,
             state.Filter == id ? "active" : null,
-            [new ButtonNode($"{label} ({count})", new ActionDescriptor("filter", new() { ["value"] = id }), null)]);
+            [new ButtonNode($"{label} ({count})", new ActionDescriptor($"filter-{id}"), null)]);
 
         var rail = new SectionNode("Views",
         [
@@ -115,18 +98,30 @@ public class TasksController : ControllerBase
         ], Variant: "card");
 
         // MAIN — progress, add, the task list.
+        // Items render in CreatedAt order; the bind path uses each task's
+        // index in the source state.Items[] array so the renderer writes the
+        // new value into the right slot.
+        var sourceItems = state.Items;
         var taskItems = filtered
             .OrderBy(t => t.CreatedAt)
-            .Select(t => (ViewNode)new ListItemNode(
-                t.Id,
-                t.Completed ? "done" : null,
-                [
-                    new CheckboxNode("completed", t.Completed, null,
-                        new ActionDescriptor("toggle", new() { ["id"] = t.Id })),
-                    new TextNode(t.Title, t.Completed ? "strikethrough" : null),
-                    new ButtonNode("✕",
-                        new ActionDescriptor("delete", new() { ["id"] = t.Id }), "danger"),
-                ]))
+            .Select(t =>
+            {
+                var i = -1;
+                for (var k = 0; k < sourceItems.Count; k++)
+                {
+                    if (sourceItems[k].Id == t.Id) { i = k; break; }
+                }
+                return (ViewNode)new ListItemNode(
+                    t.Id,
+                    t.Completed ? "done" : null,
+                    [
+                        new CheckboxNode("completed", $"items.{i}.completed", null,
+                            new ActionDescriptor($"toggle-row-{t.Id}")),
+                        new TextNode(t.Title, t.Completed ? "strikethrough" : null),
+                        new ButtonNode("✕",
+                            new ActionDescriptor($"delete-row-{t.Id}"), "danger"),
+                    ]);
+            })
             .ToList();
         if (taskItems.Count == 0)
             taskItems.Add(new TextNode("Nothing here.", "muted"));
@@ -139,7 +134,10 @@ public class TasksController : ControllerBase
                 SubmitAction: new ActionDescriptor("add"),
                 SubmitLabel:  "Add",
                 Layout:       "inline",
-                Children: [new FieldNode("title", "text", null, "Add a task…", null)]),
+                Children:
+                [
+                    new FieldNode("title", "text", "draftTitle", null, "Add a task…"),
+                ]),
             new ListNode(taskItems),
         ]);
 

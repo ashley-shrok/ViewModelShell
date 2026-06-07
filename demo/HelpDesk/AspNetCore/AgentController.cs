@@ -1,6 +1,5 @@
 namespace HelpDesk.Controllers;
 
-using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using ViewModelShell;
 
@@ -12,7 +11,7 @@ public class AgentController(HelpDeskDb db) : ControllerBase
     public ShellResponse<AgentState> Get()
     {
         var state = AgentState.Initial();
-        return new(BuildVm(state), state);
+        return new ShellResponse<AgentState>(BuildVm(state), state).Validate();
     }
 
     [HttpPost("action")]
@@ -23,98 +22,84 @@ public class AgentController(HelpDeskDb db) : ControllerBase
             Request.Form["_action"].ToString(),
             Request.Form["_state"].ToString());
 
-        string? Str(string key) =>
-            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
-                ? v.GetString() : null;
-        // 0.13.0: bulk-action handlers read the harvested selection from context.
-        List<string> StrList(string key) =>
-            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.Array
-                ? v.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList()
-                : new List<string>();
-
         var state = payload.State with { NotesSaved = false };
+        var name = payload.Name;
 
-        switch (payload.Name)
+        // Phase 6 (WIRE-07) — every input value flows through state at the
+        // bound path; per-row identity is encoded in the action name itself.
+        if (name.StartsWith("filter-") && name != "filter-text")
         {
-            case "filter":
-                state = state with { Filter = Str("value") ?? "all" };
-                break;
-
-            // 0.15.1 — free-text title filter dispatched by the Title column's
-            // Filterable input. Adapter sends { column, value, filters }; we
-            // only care about `value`. Empty string clears the filter.
-            case "filter-text":
-                state = state with { TitleFilter = Str("value") ?? "" };
-                break;
-
-            // 0.13.0 — toggle-select action removed. Selection is purely local
-            // (DOM-tracked by the adapter) until a bulk-action button fires.
-            case "bulk-start":
-            case "bulk-resolve":
-            case "bulk-reopen":
-                var bulkStatus = payload.Name switch
+            // Filter is already in state via the TabsNode bind.
+        }
+        else if (name == "filter-text")
+        {
+            // TitleFilter is already in state via the column filterBind.
+        }
+        else if (name == "bulk-start" || name == "bulk-resolve" || name == "bulk-reopen")
+        {
+            var bulkStatus = name switch
+            {
+                "bulk-start"   => "in-progress",
+                "bulk-resolve" => "resolved",
+                _              => "open",
+            };
+            // The per-row checkbox bind has already written true/false to
+            // SelectedIds keyed by ticket id; read the truthy keys here.
+            foreach (var kv in state.SelectedIds)
+            {
+                if (kv.Value && long.TryParse(kv.Key, out var id))
+                    db.UpdateStatus(id, bulkStatus);
+            }
+            state = state with { SelectedIds = new Dictionary<string, bool>() };
+        }
+        else if (name.StartsWith("select-ticket-"))
+        {
+            if (long.TryParse(name["select-ticket-".Length..], out var sid))
+            {
+                var ticket = db.GetById(sid);
+                state = state with
                 {
-                    "bulk-start"  => "in-progress",
-                    "bulk-resolve" => "resolved",
-                    _              => "open",
+                    SelectedTicketId = sid,
+                    View = "detail",
+                    AgentNotes = ticket?.AgentNotes ?? "",
                 };
-                // selectedIds arrived in the action context, harvested by the
-                // adapter from the bulk button's TableNode.selection.buttons[] click.
-                foreach (var id in StrList("selectedIds").Select(long.Parse)) db.UpdateStatus(id, bulkStatus);
-                break;
-
-            case "select-ticket":
-                var selId = Str("id");
-                if (selId != null && long.TryParse(selId, out var sid))
-                    state = state with { SelectedTicketId = sid, View = "detail" };
-                break;
-
-            case "back-to-queue":
-                state = state with { View = "queue", SelectedTicketId = null };
-                break;
-
-            case "start-ticket":
-                var startId = Str("id");
-                if (startId != null && long.TryParse(startId, out var stid))
-                {
-                    db.UpdateStatus(stid, "in-progress");
-                    if (state.View == "detail")
-                        state = state with { SelectedTicketId = stid };
-                }
-                break;
-
-            case "resolve-ticket":
-                var resolveId = Str("id");
-                if (resolveId != null && long.TryParse(resolveId, out var rid))
-                    db.UpdateStatus(rid, "resolved");
-                break;
-
-            case "reopen-ticket":
-                var reopenId = Str("id");
-                if (reopenId != null && long.TryParse(reopenId, out var roid))
-                    db.UpdateStatus(roid, "open");
-                break;
-
-            case "save-notes":
-                var notesId = Str("id");
-                var notes   = Str("agent_notes");
-                if (notesId != null && long.TryParse(notesId, out var nid))
-                {
-                    db.UpdateAgentNotes(nid, notes);
-                    state = state with { NotesSaved = true };
-                }
-                break;
-
-            default:
-                return BadRequest($"Unknown action: {payload.Name}");
+            }
+        }
+        else if (name == "back-to-queue")
+        {
+            state = state with { View = "queue", SelectedTicketId = null, AgentNotes = "" };
+        }
+        else if (name == "start-ticket")
+        {
+            if (state.SelectedTicketId.HasValue)
+                db.UpdateStatus(state.SelectedTicketId.Value, "in-progress");
+        }
+        else if (name == "resolve-ticket")
+        {
+            if (state.SelectedTicketId.HasValue)
+                db.UpdateStatus(state.SelectedTicketId.Value, "resolved");
+        }
+        else if (name == "reopen-ticket")
+        {
+            if (state.SelectedTicketId.HasValue)
+                db.UpdateStatus(state.SelectedTicketId.Value, "open");
+        }
+        else if (name == "save-notes")
+        {
+            if (state.SelectedTicketId.HasValue)
+            {
+                db.UpdateAgentNotes(state.SelectedTicketId.Value, state.AgentNotes);
+                state = state with { NotesSaved = true };
+            }
+        }
+        else
+        {
+            return BadRequest($"Unknown action: {name}");
         }
 
-        return new ShellResponse<AgentState>(BuildVm(state), state);
+        return new ShellResponse<AgentState>(BuildVm(state), state).Validate();
     }
 
-    // Realistic ticket system: a full-width filterable ticket queue
-    // (table; whole-row click opens the ticket) → a dedicated full
-    // ticket page. The navigate pattern real ticketing actually uses.
     private ViewNode BuildVm(AgentState state)
     {
         if (state.View == "detail" && state.SelectedTicketId.HasValue)
@@ -125,13 +110,6 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         return BuildQueuePage(state);
     }
 
-    // 0.15.1 — canonical workflow pattern: filter narrows under the cap, then
-    // the table shows ALL matches (no pagination), with selection.buttons[]
-    // for bulk actions on the visible chunk. If the filter is too broad
-    // (matches > Cap), the controller renders a "narrow your filter" message
-    // and an empty table (keeping the column filter input accessible). Pick
-    // Cap to fit your row weight + the user's working memory; for a ticket
-    // queue, 25 is comfortable. See AGENTS.md "Tables in VMS" for the rules.
     private const int Cap = 25;
 
     private ViewNode BuildQueuePage(AgentState state)
@@ -146,18 +124,29 @@ public class AgentController(HelpDeskDb db) : ControllerBase
             new TextNode($"{open} open · {inProgress} in progress · {resolved} resolved", "muted"),
             new TabsNode(
                 Selected: state.Filter,
-                Action:   new ActionDescriptor("filter"),
+                Bind:     "filter",
                 Tabs:
                 [
-                    new TabItem("all",         "All"),
-                    new TabItem("open",        "Open"),
-                    new TabItem("in-progress", "In Progress"),
-                    new TabItem("resolved",    "Resolved"),
+                    new TabItem("all",         "All",         new ActionDescriptor("filter-all")),
+                    new TabItem("open",        "Open",        new ActionDescriptor("filter-open")),
+                    new TabItem("in-progress", "In Progress", new ActionDescriptor("filter-in-progress")),
+                    new TabItem("resolved",    "Resolved",    new ActionDescriptor("filter-resolved")),
                 ]),
         };
 
-        // "Too many matches" notice rendered ABOVE the table so the filter
-        // input (in the table header) stays accessible to the user.
+        var tickets = withinCap ? db.GetMatching(status, state.TitleFilter, Cap) : new List<Ticket>();
+
+        // Bulk action toolbar — visible when there are matches within the cap.
+        if (withinCap && tickets.Count > 0)
+        {
+            children.Add(new SectionNode(null,
+            [
+                new ButtonNode("Mark In Progress", new ActionDescriptor("bulk-start"),   "secondary"),
+                new ButtonNode("Mark Resolved",    new ActionDescriptor("bulk-resolve"), "primary"),
+                new ButtonNode("Reopen",           new ActionDescriptor("bulk-reopen"),  "secondary"),
+            ]));
+        }
+
         if (!withinCap)
         {
             children.Add(new TextNode(
@@ -165,45 +154,52 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                 "warning"));
         }
 
-        // Fetch rows only when within the cap; over-cap renders an empty body.
-        var tickets = withinCap ? db.GetMatching(status, state.TitleFilter, Cap) : new List<Ticket>();
-        var rows = tickets.Select(t => new TableRow(
-            Cells: new Dictionary<string, string>
+        // Empty-state fallback for an empty queue.
+        if (withinCap && tickets.Count == 0 && open + inProgress + resolved == 0)
+        {
+            children.Add(new TextNode("No tickets in queue.", "muted"));
+        }
+        else
+        {
+            var rows = tickets.Select(t =>
             {
-                ["title"]    = t.Title,
-                ["type"]     = TypeLabel(t.Type),
-                ["priority"] = PriorityLabel(t.Priority),
-                ["status"]   = StatusLabel(t.Status),
-                ["due"]      = string.IsNullOrEmpty(t.DueDate) ? "—" : t.DueDate!,
-            },
-            Id:      t.Id.ToString(),
-            Action:  new ActionDescriptor("select-ticket", new() { ["id"] = t.Id.ToString() }),
-            Variant: TicketVariant(t))).ToList();
+                var rowActions = new List<ViewNode>
+                {
+                    // Per-row selection checkbox — bind writes true/false
+                    // directly to selectedIds.{id} (no action needed).
+                    new CheckboxNode($"select-{t.Id}", $"selectedIds.{t.Id}", null, null),
+                    new ButtonNode("Open",
+                        new ActionDescriptor($"select-ticket-{t.Id}"),
+                        "secondary"),
+                };
+                return new TableRow(
+                    Cells: new Dictionary<string, string>
+                    {
+                        ["title"]    = t.Title,
+                        ["type"]     = TypeLabel(t.Type),
+                        ["priority"] = PriorityLabel(t.Priority),
+                        ["status"]   = StatusLabel(t.Status),
+                        ["due"]      = string.IsNullOrEmpty(t.DueDate) ? "—" : t.DueDate!,
+                    },
+                    Id:      t.Id.ToString(),
+                    Actions: rowActions,
+                    Variant: TicketVariant(t));
+            }).ToList();
 
-        TableSelection? selection = withinCap && rows.Count > 0
-            ? new TableSelection(
-                SelectedIds: [],
-                Buttons:
+            children.Add(new TableNode(
+                Columns:
                 [
-                    new ButtonNode("Mark In Progress", new ActionDescriptor("bulk-start"),   "secondary"),
-                    new ButtonNode("Mark Resolved",    new ActionDescriptor("bulk-resolve"), "primary"),
-                    new ButtonNode("Reopen",           new ActionDescriptor("bulk-reopen"),  "secondary"),
-                ])
-            : null;
-
-        children.Add(new TableNode(
-            Columns:
-            [
-                new TableColumn("title",    "Title", Filterable: true,
-                    FilterValue: state.TitleFilter.Length > 0 ? state.TitleFilter : null),
-                new TableColumn("type",     "Type"),
-                new TableColumn("priority", "Priority"),
-                new TableColumn("status",   "Status"),
-                new TableColumn("due",      "Due"),
-            ],
-            Rows: rows,
-            FilterAction: new ActionDescriptor("filter-text"),
-            Selection: selection));
+                    new TableColumn("title",    "Title", Filterable: true,
+                        FilterValue: state.TitleFilter.Length > 0 ? state.TitleFilter : null),
+                    new TableColumn("type",     "Type"),
+                    new TableColumn("priority", "Priority"),
+                    new TableColumn("status",   "Status"),
+                    new TableColumn("due",      "Due"),
+                ],
+                Rows: rows,
+                FilterBinds: new Dictionary<string, string> { ["title"] = "titleFilter" },
+                FilterAction: new ActionDescriptor("filter-text")));
+        }
 
         return new PageNode("Help Desk — Agent", children);
     }
@@ -244,19 +240,19 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         {
             case "open":
                 actionChildren.Add(new ButtonNode("Mark In Progress",
-                    new ActionDescriptor("start-ticket",   new() { ["id"] = ticket.Id.ToString() }),
+                    new ActionDescriptor("start-ticket"),
                     "primary",
                     PendingLabel: "Marking…"));
                 break;
             case "in-progress":
                 actionChildren.Add(new ButtonNode("Mark Resolved",
-                    new ActionDescriptor("resolve-ticket", new() { ["id"] = ticket.Id.ToString() }),
+                    new ActionDescriptor("resolve-ticket"),
                     "primary",
                     PendingLabel: "Resolving…"));
                 break;
             case "resolved":
                 actionChildren.Add(new ButtonNode("Reopen",
-                    new ActionDescriptor("reopen-ticket",  new() { ["id"] = ticket.Id.ToString() }),
+                    new ActionDescriptor("reopen-ticket"),
                     "secondary",
                     PendingLabel: "Reopening…"));
                 if (!string.IsNullOrEmpty(ticket.ResolvedAt))
@@ -271,20 +267,21 @@ public class AgentController(HelpDeskDb db) : ControllerBase
             new SectionNode("Agent Notes",
             [
                 new FormNode(
-                    SubmitAction: new ActionDescriptor("save-notes", new() { ["id"] = ticket.Id.ToString() }),
+                    SubmitAction: new ActionDescriptor("save-notes"),
                     SubmitLabel:  "Save Notes",
-                    Children:     NotesFormChildren(ticket.AgentNotes, state.NotesSaved)
+                    Children:     NotesFormChildren(state.NotesSaved)
                 )
             ]),
             new SectionNode("Actions", actionChildren),
         ]);
     }
 
-    private static IReadOnlyList<ViewNode> NotesFormChildren(string? agentNotes, bool saved)
+    private static IReadOnlyList<ViewNode> NotesFormChildren(bool saved)
     {
         var children = new List<ViewNode>
         {
-            new FieldNode("agent_notes", "textarea", null, "Add notes…", agentNotes)
+            // Bound to state.AgentNotes; the renderer reads/writes from there.
+            new FieldNode("agent_notes", "textarea", "agentNotes", null, "Add notes…"),
         };
         if (saved) children.Add(new TextNode("Notes saved.", "muted"));
         return children;

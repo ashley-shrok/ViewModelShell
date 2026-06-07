@@ -9,11 +9,26 @@ public record ContactRecord(
     DateTimeOffset CreatedAt
 );
 
+// Phase 6 (WIRE-07) — typed values of the right-pane add/edit form. Lives in
+// state so the renderer's bind seam can read/write each field; the
+// "save-contact-new" / "save-contact-edit-{id}" handlers read it.
+public record DraftForm(
+    string Name,
+    string Email,
+    string Phone,
+    string Notes
+)
+{
+    public static DraftForm Empty() => new("", "", "", "");
+    public static DraftForm From(ContactRecord c) => new(c.Name, c.Email, c.Phone, c.Notes);
+}
+
 public record ContactsState(
     IReadOnlyList<ContactRecord> Contacts,
     string CurrentView,        // "list" | "detail" | "add"
     string? SelectedId,
-    string SearchQuery
+    string SearchQuery,
+    DraftForm DraftForm
 )
 {
     public static ContactsState Initial() => new(
@@ -34,6 +49,7 @@ public record ContactsState(
         ],
         CurrentView: "list",
         SelectedId: null,
-        SearchQuery: ""
+        SearchQuery: "",
+        DraftForm: DraftForm.Empty()
     );
 }

@@ -1,6 +1,5 @@
 namespace RetroBoard.Controllers;
 
-using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using RetroBoard.State;
 using ViewModelShell;
@@ -13,7 +12,7 @@ public class RetroBoardController : ControllerBase
     public ShellResponse<RetroState> Get()
     {
         var state = RetroState.Initial();
-        return new(BuildVm(state), state);
+        return new ShellResponse<RetroState>(BuildVm(state), state).Validate();
     }
 
     [HttpPost("action")]
@@ -24,63 +23,63 @@ public class RetroBoardController : ControllerBase
             Request.Form["_action"].ToString(),
             Request.Form["_state"].ToString());
 
-        string? Str(string key) =>
-            payload.Context?.TryGetValue(key, out var v) == true && v.ValueKind == JsonValueKind.String
-                ? v.GetString() : null;
-
-        bool? Bool(string key) =>
-            payload.Context?.TryGetValue(key, out var v) == true
-                ? v.ValueKind switch
-                {
-                    JsonValueKind.True  => true,
-                    JsonValueKind.False => false,
-                    _ => (bool?)null
-                }
-                : null;
-
         var state = payload.State;
+        var name = payload.Name;
 
-        switch (payload.Name)
+        // Phase 6 (WIRE-07) — per-card/per-lane identity is encoded in the
+        // action name; field values flow through state at their bind paths.
+        if (name.StartsWith("add-card-"))
         {
-            case "add-card":
-                var section = Str("section");
-                var text    = Str("text");
-                if (string.IsNullOrWhiteSpace(text)) return BadRequest("text required");
-                if (section != null)
-                {
-                    var card = new RetroCard(
-                        Id:        Guid.NewGuid().ToString("N")[..8],
-                        Text:      text.Trim(),
-                        Votes:     0,
-                        Resolved:  false,
-                        CreatedAt: DateTimeOffset.UtcNow);
-                    state = AddCard(state, section, card);
-                }
-                break;
-
-            case "delete-card":
-                var deleteId = Str("id");
-                if (deleteId != null) state = DeleteCard(state, deleteId);
-                break;
-
-            case "upvote-card":
-                var upvoteId = Str("id");
-                if (upvoteId != null) state = UpvoteCard(state, upvoteId);
-                break;
-
-            case "resolve-card":
-                var resolveId  = Str("id");
-                var isResolved = Bool("checked");
-                if (resolveId != null && isResolved.HasValue)
-                    state = ResolveCard(state, resolveId, isResolved.Value);
-                break;
-
-            default:
-                return BadRequest($"Unknown action: {payload.Name}");
+            var section = name["add-card-".Length..];
+            var text = ReadDraft(state, section).Trim();
+            if (string.IsNullOrWhiteSpace(text)) return BadRequest("text required");
+            var card = new RetroCard(
+                Id:        Guid.NewGuid().ToString("N")[..8],
+                Text:      text,
+                Votes:     0,
+                Resolved:  false,
+                CreatedAt: DateTimeOffset.UtcNow);
+            state = AddCard(state, section, card);
+            state = ClearDraft(state, section);
+        }
+        else if (name.StartsWith("delete-card-"))
+        {
+            var id = name["delete-card-".Length..];
+            state = DeleteCard(state, id);
+        }
+        else if (name.StartsWith("upvote-card-"))
+        {
+            var id = name["upvote-card-".Length..];
+            state = UpvoteCard(state, id);
+        }
+        else if (name.StartsWith("resolve-card-"))
+        {
+            // The checkbox bind has already written the new boolean to
+            // state.ActionItems[i].Resolved. Just acknowledge with a re-render.
+        }
+        else
+        {
+            return BadRequest($"Unknown action: {name}");
         }
 
-        return new ShellResponse<RetroState>(BuildVm(state), state);
+        return new ShellResponse<RetroState>(BuildVm(state), state).Validate();
     }
+
+    private static string ReadDraft(RetroState s, string section) => section switch
+    {
+        "went-well"     => s.Drafts.WentWell,
+        "didnt-go-well" => s.Drafts.DidntGoWell,
+        "action-items"  => s.Drafts.ActionItems,
+        _               => ""
+    };
+
+    private static RetroState ClearDraft(RetroState s, string section) => section switch
+    {
+        "went-well"     => s with { Drafts = s.Drafts with { WentWell    = "" } },
+        "didnt-go-well" => s with { Drafts = s.Drafts with { DidntGoWell = "" } },
+        "action-items"  => s with { Drafts = s.Drafts with { ActionItems = "" } },
+        _               => s
+    };
 
     private static RetroState AddCard(RetroState s, string section, RetroCard card) => section switch
     {
@@ -104,31 +103,25 @@ public class RetroBoardController : ControllerBase
         ActionItems = [.. s.ActionItems.Select(c => c.Id == id ? c with { Votes = c.Votes + 1 } : c)],
     };
 
-    private static RetroState ResolveCard(RetroState s, string id, bool resolved) => s with
-    {
-        ActionItems = [.. s.ActionItems.Select(c => c.Id == id ? c with { Resolved = resolved } : c)]
-    };
-
     private static ViewNode BuildVm(RetroState state)
     {
-        // Real retro board = 3 lanes side by side. `cards` auto-fits them
-        // (3 on desktop; reflows to 2/1 on narrow). Whether that reflow is
-        // acceptable or this needs a true fixed-N preset (LAYOUT-F1) is the
-        // call we make from the rendered result.
         return new PageNode(
             Title:  "Retro Board",
             Layout: "cards",
             Children:
             [
-                BuildSectionNode("Went Well",      "went-well",     state.WentWell,    isActionItems: false),
-                BuildSectionNode("Didn't Go Well", "didnt-go-well", state.DidntGoWell, isActionItems: false),
-                BuildSectionNode("Action Items",   "action-items",  state.ActionItems, isActionItems: true),
+                BuildSectionNode("Went Well",      "went-well",     "drafts.wentWell",    state.WentWell,    state.ActionItems, isActionItems: false),
+                BuildSectionNode("Didn't Go Well", "didnt-go-well", "drafts.didntGoWell", state.DidntGoWell, state.ActionItems, isActionItems: false),
+                BuildSectionNode("Action Items",   "action-items",  "drafts.actionItems", state.ActionItems, state.ActionItems, isActionItems: true),
             ]
         );
     }
 
     private static SectionNode BuildSectionNode(
-        string label, string sectionId, IReadOnlyList<RetroCard> cards, bool isActionItems)
+        string label, string sectionId, string draftBind,
+        IReadOnlyList<RetroCard> cards,
+        IReadOnlyList<RetroCard> sourceActionItems,
+        bool isActionItems)
     {
         return new SectionNode(
             Heading: $"{label} ({cards.Count})",
@@ -136,47 +129,53 @@ public class RetroBoardController : ControllerBase
             Children:
             [
                 new FormNode(
-                    SubmitAction: new ActionDescriptor("add-card", new() { ["section"] = sectionId }),
+                    SubmitAction: new ActionDescriptor($"add-card-{sectionId}"),
                     SubmitLabel:  "Add",
                     Children:
                     [
-                        new FieldNode("text", "text", null, $"Add to {label}…", null)
+                        new FieldNode("text", "text", draftBind, null, $"Add to {label}…")
                     ]
                 ),
 
                 new ListNode(
                     Children: cards
                         .OrderBy(c => c.CreatedAt)
-                        .Select(c => (ViewNode)BuildCardItem(c, isActionItems))
+                        .Select(c => (ViewNode)BuildCardItem(c, isActionItems, sourceActionItems))
                         .ToList()
                 ),
             ]
         );
     }
 
-    private static ListItemNode BuildCardItem(RetroCard card, bool isActionItems)
+    private static ListItemNode BuildCardItem(
+        RetroCard card, bool isActionItems, IReadOnlyList<RetroCard> sourceActionItems)
     {
         var children = new List<ViewNode>();
 
         if (isActionItems)
         {
+            var idx = -1;
+            for (var k = 0; k < sourceActionItems.Count; k++)
+            {
+                if (sourceActionItems[k].Id == card.Id) { idx = k; break; }
+            }
             children.Add(new CheckboxNode(
-                Name:    "resolved",
-                Checked: card.Resolved,
-                Label:   null,
-                Action:  new ActionDescriptor("resolve-card", new() { ["id"] = card.Id })
+                Name:   "resolved",
+                Bind:   $"actionItems.{idx}.resolved",
+                Label:  null,
+                Action: new ActionDescriptor($"resolve-card-{card.Id}")
             ));
         }
 
         children.Add(new TextNode(card.Text, card.Resolved ? "strikethrough" : null));
         children.Add(new ButtonNode(
             Label:   $"▲ {card.Votes}",
-            Action:  new ActionDescriptor("upvote-card", new() { ["id"] = card.Id }),
+            Action:  new ActionDescriptor($"upvote-card-{card.Id}"),
             Variant: null
         ));
         children.Add(new ButtonNode(
             Label:   "✕",
-            Action:  new ActionDescriptor("delete-card", new() { ["id"] = card.Id }),
+            Action:  new ActionDescriptor($"delete-card-{card.Id}"),
             Variant: "danger"
         ));
 
