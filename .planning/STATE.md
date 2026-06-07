@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.0.0
 milestone_name: Truly Self-Describing Wire
 status: planning
-last_updated: "2026-06-07T06:12:17.293Z"
-last_activity: 2026-06-07
+last_updated: "2026-06-07T06:33:18.607Z"
+last_activity: 2026-06-07 — Roadmap created for milestone v1.0.0 (Phases 6–7)
 progress:
-  total_phases: 2
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
