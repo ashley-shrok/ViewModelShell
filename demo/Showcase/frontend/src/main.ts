@@ -1,9 +1,6 @@
 import "@ashley-shrok/viewmodel-shell/styles.css";
 // All theme files inlined here. Apps would normally pick one and import it
 // statically; the showcase swaps at runtime via a single injected style tag.
-// The runtime theme switcher is scoped to the component-gallery view only
-// (D-14); the three archetype views always render the fixed new shipped
-// light-purple default — the stable benchmark target.
 import darkPurpleCss  from "@ashley-shrok/viewmodel-shell/themes/dark-purple.css?inline";
 import darkBlueCss    from "@ashley-shrok/viewmodel-shell/themes/dark-blue.css?inline";
 import darkGreenCss   from "@ashley-shrok/viewmodel-shell/themes/dark-green.css?inline";
@@ -17,24 +14,37 @@ import lightRoseCss   from "@ashley-shrok/viewmodel-shell/themes/light-rose.css?
 import lightAmberCss  from "@ashley-shrok/viewmodel-shell/themes/light-amber.css?inline";
 import lightTealCss   from "@ashley-shrok/viewmodel-shell/themes/light-teal.css?inline";
 import { BrowserAdapter } from "@ashley-shrok/viewmodel-shell/browser";
-import type { ViewNode, ActionEvent } from "@ashley-shrok/viewmodel-shell";
+import type { ViewNode, ActionEvent, StateAccess } from "@ashley-shrok/viewmodel-shell";
+
+// Phase 6 (WIRE-07): the Showcase has no backend; it drives the BrowserAdapter
+// directly without a ViewModelShell. To honor the new renderer contract
+// (Adapter.render expects a third stateAccess arg), we supply a minimal
+// readPath/writePath closure backed by the local `state` object and re-render
+// on every write. Action handlers no longer read `action.context`; per-row
+// identity (the catalog item id) is encoded in the action name itself.
 
 // ── State ────────────────────────────────────────────────────────────────
 type Mode = "dark" | "light";
 type Accent = "purple" | "blue" | "green" | "rose" | "amber" | "teal";
 type View = "components" | "dashboard" | "form" | "list-detail";
 
+interface SortIntent {
+  column: string;
+  direction: "asc" | "desc";
+}
+
 interface State {
   view:          View;
   modalShown:    boolean;
   agreeChecked:  boolean;
   selectedTab:   string;
-  sortColumn:    string;
-  sortDirection: "asc" | "desc";
+  sortIntent:    SortIntent;
   filters:       Record<string, string>;
   mode:          Mode;
   accent:        Accent;
   selectedItemId: string;
+  // Phase 6 — bind slots for each input in the gallery's form sections.
+  formInputs: Record<string, unknown>;
 }
 
 let state: State = {
@@ -42,17 +52,67 @@ let state: State = {
   modalShown:    true,
   agreeChecked:  false,
   selectedTab:   "active",
-  sortColumn:    "name",
-  sortDirection: "asc",
+  sortIntent:    { column: "name", direction: "asc" },
   filters:       { name: "", status: "" },
-  // The Showcase boots in the new shipped light default so the canonical set
-  // benchmarks light-on-Bootstrap-light (D-06). default.css :root is already
-  // light-purple (Plan 01), so applyTheme()'s light-purple override is a
-  // harmless no-op equivalent on first render — intentionally not special-cased.
   mode:          "light",
   accent:        "purple",
   selectedItemId: "lp-01",
+  formInputs: {
+    text: "",
+    email: "",
+    password: "",
+    number: "",
+    date: "2026-04-28",
+    time: "14:30",
+    datetime: "2026-04-28T14:30",
+    textarea: "",
+    select: "b",
+    multi: "a,c",
+    subscribe: "true",
+    file: null,
+    query: "select id, title, status\nfrom tickets\nwhere priority in ('high', 'critical')\norder by created_at desc;",
+    // Checkout (form view)
+    fullName: "", email_co: "", phone: "",
+    address1: "", address2: "", city: "", country: "us", zip: "",
+    cardName: "", cardNumber: "", cardExpiry: "", cardCvv: "",
+  },
 };
+
+// ── Bind-path walk (mirrors viewmodel-shell/src/index.ts; ~20 lines) ─────
+function readPath(obj: unknown, path: string): unknown {
+  if (!path) return obj;
+  const segs = path.split(".");
+  let cur: unknown = obj;
+  for (const seg of segs) {
+    if (cur == null) return undefined;
+    if (Array.isArray(cur)) {
+      const idx = Number(seg);
+      if (!Number.isInteger(idx) || idx < 0) return undefined;
+      cur = cur[idx];
+    } else if (typeof cur === "object") {
+      cur = (cur as Record<string, unknown>)[seg];
+    } else return undefined;
+  }
+  return cur;
+}
+function writePath(obj: unknown, path: string, value: unknown): unknown {
+  if (!path) return value;
+  const segs = path.split(".");
+  let root: unknown = obj ?? {};
+  let cur: unknown = root;
+  for (let i = 0; i < segs.length - 1; i++) {
+    const seg = segs[i]!;
+    const o = cur as Record<string, unknown>;
+    let nxt = o[seg];
+    if (nxt == null || typeof nxt !== "object") {
+      nxt = {};
+      o[seg] = nxt;
+    }
+    cur = nxt;
+  }
+  (cur as Record<string, unknown>)[segs[segs.length - 1]!] = value;
+  return root;
+}
 
 // ── Theme switching (gallery view only — D-14) ───────────────────────────
 const themeStyle = document.createElement("style");
@@ -60,10 +120,6 @@ themeStyle.id = "vms-showcase-theme";
 document.head.appendChild(themeStyle);
 
 const themeFiles: Record<string, string> = {
-  // The shipped default is now light-purple (Plan 01 D-01). dark-purple is no
-  // longer the implicit empty-string default — it is a real entry pointing at
-  // the new themes/dark-purple.css byte-exact capture of the prior dark default
-  // (D-06).
   "dark-purple":  darkPurpleCss,
   "dark-blue":    darkBlueCss,
   "dark-green":   darkGreenCss,
@@ -97,10 +153,10 @@ function visibleRows() {
     (!f.name   || r.name.toLowerCase().includes(f.name.toLowerCase())) &&
     (!f.status || r.status.toLowerCase().includes(f.status.toLowerCase()))
   );
-  const dir = state.sortDirection === "asc" ? 1 : -1;
+  const dir = state.sortIntent.direction === "asc" ? 1 : -1;
   return [...filtered].sort((a, b) => {
-    const av = (a as any)[state.sortColumn] ?? "";
-    const bv = (b as any)[state.sortColumn] ?? "";
+    const av = (a as any)[state.sortIntent.column] ?? "";
+    const bv = (b as any)[state.sortIntent.column] ?? "";
     return av < bv ? -1 * dir : av > bv ? 1 * dir : 0;
   });
 }
@@ -126,45 +182,35 @@ const catalog: CatalogItem[] = [
 ];
 
 function selectedItem(): CatalogItem {
-  return catalog.find(c => c.id === state.selectedItemId) ?? catalog[0];
+  return catalog.find(c => c.id === state.selectedItemId) ?? catalog[0]!;
 }
 
 // ── The runtime theme switcher section (D-06/D-14) ───────────────────────
-// Scoped to the component-gallery view ONLY. The three archetype views render
-// the fixed new shipped light-purple default with no switcher control — the
-// stable benchmark target. The explicit `state.view === "components"` guard
-// makes the D-14 scope structurally falsifiable (no switcher control leaks
-// onto an archetype view).
 function themeSwitcherSection(): ViewNode[] {
   if (state.view !== "components") return [];
   return [
     { type: "section", heading: "Theme", children: [
-      { type: "tabs", selected: state.mode, action: { name: "theme:mode" }, tabs: [
-        { value: "dark",  label: "Dark"  },
-        { value: "light", label: "Light" },
+      { type: "tabs", selected: state.mode, bind: "mode", tabs: [
+        { value: "dark",  label: "Dark",  action: { name: "theme:mode:dark"  } },
+        { value: "light", label: "Light", action: { name: "theme:mode:light" } },
       ]},
-      { type: "tabs", selected: state.accent, action: { name: "theme:accent" }, tabs: [
-        { value: "purple", label: "Purple" },
-        { value: "blue",   label: "Blue"   },
-        { value: "green",  label: "Green"  },
-        { value: "rose",   label: "Rose"   },
-        { value: "amber",  label: "Amber"  },
-        { value: "teal",   label: "Teal"   },
+      { type: "tabs", selected: state.accent, bind: "accent", tabs: [
+        { value: "purple", label: "Purple", action: { name: "theme:accent:purple" } },
+        { value: "blue",   label: "Blue",   action: { name: "theme:accent:blue"   } },
+        { value: "green",  label: "Green",  action: { name: "theme:accent:green"  } },
+        { value: "rose",   label: "Rose",   action: { name: "theme:accent:rose"   } },
+        { value: "amber",  label: "Amber",  action: { name: "theme:accent:amber"  } },
+        { value: "teal",   label: "Teal",   action: { name: "theme:accent:teal"   } },
       ]},
       { type: "text", value: "Mode × accent gives 12 themes. Apps pick one with a single import — the showcase combines them at runtime so you can sample them all. The switcher is scoped to this gallery; the archetype views render the fixed shipped light default.", style: "muted" },
     ]},
   ];
 }
 
-// ── Components / kitchen-sink gallery view (preserved verbatim, D-09/D-14) ─
-// Every prior gallery section is preserved unchanged. The Theme switcher
-// section stays ONLY here (gated to the components view via the
-// `state.view === "components"` guard in themeSwitcherSection() — D-14).
 function componentsView(): ViewNode[] {
   return [
     ...themeSwitcherSection(),
 
-    // ── Text styles ───────────────────────────────────────────────
     { type: "section", heading: "Text styles", children: [
       { type: "text", value: "Heading text",    style: "heading" },
       { type: "text", value: "Subheading text", style: "subheading" },
@@ -176,7 +222,6 @@ function componentsView(): ViewNode[] {
       { type: "text", value: "$ vms render --verbose\n  ok page\n  ok section\n  ok list (3 items)\n  ok button x2", style: "pre" },
     ]},
 
-    // ── Stat bar ──────────────────────────────────────────────────
     { type: "section", heading: "Stat bar", children: [
       { type: "stat-bar", stats: [
         { label: "active",    value: 12 },
@@ -185,89 +230,80 @@ function componentsView(): ViewNode[] {
       ]},
     ]},
 
-    // ── Image ─────────────────────────────────────────────────────
     { type: "section", heading: "Image", layout: "split", children: [
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%237c5cff'/%3E%3C/svg%3E", alt: "Sample avatar", size: "small", shape: "circle" },
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90'%3E%3Crect width='160' height='90' fill='%2310b981'/%3E%3C/svg%3E", alt: "Sample banner", size: "large" },
     ]},
 
-    // ── Button variants ───────────────────────────────────────────
     { type: "section", heading: "Buttons", children: [
-      { type: "button", label: "Default",   action: { name: "noop" } },
-      { type: "button", label: "Primary",   action: { name: "noop" }, variant: "primary" },
-      { type: "button", label: "Secondary", action: { name: "noop" }, variant: "secondary" },
-      { type: "button", label: "Danger",    action: { name: "noop" }, variant: "danger" },
+      { type: "button", label: "Default",   action: { name: "noop-default"   } },
+      { type: "button", label: "Primary",   action: { name: "noop-primary"   }, variant: "primary" },
+      { type: "button", label: "Secondary", action: { name: "noop-secondary" }, variant: "secondary" },
+      { type: "button", label: "Danger",    action: { name: "noop-danger"    }, variant: "danger" },
     ]},
 
-    // ── Copy button ───────────────────────────────────────────────
     { type: "section", heading: "Copy button (clipboard, no dispatch)", children: [
       { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!" },
       { type: "copy-button", text: "console.log('hello from CopyButtonNode')" },
     ]},
 
-    // ── Links ─────────────────────────────────────────────────────
     { type: "section", heading: "Links", children: [
       { type: "link", label: "Internal link to a doc", href: "#docs" },
       { type: "link", label: "External (opens new tab)", href: "https://example.com", external: true },
     ]},
 
-    // ── Tabs + progress ───────────────────────────────────────────
     { type: "section", heading: "Tabs and progress", children: [
-      { type: "tabs", selected: state.selectedTab, action: { name: "tab:set" }, tabs: [
-        { value: "all",       label: "All"       },
-        { value: "active",    label: "Active"    },
-        { value: "completed", label: "Completed" },
+      { type: "tabs", selected: state.selectedTab, bind: "selectedTab", tabs: [
+        { value: "all",       label: "All",       action: { name: "tab:set:all"       } },
+        { value: "active",    label: "Active",    action: { name: "tab:set:active"    } },
+        { value: "completed", label: "Completed", action: { name: "tab:set:completed" } },
       ]},
       { type: "progress", value: 67 },
     ]},
 
-    // ── Forms: every input type ───────────────────────────────────
     { type: "section", heading: "Form inputs", children: [
       { type: "form",
         submitAction: { name: "submit-showcase" },
         submitLabel:  "Submit",
         children: [
-          { type: "field", name: "text",     inputType: "text",            label: "Text",        placeholder: "Type something" },
-          { type: "field", name: "email",    inputType: "email",           label: "Email",       placeholder: "you@example.com" },
-          { type: "field", name: "password", inputType: "password",        label: "Password",    placeholder: "••••••••" },
-          { type: "field", name: "number",   inputType: "number",          label: "Number",      placeholder: "0" },
-          { type: "field", name: "date",     inputType: "date",            label: "Date",        value: "2026-04-28" },
-          { type: "field", name: "time",     inputType: "time",            label: "Time",        value: "14:30" },
-          { type: "field", name: "datetime", inputType: "datetime-local",  label: "Date + Time", value: "2026-04-28T14:30" },
-          { type: "field", name: "textarea", inputType: "textarea",        label: "Textarea",    placeholder: "Multi-line input…" },
-          { type: "field", name: "select",   inputType: "select",          label: "Select", value: "b", options: [
+          { type: "field", name: "text",     inputType: "text",            bind: "formInputs.text",     label: "Text",        placeholder: "Type something" },
+          { type: "field", name: "email",    inputType: "email",           bind: "formInputs.email",    label: "Email",       placeholder: "you@example.com" },
+          { type: "field", name: "password", inputType: "password",        bind: "formInputs.password", label: "Password",    placeholder: "••••••••" },
+          { type: "field", name: "number",   inputType: "number",          bind: "formInputs.number",   label: "Number",      placeholder: "0" },
+          { type: "field", name: "date",     inputType: "date",            bind: "formInputs.date",     label: "Date" },
+          { type: "field", name: "time",     inputType: "time",            bind: "formInputs.time",     label: "Time" },
+          { type: "field", name: "datetime", inputType: "datetime-local",  bind: "formInputs.datetime", label: "Date + Time" },
+          { type: "field", name: "textarea", inputType: "textarea",        bind: "formInputs.textarea", label: "Textarea",    placeholder: "Multi-line input…" },
+          { type: "field", name: "select",   inputType: "select",          bind: "formInputs.select",   label: "Select", options: [
               { value: "a", label: "Option A" },
               { value: "b", label: "Option B" },
               { value: "c", label: "Option C" },
           ]},
-          { type: "field", name: "multi",    inputType: "select-multiple", label: "Select multiple", value: "a,c", options: [
+          { type: "field", name: "multi",    inputType: "select-multiple", bind: "formInputs.multi",    label: "Select multiple", options: [
               { value: "a", label: "Apple"  },
               { value: "b", label: "Banana" },
               { value: "c", label: "Cherry" },
           ]},
-          { type: "field", name: "subscribe",inputType: "checkbox",        label: "Form-collected checkbox (FieldNode)", value: "true" },
-          { type: "field", name: "file",     inputType: "file",            label: "File upload" },
-          { type: "field", name: "query",    inputType: "code",            label: "Code (SQL)", language: "sql",
-            value: "select id, title, status\nfrom tickets\nwhere priority in ('high', 'critical')\norder by created_at desc;" },
+          { type: "field", name: "subscribe",inputType: "checkbox",        bind: "formInputs.subscribe", label: "Form-collected checkbox (FieldNode)" },
+          { type: "field", name: "file",     inputType: "file",            bind: "formInputs.file",      label: "File upload" },
+          { type: "field", name: "query",    inputType: "code",            bind: "formInputs.query",     label: "Code (SQL)", language: "sql" },
         ],
       },
     ]},
 
-    // ── Standalone CheckboxNode ───────────────────────────────────
     { type: "section", heading: "Checkbox (immediate dispatch)", children: [
-      { type: "checkbox", name: "agree", checked: state.agreeChecked,
+      { type: "checkbox", name: "agree", bind: "agreeChecked",
         label: "Agree to terms (CheckboxNode — fires action on toggle)",
         action: { name: "agree:toggle" } },
       { type: "text", value: "Click toggles via the action. The form-collected variant above lives inside the form and rides along with submit.", style: "muted" },
     ]},
 
-    // ── List + variants (full rainbow palette) ────────────────────
     { type: "section", heading: "List with variants", children: [
       { type: "list", children: [
         { type: "list-item", children: [
           { type: "text", value: "Default item",       style: "subheading" },
           { type: "text", value: "no variant set",     style: "muted" },
-          { type: "button", label: "Delete", action: { name: "noop" }, variant: "danger" },
+          { type: "button", label: "Delete", action: { name: "noop-list-delete-default" }, variant: "danger" },
         ]},
         { type: "list-item", variant: "critical", children: [
           { type: "text", value: "Critical item",      style: "subheading" },
@@ -296,7 +332,6 @@ function componentsView(): ViewNode[] {
       ]},
     ]},
 
-    // ── Table with sort, filter, link cell ────────────────────────
     { type: "section", heading: "Table", children: [
       { type: "text", value: "Click sortable headers to sort. Type in a column filter and press Enter.", style: "muted" },
       { type: "table",
@@ -310,16 +345,18 @@ function componentsView(): ViewNode[] {
           id: r.id,
           cells: { id: r.id, name: r.name, status: r.status, url: r.url },
           variant: r.variant,
-          action: { name: "noop", context: { id: r.id } },
         })),
-        sortColumn:    state.sortColumn,
-        sortDirection: state.sortDirection,
-        sortAction:    { name: "table:sort"   },
-        filterAction:  { name: "table:filter" },
+        sortBind: "sortIntent",
+        filterBinds: { name: "filters.name", status: "filters.status" },
+        sortActions: {
+          id:     { name: "table:sort:id" },
+          name:   { name: "table:sort:name" },
+          status: { name: "table:sort:status" },
+        },
+        filterAction: { name: "table:filter" },
       },
     ]},
 
-    // ── Modal ─────────────────────────────────────────────────────
     { type: "section", heading: "Modal", children: [
       { type: "text", value: "Cancel/Delete forever/the X all dismiss it. Use the button below to reopen.", style: "muted" },
       { type: "button", label: "Open modal", action: { name: "modal:open" }, variant: "primary" },
@@ -333,25 +370,17 @@ function componentsView(): ViewNode[] {
         { type: "text" as const, value: "Are you sure you want to delete this item? This cannot be undone.", style: "body" as const },
       ],
       footer: [
-        { type: "button" as const, label: "Cancel",         action: { name: "modal:dismiss" } },
-        { type: "button" as const, label: "Delete forever", action: { name: "modal:dismiss" }, variant: "danger" as const },
+        { type: "button" as const, label: "Cancel",         action: { name: "modal:dismiss:cancel" } },
+        { type: "button" as const, label: "Delete forever", action: { name: "modal:dismiss:confirm" }, variant: "danger" as const },
       ],
     }] : []),
   ];
 }
 
-// ── Dashboard archetype (LOCKED: `cards` preset, Bootstrap "Dashboard") ───
-// Teaches WHEN to reach for `cards` + `section variant:"card"`: a stat/summary
-// card grid that auto-fits from --vms-card-min, a stat-bar summary row, a small
-// recent-activity table, and the primary CTA "New report". D-10/D-13.
 function dashboardView(): ViewNode[] {
   return [
     { type: "text", value: "Operations dashboard", style: "heading" },
     { type: "text", value: "Last 30 days · benchmarked against the Bootstrap \"Dashboard\" example. Built from the cards preset + section variant:\"card\" tiles.", style: "muted" },
-
-    // Stat tiles: a `cards`-layout section of `section variant:"card"` tiles.
-    // The cards preset auto-fits the tiles from --vms-card-min — zero app
-    // breakpoints, collapses to one column intrinsically.
     { type: "section", layout: "cards", children: [
       { type: "section", variant: "card", children: [
         { type: "text", value: "Revenue", style: "subheading" },
@@ -374,8 +403,6 @@ function dashboardView(): ViewNode[] {
         { type: "text", value: "3 high priority", style: "muted" },
       ]},
     ]},
-
-    // Summary stat-bar row.
     { type: "section", heading: "This month", children: [
       { type: "stat-bar", stats: [
         { label: "orders",       value: 1842 },
@@ -384,8 +411,6 @@ function dashboardView(): ViewNode[] {
         { label: "net revenue",  value: "$126,510" },
       ]},
     ]},
-
-    // Recent-activity table.
     { type: "section", heading: "Recent activity", children: [
       { type: "table",
         columns: [
@@ -403,19 +428,12 @@ function dashboardView(): ViewNode[] {
         ],
       },
     ]},
-
-    // Primary CTA — exact copy per UI-SPEC §Copywriting Contract.
     { type: "section", children: [
       { type: "button", label: "New report", action: { name: "dashboard:new-report" }, variant: "primary" },
     ]},
   ];
 }
 
-// ── Form-heavy archetype (LOCKED: `stack` default, Bootstrap "Checkout") ──
-// Defaulted to `stack` per UI-SPEC §Design Decisions Recorded — the safest
-// few-shot exemplar of the default vertical flow; matches Bootstrap
-// "Checkout"'s single-column form. Multi-section checkout grouped into
-// Contact / Shipping / Payment sections, submit CTA "Place order". D-10/D-13.
 function formView(): ViewNode[] {
   return [
     { type: "text", value: "Checkout", style: "heading" },
@@ -426,9 +444,9 @@ function formView(): ViewNode[] {
         submitAction: { name: "form:contact" },
         submitLabel:  "Save contact",
         children: [
-          { type: "field", name: "fullName", inputType: "text",  label: "Full name",     placeholder: "Jordan Okafor", required: true },
-          { type: "field", name: "email",    inputType: "email", label: "Email address", placeholder: "you@example.com", required: true },
-          { type: "field", name: "phone",    inputType: "text",  label: "Phone",         placeholder: "+1 555 0100" },
+          { type: "field", name: "fullName", inputType: "text",  bind: "formInputs.fullName", label: "Full name",     placeholder: "Jordan Okafor", required: true },
+          { type: "field", name: "email",    inputType: "email", bind: "formInputs.email_co", label: "Email address", placeholder: "you@example.com", required: true },
+          { type: "field", name: "phone",    inputType: "text",  bind: "formInputs.phone",    label: "Phone",         placeholder: "+1 555 0100" },
         ],
       },
     ]},
@@ -438,16 +456,16 @@ function formView(): ViewNode[] {
         submitAction: { name: "form:shipping" },
         submitLabel:  "Save address",
         children: [
-          { type: "field", name: "address1", inputType: "text", label: "Address",  placeholder: "1 Market Street", required: true },
-          { type: "field", name: "address2", inputType: "text", label: "Address 2 (optional)", placeholder: "Apartment, suite, etc." },
-          { type: "field", name: "city",     inputType: "text", label: "City",     placeholder: "San Francisco", required: true },
-          { type: "field", name: "country",  inputType: "select", label: "Country", value: "us", required: true, options: [
+          { type: "field", name: "address1", inputType: "text", bind: "formInputs.address1", label: "Address",  placeholder: "1 Market Street", required: true },
+          { type: "field", name: "address2", inputType: "text", bind: "formInputs.address2", label: "Address 2 (optional)", placeholder: "Apartment, suite, etc." },
+          { type: "field", name: "city",     inputType: "text", bind: "formInputs.city",     label: "City",     placeholder: "San Francisco", required: true },
+          { type: "field", name: "country",  inputType: "select", bind: "formInputs.country", label: "Country", required: true, options: [
             { value: "us", label: "United States" },
             { value: "ca", label: "Canada" },
             { value: "gb", label: "United Kingdom" },
             { value: "de", label: "Germany" },
           ]},
-          { type: "field", name: "zip",      inputType: "text", label: "ZIP / Postal code", placeholder: "94105", required: true },
+          { type: "field", name: "zip",      inputType: "text", bind: "formInputs.zip", label: "ZIP / Postal code", placeholder: "94105", required: true },
         ],
       },
     ]},
@@ -457,21 +475,16 @@ function formView(): ViewNode[] {
         submitAction: { name: "form:place-order" },
         submitLabel:  "Place order",
         children: [
-          { type: "field", name: "cardName",   inputType: "text",   label: "Name on card", placeholder: "Jordan Okafor", required: true },
-          { type: "field", name: "cardNumber", inputType: "text",   label: "Card number",  placeholder: "1234 5678 9012 3456", required: true },
-          { type: "field", name: "cardExpiry", inputType: "text",   label: "Expiration",   placeholder: "MM/YY", required: true },
-          { type: "field", name: "cardCvv",    inputType: "number", label: "CVV",          placeholder: "123", required: true },
+          { type: "field", name: "cardName",   inputType: "text",   bind: "formInputs.cardName",   label: "Name on card", placeholder: "Jordan Okafor", required: true },
+          { type: "field", name: "cardNumber", inputType: "text",   bind: "formInputs.cardNumber", label: "Card number",  placeholder: "1234 5678 9012 3456", required: true },
+          { type: "field", name: "cardExpiry", inputType: "text",   bind: "formInputs.cardExpiry", label: "Expiration",   placeholder: "MM/YY", required: true },
+          { type: "field", name: "cardCvv",    inputType: "number", bind: "formInputs.cardCvv",    label: "CVV",          placeholder: "123", required: true },
         ],
       },
     ]},
   ];
 }
 
-// ── List/detail archetype (LOCKED: `split` preset, Bootstrap "Album") ─────
-// Teaches WHEN to reach for `split`: a list ↔ detail master-detail. The split
-// preset collapses to stacked on narrow with ZERO app breakpoints. Left = a
-// `list` of catalog rows (each with a "View details" button), right = a
-// `section variant:"card"` detail pane with an "Add to cart" action. D-10/D-13.
 function listDetailView(): ViewNode[] {
   const sel = selectedItem();
   return [
@@ -479,7 +492,6 @@ function listDetailView(): ViewNode[] {
     { type: "text", value: "Benchmarked against the Bootstrap \"Album\" example for the list half; the detail pane is our own composition. The split preset collapses to one column on narrow with zero app breakpoints.", style: "muted" },
 
     { type: "section", layout: "split", children: [
-      // LEFT: the list of catalog rows.
       { type: "section", heading: "Catalog", children: [
         { type: "list", children: catalog.map(item => ({
           type: "list-item" as const,
@@ -488,12 +500,12 @@ function listDetailView(): ViewNode[] {
           children: [
             { type: "text" as const, value: item.title, style: "subheading" as const },
             { type: "text" as const, value: `${item.artist} · ${item.year} · ${item.price}`, style: "muted" as const },
-            { type: "button" as const, label: "View details", action: { name: "list-detail:select", context: { id: item.id } } },
+            // Per-row select — unique action name per item.
+            { type: "button" as const, label: "View details", action: { name: `list-detail:select-${item.id}` } },
           ],
         })) },
       ]},
 
-      // RIGHT: the selected item's detail card.
       { type: "section", variant: "card", heading: "Details", children: [
         { type: "text", value: sel.title, style: "heading" },
         { type: "text", value: `${sel.artist} · ${sel.year}`, style: "subheading" },
@@ -503,7 +515,7 @@ function listDetailView(): ViewNode[] {
           { label: "length", value: sel.tracks },
         ]},
         { type: "text", value: sel.blurb, style: "body" },
-        { type: "button", label: "Add to cart", action: { name: "list-detail:add", context: { id: sel.id } }, variant: "primary" },
+        { type: "button", label: "Add to cart", action: { name: `list-detail:add-${sel.id}` }, variant: "primary" },
       ]},
     ]},
   ];
@@ -525,12 +537,11 @@ function buildVm(): ViewNode {
     type: "page",
     title: "ViewModel Shell — Canonical reference set",
     children: [
-      // Top-level archetype nav (D-09): always the first child of the page.
-      { type: "tabs", selected: state.view, action: { name: "view:set" }, tabs: [
-        { value: "components",  label: "Components"    },
-        { value: "dashboard",   label: "Dashboard"     },
-        { value: "form",        label: "Form"          },
-        { value: "list-detail", label: "List / detail" },
+      { type: "tabs", selected: state.view, bind: "view", tabs: [
+        { value: "components",  label: "Components",    action: { name: "view:set:components"  } },
+        { value: "dashboard",   label: "Dashboard",     action: { name: "view:set:dashboard"   } },
+        { value: "form",        label: "Form",          action: { name: "view:set:form"        } },
+        { value: "list-detail", label: "List / detail", action: { name: "view:set:list-detail" } },
       ]},
       ...viewChildren(),
     ],
@@ -540,44 +551,41 @@ function buildVm(): ViewNode {
 // ── Action handler ───────────────────────────────────────────────────────
 const adapter = new BrowserAdapter(document.getElementById("app")!);
 
+// stateAccess seam used by the renderer: the bound input values flow
+// through state at the bind path; reads return what's there, writes mutate
+// state and queue a re-render (the existing pattern this demo already used
+// for action-driven mutations).
+const stateAccess: StateAccess = {
+  read:  (path) => readPath(state, path),
+  write: (path, value) => {
+    state = writePath(state, path, value) as State;
+    // Theme writes need the stylesheet to update immediately.
+    if (path === "mode" || path === "accent") applyTheme();
+    rerender();
+  },
+};
+
 function handle(action: ActionEvent): void {
-  const ctx = action.context ?? {};
-  let stateChanged = false;
-
-  switch (action.name) {
-    case "view:set":
-      state.view = String(ctx.value) as View; stateChanged = true; break;
-    case "list-detail:select":
-      state.selectedItemId = String(ctx.id); stateChanged = true; break;
-    case "modal:dismiss":
-      state.modalShown = false; stateChanged = true; break;
-    case "modal:open":
-      state.modalShown = true;  stateChanged = true; break;
-    case "agree:toggle":
-      state.agreeChecked = ctx.checked === true; stateChanged = true; break;
-    case "tab:set":
-      state.selectedTab = String(ctx.value); stateChanged = true; break;
-    case "table:sort":
-      state.sortColumn    = String(ctx.column);
-      state.sortDirection = (ctx.direction === "desc") ? "desc" : "asc";
-      stateChanged = true; break;
-    case "table:filter":
-      state.filters = { ...state.filters, ...(ctx.filters as Record<string, string>) };
-      stateChanged = true; break;
-    case "theme:mode":
-      state.mode = ctx.value as Mode;
-      applyTheme();
-      stateChanged = true; break;
-    case "theme:accent":
-      state.accent = ctx.value as Accent;
-      applyTheme();
-      stateChanged = true; break;
-    default:
-      console.log("[showcase] action (no-op):", action);
-      return;
+  // Phase 6: action.name carries every parameter that used to live in context.
+  // Most Showcase actions are pure state writes (already handled by the bind
+  // seam above); a few need post-write side-effects:
+  if (action.name === "modal:open") {
+    state.modalShown = true; rerender(); return;
   }
-
-  if (stateChanged) adapter.render(buildVm(), handle);
+  if (action.name.startsWith("modal:dismiss")) {
+    state.modalShown = false; rerender(); return;
+  }
+  if (action.name.startsWith("list-detail:select-")) {
+    state.selectedItemId = action.name.slice("list-detail:select-".length);
+    rerender(); return;
+  }
+  // Everything else is either a no-op or already handled by stateAccess.write
+  // (the bind seam wrote the new value into state and triggered a rerender).
+  console.log("[showcase] action:", action.name);
 }
 
-adapter.render(buildVm(), handle);
+function rerender() {
+  adapter.render(buildVm(), handle, stateAccess);
+}
+
+rerender();
