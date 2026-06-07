@@ -2,15 +2,15 @@
   "name": "tasks",
   "endpoint": "/api/tasks",
   "actionEndpoint": "/api/tasks/action",
-  "$comment": "Each step references the previous response's state. The runner threads state through automatically. Actions that generate new IDs (e.g. 'add') are tested by extracting the new ID from the response and using it in subsequent steps via the ${newId.<step-id>} substitution.",
+  "$comment": "Phase 6 wire shape (0.17.0 / WIRE-07): _action carries {name} only. Per-row toggles use unique action names (toggle-row-${id}) and a stateMutations entry that mimics the checkbox bind's pre-dispatch write into items[i].completed (the server is a pure re-render — the bind path is the source of truth for the new boolean). Per-tab filters (filter-all/filter-active/filter-completed) need no mutation: the handler derives the filter value from the action-name suffix. Per-row delete (delete-row-${id}) needs no mutation: the handler reads the id from the action name and filters the array.",
   "steps": [
-    { "id": "initial-load",   "method": "GET" },
-    { "id": "filter-active",  "method": "POST", "action": { "name": "filter", "context": { "value": "active" } } },
-    { "id": "toggle-2",       "method": "POST", "action": { "name": "toggle", "context": { "id": "2", "checked": true } } },
-    { "id": "toggle-3",       "method": "POST", "action": { "name": "toggle", "context": { "id": "3", "checked": true } } },
-    { "id": "filter-all",     "method": "POST", "action": { "name": "filter", "context": { "value": "all" } } },
-    { "id": "delete-1",       "method": "POST", "action": { "name": "delete", "context": { "id": "1" } } },
-    { "id": "filter-done",    "method": "POST", "action": { "name": "filter", "context": { "value": "completed" } } },
-    { "id": "filter-all-2",   "method": "POST", "action": { "name": "filter", "context": { "value": "all" } } }
+    { "id": "initial-load",  "method": "GET" },
+    { "id": "filter-active", "method": "POST", "action": { "name": "filter-active" } },
+    { "id": "toggle-2",      "method": "POST", "action": { "name": "toggle-row-2" }, "stateMutations": [{ "path": "items.1.completed", "value": true }] },
+    { "id": "toggle-3",      "method": "POST", "action": { "name": "toggle-row-3" }, "stateMutations": [{ "path": "items.2.completed", "value": true }] },
+    { "id": "filter-all",    "method": "POST", "action": { "name": "filter-all" } },
+    { "id": "delete-1",      "method": "POST", "action": { "name": "delete-row-1" } },
+    { "id": "filter-done",   "method": "POST", "action": { "name": "filter-completed" } },
+    { "id": "filter-all-2",  "method": "POST", "action": { "name": "filter-all" } }
   ]
 }

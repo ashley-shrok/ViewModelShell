@@ -42,7 +42,27 @@ it implements. The harness will include it in the next run.
 ## Adding a new fixture
 
 Drop a JSON file under `fixtures/`. Each step references the previous
-response's state automatically — you only write the action name and context.
+response's state automatically — you only write the action name. As of
+Phase 6 (wire shape 0.17.0 / WIRE-07), the on-wire `_action` payload is
+`{ "name": "..." }` only — there is no `context` field. Per-row / per-tab
+identity is encoded in the action name itself (e.g. `delete-row-42`,
+`filter-active`).
+
+For fixture steps that simulate user-typed form input followed by a submit
+click, add a `stateMutations` array — each entry is `{ path, value }` and is
+written into the prior step's response state before this step's request is
+sent. The path syntax mirrors `BindNode.bind` in the renderer (dotted
+segments; numeric segments index arrays). Example:
+
+```json
+{
+  "id": "add-task",
+  "method": "POST",
+  "action": { "name": "add" },
+  "stateMutations": [{ "path": "draftTitle", "value": "Acme" }]
+}
+```
+
 Mark every backend in `backends.json` that should be tested against the
 fixture by adding the fixture name to its `fixtures` array.
 

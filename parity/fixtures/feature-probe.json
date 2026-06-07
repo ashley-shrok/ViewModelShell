@@ -2,21 +2,21 @@
   "name": "feature-probe",
   "endpoint": "/api/probe",
   "actionEndpoint": "/api/probe/action",
-  "$comment": "Exercises framework wire surfaces no demo app uses naturally: redirect, side effects, polling cadence, file upload via multipart.",
+  "$comment": "Phase 6 wire shape: _action carries {name} only. Parameters that used to ride in `context` (redirect URL, storage values, download URL/filename, form note, sort column/direction, table filter, page number) now live in dedicated state slots on FeatureProbeState (Plan 06-04). The fixture writes them via stateMutations to mimic the renderer's bind writes that would happen before each user click. Table sort uses per-column action names (table-sort-name / table-sort-status); pagination uses prevAction/nextAction (table-page-prev / table-page-next).",
   "steps": [
     { "id": "initial",          "method": "GET" },
 
     { "id": "redirect-default", "method": "POST", "action": { "name": "trigger-redirect" } },
     { "id": "fresh-after-redirect", "method": "GET", "freshState": true },
-    { "id": "redirect-custom",  "method": "POST", "action": { "name": "trigger-redirect", "context": { "to": "/custom-target" } } },
+    { "id": "redirect-custom",  "method": "POST", "action": { "name": "trigger-redirect" }, "stateMutations": [{ "path": "redirectTo", "value": "/custom-target" }] },
 
     { "id": "fresh-1",          "method": "GET", "freshState": true },
     { "id": "set-storage-default", "method": "POST", "action": { "name": "set-storage" } },
-    { "id": "set-storage-custom",  "method": "POST", "action": { "name": "set-storage", "context": { "local-value": "L1", "session-value": "S1" } } },
+    { "id": "set-storage-custom",  "method": "POST", "action": { "name": "set-storage" }, "stateMutations": [{ "path": "localValue", "value": "L1" }, { "path": "sessionValue", "value": "S1" }] },
 
     { "id": "fresh-download",   "method": "GET", "freshState": true },
     { "id": "download-default", "method": "POST", "action": { "name": "trigger-download" } },
-    { "id": "download-custom",  "method": "POST", "action": { "name": "trigger-download", "context": { "url": "/api/probe/file/report.pdf", "filename": "report.pdf" } } },
+    { "id": "download-custom",  "method": "POST", "action": { "name": "trigger-download" }, "stateMutations": [{ "path": "downloadUrl", "value": "/api/probe/file/report.pdf" }, { "path": "downloadFilename", "value": "report.pdf" }] },
 
     { "id": "fresh-2",          "method": "GET", "freshState": true },
     { "id": "poll-1",           "method": "POST", "action": { "name": "do-poll" } },
@@ -39,8 +39,8 @@
     { "id": "copy-button-node", "method": "POST", "action": { "name": "show-copy-button" } },
 
     { "id": "fresh-multiaction", "method": "GET", "freshState": true },
-    { "id": "form-save-draft",   "method": "POST", "action": { "name": "save-draft", "context": { "note": "hello" } } },
-    { "id": "form-publish",      "method": "POST", "action": { "name": "publish",    "context": { "note": "shipit" } } },
+    { "id": "form-save-draft",   "method": "POST", "action": { "name": "save-draft" }, "stateMutations": [{ "path": "note", "value": "hello" }] },
+    { "id": "form-publish",      "method": "POST", "action": { "name": "publish" },    "stateMutations": [{ "path": "note", "value": "shipit" }] },
 
     { "id": "fresh-long",        "method": "GET",  "freshState": true },
     { "id": "long-start",        "method": "POST", "action": { "name": "start-long-action" } },
@@ -49,12 +49,12 @@
     { "id": "long-poll-3",       "method": "POST", "action": { "name": "long-action-poll" } },
 
     { "id": "fresh-table",       "method": "GET", "freshState": true },
-    { "id": "tbl-page-2",        "method": "POST", "action": { "name": "table-page",   "context": { "page": 2 } } },
-    { "id": "tbl-sort-name-asc", "method": "POST", "action": { "name": "table-sort",   "context": { "column": "name", "direction": "asc" } } },
-    { "id": "tbl-sort-name-desc","method": "POST", "action": { "name": "table-sort",   "context": { "column": "name", "direction": "desc" } } },
-    { "id": "tbl-sort-status",   "method": "POST", "action": { "name": "table-sort",   "context": { "column": "status", "direction": "asc" } } },
-    { "id": "tbl-filter-e",      "method": "POST", "action": { "name": "table-filter", "context": { "value": "e" } } },
-    { "id": "tbl-page-2-filtered","method": "POST", "action": { "name": "table-page",  "context": { "page": 2 } } },
-    { "id": "tbl-filter-clear",  "method": "POST", "action": { "name": "table-filter", "context": { "value": "" } } }
+    { "id": "tbl-page-2",        "method": "POST", "action": { "name": "table-page-next" }, "stateMutations": [{ "path": "tablePage", "value": 2 }] },
+    { "id": "tbl-sort-name-asc", "method": "POST", "action": { "name": "table-sort-name" },   "stateMutations": [{ "path": "sortIntent.column", "value": "name" },   { "path": "sortIntent.direction", "value": "asc" }] },
+    { "id": "tbl-sort-name-desc","method": "POST", "action": { "name": "table-sort-name" },   "stateMutations": [{ "path": "sortIntent.column", "value": "name" },   { "path": "sortIntent.direction", "value": "desc" }] },
+    { "id": "tbl-sort-status",   "method": "POST", "action": { "name": "table-sort-status" }, "stateMutations": [{ "path": "sortIntent.column", "value": "status" }, { "path": "sortIntent.direction", "value": "asc" }] },
+    { "id": "tbl-filter-e",      "method": "POST", "action": { "name": "table-filter" },      "stateMutations": [{ "path": "tableFilters.name", "value": "e" }] },
+    { "id": "tbl-page-2-filtered","method": "POST", "action": { "name": "table-page-next" },  "stateMutations": [{ "path": "tablePage", "value": 2 }] },
+    { "id": "tbl-filter-clear",  "method": "POST", "action": { "name": "table-filter" },      "stateMutations": [{ "path": "tableFilters.name", "value": "" }] }
   ]
 }

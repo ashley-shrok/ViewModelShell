@@ -41,7 +41,23 @@ interface FixtureStep {
   actionEndpoint?: string;
   /** When true, this step starts a fresh state thread (sends null as _state instead of the previous response's state). */
   freshState?: boolean;
-  action?: { name: string; context?: Record<string, unknown> };
+  /** Phase 6 wire shape (0.17.0 / WIRE-07): the action envelope on the wire is `{name}` only — no `context`.
+   *  Per-row / per-tab identity is encoded in the action name itself (e.g. `delete-row-42`, `filter-active`). */
+  action?: { name: string };
+  /** Phase 6 — fixture pre-dispatch state mutations (narrow scope).
+   *
+   *  The wire shape now relies on the renderer writing input values into state at bind paths BEFORE the
+   *  user-action dispatch fires. The parity runner never renders, so for fixture steps that simulate
+   *  "user typed something, then clicked Save" we need to inject the typed values into state ourselves.
+   *
+   *  Used in roughly 10-20% of fixture steps (form submits). Per-row actions, tab switches, sort/filter
+   *  intents, and pagination clicks all use the server-derives-from-action-name pattern and need no
+   *  state injection.
+   *
+   *  Each mutation is `{ path, value }` where `path` is a dotted bind path (same syntax as `BindNode.bind`).
+   *  Numeric segments create/index arrays; string segments create/index objects. Mutations apply in order
+   *  to the PRIOR step's response state, then the mutated state is sent as `_state` for this step. */
+  stateMutations?: Array<{ path: string; value: unknown }>;
   /** File attachments to include in the multipart form (e.g. for FieldNode inputType="file").
    *  Keyed by form field name; value is { name, content }. */
   attach?: Record<string, { name: string; content: string }>;
@@ -65,6 +81,53 @@ interface CapturedResponse {
 
 const manifestPath = resolve(__dirname, "backends.json");
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Manifest;
+
+/** Mirror of the framework's `writePath` (viewmodel-shell/src/index.ts) — applies a single dotted-path
+ *  write to `obj`, creating intermediate arrays (numeric next segment) or objects on demand. Used to
+ *  apply each fixture step's `stateMutations` to the prior step's response state before sending the
+ *  request, so the runner can simulate the renderer's bind-path writes that happen before dispatch. */
+function isArrayIndexSegment(seg: string): boolean {
+  return /^[0-9]+$/.test(seg);
+}
+function writePath(obj: unknown, path: string, value: unknown): unknown {
+  if (path == null) return obj;
+  if (path === "") return value;
+  const segs = path.split(".");
+  let root: unknown = obj;
+  if (root == null || typeof root !== "object") {
+    root = isArrayIndexSegment(segs[0]!) ? [] : {};
+  }
+  let cur: unknown = root;
+  for (let i = 0; i < segs.length - 1; i++) {
+    const seg = segs[i]!;
+    const nextSeg = segs[i + 1]!;
+    const nextShape: "array" | "object" = isArrayIndexSegment(nextSeg) ? "array" : "object";
+    if (Array.isArray(cur)) {
+      const idx = Number(seg);
+      let nxt = cur[idx];
+      if (nxt == null || typeof nxt !== "object") {
+        nxt = nextShape === "array" ? [] : {};
+        cur[idx] = nxt;
+      }
+      cur = nxt;
+    } else {
+      const o = cur as Record<string, unknown>;
+      let nxt = o[seg];
+      if (nxt == null || typeof nxt !== "object") {
+        nxt = nextShape === "array" ? [] : {};
+        o[seg] = nxt;
+      }
+      cur = nxt;
+    }
+  }
+  const last = segs[segs.length - 1]!;
+  if (Array.isArray(cur)) {
+    cur[Number(last)] = value;
+  } else {
+    (cur as Record<string, unknown>)[last] = value;
+  }
+  return root;
+}
 
 async function waitForReady(url: string, timeoutMs = 30_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -116,6 +179,16 @@ async function runFixtureAgainst(cfg: BackendConfig, fixture: Fixture): Promise<
 
   for (const step of fixture.steps) {
     if (step.freshState) lastState = null;
+    // Phase 6 — apply fixture pre-dispatch state mutations. The runner simulates the renderer's
+    // bind-path writes (which happen between user input and the dispatch click) by writing each
+    // mutation's value into the prior step's response state. Used only for form-submit steps where
+    // the user "typed" something before the click; per-row / per-tab actions need no mutation
+    // because the server derives identity from the action name.
+    if (step.stateMutations && step.method === "POST") {
+      for (const mut of step.stateMutations) {
+        lastState = writePath(lastState, mut.path, mut.value);
+      }
+    }
     let url: string;
     let init: RequestInit;
     if (step.method === "GET") {
@@ -124,7 +197,9 @@ async function runFixtureAgainst(cfg: BackendConfig, fixture: Fixture): Promise<
     } else {
       url = `${cfg.baseUrl}${step.actionEndpoint ?? fixture.actionEndpoint}`;
       const form = new FormData();
-      form.append("_action", JSON.stringify({ name: step.action!.name, context: step.action!.context ?? {} }));
+      // Phase 6 wire shape (0.17.0 / WIRE-07): the _action JSON carries `{name}` only.
+      // Per-row / per-tab identity is in the action name; typed form values live in state.
+      form.append("_action", JSON.stringify({ name: step.action!.name }));
       form.append("_state", JSON.stringify(lastState));
       if (step.attach) {
         for (const [fieldName, file] of Object.entries(step.attach)) {

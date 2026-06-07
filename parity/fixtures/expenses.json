@@ -2,16 +2,15 @@
   "name": "expenses",
   "endpoint": "/api/expenses",
   "actionEndpoint": "/api/expenses/action",
-  "$comment": "Exercises ExpenseTracker — categories with progress bars, transaction filtering, category selection. Add is deferred (generates IDs).",
+  "$comment": "Phase 6 wire shape: _action carries {name} only. ExpenseTracker's filter and category-select handlers are no-ops (bind already wrote the value to state.filterCategory / state.addCategory) — the fixture mimics those bind writes via stateMutations. The 'delete' action no longer exists on the demo (the migrated handler doesn't expose one), so the delete-tx-3 step from the old fixture is dropped: parity tests the wire the demos actually speak.",
   "steps": [
     { "id": "initial-load",     "method": "GET" },
-    { "id": "filter-food",      "method": "POST", "action": { "name": "filter",          "context": { "value": "food" } } },
-    { "id": "filter-transport", "method": "POST", "action": { "name": "filter",          "context": { "value": "transport" } } },
-    { "id": "filter-all",       "method": "POST", "action": { "name": "filter",          "context": { "value": "all" } } },
-    { "id": "select-bills",     "method": "POST", "action": { "name": "select-category", "context": { "value": "bills" } } },
-    { "id": "select-ent",       "method": "POST", "action": { "name": "select-category", "context": { "value": "entertainment" } } },
-    { "id": "delete-tx-3",      "method": "POST", "action": { "name": "delete",          "context": { "id": "3" } } },
-    { "id": "filter-bills",     "method": "POST", "action": { "name": "filter",          "context": { "value": "bills" } } },
-    { "id": "filter-all-2",     "method": "POST", "action": { "name": "filter",          "context": { "value": "all" } } }
+    { "id": "filter-food",      "method": "POST", "action": { "name": "filter-food" },                  "stateMutations": [{ "path": "filterCategory", "value": "food" }] },
+    { "id": "filter-transport", "method": "POST", "action": { "name": "filter-transport" },             "stateMutations": [{ "path": "filterCategory", "value": "transport" }] },
+    { "id": "filter-all",       "method": "POST", "action": { "name": "filter-all" },                   "stateMutations": [{ "path": "filterCategory", "value": "all" }] },
+    { "id": "select-bills",     "method": "POST", "action": { "name": "select-category-bills" },        "stateMutations": [{ "path": "addCategory", "value": "bills" }] },
+    { "id": "select-ent",       "method": "POST", "action": { "name": "select-category-entertainment" }, "stateMutations": [{ "path": "addCategory", "value": "entertainment" }] },
+    { "id": "filter-bills",     "method": "POST", "action": { "name": "filter-bills" },                 "stateMutations": [{ "path": "filterCategory", "value": "bills" }] },
+    { "id": "filter-all-2",     "method": "POST", "action": { "name": "filter-all" },                   "stateMutations": [{ "path": "filterCategory", "value": "all" }] }
   ]
 }

@@ -2,16 +2,16 @@
   "name": "retro",
   "endpoint": "/api/retro",
   "actionEndpoint": "/api/retro/action",
-  "$comment": "Exercises RetroBoard's votes/resolve/delete actions on seeded cards. Add-card is deferred (generates IDs + timestamps).",
+  "$comment": "Phase 6 wire shape: _action carries {name} only. Per-card upvote/delete actions encode the card id in the action name (upvote-card-${id} / delete-card-${id}). The resolve-card handler is a no-op (the checkbox bind writes the new boolean into actionItems[i].resolved before dispatch) — the fixture mimics that bind write via stateMutations. Seed: actionItems[0] is card s3.",
   "steps": [
     { "id": "initial-load",   "method": "GET" },
-    { "id": "upvote-s1",      "method": "POST", "action": { "name": "upvote-card", "context": { "id": "s1" } } },
-    { "id": "upvote-s1-2",    "method": "POST", "action": { "name": "upvote-card", "context": { "id": "s1" } } },
-    { "id": "upvote-s2",      "method": "POST", "action": { "name": "upvote-card", "context": { "id": "s2" } } },
-    { "id": "resolve-s3",     "method": "POST", "action": { "name": "resolve-card", "context": { "id": "s3", "checked": true } } },
-    { "id": "unresolve-s3",   "method": "POST", "action": { "name": "resolve-card", "context": { "id": "s3", "checked": false } } },
-    { "id": "resolve-s3-2",   "method": "POST", "action": { "name": "resolve-card", "context": { "id": "s3", "checked": true } } },
-    { "id": "delete-s2",      "method": "POST", "action": { "name": "delete-card", "context": { "id": "s2" } } },
-    { "id": "upvote-s1-3",    "method": "POST", "action": { "name": "upvote-card", "context": { "id": "s1" } } }
+    { "id": "upvote-s1",      "method": "POST", "action": { "name": "upvote-card-s1" } },
+    { "id": "upvote-s1-2",    "method": "POST", "action": { "name": "upvote-card-s1" } },
+    { "id": "upvote-s2",      "method": "POST", "action": { "name": "upvote-card-s2" } },
+    { "id": "resolve-s3",     "method": "POST", "action": { "name": "resolve-card-s3" }, "stateMutations": [{ "path": "actionItems.0.resolved", "value": true }] },
+    { "id": "unresolve-s3",   "method": "POST", "action": { "name": "resolve-card-s3" }, "stateMutations": [{ "path": "actionItems.0.resolved", "value": false }] },
+    { "id": "resolve-s3-2",   "method": "POST", "action": { "name": "resolve-card-s3" }, "stateMutations": [{ "path": "actionItems.0.resolved", "value": true }] },
+    { "id": "delete-s2",      "method": "POST", "action": { "name": "delete-card-s2" } },
+    { "id": "upvote-s1-3",    "method": "POST", "action": { "name": "upvote-card-s1" } }
   ]
 }

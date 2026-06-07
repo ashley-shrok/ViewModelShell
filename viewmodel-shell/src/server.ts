@@ -181,7 +181,18 @@ function collectActions(
       }
       for (const row of table.rows) {
         if (row.actions) {
-          for (const btn of row.actions) recordAction(btn.action, enclosingForm, out);
+          // row.actions is ViewNode[] — it can include bind-only nodes (e.g. a
+          // per-row CheckboxNode used for selection has no .action). Filter to
+          // ButtonNodes the same way the .NET validator does (OfType<ButtonNode>())
+          // before recording — otherwise the validator throws on a non-button
+          // entry's missing .action property. Phase 6 surfaced this when
+          // TableSelection was removed and per-row selection moved into
+          // row.actions as bound CheckboxNodes (06-04).
+          for (const node of row.actions) {
+            if (node.type === "button") {
+              recordAction((node as ButtonNode).action, enclosingForm, out);
+            }
+          }
         }
       }
       return;
