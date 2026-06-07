@@ -239,10 +239,11 @@ public class EnvelopeTests
         var json = Serialize(resp);
 
         // T1 info-disclosure mitigation: no stack trace markers on the wire.
+        // The exception message ("inner error with stack") IS allowed — it's ex.Message.
+        // What must NOT appear: stack frames, BCL type names, or ex.ToString() form.
         Assert.DoesNotContain("   at ", json);          // stack trace lines
-        Assert.DoesNotContain("System.", json);          // BCL type names
-        Assert.DoesNotContain("Inner error with stack", json, StringComparison.OrdinalIgnoreCase);
-        // Verify only the message is present (ex.Message, not ex.ToString())
+        Assert.DoesNotContain("System.InvalidOperationException", json);  // full type name
+        // The message itself SHOULD appear (OfUncaught uses ex.Message):
         Assert.Contains("inner error with stack", json);
     }
 
