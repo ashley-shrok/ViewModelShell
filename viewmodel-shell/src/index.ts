@@ -400,6 +400,62 @@ export interface ShellSideEffect {
   filename?: string;
 }
 
+// ─── Error envelope types (Phase 7 / v1.0.0) ─────────────────────────────────
+//
+// `ErrorEntry` is structurally identical to the one exported from server.ts.
+// It is kept local here to avoid a circular dependency (server.ts imports from
+// index.ts via `export * from "./index.js"`). Keep both definitions in sync
+// when changing the shape.
+
+/** One entry in the structured error payload returned on `ok: false`. */
+export interface ErrorEntry {
+  /** Absent when not tied to a specific input slot (parse errors, uncaught
+   *  exceptions, etc.). Present when bound to a specific bind-path on an input. */
+  path?: string;
+  /** Human-readable description of the error. Always present. */
+  message: string;
+  /** Framework-set discriminator for the failure class. Initial vocabulary:
+   *  "parse_error" | "unknown_action" | "invalid_tree" | "uncaught_exception".
+   *  Absent when not applicable (e.g. BadRequest / D-08 path). */
+  code?: string;
+}
+
+/**
+ * Private helper: compose a human-readable `.message` from an errors array.
+ * Single entry → the entry's message verbatim.
+ * Multiple entries → "<first> (and N more)" so console.error is still useful.
+ */
+function summarizeErrors(errors: ErrorEntry[]): string {
+  if (errors.length === 0) return "Server returned ok:false with no error details";
+  if (errors.length === 1) return errors[0].message;
+  return `${errors[0].message} (and ${errors.length - 1} more)`;
+}
+
+/**
+ * Structured error surfaced via `onError` when the server returns `ok: false`.
+ * Extends `Error` so existing `onError` consumers that don't know about the
+ * envelope continue receiving a normal Error with a useful `.message`.
+ *
+ * Consumers that want the structured payload: `if (err instanceof VmsActionError) { ... err.errors ... }`.
+ *
+ * `status` is the HTTP status code (0 for push-originated errors with no
+ * HTTP transaction). `code` is a shortcut to `errors[0].code` for ergonomic
+ * branching on single-error responses.
+ */
+export class VmsActionError extends Error {
+  constructor(
+    public readonly errors: ErrorEntry[],
+    public readonly status: number,
+  ) {
+    super(summarizeErrors(errors));
+    this.name = "VmsActionError";
+  }
+  /** Shortcut to `errors[0]?.code`. Undefined when the first entry has no code. */
+  get code(): string | undefined {
+    return this.errors[0]?.code;
+  }
+}
+
 export interface ShellResponse {
   vm: ViewNode;
   state: unknown;
@@ -419,6 +475,14 @@ export interface ShellResponse {
    *  dispatches; the adapter applies `.vms-busy` for the visual cue). Polls
    *  bypass so the server can clear the state. See `Adapter.setBusy`. */
   busy?: boolean;
+  /** 1.0.0 — framework-set envelope flag. Present on every framework-rendered
+   *  response; absent on hand-constructed legacy push bodies (treated as ok:true
+   *  for backwards compatibility). On ok:false responses, only `errors[]` is
+   *  consumed — any vm/state present in the body is IGNORED at runtime (D-15
+   *  hardening: the shell throws before the currentVm/currentState writes run). */
+  ok?: boolean;
+  /** 1.0.0 — structured error entries. Present when `ok: false`. */
+  errors?: ErrorEntry[];
 }
 
 export class ViewModelShell {
@@ -447,8 +511,27 @@ export class ViewModelShell {
       const url = params ? `${endpoint}?${new URLSearchParams(params)}` : endpoint;
       const extraHeaders = this.options.getRequestHeaders ? await this.options.getRequestHeaders() : {};
       const res = await fetch(url, { headers: { Accept: "application/json", ...extraHeaders } });
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const body = (await res.json()) as ShellResponse;
+      // 1.0.0 — parse-then-branch: always parse the body even on 4xx/5xx so the
+      // structured envelope is available. The ok:false check throws BEFORE the
+      // currentVm/currentState writes below — D-15 runtime hardening (throw-before-
+      // write ordering means the shell never mutates state from a failure body).
+      let body: ShellResponse;
+      try {
+        body = (await res.json()) as ShellResponse;
+      } catch (_parseErr) {
+        // Non-JSON body on a 4xx/5xx (proxy error page, 502, etc.).
+        // Fall back to a plain Error — the body was never a VMS envelope.
+        throw new Error(`${res.status} ${res.statusText}`);
+      }
+      if (body.ok === false) {
+        // D-15 runtime hardening: throw BEFORE currentVm/currentState are written.
+        // Even if the server (incorrectly) sent vm/state on an ok:false response,
+        // neither field is consumed — type-erosion-safe.
+        throw new VmsActionError(
+          body.errors ?? [{ message: `${res.status} ${res.statusText}` }],
+          res.status,
+        );
+      }
       this.currentVm = body.vm;
       this.currentState = body.state;
       // 0.14.0 — apply the unload guard from the initial-load response too. The
@@ -520,8 +603,29 @@ export class ViewModelShell {
       } else {
         res = await fetch(actionEndpoint, init);
       }
-      if (!res.ok) throw new Error(`Action '${action.name}' failed: ${res.status}`);
-      this.processResponse((await res.json()) as ShellResponse);
+      // 1.0.0 — parse-then-branch: always parse the body even on 4xx/5xx so the
+      // structured envelope is available to construct VmsActionError. The existing
+      // catch arm below re-renders currentVm on error (D-15 behavior) — VmsActionError
+      // flows through that same path since it IS an Error instance.
+      let body: ShellResponse;
+      try {
+        body = (await res.json()) as ShellResponse;
+      } catch (_parseErr) {
+        // Non-JSON body on a 4xx/5xx (proxy error page, 502, etc.).
+        // Fall back to a plain Error — the body was never a VMS envelope.
+        throw new Error(`Action '${action.name}' failed: ${res.status} ${res.statusText}`);
+      }
+      if (body.ok === false) {
+        // D-15 runtime hardening: throw BEFORE this.processResponse(body) runs.
+        // The throw skips processResponse entirely, so currentVm/currentState are
+        // NOT updated from the failure body — even if the server (incorrectly) sent
+        // vm/state on an ok:false response. Type-erosion-safe.
+        throw new VmsActionError(
+          body.errors ?? [{ message: `Action '${action.name}' failed: ${res.status}` }],
+          res.status,
+        );
+      }
+      this.processResponse(body);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       onError ? onError(error) : console.error("[ViewModelShell]", error);
@@ -547,6 +651,19 @@ export class ViewModelShell {
   /** Feed a pre-parsed ShellResponse into the shell — for SSE/WebSocket integrations. */
   push(response: ShellResponse): void {
     if (this.dispatching) return;
+    // 1.0.0 — parse-then-branch for push. External push consumers (SSE, WebSocket)
+    // may feed ok:false responses (e.g. a server-pushed error notification). Route
+    // them to onError WITHOUT calling processResponse — currentVm/currentState
+    // are NOT updated (D-15 runtime hardening for the push path).
+    // status: 0 because there was no HTTP transaction in an external push.
+    if (response.ok === false) {
+      const err = new VmsActionError(
+        response.errors ?? [{ message: "Server pushed ok:false envelope" }],
+        0,
+      );
+      this.options.onError ? this.options.onError(err) : console.error("[ViewModelShell]", err);
+      return;
+    }
     this.processResponse(response);
   }
 
