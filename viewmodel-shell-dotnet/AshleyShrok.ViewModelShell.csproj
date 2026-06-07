@@ -28,4 +28,15 @@
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
+  <!-- The framework-level test project lives at viewmodel-shell-dotnet/Tests/
+       (sibling subdir) and ProjectReferences this csproj. Exclude it from the
+       package's own compile/embedded globs so adding test files there doesn't
+       accidentally bloat the shipped NuGet (or pull xunit into the package
+       graph). The Tests/ project compiles separately. -->
+  <ItemGroup>
+    <Compile Remove="Tests/**" />
+    <EmbeddedResource Remove="Tests/**" />
+    <None Remove="Tests/**" />
+  </ItemGroup>
+
 </Project>
