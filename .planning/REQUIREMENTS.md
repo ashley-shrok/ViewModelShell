@@ -1,50 +1,50 @@
-# Requirements: ViewModel Shell — Milestone 0.4.0 Design System
+# Requirements: ViewModel Shell — Milestone 1.0.0 Truly Self-Describing Wire
 
-**Defined:** 2026-05-17
-**Core Value:** The core is a platform-agnostic transformer of a structured wire protocol — testable with no browser runtime, portable to any front-end.
+**Defined:** 2026-06-07
+**Core Value:** The core is a platform-agnostic transformer of a structured wire protocol — testable with no browser runtime, portable to any front-end, and drivable end-to-end by an agent reading only the JSON the server emits.
 
-**Milestone goal:** Ship a serviceable out-of-box look so agents — blind by design (no browser, no visual iteration loop) — produce decent apps without human intervention. The framework itself must guarantee the baseline because the only entity that could compensate is the blind app-building agent.
+**Milestone goal:** Deliver the framework's original "agents drive what the browser drives" pitch without the asterisk. Today the wire is self-describing only when paired with the browser renderer — the renderer applies scope rules that aren't in the JSON to assemble a `context` payload, so an agent driving the API directly has to mentally simulate the renderer to know what to send. v1.0.0 closes that asymmetry by eliminating `context` entirely (every input binds to a path in state; action names are unique per operation; renderer becomes a thin interpreter), and by giving every response a framework-owned `ok` flag + structured error envelope so failures are uniformly legible across every VMS app. **Hard wire-format break — no backwards-compatibility shims.** Aligned npm + NuGet `1.0.0` major bump.
 
 ## v1 Requirements
 
-Requirements for milestone 0.4.0. Each maps to exactly one roadmap phase (numbering continues from 0.3.13 → starts at Phase 3).
+Requirements for milestone 1.0.0. Each maps to exactly one roadmap phase (numbering continues from 0.4.0 → starts at Phase 6).
 
-### Theme
+### Wire
 
-- [x] **THEME-01**: An app that imports the shipped stylesheet and renders only `.vms-*` nodes gets a serviceable page shell (centered, max-width container, responsive horizontal padding) with zero app-authored CSS.
-- [x] **THEME-02**: The shipped stylesheet applies one coherent spacing scale and type scale across all node types, so a page composing form + table + stat-bar + section has consistent vertical rhythm with no per-app tuning.
-- [x] **THEME-03**: A density control on the page (`comfortable` | `compact`) adjusts global spacing / control sizing without app CSS.
-- [x] **THEME-04**: `section` accepts `variant: "card"`, rendering a visually grouped surface (background, border, padding, radius).
-- [x] **THEME-05**: The existing CSS-variable / alternate-theme override seam still fully reskins the UI via `:root` variables and the shipped theme files without editing rules (regression-guarded — no override-seam behavior change).
+The protocol contract change — Phase 6.
 
-### Layout
+- [ ] **WIRE-01**: Every input node (text/number/email/password/date/time/datetime/textarea/select/checkbox/file) declares a `bind` path naming where in state its value lives. The renderer reads/writes through that path; an agent reading the JSON sees the same declaration and can mutate state directly at that path.
+- [ ] **WIRE-02**: The client maintains a locally-mutable copy of state. Typing in an input, changing a select, toggling a checkbox, or picking a file mutates that local state at the declared bind path in place — no DOM-only form state that has to be "harvested" later.
+- [ ] **WIRE-03**: The dispatch wire carries only `{action, state, files?}`. The `context` field is removed from the protocol entirely. Files remain on the multipart side channel (the only path exempt from "everything lives in state").
+- [ ] **WIRE-04**: Every dispatch-bearing node (button, table sort header / filter input / pagination / selection button, tabs, fields with action-on-Enter, checkbox-on-change) carries an action name only — no embedded context payload. Per-row identity (the old `context: {id: 42}` pattern) is encoded in the action name itself; the app picks its naming style.
+- [ ] **WIRE-05**: The framework enforces "one action name = one operation" at tree-build time. Two nodes can share an action name only if they fire the same operation; declaring the same name for semantically distinct operations is an error caught when the tree is built.
+- [ ] **WIRE-06**: The renderer (`viewmodel-shell/src/browser.ts`) is rewritten as a thin interpreter. The seven distinct context-assembly paths identified by the codebase audit collapse into one declarative bind-path path. No DOM harvest, no implicit scope rules, no synthetic context.
+- [ ] **WIRE-07**: Every demo app — `demo/Tasks`, `ContactManager`, `ExpenseTracker`, `RetroBoard`, `HelpDesk`, `FeatureProbe`, `Reorder`, Showcase, and every `-bun` twin — is migrated to the new shape. Action handlers read from state, never from a context payload; state records carry per-input values at the bound paths.
+- [ ] **WIRE-08**: Cross-backend parity suite (`parity/`) green across .NET / Bun / Node — every fixture rewritten to the new wire shape, every backend agrees byte-for-byte. Existing CI gates (`check:core-globals`, parity workflow) stay green.
 
-- [ ] **LAYOUT-01**: `page` and `section` accept an optional layout-preset value that arranges their direct children; the default value renders identically to current vertical-stack behavior (non-breaking, no new node types).
-- [ ] **LAYOUT-02**: A side-by-side ("split") preset lays children in columns on wide viewports and collapses to stacked on narrow viewports with no app-specified breakpoints.
-- [ ] **LAYOUT-03**: A responsive card-grid ("cards") preset lays children via auto-fit from a single min-item-width value, collapsing to one column on narrow screens.
-- [ ] **LAYOUT-04**: The layout preset is the only layout field on the wire — no spans, tracks, or named areas cross the contract.
-- [ ] **LAYOUT-05**: The layout-preset field round-trips identically on .NET and TS backends — present in `src/index.ts`, `src/server.ts`, all 5 demo `ViewModels.cs` copies + the NuGet source, and covered by a parity fixture.
+### Error
 
-### Examples
+Framework-owned error model — Phase 7.
 
-- [x] **EXAMPLES-01**: Showcase renders a canonical reference set (at least: dashboard, form-heavy page, list/detail) using only `.vms-*` nodes + the shipped stylesheet, visually serviceable benchmarked against Bootstrap's example pages.
-- [x] **EXAMPLES-02**: Every demo app imports the shipped stylesheet and contains no hand-rolled per-demo `<style>` page chrome.
-- [x] **EXAMPLES-03**: AGENTS.md documents the layout presets, density control, and card variant (node table + CSS-class table updated) so an agent can use them from docs alone.
+- [ ] **ERROR-01**: The framework intercepts malformed action submissions before the app's handler runs and returns a uniform `{ok: false, errors: [{path, message}]}` envelope at 4xx. Replaces every per-app silent-revert / opaque-error convention.
+- [ ] **ERROR-02**: Unknown action names (action names not present in the just-rendered tree) and uncaught exceptions from app handlers are wrapped into the same envelope shape on the way out. App handlers don't need to do anything to participate — throwing is enough.
+- [ ] **ERROR-03**: Every response carries a top-level `ok: true | false` flag, set by the framework based on whether parsing, dispatching, and the app handler completed without thrown exceptions. Agents have one stable place to check across every VMS app.
 
 ### Release
 
-- [x] **RELEASE-01**: npm `@ashley-shrok/viewmodel-shell` and NuGet `AshleyShrok.ViewModelShell` ship aligned at `0.4.0` (wire-format change per the AGENTS.md major.minor-alignment rule).
-- [x] **RELEASE-02**: The full cross-backend parity suite is green (all fixtures, all backends agree) including the new layout-preset field.
-- [x] **RELEASE-03**: MIGRATION.md + CHANGELOG document 0.4.0 — the additive layout preset (default = prior behavior, non-breaking), the theme/density/card additions, and that existing apps render unchanged unless they opt in.
-- [x] **RELEASE-04**: Existing unit tests stay green and new behavior (layout presets, density, card variant) has jsdom unit tests (no browser runtime).
+1.0.0 closeout — Phase 7.
+
+- [ ] **RELEASE-01**: Aligned `1.0.0` major bump on both npm (`@ashley-shrok/viewmodel-shell`) and NuGet (`AshleyShrok.ViewModelShell`) — wire-format change forces aligned major per the major.minor-alignment rule.
+- [ ] **RELEASE-02**: `MIGRATION.md` documents the breaking change explicitly: context-payload elimination, the `bind` path on every input node, action-name uniqueness rule, the new error envelope + `ok` flag, and a per-app migration recipe. No backwards-compat shims; the doc is the upgrade path.
+- [ ] **RELEASE-03**: `CHANGELOG.md` 1.0.0 entry covers the full milestone with crisp before/after framing for consumers.
+- [ ] **RELEASE-04**: AGENTS.md updated — the "Critical gotchas" section (currently calls out `context`-related footguns) rewritten for the new model; the action-payload section replaced; tables / conventions / patterns sections reflect bind paths and unique action names. Documents the milestone's central promise: an agent that reads only `{vm, state}` from a GET and walks the tree can drive the entire app.
+- [ ] **RELEASE-05**: Full cross-backend parity green at release time; vitest + dotnet test green; new tests cover bind-path round-trip, action-name uniqueness enforcement at tree-build, and the error-envelope shape.
 
 ## v2 Requirements
 
 Deferred. Tracked but not in the current roadmap.
 
-### Layout
-
-- **LAYOUT-F1**: Fixed-N-column preset for calendar / scheduling-style grids — deferred; revisit only if a calendar-class app proves vertical-flow and auto-fit insufficient (driven by usage, not speculation, per project discipline).
+- _None — milestone scope is the architectural overhaul and its closeout._
 
 ## Out of Scope
 
@@ -52,40 +52,41 @@ Explicitly excluded. Documented to prevent scope creep.
 
 | Feature | Reason |
 |---------|--------|
-| `image`/media node ([#5](https://github.com/ashley-shrok/ViewModelShell/issues/5)) | Highest coverage-per-cost content node and zero tension with the no-browser promise, but scoped out to keep 0.4.0 tight on theme + layout + examples. Deferred, not rejected. |
-| `chart`/data-viz node ([#6](https://github.com/ashley-shrok/ViewModelShell/issues/6)) | Collides with no-browser-testability + multi-target + parity; needs design (server-rendered SVG vs. declarative ChartNode behind the seam vs. explicit out-of-scope). Likely its own milestone. |
-| External CSS framework as a dependency (Bootstrap / Tailwind / Pico) | The `.vms-*` semantic-class contract makes external frameworks a poor fit (they expect utility/component classes or bare semantic HTML); a bridge stylesheet collapses into theme work with added coupling. Bootstrap used only as a visual quality benchmark. |
-| Spatial layout utilities (column spans, track templates, named areas, `m-*`/`p-*` utilities, 12-column grid) | Dumps visual 2D reasoning onto a blind agent and explodes the wire contract; the whole point of preset-grid is the agent picks a semantic preset, never authors geometry. |
+| Backwards-compatibility shims (a "legacy `context`" reader, deprecation warnings, dual-mode renderer, migration codemod) | This milestone exists to deliver the framework as it should have been from day one. Compatibility hacks would dilute the change and entrench the asymmetry being removed. Apps migrate; the framework just ships the corrected protocol. |
+| Framework-shipped action-name router / pattern-matching primitive | Action-name dispatch in handlers is a one-line `startsWith` / `switch` per app. Framework opinions on naming convention (slashes, dashes, colons) belong in apps, not in the protocol. Strike the helper. |
+| Naming convention for unique action names | Each app picks the style that fits its handler ergonomics (`delete-row-42`, `row/42/delete`, etc.). Framework only enforces uniqueness, not structure. |
+| Action-result type with `{success, message}` separate from state | Overlaps with state itself — the next state IS the result. Structured `errors` + the `ok` flag (ERROR-01..03) cover the agent-facing slice; no additional layer needed. |
+| Bringing earlier features (busy, preventUnload, table modes, side effects, polling, redirects) into the wire change | These already work correctly and aren't `context`-bound. They continue to ship unchanged on the new wire. |
+| Lenient type coercion (JSON int → string-field, etc.) as a separate framework capability | The `bind` path lands typed values directly into the state's own typing. Apps that want typed state get typed inputs; apps that want loose state can use loose state. Coercion as a separate concept disappears. |
 
 ## Traceability
 
-Which phases cover which requirements. Phase numbering continues from 0.3.13 (Phases 1–2) → 0.4.0 starts at Phase 3.
+Which phases cover which requirements. Phase numbering continues from 0.4.0 (Phases 3–5) → 1.0.0 starts at Phase 6.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| THEME-01 | Phase 3 | Complete |
-| THEME-02 | Phase 3 | Complete |
-| THEME-03 | Phase 3 | Complete |
-| THEME-04 | Phase 3 | Complete |
-| THEME-05 | Phase 3 | Complete |
-| LAYOUT-01 | Phase 4 | Pending |
-| LAYOUT-02 | Phase 4 | Pending |
-| LAYOUT-03 | Phase 4 | Pending |
-| LAYOUT-04 | Phase 4 | Pending |
-| LAYOUT-05 | Phase 4 | Pending |
-| EXAMPLES-01 | Phase 5 | Complete |
-| EXAMPLES-02 | Phase 5 | Complete |
-| EXAMPLES-03 | Phase 5 | Complete |
-| RELEASE-01 | Phase 5 | Complete |
-| RELEASE-02 | Phase 5 | Complete |
-| RELEASE-03 | Phase 5 | Complete |
-| RELEASE-04 | Phase 5 | Complete |
+| WIRE-01 | Phase 6 | Pending |
+| WIRE-02 | Phase 6 | Pending |
+| WIRE-03 | Phase 6 | Pending |
+| WIRE-04 | Phase 6 | Pending |
+| WIRE-05 | Phase 6 | Pending |
+| WIRE-06 | Phase 6 | Pending |
+| WIRE-07 | Phase 6 | Pending |
+| WIRE-08 | Phase 6 | Pending |
+| ERROR-01 | Phase 7 | Pending |
+| ERROR-02 | Phase 7 | Pending |
+| ERROR-03 | Phase 7 | Pending |
+| RELEASE-01 | Phase 7 | Pending |
+| RELEASE-02 | Phase 7 | Pending |
+| RELEASE-03 | Phase 7 | Pending |
+| RELEASE-04 | Phase 7 | Pending |
+| RELEASE-05 | Phase 7 | Pending |
 
 **Coverage:**
-- v1 requirements: 17 total
-- Mapped to phases: 17 (Phase 3: 5, Phase 4: 5, Phase 5: 7)
+- v1 requirements: 16 total
+- Mapped to phases: 16 (Phase 6: 8, Phase 7: 8)
 - Unmapped: 0 ✓
 
 ---
-*Requirements defined: 2026-05-17*
-*Last updated: 2026-05-17 — roadmap created: all 17 v1 requirements mapped across Phases 3–5 (THEME→Phase 3, LAYOUT→Phase 4, EXAMPLES+RELEASE→Phase 5).*
+*Requirements defined: 2026-06-07*
+*Last updated: 2026-06-07 — initial requirements for 1.0.0 milestone drafted directly from the design conversation (no research pass; codebase audit by Explore agent inventoried every context-assembly path before drafting). All 16 v1 requirements mapped across Phases 6–7 (WIRE→Phase 6, ERROR+RELEASE→Phase 7).*

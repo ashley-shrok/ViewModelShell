@@ -8,16 +8,17 @@ A server-driven UI framework where the wire format is structured enough that age
 
 The core is a platform-agnostic transformer of a structured wire protocol — testable with no browser runtime, portable to any front-end. If platform assumptions leak into the core, the framework's central promise (and its main differentiator) is broken.
 
-## Current Milestone: 0.4.0 Design System
+## Current Milestone: 1.0.0 Truly Self-Describing Wire
 
-**Goal:** Ship a serviceable out-of-box look so agents — which are blind by design (no browser, no visual iteration loop) — produce decent apps without human intervention. The framework itself must guarantee the baseline because the only entity that could compensate (the app-building agent) cannot see its output.
+**Goal:** Deliver the framework's original pitch — "agents drive what the browser drives" — without the asterisk. Eliminate the `context` payload from the wire entirely; every input node binds to a path in state; action names are unique per operation; the renderer becomes a thin interpreter; the agent path and browser path become genuinely identical. Pair this with framework-owned error envelopes and a top-level success flag so failures are uniformly legible across every VMS app.
 
 **Target features:**
-- **Excellent shipped default theme** — page shell (container max-width, responsive padding), coherent spacing + type scale, density knob, card grouping as a `section` variant. The design system owns rhythm/spacing so the agent never reasons about visuals.
-- **Preset-grid layout** — ONE grid-backed layout enum on the *existing* container nodes (`page`/`section`). Server emits layout *intent*; CSS implements every pixel. Default value = today's vertical flow (non-breaking; no new node types; no spatial geometry/spans in the wire). Agent-familiar but correctly-scoped naming (stack/split/cards-style, not `grid` with implied spans). Consider a fixed-column mode for calendar/scheduling-like grids.
-- **Canonical examples as the few-shot agent surface** — Showcase + demos switched to import the shipped stylesheet (stop hand-rolling per-demo `<style>` blocks), benchmarked against Bootstrap's example pages as the quality bar (Bootstrap as visual acceptance benchmark only, NOT a CSS dependency — the `.vms-*` semantic-class contract makes external CSS frameworks a poor fit).
+- **State bindings + context elimination.** Every input node (text/number/checkbox/select/file/etc.) declares a `bind` path into the state model. Typing/changing mutates local state in place. On dispatch, the wire carries only `{action, state, files?}` — the `context` field is gone entirely. The renderer is rewritten as a thin interpreter: it reads/writes state at declared paths and dispatches action names. No DOM harvest, no scope rules, no implicit gathering. An agent reading the JSON sees the same declarations the renderer sees, and assembles requests identically.
+- **Unique action names per operation.** Every dispatch-bearing node (button, table sort/filter/page/selection, tabs, fields, checkboxes) stops carrying a context payload. Per-row identity (which used to be `context: {id: 42}`) moves into the action name itself (`delete-row-42`, etc.). Framework enforces "one action name = one operation" at tree-build time. Apps choose their own naming style; no framework router primitive.
+- **Framework-owned error envelope.** Malformed payloads, unknown action names, and uncaught handler exceptions all return a uniform `{ok: false, errors: [{path, message}]}` shape — the framework intercepts before the app's handler runs, so the silent-revert anti-pattern stops being writable in app code.
+- **Top-level `ok` flag on every response.** Set by the framework, not the app. Gives agents one stable place to check "did the thing work" across every VMS app.
 
-**Key constraints:** Wire-format change (the layout enum) ⇒ **0.4.0** minor bump, npm + NuGet aligned (npm `0.3.14`→`0.4.0`, NuGet `0.3.10`→`0.4.0`) per the AGENTS.md major.minor-alignment rule; all 5 `ViewModels.cs` copies stay in sync; full cross-backend parity stays green; the CSS-variable / alt-theme override seam stays exactly as-is.
+**Key constraints:** **Hard wire-format break** — every consuming app must migrate. No backwards-compatibility helpers; the framework simply ships the corrected protocol. Aligned npm + NuGet bump to `1.0.0` per the major.minor-alignment rule. Files stay on their own multipart channel (only path exempt from "everything lives in state"). All existing 0.4.0–0.16.0 features (busy, preventUnload, table modes, side effects, polling, redirects) continue to work; they just no longer use `context`. Cross-backend parity stays green; renderer simplification (~7 distinct context-assembly paths today, collapsed to one declarative path) must not change the rendered DOM for equivalent inputs.
 
 ## Requirements
 
@@ -61,7 +62,7 @@ The core is a platform-agnostic transformer of a structured wire protocol — te
 
 <!-- Current scope. Building toward these. -->
 
-- _None — Milestone 0.4.0 Design System complete (Phases 3–5 all validated). Awaiting next milestone._
+- Active REQ-IDs for v1.0.0 are defined in `.planning/REQUIREMENTS.md` (scoped to this milestone).
 
 <!-- Detailed REQ-IDs live in REQUIREMENTS.md, scoped per milestone. -->
 
@@ -122,4 +123,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-18 — Phase 5 (Canonical Examples + 0.4.0 Release Closeout) complete: **Milestone 0.4.0 Design System closed (Phases 3–5, all 17 requirements validated)**. EXAMPLES-01..03 + RELEASE-01..04 shipped — Showcase gained the navigable canonical set (gallery + Dashboard `cards` / Form-heavy `stack` / List-detail `split`, locked Bootstrap Dashboard/Checkout/Album mapping, `.vms-*`-only); all 7 demos de-chromed to zero-`<style>` + a distinct pinned shipped theme (CI-guarded); AGENTS.md gained a focused Design system section pointing at the live Showcase as single source of truth; default `:root` re-based dark→light onto the light-purple set with the D-01↔D-07 AA conflict resolved via the D-17 one-value precedent (`--vms-warning #c89610→#a37510`, surfaced to the user not auto-resolved; `light-purple.css`+11 themes byte-unchanged; new `themes/dark-purple.css` byte-exact prior-dark capture); npm 0.3.14→0.4.0 + NuGet 0.3.10→0.4.0 aligned with one consolidated CHANGELOG/MIGRATION. Parity 7/7 byte-identical green (zero new parity surface), vitest 31/31 (no new jsdom behavior test — D-25), 4 static CI guards gated in parity.yml; code review 0 critical (WR-01 doc fix applied), D-12 visual benchmark human-signed-off (ahbarnum, 2026-05-18). Next: new milestone (questioning → requirements → roadmap) via `/gsd-new-milestone`.*
+*Last updated: 2026-06-07 — Milestone v1.0.0 Truly Self-Describing Wire started. Goal: deliver the framework's original "agents drive what the browser drives" pitch without the asterisk. The current wire still carries a `context` payload assembled by renderer-side scope rules — making the protocol self-describing only when paired with the browser renderer (asymmetric for agents driving the API directly). v1.0.0 closes that asymmetry by eliminating `context` entirely (input nodes bind to state paths; action names are unique per operation; renderer becomes a thin interpreter), and by giving every response a framework-owned `ok` flag + structured error envelope so failures are uniformly legible. Hard wire break; aligned npm + NuGet `1.0.0` bump; no compatibility shims. Phases to be defined.*
