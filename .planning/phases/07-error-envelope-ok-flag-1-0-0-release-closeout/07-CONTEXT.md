@@ -39,17 +39,17 @@ Close the v1.0.0 milestone. Two coupled deliverables:
 ### Unknown action detection — app-driven via `UnknownActionError`
 
 - **D-09:** Framework does NOT re-render the tree from posted state to validate action names. Apps are responsible for surfacing unknown actions from their dispatch: the framework provides a new public `UnknownActionError(name)` exception class (both backends — TS export, .NET class). Apps add a `default:` case to their dispatch switch that throws it. The framework catches all exceptions including this one and wraps into the envelope; `UnknownActionError` is surfaced with `code: "unknown_action"` so agents can distinguish "I sent a name your tree doesn't expose" from "your handler crashed."
-- **D-10:** This is mildly less strict than ERROR-02's literal wording ("action names not present in the just-rendered tree") — the action is unknown when the app says it is, not when the framework re-walks the tree and confirms. The trade-off is zero perf cost, zero controller-shape change, and zero framework opinion on the dispatch pattern (consistent with REQUIREMENTS.md's "no framework router primitive" out-of-scope). MIGRATION.md teaches the default-case pattern as the canonical migration step.
+- **D-10** [informational, rationale for D-09]: This is mildly less strict than ERROR-02's literal wording ("action names not present in the just-rendered tree") — the action is unknown when the app says it is, not when the framework re-walks the tree and confirms. The trade-off is zero perf cost, zero controller-shape change, and zero framework opinion on the dispatch pattern (consistent with REQUIREMENTS.md's "no framework router primitive" out-of-scope). MIGRATION.md teaches the default-case pattern as the canonical migration step.
 
 ### HTTP status code policy
 
 - **D-11:** Split by fault attribution. `ok: true` → 200. Malformed payload (parse failure) → 400. `UnknownActionError` → 400. Uncaught handler exception → 500. ANY ok:false response carries the same envelope body — only the HTTP status differs. Matches today's `createAction` policy; only the body shape changes (from `{error: msg}` to `{ok: false, errors: [...]}`).
-- **D-12:** Rationale: proxies, load balancers, and infrastructure monitoring see real HTTP status codes (a 500 fires alerts; a 400 does not); the structured envelope is the body. Uniform-200 was considered and rejected — it hides 500-class faults from monitoring; the small client-side simplification (single status path) is not worth the operational regression.
+- **D-12** [informational, rationale for D-11]: proxies, load balancers, and infrastructure monitoring see real HTTP status codes (a 500 fires alerts; a 400 does not); the structured envelope is the body. Uniform-200 was considered and rejected — it hides 500-class faults from monitoring; the small client-side simplification (single status path) is not worth the operational regression.
 
 ### Client shell — `VmsActionError` on existing `onError`
 
 - **D-13:** New exported class: `class VmsActionError extends Error { errors: ErrorEntry[]; status: number; code?: string }`. The shell always parses the response body — even on 4xx/5xx. On `ok: false` (or non-2xx with a parseable envelope body), the shell constructs a `VmsActionError` and surfaces it via the **existing** `onError(err)` callback. No new callback.
-- **D-14:** Apps that don't care see a normal `Error` with a useful `.message` (composed from the first error entry or a summary). Apps that want the structured payload do `if (err instanceof VmsActionError) { ... err.errors ... }`. Smallest API addition; one callback to remember; non-VMS apps that wired `onError` for fetch failures keep working without change.
+- **D-14** [informational, rationale for D-13]: Apps that don't care see a normal `Error` with a useful `.message` (composed from the first error entry or a summary). Apps that want the structured payload do `if (err instanceof VmsActionError) { ... err.errors ... }`. Smallest API addition; one callback to remember; non-VMS apps that wired `onError` for fetch failures keep working without change.
 - **D-15:** The shell DOES NOT render a returned `vm` on `ok: false`. (Framework `ok: false` responses don't include `vm`/`state` — they're structurally just `{ok: false, errors: [...]}`.) The user's last-good UI persists; agents handle the error via the callback. If future work wants "render this form with inline errors," it can add that as a separate affordance without disturbing this contract.
 
 ### MIGRATION + AGENTS scope
@@ -70,7 +70,7 @@ Close the v1.0.0 milestone. Two coupled deliverables:
   3. New `UnknownActionError` class export (both backends) + sweep every demo controller's dispatch switch to add the `default:` throw.
   4. Parity fixtures updated (see D-19).
   5. Aligned npm + NuGet `1.0.0` bump + consolidated MIGRATION.md / CHANGELOG.md / surgical AGENTS.md updates.
-- **D-19:** Version-bumping FIRST would publish a 1.0.0 artifact in front of consumers mid-milestone with half the changes shipped — that's how releases break. Bump in the final plan, after parity is green and migrations are done.
+- **D-19** [informational, rationale for D-18]: Version-bumping FIRST would publish a 1.0.0 artifact in front of consumers mid-milestone with half the changes shipped — that's how releases break. Bump in the final plan, after parity is green and migrations are done.
 
 ### Parity fixture surface — two cheap deltas
 

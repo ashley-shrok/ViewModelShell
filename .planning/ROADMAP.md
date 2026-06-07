@@ -101,7 +101,7 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
   3. The framework rejects at tree-build time any attempt to register the same action name for two semantically distinct operations — the violation surfaces as an error before the tree is serialized to the wire (WIRE-05).
   4. The renderer source (`browser.ts`) has no context-assembly code paths; a grep for any prior context-harvesting pattern returns no matches; parity suite byte-identical across .NET / Bun / Node with new fixtures exercising bind-path round-trips (WIRE-06, WIRE-08).
   5. Every demo app (`Tasks`, `ContactManager`, `ExpenseTracker`, `RetroBoard`, `HelpDesk`, `FeatureProbe`, `Reorder`, `Showcase`, and all `-bun` twins) responds correctly to actions posted without a `context` field; no demo references the old context-payload shape (WIRE-07).
-**Plans**: TBD
+**Plans**: 5 plans
 **UI hint**: no
 
 ### Phase 7: Error Envelope + ok Flag + 1.0.0 Release Closeout
@@ -114,7 +114,12 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
   3. Every successful response carries `ok: true`; every error response carries `ok: false` — an agent checking only that field gets a reliable success signal across every VMS app with no per-app convention (ERROR-03).
   4. npm `@ashley-shrok/viewmodel-shell` and NuGet `AshleyShrok.ViewModelShell` ship aligned at `1.0.0`; MIGRATION.md documents context-payload elimination, bind-path requirements, action-name uniqueness, and the error envelope as breaking changes with a per-app migration recipe; CHANGELOG.md has a 1.0.0 entry with crisp before/after framing (RELEASE-01, RELEASE-02, RELEASE-03).
   5. AGENTS.md "Critical gotchas" section is rewritten for the new model (no context references, bind-path pattern, unique-action-name rule, error envelope); vitest, dotnet test, and cross-backend parity suite are all green with new tests covering bind-path round-trip, action-name uniqueness enforcement, and error-envelope shape (RELEASE-04, RELEASE-05).
-**Plans**: TBD
+**Plans**: 5 plans
+  - [ ] 07-01-PLAN.md — Framework envelope wire types + UnknownActionError/Exception + createAction envelope wrap (ERROR-01, ERROR-02, ERROR-03)
+  - [ ] 07-02-PLAN.md — Shell-side parse-then-branch + VmsActionError + ok? field on ShellResponse interface (ERROR-01, ERROR-02, ERROR-03)
+  - [ ] 07-03-PLAN.md — Demo controller sweep (.NET filter + 7 controllers + 7 TS servers) + FeatureProbe `boom` action (ERROR-02, ERROR-03)
+  - [ ] 07-04-PLAN.md — Parity ok:true sweep + new feature-probe-envelope fixture across 3 backends + expectStatus support (ERROR-01, ERROR-02, ERROR-03, RELEASE-05)
+  - [ ] 07-05-PLAN.md — 1.0.0 version bump + consolidated MIGRATION + CHANGELOG + AGENTS surgical rewrite + README sweep + final gate (RELEASE-01..05)
 **UI hint**: no
 
 ## Progress
@@ -130,4 +135,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. Preset-Grid Layout | 0.4.0 | 4/4 | Complete | 2026-05-18 |
 | 5. Canonical Examples + 0.4.0 Closeout | 0.4.0 | 6/6 | Complete | 2026-05-18 |
 | 6. Wire Shape Change | 1.0.0 | 5/5 | Complete   | 2026-06-07 |
-| 7. Error Envelope + ok Flag + 1.0.0 Closeout | 1.0.0 | TBD | Pending | - |
+| 7. Error Envelope + ok Flag + 1.0.0 Closeout | 1.0.0 | 0/5 | Planning | - |
