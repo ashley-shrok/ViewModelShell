@@ -191,6 +191,9 @@ function collectActions(
           for (const node of row.actions) {
             if (node.type === "button") {
               recordAction((node as ButtonNode).action, enclosingForm, out);
+            } else if (node.type === "checkbox") {
+              const cbAction = (node as CheckboxNode).action;
+              if (cbAction) recordAction(cbAction, enclosingForm, out);
             }
           }
         }

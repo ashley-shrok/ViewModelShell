@@ -464,9 +464,11 @@ public static class ViewTreeValidation
                 {
                     if (row.Actions is { } rowActions)
                     {
-                        foreach (var b in rowActions.OfType<ButtonNode>())
+                        foreach (var rowAction in rowActions)
                         {
-                            Record(b.Action, enclosingForm, sink);
+                            if (rowAction is ButtonNode b) Record(b.Action, enclosingForm, sink);
+                            else if (rowAction is CheckboxNode cb && cb.Action is { } cbAct)
+                                Record(cbAct, enclosingForm, sink);
                         }
                     }
                 }
