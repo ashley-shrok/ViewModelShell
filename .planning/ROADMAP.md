@@ -129,5 +129,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 3. Default Design System | 0.4.0 | 3/3 | Complete | 2026-05-17 |
 | 4. Preset-Grid Layout | 0.4.0 | 4/4 | Complete | 2026-05-18 |
 | 5. Canonical Examples + 0.4.0 Closeout | 0.4.0 | 6/6 | Complete | 2026-05-18 |
-| 6. Wire Shape Change | 1.0.0 | 2/5 | In Progress|  |
+| 6. Wire Shape Change | 1.0.0 | 3/5 | In Progress|  |
 | 7. Error Envelope + ok Flag + 1.0.0 Closeout | 1.0.0 | TBD | Pending | - |
