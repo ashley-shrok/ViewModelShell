@@ -43,25 +43,50 @@ function jsonRequest(body: object): Request {
   });
 }
 
-/** Build a multipart request with valid _action + _state fields. */
+/** Build a multipart request with valid _action + _state fields.
+ *  Manually constructs the multipart body with a fixed boundary so
+ *  it works reliably in the jsdom / node test environment.
+ */
 function multipartRequest(name: string, state: TestState): Request {
-  const fd = new FormData();
-  fd.append("_action", JSON.stringify({ name }));
-  fd.append("_state", JSON.stringify(state));
+  const boundary = "----VmsTestBoundary123";
+  const actionJson = JSON.stringify({ name });
+  const stateJson = JSON.stringify(state);
+  const body = [
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="_action"`,
+    "",
+    actionJson,
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="_state"`,
+    "",
+    stateJson,
+    `--${boundary}--`,
+  ].join("\r\n");
   return new Request("http://localhost/action", {
     method: "POST",
-    body: fd,
+    headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+    body,
   });
 }
 
-/** Build a multipart request with a malformed _action field. */
+/** Build a multipart request with a malformed _action field (invalid JSON). */
 function malformedMultipartRequest(): Request {
-  const fd = new FormData();
-  fd.append("_action", "not-valid-json{{{");
-  fd.append("_state", JSON.stringify(VALID_STATE));
+  const boundary = "----VmsTestBoundary456";
+  const body = [
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="_action"`,
+    "",
+    "not-valid-json{{{",
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="_state"`,
+    "",
+    JSON.stringify(VALID_STATE),
+    `--${boundary}--`,
+  ].join("\r\n");
   return new Request("http://localhost/action", {
     method: "POST",
-    body: fd,
+    headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+    body,
   });
 }
 
