@@ -8,6 +8,7 @@
 // are needed: this demo has no input fields, only buttons.
 
 import {
+  BadRequestError,
   createAction,
   validateActionNames,
   type ViewNode,
@@ -148,7 +149,7 @@ const actionHandler = createAction<ReorderState>(async (payload) => {
       }
     }
   } else {
-    throw new Error(`Unknown action: ${name}`);
+    throw new BadRequestError(`Unknown action: ${name}`);
   }
 
   return { vm: buildVm(state), state };

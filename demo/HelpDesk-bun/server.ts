@@ -20,6 +20,7 @@
 //     save-notes) — only one ticket is on the detail page at a time.
 
 import {
+  BadRequestError,
   createAction,
   validateActionNames,
   type ViewNode,
@@ -597,7 +598,7 @@ const agentHandler = createAction<AgentState>(async (payload) => {
       state = { ...state, notesSaved: true };
     }
   } else {
-    throw new Error(`Unknown action: ${name}`);
+    throw new BadRequestError(`Unknown action: ${name}`);
   }
 
   return { vm: agentBuildVm(state), state };
@@ -847,7 +848,7 @@ const requesterHandler = createAction<RequesterState>(async (payload) => {
       state = { ...state, validationError: null, view: "list" };
     }
   } else {
-    throw new Error(`Unknown action: ${name}`);
+    throw new BadRequestError(`Unknown action: ${name}`);
   }
 
   return { vm: requesterBuildVm(state), state };

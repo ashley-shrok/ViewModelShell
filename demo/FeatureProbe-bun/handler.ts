@@ -11,6 +11,7 @@
 // — parity sets them via state before dispatching.
 
 import {
+  BadRequestError,
   createAction,
   shellRedirect,
   shellSideEffect,
@@ -268,7 +269,7 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
   } else if (name === "table-page-next") {
     // Same as prev.
   } else {
-    throw new Error(`Unknown action: ${name}`);
+    throw new BadRequestError(`Unknown action: ${name}`);
   }
 
   return { vm: buildVm(state), state };

@@ -16,6 +16,7 @@
 // rather than a context payload.
 
 import {
+  BadRequestError,
   createAction,
   validateActionNames,
   type ViewNode,
@@ -262,7 +263,7 @@ const actionHandler = createAction<ExpensesState>(async payload => {
     const amount = state.draftAmount ? parseFloat(state.draftAmount) : NaN;
     const note = state.draftNote ?? "";
     if (!isFinite(amount) || amount <= 0)
-      throw new Error("amount must be a positive number");
+      throw new BadRequestError("amount must be a positive number");
     const added: Transaction = {
       id: Array.from({ length: 8 }, () =>
         Math.floor(Math.random() * 16).toString(16),
@@ -289,7 +290,7 @@ const actionHandler = createAction<ExpensesState>(async payload => {
   } else if (name === "hide-add") {
     state = { ...state, adding: false, draftAmount: "", draftNote: "" };
   } else {
-    throw new Error(`Unknown action: ${name}`);
+    throw new BadRequestError(`Unknown action: ${name}`);
   }
 
   return { vm: buildVm(state), state };

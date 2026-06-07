@@ -15,6 +15,7 @@
 // the action handler reads from state, not from a `context` payload.
 
 import {
+  BadRequestError,
   createAction,
   validateActionNames,
   type ViewNode,
@@ -197,7 +198,7 @@ export const actionHandler = createAction<TasksState>(async (payload) => {
   if (name === "add") {
     const title = state.draftTitle?.trim() ?? "";
     if (!title) {
-      throw new Error("title required");
+      throw new BadRequestError("title required");
     }
     const newTask: TaskRecord = {
       id: generateId(),
@@ -217,7 +218,7 @@ export const actionHandler = createAction<TasksState>(async (payload) => {
     const value = name.slice("filter-".length);
     state = { ...state, filter: value };
   } else {
-    throw new Error(`Unknown action: ${name}`);
+    throw new BadRequestError(`Unknown action: ${name}`);
   }
 
   return { vm: buildVm(state), state };

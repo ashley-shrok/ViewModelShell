@@ -15,6 +15,7 @@
 // shape, now bind-driven).
 
 import {
+  BadRequestError,
   createAction,
   validateActionNames,
   type ViewNode,
@@ -236,7 +237,7 @@ const actionHandler = createAction<ContactsState>(async (payload) => {
   if (name.startsWith("navigate-to-detail-")) {
     const id = name.slice("navigate-to-detail-".length);
     const c = state.contacts.find(c => c.id === id);
-    if (!c) throw new Error("id not found");
+    if (!c) throw new BadRequestError("id not found");
     // Seed the draft form with the contact's current values so the bound
     // edit fields render correctly on first paint.
     state = {
@@ -252,7 +253,7 @@ const actionHandler = createAction<ContactsState>(async (payload) => {
   } else if (name === "save-contact-new") {
     const draft = state.draftForm;
     const trimmedName = (draft.name ?? "").trim();
-    if (!trimmedName) throw new Error("name required");
+    if (!trimmedName) throw new BadRequestError("name required");
     const added: ContactRecord = {
       id: generateId(),
       name: trimmedName,
@@ -272,7 +273,7 @@ const actionHandler = createAction<ContactsState>(async (payload) => {
     const editId = name.slice("save-contact-edit-".length);
     const draft = state.draftForm;
     const trimmedName = (draft.name ?? "").trim();
-    if (!trimmedName) throw new Error("name required");
+    if (!trimmedName) throw new BadRequestError("name required");
     const email = (draft.email ?? "").trim();
     const phone = (draft.phone ?? "").trim();
     const notes = (draft.notes ?? "").trim();
@@ -298,7 +299,7 @@ const actionHandler = createAction<ContactsState>(async (payload) => {
     // searchQuery is already in state via the field's bind path; the server
     // just acknowledges with a re-render driven by the new query.
   } else {
-    throw new Error(`Unknown action: ${name}`);
+    throw new BadRequestError(`Unknown action: ${name}`);
   }
 
   return { vm: buildVm(state), state };

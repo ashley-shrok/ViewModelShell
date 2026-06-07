@@ -13,6 +13,7 @@
 // actionItems[i].resolved slot via index.
 
 import {
+  BadRequestError,
   createAction,
   validateActionNames,
   type PageNode,
@@ -207,9 +208,9 @@ const actionHandler = createAction<RetroState>(async (payload) => {
   if (name.startsWith("add-card-")) {
     const section = name.slice("add-card-".length) as SectionId;
     const draftKey = SECTION_TO_DRAFT[section];
-    if (!draftKey) throw new Error(`unknown section: ${section}`);
+    if (!draftKey) throw new BadRequestError(`unknown section: ${section}`);
     const text = (state.drafts[draftKey] ?? "").trim();
-    if (!text) throw new Error("text required");
+    if (!text) throw new BadRequestError("text required");
     const card: RetroCard = {
       id: generateId(),
       text,
@@ -229,7 +230,7 @@ const actionHandler = createAction<RetroState>(async (payload) => {
     // The checkbox bind has already written the new boolean to
     // state.actionItems[i].resolved. Just acknowledge with a re-render.
   } else {
-    throw new Error(`Unknown action: ${name}`);
+    throw new BadRequestError(`Unknown action: ${name}`);
   }
 
   return { vm: buildVm(state), state };
