@@ -416,9 +416,8 @@ public class RetroBoardControllerTests
     // ── unknown action ──────────────────────────────────────────────────────────
 
     [Fact]
-    public void Action_UnknownName_ReturnsBadRequest()
+    public void Action_UnknownName_Throws()
     {
-        var result = Act(CreateController(), RetroState.Initial(), "blast-off");
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Throws<UnknownActionException>(() => Act(CreateController(), RetroState.Initial(), "blast-off"));
     }
 }

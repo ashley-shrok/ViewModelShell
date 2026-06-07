@@ -98,7 +98,7 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
         }
         else
         {
-            return BadRequest($"Unknown action: {name}");
+            throw new UnknownActionException(name);
         }
 
         return new ShellResponse<RequesterState>(BuildVm(state), state).Validate();

@@ -446,10 +446,9 @@ public class TasksControllerTests
     }
 
     [Fact]
-    public void Action_UnknownName_ReturnsBadRequest()
+    public void Action_UnknownName_Throws()
     {
         var ctrl = CreateController();
-        var result = Act(ctrl, TasksState.Initial(), "fly-to-moon");
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Throws<UnknownActionException>(() => Act(ctrl, TasksState.Initial(), "fly-to-moon"));
     }
 }

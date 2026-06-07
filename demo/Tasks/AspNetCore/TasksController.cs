@@ -59,7 +59,7 @@ public class TasksController : ControllerBase
         }
         else
         {
-            return BadRequest($"Unknown action: {name}");
+            throw new UnknownActionException(name);
         }
 
         return new ShellResponse<TasksState>(BuildVm(state), state).Validate();

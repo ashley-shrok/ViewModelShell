@@ -360,9 +360,8 @@ public class RequesterControllerTests : IDisposable
     // ── unknown action ────────────────────────────────────────────────────────
 
     [Fact]
-    public void UnknownAction_ReturnsBadRequest()
+    public void UnknownAction_Throws()
     {
-        var result = Act(CreateController(), RequesterState.Initial(), "fly-to-moon");
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Throws<UnknownActionException>(() => Act(CreateController(), RequesterState.Initial(), "fly-to-moon"));
     }
 }

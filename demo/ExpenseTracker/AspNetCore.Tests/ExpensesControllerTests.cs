@@ -431,9 +431,8 @@ public class ExpensesControllerTests
     // ── action: unknown ──────────────────────────────────────────────────────────
 
     [Fact]
-    public void Action_UnknownName_ReturnsBadRequest()
+    public void Action_UnknownName_Throws()
     {
-        var result = Act(CreateController(), ExpensesState.Initial(), "fly-to-moon");
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Throws<UnknownActionException>(() => Act(CreateController(), ExpensesState.Initial(), "fly-to-moon"));
     }
 }

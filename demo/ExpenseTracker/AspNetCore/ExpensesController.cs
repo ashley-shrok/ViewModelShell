@@ -66,7 +66,7 @@ public class ExpensesController : ControllerBase
         }
         else
         {
-            return BadRequest($"Unknown action: {name}");
+            throw new UnknownActionException(name);
         }
 
         return new ShellResponse<ExpensesState>(BuildVm(state), state).Validate();

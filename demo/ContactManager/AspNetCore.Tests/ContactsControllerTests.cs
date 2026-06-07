@@ -529,10 +529,9 @@ public class ContactsControllerTests
     }
 
     [Fact]
-    public void Action_UnknownAction_ReturnsBadRequest()
+    public void Action_UnknownAction_Throws()
     {
         var ctrl = CreateController();
-        var result = Act(ctrl, ContactsState.Initial(), "teleport");
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Throws<UnknownActionException>(() => Act(ctrl, ContactsState.Initial(), "teleport"));
     }
 }

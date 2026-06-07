@@ -188,9 +188,18 @@ public class FeatureProbeController : ControllerBase
         {
             // Renderer wrote target page to state.TablePage before dispatch.
         }
+        else if (name == "boom")
+        {
+            // Deliberate uncaught throw — exercises the generic-Exception path through
+            // ShellExceptionFilter. Used by the Plan 04 parity fixture to verify that
+            // ALL backends return byte-identical {ok:false, errors:[{message:"deliberate
+            // test failure", code:"uncaught_exception"}]} envelopes. Dev/parity use only;
+            // this demo is never deployed to production (T-07-09 accept disposition).
+            throw new Exception("deliberate test failure");
+        }
         else
         {
-            return BadRequest($"Unknown action: {name}");
+            throw new UnknownActionException(name);
         }
 
         return new ShellResponse<FeatureProbeState>(BuildVm(state), state).Validate();

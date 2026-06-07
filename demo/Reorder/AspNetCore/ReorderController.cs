@@ -96,7 +96,7 @@ public class ReorderController : ControllerBase
         }
         else
         {
-            return BadRequest($"Unknown action: {name}");
+            throw new UnknownActionException(name);
         }
 
         return new ShellResponse<ReorderState>(BuildVm(state), state).Validate();

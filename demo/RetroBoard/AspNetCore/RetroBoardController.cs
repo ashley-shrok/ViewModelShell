@@ -59,7 +59,7 @@ public class RetroBoardController : ControllerBase
         }
         else
         {
-            return BadRequest($"Unknown action: {name}");
+            throw new UnknownActionException(name);
         }
 
         return new ShellResponse<RetroState>(BuildVm(state), state).Validate();

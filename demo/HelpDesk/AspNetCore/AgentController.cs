@@ -94,7 +94,7 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         }
         else
         {
-            return BadRequest($"Unknown action: {name}");
+            throw new UnknownActionException(name);
         }
 
         return new ShellResponse<AgentState>(BuildVm(state), state).Validate();

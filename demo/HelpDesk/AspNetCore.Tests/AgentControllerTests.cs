@@ -401,9 +401,8 @@ public class AgentControllerTests : IDisposable
     // ── unknown action ────────────────────────────────────────────────────────
 
     [Fact]
-    public void UnknownAction_ReturnsBadRequest()
+    public void UnknownAction_Throws()
     {
-        var result = Act(CreateAgent(), AgentState.Initial(), "do-the-thing");
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Throws<UnknownActionException>(() => Act(CreateAgent(), AgentState.Initial(), "do-the-thing"));
     }
 }
