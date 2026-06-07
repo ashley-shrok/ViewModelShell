@@ -710,6 +710,14 @@ export class ViewModelShell {
 // demand when the next segment shape implies one. Bind paths arrive trimmed
 // of leading/trailing dots; an empty path writes to the root.
 
+// Reject segments that would mutate Object.prototype on write or expose it on
+// read. The bind string is server-controlled today, but stateWrite() is a
+// public method and demos build bind paths dynamically; the guard is defense
+// in depth so consumer code can never turn a path string into prototype pollution.
+function isUnsafeSegment(seg: string): boolean {
+  return seg === "__proto__" || seg === "constructor" || seg === "prototype";
+}
+
 function readPath(obj: unknown, path: string): unknown {
   // Defense: a bind-less input that somehow reached the renderer would call
   // here with path=undefined. The wire contract guarantees `bind` on every
@@ -719,6 +727,7 @@ function readPath(obj: unknown, path: string): unknown {
   const segs = path.split(".");
   let cur: unknown = obj;
   for (const seg of segs) {
+    if (isUnsafeSegment(seg)) return undefined;
     if (cur == null) return undefined;
     if (Array.isArray(cur)) {
       const idx = Number(seg);
@@ -738,6 +747,9 @@ function writePath(obj: unknown, path: string, value: unknown): unknown {
   if (path == null) return obj;
   if (path === "") return value;
   const segs = path.split(".");
+  for (const seg of segs) {
+    if (isUnsafeSegment(seg)) return obj;
+  }
   // Bootstrap a root if the current state is null/undefined; choose the shape
   // implied by the first segment (numeric ⇒ array, else object).
   let root: unknown = obj;

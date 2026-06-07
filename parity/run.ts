@@ -89,10 +89,16 @@ const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Manifest;
 function isArrayIndexSegment(seg: string): boolean {
   return /^[0-9]+$/.test(seg);
 }
+function isUnsafeSegment(seg: string): boolean {
+  return seg === "__proto__" || seg === "constructor" || seg === "prototype";
+}
 function writePath(obj: unknown, path: string, value: unknown): unknown {
   if (path == null) return obj;
   if (path === "") return value;
   const segs = path.split(".");
+  for (const seg of segs) {
+    if (isUnsafeSegment(seg)) return obj;
+  }
   let root: unknown = obj;
   if (root == null || typeof root !== "object") {
     root = isArrayIndexSegment(segs[0]!) ? [] : {};

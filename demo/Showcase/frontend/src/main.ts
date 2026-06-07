@@ -79,11 +79,15 @@ let state: State = {
 };
 
 // ── Bind-path walk (mirrors viewmodel-shell/src/index.ts; ~20 lines) ─────
+function isUnsafeSegment(seg: string): boolean {
+  return seg === "__proto__" || seg === "constructor" || seg === "prototype";
+}
 function readPath(obj: unknown, path: string): unknown {
   if (!path) return obj;
   const segs = path.split(".");
   let cur: unknown = obj;
   for (const seg of segs) {
+    if (isUnsafeSegment(seg)) return undefined;
     if (cur == null) return undefined;
     if (Array.isArray(cur)) {
       const idx = Number(seg);
@@ -98,6 +102,9 @@ function readPath(obj: unknown, path: string): unknown {
 function writePath(obj: unknown, path: string, value: unknown): unknown {
   if (!path) return value;
   const segs = path.split(".");
+  for (const seg of segs) {
+    if (isUnsafeSegment(seg)) return obj;
+  }
   let root: unknown = obj ?? {};
   let cur: unknown = root;
   for (let i = 0; i < segs.length - 1; i++) {
