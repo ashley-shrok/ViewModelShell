@@ -23,14 +23,10 @@ namespace ViewModelShell;
 
 // ─── Action types ─────────────────────────────────────────────────────────────
 
-public record ActionDescriptor(
-    string Name,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, object>? Context = null
-);
+public record ActionDescriptor(string Name);
 
 public record ActionPayload<TState>(
     string Name,
-    Dictionary<string, JsonElement>? Context,
     TState State
 )
 {
@@ -41,16 +37,12 @@ public record ActionPayload<TState>(
     {
         var actionDoc = JsonSerializer.Deserialize<JsonElement>(actionJson, _parseOpts);
         var name = actionDoc.GetProperty("name").GetString()!;
-        var context = actionDoc.TryGetProperty("context", out var ctxEl)
-                      && ctxEl.ValueKind == JsonValueKind.Object
-            ? ctxEl.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone())
-            : null;
         var state = JsonSerializer.Deserialize<TState>(stateJson, _parseOpts)!;
-        return new ActionPayload<TState>(name, context, state);
+        return new ActionPayload<TState>(name, state);
     }
 
     /// <summary>
-    /// Parses a flat JSON body shaped { "name": "...", "context": {...}, "state": {...} }.
+    /// Parses a flat JSON body shaped { "name": "...", "state": {...} }.
     /// Use this when a controller accepts application/json alongside multipart/form-data —
     /// removes the two-layer escaping that multipart requires and makes curl/agent callers ergonomic.
     /// </summary>
@@ -58,14 +50,10 @@ public record ActionPayload<TState>(
     {
         var root = JsonSerializer.Deserialize<JsonElement>(jsonBody, _parseOpts);
         var name = root.GetProperty("name").GetString()!;
-        var context = root.TryGetProperty("context", out var ctxEl)
-                      && ctxEl.ValueKind == JsonValueKind.Object
-            ? ctxEl.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone())
-            : null;
         var state = root.TryGetProperty("state", out var stateEl)
             ? JsonSerializer.Deserialize<TState>(stateEl.GetRawText(), _parseOpts)!
             : default!;
-        return new ActionPayload<TState>(name, context, state);
+        return new ActionPayload<TState>(name, state);
     }
 }
 
@@ -192,9 +180,10 @@ public record FieldOption(string Value, string Label);
 public record FieldNode(
     string Name,
     string InputType,
+    /// <summary>Path into state where this input reads its current value and writes user changes (e.g. "fields.title").</summary>
+    string Bind,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Placeholder,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Value,
     bool Required = false,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<FieldOption>? Options = null,
@@ -203,7 +192,8 @@ public record FieldNode(
 
 public record CheckboxNode(
     string Name,
-    bool Checked,
+    /// <summary>Path into state where this input reads its current value and writes user changes (e.g. "fields.acceptedTos").</summary>
+    string Bind,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action
 ) : ViewNode;
@@ -226,10 +216,11 @@ public record TextNode(
 public record StatItem(string Label, string Value);
 public record StatBarNode(IReadOnlyList<StatItem> Stats) : ViewNode;
 
-public record TabItem(string Value, string Label);
+public record TabItem(string Value, string Label, ActionDescriptor Action);
 public record TabsNode(
     string Selected,
-    ActionDescriptor Action,
+    /// <summary>Path into state where this input reads its current value and writes user changes (e.g. "filter").</summary>
+    string Bind,
     IReadOnlyList<TabItem> Tabs
 ) : ViewNode;
 
@@ -256,44 +247,39 @@ public record TableColumn(
 public record TableRow(
     Dictionary<string, string> Cells,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null,
+    // Per-row action buttons. Each is a ButtonNode with its own unique action
+    // name (e.g. delete-row-42) — per-row identity is encoded in the action
+    // name, not as a separate context payload. Typed as IReadOnlyList<ViewNode>
+    // (not ButtonNode) so System.Text.Json emits the polymorphic "type":"button"
+    // discriminator on the wire — the same maintainer rule from FormNode.Buttons.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Actions = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant = null
-);
-
-// Per-row multi-select metadata for TableNode. SelectedIds drives initial /
-// pre-selected rows. Selection is LOCAL ONLY (0.15.0+): the adapter toggles
-// the DOM + .vms-table__row--selected purely client-side; the server learns
-// the selection only when a Buttons[] entry is clicked (the adapter harvests
-// the checked rows and merges { selectedIds: [...] } into the button's action
-// context). The earlier server-truth "Action" mode was removed because rapid
-// clicks were silently dropped under the dispatch guard and the in-flight
-// re-render wiped the visually-toggled checkbox — a latent foot-gun no app
-// depended on.
-// IReadOnlyList<ViewNode> for Buttons (NOT ButtonNode) so the polymorphic
-// "type":"button" discriminator emits — the maintainer rule from 0.10.0/#15.
-public record TableSelection(
-    IReadOnlyList<string> SelectedIds,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Buttons = null
 );
 
 // Server-driven pagination metadata for TableNode. The server slices Rows to the
 // current page; the adapter only renders the "X–Y of N" range + prev/next from
-// these numbers. Action is dispatched with merged { page } (target 1-based page).
+// these numbers. PrevAction/NextAction are unique-named — the renderer writes
+// the target page number to TableNode.PaginationBind in state before dispatch.
 public record TablePagination(
     int Page,
     int PageSize,
     int TotalRows,
-    ActionDescriptor Action
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? PrevAction = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? NextAction = null
 );
 
 public record TableNode(
     IReadOnlyList<TableColumn> Columns,
     IReadOnlyList<TableRow> Rows,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SortColumn = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SortDirection = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? SortAction = null,
+    /// <summary>Path into state where the current sort intent ({column, direction}) is read/written.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SortBind = null,
+    /// <summary>Per-column filter input bind paths — the renderer reads/writes filter values at these paths.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, string>? FilterBinds = null,
+    /// <summary>Path into state where the renderer writes the target page number before firing Pagination.PrevAction / NextAction.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? PaginationBind = null,
+    /// <summary>Per-column sort header click actions, keyed by column key. Each carries a unique action name.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, ActionDescriptor>? SortActions = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? FilterAction = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TableSelection? Selection = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TablePagination? Pagination = null
 ) : ViewNode;
 
