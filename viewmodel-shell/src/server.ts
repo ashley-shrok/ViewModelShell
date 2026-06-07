@@ -6,11 +6,200 @@
 // Cloudflare Workers. Express users can adapt createAction's (Request → Response)
 // handler with a 3-line wrapper.
 
-import type { ViewNode, ShellSideEffect } from "./index.js";
+import type {
+  ViewNode,
+  ShellSideEffect,
+  ActionEvent,
+  FormNode,
+  FieldNode,
+  CheckboxNode,
+  ButtonNode,
+  TabsNode,
+  TableNode,
+  ModalNode,
+  PageNode,
+  SectionNode,
+  ListNode,
+  ListItemNode,
+} from "./index.js";
 
 // Re-export the ViewNode hierarchy and wire types so a backend can import
 // everything it needs from one place.
 export * from "./index.js";
+
+// ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────
+//
+// The wire contract says "one action name = one operation." Per-row identity
+// lives in the action name itself (`delete-row-42` instead of `delete-row` with
+// a context `{id: 42}`). Two dispatch-bearing nodes that share an action name
+// must be firing the *same* operation, or the server has produced an ambiguous
+// tree — the agent driving the wire cannot tell which row a `delete-row` click
+// is meant to target.
+//
+// `validateActionNames` walks a built tree and throws when two dispatch-bearing
+// nodes share an action name but represent semantically distinct operations.
+// The heuristic — "same name is allowed iff both nodes share the same enclosing
+// FormNode reference" — is intentionally strict outside forms: the most common
+// bug class this exists to catch is per-row buttons that forgot to include the
+// row ID in the action name. A looser heuristic would swallow exactly that bug.
+//
+// Two ButtonNodes inside one FormNode firing `save-ticket-42` → PASS
+//   (top-of-form and bottom-of-form "Save" button — canonical valid duplicate).
+// Two ButtonNodes in different FormNodes firing `submit`                → FAIL.
+// Two ButtonNodes at the page level (no enclosing form) firing `delete` → FAIL
+//   (per-row delete buttons that forgot the row ID).
+// A ButtonNode in a form and one at page level firing `save`            → FAIL.
+
+interface ActionOccurrence {
+  name: string;
+  /** The enclosing FormNode reference, or null when not inside a form. */
+  enclosingForm: FormNode | null;
+}
+
+/**
+ * Walk a ViewNode tree and assert that every dispatch-bearing action name names
+ * exactly one operation. Two occurrences are considered "the same operation"
+ * iff they share the same enclosing FormNode reference; otherwise a duplicate
+ * action name is a violation.
+ *
+ * Call this from your GET handler before returning the initial response if you
+ * want the same protection at initial-load time — the action-handler wrapper
+ * (`createAction`) calls it automatically on every response that carries `vm`.
+ *
+ * @throws Error when a violation is found. The message names the colliding
+ *   action and suggests the two fixes (rename one node, or move both into the
+ *   same enclosing form).
+ */
+export function validateActionNames(vm: ViewNode): void {
+  const occurrences: ActionOccurrence[] = [];
+  collectActions(vm, null, occurrences);
+
+  // Group by action name; for each group, verify all occurrences share the
+  // same enclosing FormNode (and that form is non-null). Anything else is a
+  // violation.
+  const byName = new Map<string, ActionOccurrence[]>();
+  for (const occ of occurrences) {
+    const bucket = byName.get(occ.name);
+    if (bucket) bucket.push(occ);
+    else byName.set(occ.name, [occ]);
+  }
+
+  for (const [name, group] of byName) {
+    if (group.length < 2) continue;
+    const firstForm = group[0].enclosingForm;
+    // Allowed iff every occurrence is inside the SAME non-null form.
+    const allInSameForm =
+      firstForm !== null && group.every((o) => o.enclosingForm === firstForm);
+    if (!allInSameForm) {
+      throw new Error(
+        `Duplicate action name '${name}' dispatched from semantically distinct nodes. ` +
+        `Each action name must name exactly one operation. Either rename one of the ` +
+        `nodes (e.g. '${name}-X' / '${name}-Y') or move them into the same surrounding ` +
+        `form if they are intended to fire the same operation.`
+      );
+    }
+  }
+}
+
+function collectActions(
+  node: ViewNode,
+  enclosingForm: FormNode | null,
+  out: ActionOccurrence[]
+): void {
+  switch (node.type) {
+    case "page": {
+      const page = node as PageNode;
+      for (const child of page.children) collectActions(child, enclosingForm, out);
+      return;
+    }
+    case "section": {
+      const section = node as SectionNode;
+      for (const child of section.children) collectActions(child, enclosingForm, out);
+      return;
+    }
+    case "list": {
+      const list = node as ListNode;
+      for (const child of list.children) collectActions(child, enclosingForm, out);
+      return;
+    }
+    case "list-item": {
+      const li = node as ListItemNode;
+      for (const child of li.children) collectActions(child, enclosingForm, out);
+      return;
+    }
+    case "form": {
+      const form = node as FormNode;
+      if (form.submitAction) recordAction(form.submitAction, form, out);
+      if (form.buttons) {
+        for (const btn of form.buttons) recordAction(btn.action, form, out);
+      }
+      for (const child of form.children) collectActions(child, form, out);
+      return;
+    }
+    case "field": {
+      const field = node as FieldNode;
+      if (field.action) recordAction(field.action, enclosingForm, out);
+      return;
+    }
+    case "checkbox": {
+      const cb = node as CheckboxNode;
+      if (cb.action) recordAction(cb.action, enclosingForm, out);
+      return;
+    }
+    case "button": {
+      const btn = node as ButtonNode;
+      recordAction(btn.action, enclosingForm, out);
+      return;
+    }
+    case "tabs": {
+      const tabs = node as TabsNode;
+      for (const tab of tabs.tabs) recordAction(tab.action, enclosingForm, out);
+      return;
+    }
+    case "modal": {
+      const modal = node as ModalNode;
+      if (modal.dismissAction) recordAction(modal.dismissAction, enclosingForm, out);
+      for (const child of modal.children) collectActions(child, enclosingForm, out);
+      if (modal.footer) {
+        for (const child of modal.footer) collectActions(child, enclosingForm, out);
+      }
+      return;
+    }
+    case "table": {
+      const table = node as TableNode;
+      if (table.sortActions) {
+        for (const action of Object.values(table.sortActions)) {
+          recordAction(action, enclosingForm, out);
+        }
+      }
+      if (table.filterAction) recordAction(table.filterAction, enclosingForm, out);
+      if (table.pagination?.prevAction) {
+        recordAction(table.pagination.prevAction, enclosingForm, out);
+      }
+      if (table.pagination?.nextAction) {
+        recordAction(table.pagination.nextAction, enclosingForm, out);
+      }
+      for (const row of table.rows) {
+        if (row.actions) {
+          for (const btn of row.actions) recordAction(btn.action, enclosingForm, out);
+        }
+      }
+      return;
+    }
+    // Nodes with no dispatch-bearing actions of their own:
+    //   text, link, image, stat-bar, progress, copy-button
+    default:
+      return;
+  }
+}
+
+function recordAction(
+  action: ActionEvent,
+  enclosingForm: FormNode | null,
+  out: ActionOccurrence[]
+): void {
+  out.push({ name: action.name, enclosingForm });
+}
 
 // ─── Action payload ──────────────────────────────────────────────────────────
 
@@ -139,6 +328,21 @@ export function createAction<TState>(
       });
     }
     const result = await handler(payload);
+    // Phase 06 / WIRE-05 — enforce action-name uniqueness on the built tree
+    // before it leaves the server. A violation here is a server-side bug, so
+    // we surface it as a 500 (the parse-error path above is a 400 because the
+    // client sent malformed input). Only run when the response carries a vm
+    // (redirect-only responses have nothing to walk).
+    if (result.vm) {
+      try {
+        validateActionNames(result.vm);
+      } catch (err) {
+        return new Response(JSON.stringify({ error: (err as Error).message }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
     return new Response(JSON.stringify(result), {
       headers: { "Content-Type": "application/json" },
     });
