@@ -159,6 +159,9 @@ public class RetroBoardController : ControllerBase
             {
                 if (sourceActionItems[k].Id == card.Id) { idx = k; break; }
             }
+            if (idx < 0) throw new InvalidOperationException(
+                $"Action item id '{card.Id}' is in the filtered list but not in sourceActionItems. " +
+                "Bind paths require a valid array index.");
             children.Add(new CheckboxNode(
                 Name:   "resolved",
                 Bind:   $"actionItems.{idx}.resolved",

@@ -138,6 +138,12 @@ function buildSectionNode(
           .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
           .map(c => {
             const idx = sourceActionItems.findIndex(x => x.id === c.id);
+            if (isActionItems && idx < 0) {
+              throw new Error(
+                `Action item id '${c.id}' is in the filtered list but not in sourceActionItems. ` +
+                `Bind paths require a valid array index.`,
+              );
+            }
             return buildCardItem(c, isActionItems, idx);
           }),
       },

@@ -112,6 +112,12 @@ export function buildVm(state: TasksState): ViewNode {
       // (`items.${i}.completed`) points at the correct slot. The renderer
       // writes the new value to state before the action fires.
       const i = state.items.findIndex(x => x.id === t.id);
+      if (i < 0) {
+        throw new Error(
+          `Task id '${t.id}' is in the filtered list but not in state.items. ` +
+          `Bind paths require a valid array index.`,
+        );
+      }
       return {
         type: "list-item",
         id: t.id,

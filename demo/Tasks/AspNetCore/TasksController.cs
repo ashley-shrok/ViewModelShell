@@ -111,6 +111,9 @@ public class TasksController : ControllerBase
                 {
                     if (sourceItems[k].Id == t.Id) { i = k; break; }
                 }
+                if (i < 0) throw new InvalidOperationException(
+                    $"Task id '{t.Id}' is in the filtered list but not in sourceItems. " +
+                    "Bind paths require a valid array index.");
                 return (ViewNode)new ListItemNode(
                     t.Id,
                     t.Completed ? "done" : null,
