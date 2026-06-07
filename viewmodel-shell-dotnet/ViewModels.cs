@@ -104,6 +104,31 @@ public record ShellResponse<TState>(
 
     public ShellResponse<TState> WithEffect(ShellSideEffect effect) =>
         this with { SideEffects = [.. (SideEffects ?? []), effect] };
+
+    /// <summary>
+    /// Phase 06 / WIRE-05 — assert the response's ViewNode tree satisfies the
+    /// action-name uniqueness rule ("one action name = one operation") before
+    /// the response leaves the controller. Fluent: returns the same instance
+    /// so it can chain (`return new ShellResponse&lt;T&gt;(...).Validate();`).
+    /// </summary>
+    /// <remarks>
+    /// Plan 06-04 wires this into every demo controller's return path. Until
+    /// then, controllers MUST call <c>.Validate()</c> on responses they build,
+    /// or the uniqueness check is skipped on the .NET backend. (The TS server
+    /// subpath runs the equivalent check automatically in <c>createAction</c>.)
+    ///
+    /// Skipped silently when <see cref="Vm"/> is null (redirect responses have
+    /// no tree to walk).
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown by <see cref="ViewTreeValidation.ValidateActionNames"/> when a
+    /// duplicate action name is found.
+    /// </exception>
+    public ShellResponse<TState> Validate()
+    {
+        if (Vm is not null) ViewTreeValidation.ValidateActionNames(Vm);
+        return this;
+    }
 }
 
 // ─── ViewNode hierarchy ───────────────────────────────────────────────────────
@@ -309,3 +334,155 @@ public record CopyButtonNode(
     // .vms-button--{variant} class ButtonNode does.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant = null
 ) : ViewNode;
+
+// ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────
+//
+// Mirrors viewmodel-shell/src/server.ts `validateActionNames` byte-for-byte:
+// walks a built ViewNode tree, collects every dispatch-bearing action with its
+// enclosing FormNode reference, and throws when two occurrences of the same
+// action name don't share the same non-null enclosing form.
+//
+// The strict heuristic outside forms is intentional: the most common bug class
+// this exists to catch is per-row buttons that forgot to encode the row ID in
+// the action name (`delete-row` repeated instead of `delete-row-42`). A looser
+// "same name = same operation" heuristic would let that bug slip past.
+//
+// Invocation: controllers call ShellResponse<TState>.Validate() before
+// returning. Plan 06-04 wires this into every demo controller's return path.
+public static class ViewTreeValidation
+{
+    /// <summary>
+    /// Walk a ViewNode tree and assert that every dispatch-bearing action name
+    /// names exactly one operation. Two occurrences are considered the same
+    /// operation iff they share the same enclosing FormNode reference; any
+    /// other duplicate is a violation.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when a duplicate action name is found. The message names the
+    /// colliding action and suggests the two fixes (rename one node, or move
+    /// both into the same enclosing form).
+    /// </exception>
+    public static void ValidateActionNames(ViewNode root)
+    {
+        var occurrences = new List<(string Name, FormNode? EnclosingForm)>();
+        Collect(root, null, occurrences);
+
+        var groups = occurrences
+            .GroupBy(o => o.Name)
+            .Where(g => g.Count() >= 2);
+
+        foreach (var group in groups)
+        {
+            var first = group.First().EnclosingForm;
+            // Allowed iff every occurrence is inside the SAME non-null form
+            // (reference equality).
+            var allInSameForm = first is not null
+                && group.All(o => ReferenceEquals(o.EnclosingForm, first));
+            if (!allInSameForm)
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate action name '{group.Key}' dispatched from semantically distinct nodes. " +
+                    "Each action name must name exactly one operation. Either rename one of the " +
+                    $"nodes (e.g. '{group.Key}-X' / '{group.Key}-Y') or move them into the same surrounding " +
+                    "form if they are intended to fire the same operation.");
+            }
+        }
+    }
+
+    private static void Collect(
+        ViewNode node,
+        FormNode? enclosingForm,
+        List<(string Name, FormNode? EnclosingForm)> sink)
+    {
+        switch (node)
+        {
+            case PageNode page:
+                foreach (var child in page.Children) Collect(child, enclosingForm, sink);
+                break;
+
+            case SectionNode section:
+                foreach (var child in section.Children) Collect(child, enclosingForm, sink);
+                break;
+
+            case ListNode list:
+                foreach (var child in list.Children) Collect(child, enclosingForm, sink);
+                break;
+
+            case ListItemNode item:
+                foreach (var child in item.Children) Collect(child, enclosingForm, sink);
+                break;
+
+            case FormNode form:
+                if (form.SubmitAction is { } submit) Record(submit, form, sink);
+                if (form.Buttons is { } buttons)
+                {
+                    foreach (var b in buttons.OfType<ButtonNode>())
+                    {
+                        Record(b.Action, form, sink);
+                    }
+                }
+                foreach (var child in form.Children) Collect(child, form, sink);
+                break;
+
+            case FieldNode field:
+                if (field.Action is { } fieldAction) Record(fieldAction, enclosingForm, sink);
+                break;
+
+            case CheckboxNode checkbox:
+                if (checkbox.Action is { } cbAction) Record(cbAction, enclosingForm, sink);
+                break;
+
+            case ButtonNode button:
+                Record(button.Action, enclosingForm, sink);
+                break;
+
+            case TabsNode tabs:
+                foreach (var tab in tabs.Tabs) Record(tab.Action, enclosingForm, sink);
+                break;
+
+            case ModalNode modal:
+                if (modal.DismissAction is { } dismiss) Record(dismiss, enclosingForm, sink);
+                foreach (var child in modal.Children) Collect(child, enclosingForm, sink);
+                if (modal.Footer is { } footer)
+                {
+                    foreach (var f in footer) Collect(f, enclosingForm, sink);
+                }
+                break;
+
+            case TableNode table:
+                if (table.SortActions is { } sortActions)
+                {
+                    foreach (var action in sortActions.Values)
+                    {
+                        Record(action, enclosingForm, sink);
+                    }
+                }
+                if (table.FilterAction is { } filter) Record(filter, enclosingForm, sink);
+                if (table.Pagination?.PrevAction is { } prev) Record(prev, enclosingForm, sink);
+                if (table.Pagination?.NextAction is { } next) Record(next, enclosingForm, sink);
+                foreach (var row in table.Rows)
+                {
+                    if (row.Actions is { } rowActions)
+                    {
+                        foreach (var b in rowActions.OfType<ButtonNode>())
+                        {
+                            Record(b.Action, enclosingForm, sink);
+                        }
+                    }
+                }
+                break;
+
+            // No dispatch-bearing actions of their own:
+            //   TextNode, LinkNode, ImageNode, StatBarNode, ProgressNode,
+            //   CopyButtonNode.
+        }
+    }
+
+    private static void Record(
+        ActionDescriptor action,
+        FormNode? enclosingForm,
+        List<(string Name, FormNode? EnclosingForm)> sink)
+    {
+        sink.Add((action.Name, enclosingForm));
+    }
+}
