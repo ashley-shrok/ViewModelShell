@@ -191,12 +191,16 @@ public record FormNode(
     IReadOnlyList<ViewNode> Children,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null,
     // Multi-action submit buttons (#15). Populate with ButtonNodes — each
-    // harvests this form's fields into its action context, then dispatches.
+    // dispatches its declared action by name on activation. Field values
+    // live in state at each input's bind path and travel with the dispatch's
+    // _state payload; the action carries no harvested context. Mirrors
+    // HTML's multiple submit buttons / formaction. A plain ButtonNode placed
+    // in Children has identical dispatch semantics; the Buttons[] slot is a
+    // layout hint. variant + pendingLabel apply.
     // Typed as IReadOnlyList<ViewNode> (not ButtonNode) so System.Text.Json
     // emits the polymorphic "type":"button" discriminator (it's only written
     // when serializing through the ViewNode base) — without it the wire would
-    // drift from the TS backend, which always includes type. variant +
-    // pendingLabel apply.
+    // drift from the TS backend, which always includes type.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Buttons = null
 ) : ViewNode;
 

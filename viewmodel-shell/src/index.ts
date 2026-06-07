@@ -159,12 +159,12 @@ export interface FormNode {
   /** Layout preset for the form's controls. Omitted or "stack" = fields stacked (current, no modifier class). "inline" = field row + submit on one line (add/search bar) — emits .vms-form--inline. Closed union (D-29). */
   layout?: "stack" | "inline";
   /** Multi-action submit buttons (#15). Each is a full ButtonNode (so
-   *  `variant` + `pendingLabel` apply) that, on activation, HARVESTS this
-   *  form's current field values into its `action.context` and dispatches —
-   *  the same harvest the default submit performs, but carrying a different
-   *  action. Mirrors HTML's multiple submit buttons / `formaction`. A plain
-   *  ButtonNode placed in `children` keeps its no-harvest behavior; only
-   *  buttons in THIS slot harvest. */
+   *  `variant` + `pendingLabel` apply) that, on activation, dispatches its
+   *  declared action by name. Field values live in state at each input's
+   *  `bind` path and travel with the dispatch's `_state` payload. Mirrors
+   *  HTML's multiple submit buttons / `formaction` — different action per
+   *  button, same underlying state. A plain ButtonNode placed in `children`
+   *  has identical dispatch semantics; the buttons[] slot is a layout hint. */
   buttons?: ButtonNode[];
   children: ViewNode[];
 }
