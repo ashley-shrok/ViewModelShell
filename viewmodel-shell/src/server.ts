@@ -312,6 +312,20 @@ export const shellSideEffect = {
 // ─── Action handler factory ──────────────────────────────────────────────────
 
 /**
+ * Thrown by an action handler to signal a malformed/invalid request. The
+ * createAction wrapper catches this and returns a 400 with the error
+ * message in the body, matching the .NET twin's BadRequest("...") path.
+ * Any other thrown Error propagates to the runtime (Bun.serve / Hono /
+ * etc.) as a 500.
+ */
+export class BadRequestError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BadRequestError";
+  }
+}
+
+/**
  * Web Fetch API–native request handler factory. Auto-detects content-type
  * (application/json vs multipart/form-data), parses the body, calls your
  * handler, and returns the JSON response.
@@ -345,7 +359,18 @@ export function createAction<TState>(
         headers: { "Content-Type": "application/json" },
       });
     }
-    const result = await handler(payload);
+    let result: ShellResponseBody<TState>;
+    try {
+      result = await handler(payload);
+    } catch (err) {
+      if (err instanceof BadRequestError) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      throw err;
+    }
     // Phase 06 / WIRE-05 — enforce action-name uniqueness on the built tree
     // before it leaves the server. A violation here is a server-side bug, so
     // we surface it as a 500 (the parse-error path above is a 400 because the
