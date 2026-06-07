@@ -34,7 +34,7 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
 
 **Milestone Goal:** Deliver the framework's original "agents drive what the browser drives" pitch without the asterisk. Eliminate the `context` payload from the wire entirely — every input binds to a path in state, action names are unique per operation, the renderer becomes a thin interpreter — so an agent reading only the JSON the server emits can drive any VMS app identically to the browser. Pair this with framework-owned error envelopes and a top-level `ok` flag so failures are uniformly legible. Hard wire-format break; aligned npm + NuGet `1.0.0` major bump; no compatibility shims.
 
-- [ ] **Phase 6: Wire Shape Change** - Context payload eliminated; every input carries a bind path; action names are unique per operation; renderer rewritten as a thin interpreter; all demos migrated; cross-backend parity green
+- [x] **Phase 6: Wire Shape Change** - Context payload eliminated; every input carries a bind path; action names are unique per operation; renderer rewritten as a thin interpreter; all demos migrated; cross-backend parity green (completed 2026-06-07)
 - [ ] **Phase 7: Error Envelope + ok Flag + 1.0.0 Release Closeout** - Framework-owned error envelope + top-level `ok` flag on every response; aligned 1.0.0 npm+NuGet bump; MIGRATION.md, CHANGELOG.md, AGENTS.md updated; full parity + tests green at release time
 
 ## Phase Details
@@ -129,5 +129,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 3. Default Design System | 0.4.0 | 3/3 | Complete | 2026-05-17 |
 | 4. Preset-Grid Layout | 0.4.0 | 4/4 | Complete | 2026-05-18 |
 | 5. Canonical Examples + 0.4.0 Closeout | 0.4.0 | 6/6 | Complete | 2026-05-18 |
-| 6. Wire Shape Change | 1.0.0 | 4/5 | In Progress|  |
+| 6. Wire Shape Change | 1.0.0 | 5/5 | Complete   | 2026-06-07 |
 | 7. Error Envelope + ok Flag + 1.0.0 Closeout | 1.0.0 | TBD | Pending | - |
