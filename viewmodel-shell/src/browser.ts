@@ -704,7 +704,15 @@ export class BrowserAdapter implements Adapter {
       if (col.sortable && sortAction && n.sortBind != null) {
         const sortBind = n.sortBind;
         th.addEventListener("click", () => {
-          const nextDir: "asc" | "desc" = isSorted && sortedDir === "asc" ? "desc" : "asc";
+          // Read current sort intent at click time (not render time): if no
+          // re-render has happened between clicks, the closure-captured
+          // sortedDir would be stale.
+          const cur = this.sa.read(sortBind) as
+            | { column?: string; direction?: "asc" | "desc" }
+            | null
+            | undefined;
+          const nextDir: "asc" | "desc" =
+            cur?.column === col.key && cur?.direction === "asc" ? "desc" : "asc";
           this.sa.write(sortBind, { column: col.key, direction: nextDir });
           on({ name: sortAction.name });
         });

@@ -711,7 +711,11 @@ export class ViewModelShell {
 // of leading/trailing dots; an empty path writes to the root.
 
 function readPath(obj: unknown, path: string): unknown {
-  if (path === "") return obj;
+  // Defense: a bind-less input that somehow reached the renderer would call
+  // here with path=undefined. The wire contract guarantees `bind` on every
+  // input, but the runtime should not crash if a malformed tree leaks
+  // through — return undefined and let the field render as empty.
+  if (path == null || path === "") return path == null ? undefined : obj;
   const segs = path.split(".");
   let cur: unknown = obj;
   for (const seg of segs) {
@@ -730,6 +734,8 @@ function readPath(obj: unknown, path: string): unknown {
 }
 
 function writePath(obj: unknown, path: string, value: unknown): unknown {
+  // Defense: drop writes from bind-less inputs (see readPath).
+  if (path == null) return obj;
   if (path === "") return value;
   const segs = path.split(".");
   // Bootstrap a root if the current state is null/undefined; choose the shape

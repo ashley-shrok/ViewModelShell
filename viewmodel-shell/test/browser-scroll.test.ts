@@ -38,7 +38,7 @@ const vm: ViewNode = {
       name: "q",
       inputType: "text",
       label: "Search",
-      value: "",
+      bind: "q",
     },
   ],
 };
