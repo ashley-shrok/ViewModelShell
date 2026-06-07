@@ -20,18 +20,13 @@ public class TasksControllerTests
         return controller;
     }
 
-    private static Dictionary<string, JsonElement> Ctx(object obj)
-    {
-        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(obj));
-        return doc.RootElement.EnumerateObject()
-            .ToDictionary(p => p.Name, p => p.Value.Clone());
-    }
-
+    // Phase 6 (WIRE-07) — dispatch envelope is {name, state} only. No context.
+    // Tests pre-populate state with whatever the action will read, then dispatch
+    // by action name (per-row identity is encoded in the name).
     private static ActionResult<ShellResponse<TasksState>> Act(
-        TasksController ctrl, TasksState state, string name,
-        Dictionary<string, JsonElement>? ctx = null)
+        TasksController ctrl, TasksState state, string name)
     {
-        var actionJson = JsonSerializer.Serialize(new { name, context = ctx });
+        var actionJson = JsonSerializer.Serialize(new { name });
         var stateJson  = JsonSerializer.Serialize(state);
         ctrl.ControllerContext.HttpContext.Request.Form = new FormCollection(
             new Dictionary<string, StringValues>
@@ -50,7 +45,7 @@ public class TasksControllerTests
     //   rail = SectionNode("Views",[ListNode(navItems)],Variant:"card")
     //   main = SectionNode(null,[TextNode muted, ProgressNode, FormNode inline, ListNode])
 
-    private static PageNode Page(ViewNode vm) => Assert.IsType<PageNode>(vm);
+    private static PageNode Page(ViewNode? vm) => Assert.IsType<PageNode>(vm);
 
     private static SectionNode Rail(PageNode page) =>
         page.Children.OfType<SectionNode>().First(s => s.Heading == "Views");
@@ -126,13 +121,19 @@ public class TasksControllerTests
     }
 
     [Fact]
-    public void Get_NavItemButtons_DispatchFilterAction()
+    public void Get_NavItemButtons_DispatchUniqueFilterActionPerTab()
     {
         var page = Page(CreateController().Get().Vm);
+        // Phase 6 — each nav button carries a unique action name (`filter-all`,
+        // `filter-active`, `filter-completed`); the framework's action-name
+        // uniqueness check would fire if these collided.
         var btn = Assert.IsType<ButtonNode>(NavItem(page, "active").Children.Single());
-        Assert.Equal("filter", btn.Action.Name);
-        Assert.Equal("active", btn.Action.Context!["value"]);
+        Assert.Equal("filter-active", btn.Action.Name);
         Assert.Null(btn.Variant);
+        Assert.Equal("filter-all",
+            Assert.IsType<ButtonNode>(NavItem(page, "all").Children.Single()).Action.Name);
+        Assert.Equal("filter-completed",
+            Assert.IsType<ButtonNode>(NavItem(page, "completed").Children.Single()).Action.Name);
     }
 
     [Fact]
@@ -156,8 +157,10 @@ public class TasksControllerTests
     public void Get_ReturnsInitialState()
     {
         var resp = CreateController().Get();
-        Assert.Equal(3, resp.State.Items.Count);
+        Assert.NotNull(resp.State);
+        Assert.Equal(3, resp.State!.Items.Count);
         Assert.Equal("all", resp.State.Filter);
+        Assert.Equal("", resp.State.DraftTitle);
     }
 
     [Fact]
@@ -175,36 +178,51 @@ public class TasksControllerTests
     }
 
     [Fact]
-    public void Get_MainHasInlineAddForm_WithTitleField()
+    public void Get_MainHasInlineAddForm_WithBoundTitleField()
     {
         var form = AddForm(Page(CreateController().Get().Vm));
-        Assert.Equal("add", form.SubmitAction.Name);
+        Assert.NotNull(form.SubmitAction);
+        Assert.Equal("add", form.SubmitAction!.Name);
         Assert.Equal("Add", form.SubmitLabel);
         Assert.Equal("inline", form.Layout);
 
         var field = Assert.IsType<FieldNode>(form.Children.Single());
         Assert.Equal("title", field.Name);
         Assert.Equal("text", field.InputType);
+        Assert.Equal("draftTitle", field.Bind);
         Assert.Equal("Add a task…", field.Placeholder);
         Assert.False(field.Required);
     }
 
     [Fact]
-    public void Get_EachTaskRow_HasCheckboxTextAndDeleteButton()
+    public void Get_EachTaskRow_HasBoundCheckboxTextAndUniqueDeleteAction()
     {
         var page = Page(CreateController().Get().Vm);
-        foreach (var row in TaskRows(page))
+        var resp = CreateController().Get();
+        Assert.NotNull(resp.State);
+        var idsByOrder = resp.State!.Items.OrderBy(t => t.CreatedAt).Select(t => t.Id).ToList();
+
+        var rows = TaskRows(page);
+        Assert.Equal(3, rows.Count);
+        for (var k = 0; k < rows.Count; k++)
         {
+            var row = rows[k];
             var checkbox = Assert.Single(row.Children.OfType<CheckboxNode>());
             Assert.Equal("completed", checkbox.Name);
-            Assert.Equal("toggle", checkbox.Action!.Name);
+            // Bind path points into state.items[i].completed where i is the
+            // task's index in source state.Items[] — not the display index.
+            var sourceIdx = resp.State.Items.Select((t, idx) => (t, idx))
+                .Single(p => p.t.Id == row.Id).idx;
+            Assert.Equal($"items.{sourceIdx}.completed", checkbox.Bind);
+            Assert.NotNull(checkbox.Action);
+            Assert.Equal($"toggle-row-{row.Id}", checkbox.Action!.Name);
 
             Assert.Contains(row.Children, c => c is TextNode);
 
             var del = Assert.Single(row.Children.OfType<ButtonNode>());
             Assert.Equal("✕", del.Label);
             Assert.Equal("danger", del.Variant);
-            Assert.Equal("delete", del.Action.Name);
+            Assert.Equal($"delete-row-{row.Id}", del.Action.Name);
         }
     }
 
@@ -214,16 +232,19 @@ public class TasksControllerTests
     public void Action_Add_IncreasesTaskRowCount()
     {
         var ctrl = CreateController();
-        var resp = Ok(Act(ctrl, TasksState.Initial(), "add", Ctx(new { title = "Buy milk" })));
+        var state = TasksState.Initial() with { DraftTitle = "Buy milk" };
+        var resp = Ok(Act(ctrl, state, "add"));
+        Assert.NotNull(resp.State);
         Assert.Equal(4, TaskRows(Page(resp.Vm)).Count);
-        Assert.Equal(4, resp.State.Items.Count);
+        Assert.Equal(4, resp.State!.Items.Count);
     }
 
     [Fact]
     public void Action_Add_NewTaskAppearsInList()
     {
         var ctrl = CreateController();
-        var resp = Ok(Act(ctrl, TasksState.Initial(), "add", Ctx(new { title = "Buy milk" })));
+        var state = TasksState.Initial() with { DraftTitle = "Buy milk" };
+        var resp = Ok(Act(ctrl, state, "add"));
         var texts = TaskRows(Page(resp.Vm))
             .SelectMany(i => i.Children.OfType<TextNode>())
             .Select(t => t.Value);
@@ -231,112 +252,147 @@ public class TasksControllerTests
     }
 
     [Fact]
-    public void Action_Add_EmptyTitle_ReturnsBadRequest()
+    public void Action_Add_ResetsDraftTitleAfterSubmit()
     {
         var ctrl = CreateController();
-        var result = Act(ctrl, TasksState.Initial(), "add", Ctx(new { title = "" }));
+        var state = TasksState.Initial() with { DraftTitle = "Buy milk" };
+        var resp = Ok(Act(ctrl, state, "add"));
+        Assert.NotNull(resp.State);
+        Assert.Equal("", resp.State!.DraftTitle);
+    }
+
+    [Fact]
+    public void Action_Add_EmptyDraftTitle_ReturnsBadRequest()
+    {
+        var ctrl = CreateController();
+        var state = TasksState.Initial() with { DraftTitle = "" };
+        var result = Act(ctrl, state, "add");
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     [Fact]
-    public void Action_Add_WhitespaceTitle_ReturnsBadRequest()
+    public void Action_Add_WhitespaceDraftTitle_ReturnsBadRequest()
     {
         var ctrl = CreateController();
-        var result = Act(ctrl, TasksState.Initial(), "add", Ctx(new { title = "   " }));
+        var state = TasksState.Initial() with { DraftTitle = "   " };
+        var result = Act(ctrl, state, "add");
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
-    // ── action: toggle ──────────────────────────────────────────────────────────
+    // ── action: toggle-row-{id} ─────────────────────────────────────────────────
+    // Phase 6 model: the renderer has already written the new boolean to
+    // state.Items[i].Completed at the bind path before the action fires.
+    // Tests model that by pre-populating state with the desired Completed flag.
 
     [Fact]
-    public void Action_Toggle_MarksActiveTaskDone()
+    public void Action_ToggleRow_MarksActiveTaskDone()
     {
         var ctrl = CreateController();
         var initial = TasksState.Initial();
-        var activeId = initial.Items.First(t => !t.Completed).Id;
+        var idx = initial.Items.Select((t, i) => (t, i)).First(p => !p.t.Completed).i;
+        var activeId = initial.Items[idx].Id;
+        var nextItems = initial.Items.Select((t, i) =>
+            i == idx ? t with { Completed = true } : t).ToList();
+        var state = initial with { Items = nextItems };
 
-        var resp = Ok(Act(ctrl, initial, "toggle", Ctx(new { id = activeId, @checked = true })));
+        var resp = Ok(Act(ctrl, state, $"toggle-row-{activeId}"));
 
         var doneCount = TaskRows(Page(resp.Vm)).Count(i => i.Variant == "done");
         Assert.Equal(2, doneCount);
     }
 
     [Fact]
-    public void Action_Toggle_DoneRow_HasStrikethroughText()
+    public void Action_ToggleRow_DoneRow_HasStrikethroughText()
     {
         var ctrl = CreateController();
         var initial = TasksState.Initial();
-        var activeId = initial.Items.First(t => !t.Completed).Id;
+        var idx = initial.Items.Select((t, i) => (t, i)).First(p => !p.t.Completed).i;
+        var activeId = initial.Items[idx].Id;
+        var nextItems = initial.Items.Select((t, i) =>
+            i == idx ? t with { Completed = true } : t).ToList();
+        var state = initial with { Items = nextItems };
 
-        var resp = Ok(Act(ctrl, initial, "toggle", Ctx(new { id = activeId, @checked = true })));
+        var resp = Ok(Act(ctrl, state, $"toggle-row-{activeId}"));
 
         var row = TaskRows(Page(resp.Vm)).Single(i => i.Id == activeId);
         Assert.Equal("done", row.Variant);
         Assert.Equal("strikethrough", row.Children.OfType<TextNode>().Single().Style);
-        Assert.True(row.Children.OfType<CheckboxNode>().Single().Checked);
     }
 
     [Fact]
-    public void Action_Toggle_UncompletesDoneTask()
+    public void Action_ToggleRow_UncompletesDoneTask()
     {
         var ctrl = CreateController();
         var initial = TasksState.Initial();
-        var doneId = initial.Items.First(t => t.Completed).Id;
+        var idx = initial.Items.Select((t, i) => (t, i)).First(p => p.t.Completed).i;
+        var doneId = initial.Items[idx].Id;
+        var nextItems = initial.Items.Select((t, i) =>
+            i == idx ? t with { Completed = false } : t).ToList();
+        var state = initial with { Items = nextItems };
 
-        var resp = Ok(Act(ctrl, initial, "toggle", Ctx(new { id = doneId, @checked = false })));
+        var resp = Ok(Act(ctrl, state, $"toggle-row-{doneId}"));
 
         var doneCount = TaskRows(Page(resp.Vm)).Count(i => i.Variant == "done");
         Assert.Equal(0, doneCount);
     }
 
     [Fact]
-    public void Action_Toggle_UpdatesProgressBar()
+    public void Action_ToggleRow_UpdatesProgressBar()
     {
         var ctrl = CreateController();
         var initial = TasksState.Initial();
-        var activeId = initial.Items.First(t => !t.Completed).Id;
+        var idx = initial.Items.Select((t, i) => (t, i)).First(p => !p.t.Completed).i;
+        var activeId = initial.Items[idx].Id;
+        var nextItems = initial.Items.Select((t, i) =>
+            i == idx ? t with { Completed = true } : t).ToList();
+        var state = initial with { Items = nextItems };
 
-        var resp = Ok(Act(ctrl, initial, "toggle", Ctx(new { id = activeId, @checked = true })));
+        var resp = Ok(Act(ctrl, state, $"toggle-row-{activeId}"));
 
         Assert.Equal(67, Progress(Page(resp.Vm)).Value);
     }
 
-    // ── action: delete ──────────────────────────────────────────────────────────
+    // ── action: delete-row-{id} ─────────────────────────────────────────────────
 
     [Fact]
-    public void Action_Delete_RemovesTask()
+    public void Action_DeleteRow_RemovesTask()
     {
         var ctrl = CreateController();
         var initial = TasksState.Initial();
         var firstId = initial.Items[0].Id;
 
-        var resp = Ok(Act(ctrl, initial, "delete", Ctx(new { id = firstId })));
+        var resp = Ok(Act(ctrl, initial, $"delete-row-{firstId}"));
 
+        Assert.NotNull(resp.State);
         Assert.Equal(2, TaskRows(Page(resp.Vm)).Count);
-        Assert.Equal(2, resp.State.Items.Count);
+        Assert.Equal(2, resp.State!.Items.Count);
     }
 
     [Fact]
-    public void Action_Delete_RemovedTaskNotInList()
+    public void Action_DeleteRow_RemovedTaskNotInList()
     {
         var ctrl = CreateController();
         var initial = TasksState.Initial();
         var firstId = initial.Items[0].Id;
 
-        var resp = Ok(Act(ctrl, initial, "delete", Ctx(new { id = firstId })));
+        var resp = Ok(Act(ctrl, initial, $"delete-row-{firstId}"));
 
         Assert.DoesNotContain(TaskRows(Page(resp.Vm)), i => i.Id == firstId);
     }
 
     [Fact]
-    public void Action_Delete_AllTasks_ShowsEmptyStateText()
+    public void Action_DeleteRow_AllTasks_ShowsEmptyStateText()
     {
         var ctrl = CreateController();
         var state = TasksState.Initial();
         foreach (var id in state.Items.Select(i => i.Id).ToList())
-            state = Ok(Act(ctrl, state, "delete", Ctx(new { id }))).State;
+        {
+            var next = Ok(Act(ctrl, state, $"delete-row-{id}")).State;
+            Assert.NotNull(next);
+            state = next!;
+        }
 
-        var resp = Ok(Act(ctrl, state, "filter", Ctx(new { value = "all" })));
+        var resp = Ok(Act(ctrl, state, "filter-all"));
         var page = Page(resp.Vm);
         Assert.Empty(TaskRows(page));
         var empty = TaskList(page).Children.OfType<TextNode>().Single();
@@ -344,24 +400,25 @@ public class TasksControllerTests
         Assert.Equal("muted", empty.Style);
     }
 
-    // ── action: filter ──────────────────────────────────────────────────────────
+    // ── action: filter-{value} ──────────────────────────────────────────────────
 
     [Fact]
     public void Action_Filter_Active_MarksActiveNavItem()
     {
         var ctrl = CreateController();
-        var resp = Ok(Act(ctrl, TasksState.Initial(), "filter", Ctx(new { value = "active" })));
+        var resp = Ok(Act(ctrl, TasksState.Initial(), "filter-active"));
+        Assert.NotNull(resp.State);
         var page = Page(resp.Vm);
         Assert.Equal("active", NavItem(page, "active").Variant);
         Assert.Null(NavItem(page, "all").Variant);
-        Assert.Equal("active", resp.State.Filter);
+        Assert.Equal("active", resp.State!.Filter);
     }
 
     [Fact]
     public void Action_Filter_Active_ExcludesCompletedTasks()
     {
         var ctrl = CreateController();
-        var resp = Ok(Act(ctrl, TasksState.Initial(), "filter", Ctx(new { value = "active" })));
+        var resp = Ok(Act(ctrl, TasksState.Initial(), "filter-active"));
         var rows = TaskRows(Page(resp.Vm));
         Assert.Equal(2, rows.Count);
         Assert.All(rows, i => Assert.Null(i.Variant));
@@ -371,7 +428,7 @@ public class TasksControllerTests
     public void Action_Filter_Completed_ShowsOnlyDoneTasks()
     {
         var ctrl = CreateController();
-        var resp = Ok(Act(ctrl, TasksState.Initial(), "filter", Ctx(new { value = "completed" })));
+        var resp = Ok(Act(ctrl, TasksState.Initial(), "filter-completed"));
         var rows = TaskRows(Page(resp.Vm));
         Assert.Single(rows);
         Assert.Equal("done", rows[0].Variant);
@@ -382,8 +439,9 @@ public class TasksControllerTests
     {
         var ctrl = CreateController();
         // Two-step: first set filter to active, then back to all (state carries through).
-        var step1 = Ok(Act(ctrl, TasksState.Initial(), "filter", Ctx(new { value = "active" })));
-        var step2 = Ok(Act(ctrl, step1.State, "filter", Ctx(new { value = "all" })));
+        var step1 = Ok(Act(ctrl, TasksState.Initial(), "filter-active"));
+        Assert.NotNull(step1.State);
+        var step2 = Ok(Act(ctrl, step1.State!, "filter-all"));
         Assert.Equal(3, TaskRows(Page(step2.Vm)).Count);
     }
 
