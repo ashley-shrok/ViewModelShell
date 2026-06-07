@@ -1,5 +1,18 @@
+// Phase 6 — thin-interpreter rewrite.
+//
+// Every input declares a `bind` dotted path into state; the renderer reads
+// that slot to render and writes back on user-input events. Dispatch carries
+// only the action name. The 7 context-assembly sites that lived here
+// (form harvest, select-on-change, field-on-Enter, standalone CheckboxNode,
+// TabsNode, TableNode sort/filter/pagination/selection, ButtonNode pre-baked
+// context) collapse to one pattern: read via sa.read(bind); write via
+// sa.write(bind, value); dispatch { name }. Drafts ARE state. File-input
+// persistence keeps a fileRegistry for the binary side channel; the picked
+// file also lands in state as {filename, size}. Focus/caret/scroll
+// preservation continue to operate on the DOM.
+
 import type {
-  ViewNode, ActionEvent, Adapter,
+  ViewNode, ActionEvent, Adapter, StateAccess,
   PageNode, SectionNode, ListNode, ListItemNode,
   FormNode, FieldNode, CheckboxNode, ButtonNode,
   TextNode, LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
@@ -22,12 +35,30 @@ function legacyCopy(text: string): boolean {
   }
 }
 
+/**
+ * No-op StateAccess fallback for callers that mount the adapter without a
+ * live shell (theme-modifier tests, conformance fixture walks, etc.). Reads
+ * return undefined; writes are dropped. This keeps the static-tree test
+ * surface intact while the bind-path contract is mandatory for real apps.
+ */
+const noopStateAccess: StateAccess = {
+  read: () => undefined,
+  write: () => { /* drop */ },
+};
+
 export class BrowserAdapter implements Adapter {
   private fileRegistry = new Map<string, File>();
+  private sa: StateAccess = noopStateAccess;
 
   constructor(private container: HTMLElement) {}
 
-  render(vm: ViewNode, onAction: (action: ActionEvent) => void): void {
+  render(
+    vm: ViewNode,
+    onAction: (action: ActionEvent) => void,
+    stateAccess?: StateAccess,
+  ): void {
+    this.sa = stateAccess ?? noopStateAccess;
+
     const active = document.activeElement as HTMLInputElement | HTMLTextAreaElement | null;
     const focusId = active?.id || null;
     const selStart = active?.selectionStart ?? null;
@@ -35,11 +66,8 @@ export class BrowserAdapter implements Adapter {
 
     // 0.7.1 (#7) — snapshot the WINDOW scroll position alongside element-level
     // scroll. Without this, an action-driven re-render rebuilds the entire
-    // subtree and the viewport jumps (to top, or wherever HTMLElement.focus()
-    // scrolled the restored-focus element into view). Same preservation
-    // contract as element scroll: preserve unless the server explicitly
-    // navigates (a redirect IS a navigation, so it correctly does NOT
-    // round-trip through render — it goes through navigate()).
+    // subtree and the viewport jumps. Same preservation contract as before;
+    // unchanged by the Phase 6 rewrite.
     const winScrollX = window.scrollX;
     const winScrollY = window.scrollY;
 
@@ -49,35 +77,17 @@ export class BrowserAdapter implements Adapter {
         scrollMap.set(el.id, { top: el.scrollTop, left: el.scrollLeft });
     });
 
-    const draftValues = new Map<string, string>();
-    this.container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-      "input:not([type=checkbox]):not([type=hidden]):not([type=file]), textarea"
-    ).forEach(el => { if (el.name) draftValues.set(el.name, el.value); });
-
     this.container.innerHTML = "";
     this.node(vm, this.container, onAction);
-
-    if (draftValues.size > 0) {
-      this.container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-        "input:not([type=checkbox]):not([type=hidden]):not([type=file]), textarea"
-      ).forEach(el => {
-        if (el.name && !el.value && draftValues.has(el.name))
-          el.value = draftValues.get(el.name)!;
-      });
-    }
 
     if (focusId) {
       const el = this.container.querySelector<HTMLInputElement | HTMLTextAreaElement>(
         `#${CSS.escape(focusId)}`
       );
       if (el) {
-        // 0.7.1 (#7) — preventScroll stops focus() from yanking the viewport
-        // to the focused element. The window-scroll restore below still
-        // overrides any scroll that snuck in, but preventing the scroll in
-        // the first place is the cleaner contract.
         el.focus({ preventScroll: true });
         if (selStart !== null && selEnd !== null) {
-          try { el.setSelectionRange(selStart, selEnd); } catch {}
+          try { el.setSelectionRange(selStart, selEnd); } catch { /* nothing */ }
         }
       }
     }
@@ -87,9 +97,6 @@ export class BrowserAdapter implements Adapter {
       if (el) { el.scrollTop = top; el.scrollLeft = left; }
     });
 
-    // 0.7.1 (#7) — restore the window scroll LAST so any defensive
-    // browser behavior earlier in this method (e.g. a future element
-    // bringing itself into view) gets overridden by the snapshot.
     window.scrollTo(winScrollX, winScrollY);
   }
 
@@ -102,9 +109,6 @@ export class BrowserAdapter implements Adapter {
     store.setItem(key, value);
   }
 
-  /** Save an authenticated-download blob via the browser's native Save-As.
-   *  contentType is informational — the Blob's own .type takes precedence in
-   *  browsers. We accept the arg for adapter symmetry (other adapters use it). */
   saveFile(data: Blob, filename: string, _contentType: string): void {
     const url = URL.createObjectURL(data);
     try {
@@ -116,32 +120,18 @@ export class BrowserAdapter implements Adapter {
       a.click();
       a.remove();
     } finally {
-      // Revoke async so the browser has time to start the download. The 0ms
-      // setTimeout is the established pattern (Chromium/Firefox/Safari).
       setTimeout(() => URL.revokeObjectURL(url), 0);
     }
   }
 
-  /** 0.16.0 — toggle the `.vms-busy` class on the container. Default CSS makes
-   *  every interactive descendant non-clickable (cursor:wait + pointer-events:
-   *  none), so a rapid checkbox click during a round-trip never visually flips
-   *  the box. Idempotent (classList.toggle with a force value). */
   setBusy(active: boolean): void {
     this.container.classList.toggle("vms-busy", active);
   }
 
-  /** 0.14.0 — install / clear the browser's `beforeunload` guard. The shell
-   *  calls this on every response with `response.preventUnload ?? false`, so
-   *  the lock-and-clear cycle is just "server sets preventUnload:true while
-   *  work is pending, omits it (or sets false) when done." Idempotent. */
   private unloadHandler: ((e: BeforeUnloadEvent) => void) | null = null;
   setPreventUnload(active: boolean): void {
     if (active && this.unloadHandler == null) {
       this.unloadHandler = (e: BeforeUnloadEvent): void => {
-        // Two signals because browsers historically disagreed on which they
-        // honor; modern Chromium/Firefox honor preventDefault, older Safari
-        // and ancient browsers look at returnValue. The dialog text itself is
-        // browser-controlled ("Leave site?…") and cannot be customized.
         e.preventDefault();
         e.returnValue = "";
       };
@@ -159,64 +149,36 @@ export class BrowserAdapter implements Adapter {
   ): Promise<Response> {
     const onUploadProgress = hooks?.onUploadProgress;
     if (!onUploadProgress) {
-      // No progress requested → identical to the core fetch path (D-02 fallback parity).
       return fetch(input, init);
     }
 
     return new Promise<Response>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      // IN-01: this seam only exists to carry a body+files action request, so
-      // a method-less init is non-sensical. dispatch() (the sole caller) always
-      // passes "POST"; default to "POST" (not "GET") so a future caller bug
-      // never silently produces a body-bearing GET.
       xhr.open(init.method ?? "POST", input);
-      // WR-02: every header dispatch() builds in `init.headers` (Accept +
-      // getRequestHeaders()) is applied here, so the XHR path's request
-      // headers are byte-identical to the fetch path's. Scope note: this
-      // seam is same-origin only. The fetch fallback sends cookies on
-      // same-origin requests via its default `credentials: "same-origin"`;
-      // XHR sends same-origin cookies without `withCredentials`, so the
-      // common (same-origin `actionEndpoint`) case matches fetch exactly.
-      // Cross-origin action endpoints are out of scope for this transport.
       for (const [k, v] of Object.entries(init.headers ?? {})) {
         xhr.setRequestHeader(k, v);
       }
 
-      let knownTotal = 0;          // last computable total (0 = never computable)
-      let lastLoaded = 0;          // last reported bytes sent
+      let knownTotal = 0;
+      let lastLoaded = 0;
 
       xhr.upload.onprogress = (e: ProgressEvent) => {
         lastLoaded = e.loaded;
         if (e.lengthComputable) {
           knownTotal = e.total;
-          onUploadProgress(e.loaded, e.total);          // D-05 in-flight, computable
+          onUploadProgress(e.loaded, e.total);
         } else {
-          onUploadProgress(e.loaded, 0);                // D-05 indeterminate sentinel (0)
+          onUploadProgress(e.loaded, 0);
         }
       };
 
       xhr.onload = () => {
-        // D-05 terminal emission: mirror whichever value was being reported.
-        // Known total → (total, total); indeterminate → (finalLoaded, finalLoaded).
-        // NEVER (0,0) once any progress event has fired; a body that produces
-        // no progress event (e.g. a zero-byte upload, or a transport that
-        // completes before the browser emits any upload progress) legitimately
-        // terminates at (0,0), which the documented `total > 0` consumer guard
-        // (MIGRATION.md 5b) handles.
         if (knownTotal > 0) onUploadProgress(knownTotal, knownTotal);
         else onUploadProgress(lastLoaded, lastLoaded);
-        // D-08: status 0 means a network-level failure (CORS rejection / blocked
-        // request) where onload fired but onerror did not. The Fetch Response
-        // constructor throws RangeError for status 0, and that throw would land
-        // OUTSIDE the Promise executor (never settling it → dispatch() hangs).
-        // Reject instead so dispatch()'s try/catch routes it to onError —
-        // byte-identical to fetch, which rejects on CORS/network failure.
         if (xhr.status === 0) {
           reject(new Error(`Transport request to ${input} failed (status 0)`));
           return;
         }
-        // D-08: resolve a real Response so dispatch()'s res.ok / await res.json()
-        // / processResponse() is byte-identical to the fetch path.
         resolve(
           new Response(xhr.responseText, {
             status: xhr.status,
@@ -225,8 +187,6 @@ export class BrowserAdapter implements Adapter {
         );
       };
 
-      // D-07: error / timeout / abort → reject so dispatch()'s existing
-      // try/catch routes it to onError exactly like a failed fetch.
       xhr.onerror = () => reject(new Error(`Transport request to ${input} failed`));
       xhr.ontimeout = () => reject(new Error(`Transport request to ${input} timed out`));
       xhr.onabort = () => reject(new Error(`Transport request to ${input} aborted`));
@@ -265,8 +225,6 @@ export class BrowserAdapter implements Adapter {
     const el = document.createElement("div");
     el.className = `vms-page${n.density === "compact" ? " vms-page--compact" : ""}${
       n.layout && n.layout !== "stack" ? ` vms-page--${n.layout}` : ""}${
-      // 0.7.0 (#13) — width override: "wide" or "full" opt-in via a closed
-      // union. Omitted = no modifier class (existing 1080px cap holds).
       n.width ? ` vms-page--${n.width}` : ""}`;
     if (n.title) {
       const h = document.createElement("h1");
@@ -308,52 +266,25 @@ export class BrowserAdapter implements Adapter {
     parent.appendChild(li);
   }
 
+  /** FormNode — no harvest. Field values live in state via their bind paths;
+   *  submit dispatches just `{name}`. File inputs are walked for binaries to
+   *  attach to action.files (multipart side channel). */
   private form(n: FormNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const form = document.createElement("form");
     form.className = `vms-form${n.layout && n.layout !== "stack" ? ` vms-form--${n.layout}` : ""}`;
     form.noValidate = true;
     this.kids(n.children, form, on);
 
-    // 0.10.0 (#15) — harvest this form's current field values, merge into the
-    // given action's context, and dispatch. Factored out of the submit
-    // handler so both the default submit AND each buttons[] entry can call it
-    // with a DIFFERENT action carrying the SAME live field values.
-    const harvest = (base: ActionEvent): void => {
-      const ctx: Record<string, unknown> = { ...(base.context ?? {}) };
+    const dispatchWithFiles = (action: ActionEvent): void => {
       const files: Record<string, File> = {};
-
-      form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-        "input:not([type=checkbox]):not([type=file]), textarea"
-      ).forEach(el => { if (el.name) ctx[el.name] = el.value; });
-
-      // Form-collected checkboxes (FieldNode inputType="checkbox").
-      // CheckboxNode renders with .vms-checkbox__input and is excluded so its
-      // immediate-dispatch path stays the only way it talks to the server.
-      form.querySelectorAll<HTMLInputElement>(
-        "input.vms-field__input[type=checkbox]"
-      ).forEach(el => { if (el.name) ctx[el.name] = el.checked; });
-
-      form.querySelectorAll<HTMLSelectElement>("select:not([multiple])").forEach(sel => {
-        if (sel.name) ctx[sel.name] = sel.value;
-      });
-
-      form.querySelectorAll<HTMLSelectElement>("select[multiple]").forEach(sel => {
-        if (sel.name)
-          ctx[sel.name] = Array.from(sel.selectedOptions).map(o => o.value).join(",");
-      });
-
       form.querySelectorAll<HTMLInputElement>("input[type=file]").forEach(inp => {
         if (inp.name && inp.files?.[0]) files[inp.name] = inp.files[0];
       });
-
-      const action: ActionEvent = { name: base.name, context: ctx };
-      if (Object.keys(files).length > 0) action.files = files;
-      on(action);
+      const ev: ActionEvent = { name: action.name };
+      if (Object.keys(files).length > 0) ev.files = files;
+      on(ev);
     };
 
-    // Default submit button + Enter-to-submit, only when submitAction is set.
-    // (0.10.0: submitAction is now optional — a buttons[]-only form renders
-    // no default button, and Enter does not submit at the form level.)
     if (n.submitAction) {
       const submitAction = n.submitAction;
       const submit = document.createElement("button");
@@ -363,40 +294,45 @@ export class BrowserAdapter implements Adapter {
       form.appendChild(submit);
       form.addEventListener("submit", (e) => {
         e.preventDefault();
-        harvest(submitAction);
+        dispatchWithFiles(submitAction);
       });
     } else {
-      // No default submit — still neutralize implicit Enter submission so a
+      // No default submit — neutralize implicit Enter submission so a
       // single-field buttons[]-only form doesn't reload via native submit.
       form.addEventListener("submit", (e) => e.preventDefault());
     }
 
-    // 0.10.0 (#15) — multi-action buttons. Each renders through the normal
-    // button() path (so variant + pendingLabel work) but its onAction is
-    // wrapped to harvest the form first. We render them in a footer row so
-    // they group like the default submit.
     if (n.buttons && n.buttons.length > 0) {
       const row = document.createElement("div");
       row.className = "vms-form__buttons";
-      const harvestOn = (action: ActionEvent): void => harvest(action);
-      for (const btn of n.buttons) this.button(btn, row, harvestOn);
+      const buttonOn = (action: ActionEvent): void => dispatchWithFiles(action);
+      for (const btn of n.buttons) this.button(btn, row, buttonOn);
       form.appendChild(row);
     }
 
     parent.appendChild(form);
   }
 
+  /** FieldNode — reads value from `sa.read(bind)`; writes back on input/change.
+   *  When `action` is set, it fires on Enter (text-like) or change (select) —
+   *  the new value is already in state by that point. */
   private field(n: FieldNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const stateValue = this.sa.read(n.bind);
+
     if (n.inputType === "hidden") {
+      // Hidden fields don't write back — server is authoritative for hidden.
       const inp = document.createElement("input");
       inp.type = "hidden";
       inp.name = n.name;
-      if (n.value) inp.value = n.value;
+      inp.value = stateValue == null ? "" : String(stateValue);
       parent.appendChild(inp);
       return;
     }
 
     if (n.inputType === "checkbox") {
+      // FieldNode of type checkbox — used as a form-collected checkbox (the
+      // standalone CheckboxNode is the immediate-dispatch variant). Bind path
+      // holds a boolean.
       const wrapper = document.createElement("div");
       wrapper.className = "vms-field vms-field--checkbox";
 
@@ -405,7 +341,10 @@ export class BrowserAdapter implements Adapter {
       inp.className = "vms-field__input";
       inp.id = `vms-${n.name}`;
       inp.name = n.name;
-      inp.checked = !!n.value && n.value !== "false" && n.value !== "0";
+      inp.checked = Boolean(stateValue);
+      inp.addEventListener("change", () => {
+        this.sa.write(n.bind, inp.checked);
+      });
 
       wrapper.appendChild(inp);
 
@@ -437,21 +376,27 @@ export class BrowserAdapter implements Adapter {
       sel.id = `vms-${n.name}`;
       sel.name = n.name;
       sel.multiple = n.inputType === "select-multiple";
+      const isMulti = n.inputType === "select-multiple";
+      const selectedSet: Set<string> = isMulti && Array.isArray(stateValue)
+        ? new Set((stateValue as unknown[]).map(String))
+        : new Set();
+      const selectedSingle: string = !isMulti && stateValue != null ? String(stateValue) : "";
       (n.options ?? []).forEach(opt => {
         const o = document.createElement("option");
         o.value = opt.value;
         o.textContent = opt.label;
-        o.selected = n.inputType === "select-multiple"
-          ? (n.value ?? "").split(",").map(s => s.trim()).includes(opt.value)
-          : opt.value === n.value;
+        o.selected = isMulti ? selectedSet.has(opt.value) : opt.value === selectedSingle;
         sel.appendChild(o);
       });
-      if (n.action) {
-        const action = n.action;
-        sel.addEventListener("change", () => {
-          on({ name: action.name, context: { ...(action.context ?? {}), [n.name]: sel.value } });
-        });
-      }
+      sel.addEventListener("change", () => {
+        if (isMulti) {
+          const arr = Array.from(sel.selectedOptions).map(o => o.value);
+          this.sa.write(n.bind, arr);
+        } else {
+          this.sa.write(n.bind, sel.value);
+        }
+        if (n.action) on({ name: n.action.name });
+      });
       wrapper.appendChild(sel);
     } else if (n.inputType === "file") {
       const inp = document.createElement("input");
@@ -459,18 +404,27 @@ export class BrowserAdapter implements Adapter {
       inp.className = "vms-field__input";
       inp.id = `vms-${n.name}`;
       inp.name = n.name;
+      // File-input persistence: re-apply any registered file to the new node.
       const existingFile = this.fileRegistry.get(n.name);
       if (existingFile) {
         try {
           const dt = new DataTransfer();
           dt.items.add(existingFile);
           inp.files = dt.files;
-        } catch {}
+        } catch { /* nothing */ }
       }
       inp.addEventListener("change", () => {
         const file = inp.files?.[0];
-        if (file) this.fileRegistry.set(n.name, file);
-        else this.fileRegistry.delete(n.name);
+        if (file) {
+          this.fileRegistry.set(n.name, file);
+          // Per Phase-6 decision: the picked file is visible in state as a
+          // serialization-safe placeholder; the binary travels on the
+          // multipart side channel.
+          this.sa.write(n.bind, { filename: file.name, size: file.size });
+        } else {
+          this.fileRegistry.delete(n.name);
+          this.sa.write(n.bind, null);
+        }
       });
       wrapper.appendChild(inp);
     } else if (n.inputType === "textarea") {
@@ -479,8 +433,9 @@ export class BrowserAdapter implements Adapter {
       ta.id = `vms-${n.name}`;
       ta.name = n.name;
       if (n.placeholder) ta.placeholder = n.placeholder;
-      if (n.value) ta.value = n.value;
+      ta.value = stateValue == null ? "" : String(stateValue);
       if (n.required) ta.required = true;
+      ta.addEventListener("input", () => { this.sa.write(n.bind, ta.value); });
       wrapper.appendChild(ta);
     } else if (n.inputType === "code") {
       // Monospaced editable text. Tab inserts a literal tab instead of moving
@@ -497,8 +452,9 @@ export class BrowserAdapter implements Adapter {
       ta.autocomplete = "off";
       ta.setAttribute("autocorrect", "off");
       if (n.placeholder) ta.placeholder = n.placeholder;
-      if (n.value) ta.value = n.value;
+      ta.value = stateValue == null ? "" : String(stateValue);
       if (n.required) ta.required = true;
+      ta.addEventListener("input", () => { this.sa.write(n.bind, ta.value); });
       ta.addEventListener("keydown", (e) => {
         if (e.key === "Tab") {
           e.preventDefault();
@@ -506,6 +462,7 @@ export class BrowserAdapter implements Adapter {
           const end   = ta.selectionEnd   ?? 0;
           ta.value = ta.value.slice(0, start) + "\t" + ta.value.slice(end);
           ta.selectionStart = ta.selectionEnd = start + 1;
+          this.sa.write(n.bind, ta.value);
         }
       });
       wrapper.appendChild(ta);
@@ -516,14 +473,19 @@ export class BrowserAdapter implements Adapter {
       inp.type = n.inputType;
       inp.name = n.name;
       if (n.placeholder) inp.placeholder = n.placeholder;
-      if (n.value) inp.value = n.value;
+      inp.value = stateValue == null ? "" : String(stateValue);
       if (n.required) inp.required = true;
+      inp.addEventListener("input", () => { this.sa.write(n.bind, inp.value); });
       if (n.action) {
         const action = n.action;
         inp.addEventListener("keydown", (e) => {
           if (e.key === "Enter") {
             e.preventDefault();
-            on({ name: action.name, context: { ...(action.context ?? {}), [n.name]: inp.value } });
+            // Belt-and-suspenders: flush the latest value to state before
+            // dispatching, in case the browser hasn't fired `input` yet
+            // (e.g. an autofill that lands then submits).
+            this.sa.write(n.bind, inp.value);
+            on({ name: action.name });
           }
         });
       }
@@ -533,6 +495,8 @@ export class BrowserAdapter implements Adapter {
     parent.appendChild(wrapper);
   }
 
+  /** CheckboxNode (standalone, immediate-dispatch) — bound boolean; on toggle,
+   *  write to state then dispatch the action name (if any). */
   private checkbox(n: CheckboxNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const lbl = document.createElement("label");
     lbl.className = "vms-checkbox";
@@ -540,7 +504,7 @@ export class BrowserAdapter implements Adapter {
     inp.type = "checkbox";
     inp.className = "vms-checkbox__input";
     inp.name = n.name;
-    inp.checked = n.checked;
+    inp.checked = Boolean(this.sa.read(n.bind));
     const mark = document.createElement("span");
     mark.className = "vms-checkbox__mark";
     lbl.appendChild(inp);
@@ -551,12 +515,10 @@ export class BrowserAdapter implements Adapter {
       span.textContent = n.label;
       lbl.appendChild(span);
     }
-    if (n.action) {
-      const action = n.action;
-      inp.addEventListener("change", () => {
-        on({ name: action.name, context: { ...(action.context ?? {}), checked: inp.checked } });
-      });
-    }
+    inp.addEventListener("change", () => {
+      this.sa.write(n.bind, inp.checked);
+      if (n.action) on({ name: n.action.name });
+    });
     parent.appendChild(lbl);
   }
 
@@ -566,13 +528,10 @@ export class BrowserAdapter implements Adapter {
     btn.className = `vms-button${n.variant ? ` vms-button--${n.variant}` : ""}`;
     btn.textContent = n.label;
     btn.addEventListener("click", () => {
-      // 0.8.0 (#11) — pendingLabel: instant client-side feedback. Swap text +
-      // add .vms-button--pending BEFORE handing off to the dispatcher. On
+      // pendingLabel: instant client-side feedback. Swap text + add
+      // .vms-button--pending BEFORE handing off to the dispatcher. On
       // success the next render replaces the button entirely. On dispatch
-      // error, the shell's dispatch() catch re-renders this.currentVm so
-      // the original label snaps back automatically — no per-button cleanup
-      // wiring needed in the adapter. Pure-client ephemeral state; never
-      // round-trips through the wire.
+      // error, the shell re-renders so the original label snaps back.
       if (n.pendingLabel) {
         btn.textContent = n.pendingLabel;
         btn.classList.add("vms-button--pending");
@@ -620,6 +579,8 @@ export class BrowserAdapter implements Adapter {
     parent.appendChild(bar);
   }
 
+  /** TabsNode — on click, write tab.value to state at node.bind, then dispatch
+   *  the tab's own action name. */
   private tabs(n: TabsNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const nav = document.createElement("nav");
     nav.className = "vms-tabs";
@@ -631,7 +592,8 @@ export class BrowserAdapter implements Adapter {
       btn.setAttribute("role", "tab");
       btn.setAttribute("aria-selected", String(tab.value === n.selected));
       btn.addEventListener("click", () => {
-        on({ name: n.action.name, context: { ...(n.action.context ?? {}), value: tab.value } });
+        this.sa.write(n.bind, tab.value);
+        on({ name: tab.action.name });
       });
       nav.appendChild(btn);
     });
@@ -705,6 +667,12 @@ export class BrowserAdapter implements Adapter {
     parent.appendChild(backdrop);
   }
 
+  /** TableNode — sort writes {column, direction} to sortBind then dispatches
+   *  sortActions[col.key]; filter inputs are bound to filterBinds[col.key],
+   *  every keystroke writes, Enter dispatches filterAction; pagination
+   *  prev/next write the target page to paginationBind then dispatch
+   *  prevAction/nextAction. Per-row buttons are plain ButtonNodes. Selection
+   *  is no longer a framework concept. */
   private table(n: TableNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const wrapper = document.createElement("div");
     wrapper.className = "vms-table-wrapper";
@@ -715,51 +683,30 @@ export class BrowserAdapter implements Adapter {
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
 
-    // Selection: a leading checkbox column. The header box is a select-all over
-    // the rows CURRENTLY rendered (the current page) — never unloaded rows.
-    const sel = n.selection;
-    const selectedSet = sel ? new Set(sel.selectedIds) : null;
-    if (sel) {
-      const th = document.createElement("th");
-      th.className = "vms-table__th vms-table__th--select";
-      const allOnPage = n.rows.length > 0 && n.rows.every(r => r.id != null && selectedSet!.has(r.id));
-      const someOnPage = n.rows.some(r => r.id != null && selectedSet!.has(r.id));
-      const box = document.createElement("input");
-      box.type = "checkbox";
-      box.className = "vms-table__select vms-table__select--all";
-      box.checked = allOnPage;
-      box.indeterminate = someOnPage && !allOnPage;
-      box.addEventListener("change", () => {
-        // Toggle every row checkbox + class in this table to match the header.
-        // No dispatch — selection is purely DOM-local; bulk actions harvest the
-        // checked rows when a `selection.buttons[]` entry is clicked.
-        const want = box.checked;
-        table.querySelectorAll<HTMLInputElement>("tbody input.vms-table__select").forEach(rowBox => {
-          if (rowBox.disabled) return;
-          rowBox.checked = want;
-          const tr = rowBox.closest<HTMLElement>(".vms-table__row");
-          if (tr) tr.classList.toggle("vms-table__row--selected", want);
-        });
-      });
-      th.appendChild(box);
-      headerRow.appendChild(th);
-    }
+    const sortIntent = (n.sortBind != null ? this.sa.read(n.sortBind) : null) as
+      | { column?: string; direction?: "asc" | "desc" }
+      | null
+      | undefined;
+    const sortedCol = sortIntent?.column;
+    const sortedDir = sortIntent?.direction;
 
     n.columns.forEach(col => {
       const th = document.createElement("th");
-      const isSorted = col.key === n.sortColumn;
-      const dir = isSorted ? (n.sortDirection ?? "asc") : null;
+      const isSorted = col.key === sortedCol;
+      const dir = isSorted ? (sortedDir ?? "asc") : null;
       let classes = "vms-table__th";
       if (col.sortable) classes += " vms-table__th--sortable";
       if (dir === "asc") classes += " vms-table__th--asc";
       if (dir === "desc") classes += " vms-table__th--desc";
       th.className = classes;
       th.textContent = col.label;
-      if (col.sortable && n.sortAction) {
-        const sortAction = n.sortAction;
+      const sortAction = n.sortActions?.[col.key];
+      if (col.sortable && sortAction && n.sortBind != null) {
+        const sortBind = n.sortBind;
         th.addEventListener("click", () => {
-          const nextDir = isSorted && n.sortDirection === "asc" ? "desc" : "asc";
-          on({ name: sortAction.name, context: { ...(sortAction.context ?? {}), column: col.key, direction: nextDir } });
+          const nextDir: "asc" | "desc" = isSorted && sortedDir === "asc" ? "desc" : "asc";
+          this.sa.write(sortBind, { column: col.key, direction: nextDir });
+          on({ name: sortAction.name });
         });
       }
       headerRow.appendChild(th);
@@ -771,7 +718,6 @@ export class BrowserAdapter implements Adapter {
       const filterAction = n.filterAction!;
       const filterRow = document.createElement("tr");
       filterRow.className = "vms-table__filter-row";
-      if (sel) filterRow.appendChild(document.createElement("th")); // align under the select column
       n.columns.forEach(col => {
         const th = document.createElement("th");
         if (col.filterable) {
@@ -779,15 +725,19 @@ export class BrowserAdapter implements Adapter {
           inp.type = "text";
           inp.className = "vms-table__filter-input";
           inp.dataset.col = col.key;
-          inp.value = col.filterValue ?? "";
+          const bindPath = n.filterBinds?.[col.key];
+          const bound = bindPath != null ? this.sa.read(bindPath) : undefined;
+          inp.value = bound != null
+            ? String(bound)
+            : (col.filterValue ?? "");
           inp.placeholder = `Filter…`;
+          if (bindPath != null) {
+            inp.addEventListener("input", () => { this.sa.write(bindPath, inp.value); });
+          }
           inp.addEventListener("keydown", (e) => {
             if (e.key === "Enter") {
-              const filters: Record<string, string> = {};
-              filterRow.querySelectorAll<HTMLInputElement>("[data-col]").forEach(el => {
-                filters[el.dataset.col!] = el.value;
-              });
-              on({ name: filterAction.name, context: { ...(filterAction.context ?? {}), column: col.key, value: inp.value, filters } });
+              if (bindPath != null) this.sa.write(bindPath, inp.value);
+              on({ name: filterAction.name });
             }
           });
           th.appendChild(inp);
@@ -804,48 +754,8 @@ export class BrowserAdapter implements Adapter {
       const tr = document.createElement("tr");
       let rowClass = "vms-table__row";
       if (row.variant) rowClass += ` vms-table__row--${row.variant}`;
-      if (row.action) rowClass += " vms-table__row--clickable";
-      const isSelected = sel != null && row.id != null && selectedSet!.has(row.id);
-      if (isSelected) rowClass += " vms-table__row--selected";
       tr.className = rowClass;
       if (row.id) tr.dataset.id = row.id;
-      if (row.action) {
-        const rowAction = row.action;
-        tr.addEventListener("click", () => on(rowAction));
-      }
-      if (sel) {
-        const td = document.createElement("td");
-        td.className = "vms-table__td vms-table__td--select";
-        // A click in the checkbox cell must not also fire the row's click action.
-        td.addEventListener("click", (e) => e.stopPropagation());
-        const box = document.createElement("input");
-        box.type = "checkbox";
-        box.className = "vms-table__select";
-        box.checked = isSelected;
-        if (row.id != null) {
-          const rowId = row.id;
-          // data-id is what selection.buttons[] harvest reads on click.
-          box.dataset.id = rowId;
-          box.addEventListener("change", () => {
-            // Flip the row class to mirror the box, then reconcile the header
-            // select-all (could now be all / some / none). No dispatch — bulk
-            // actions read the DOM via the selection.buttons[] harvest.
-            tr.classList.toggle("vms-table__row--selected", box.checked);
-            const headerBox = table.querySelector<HTMLInputElement>("thead input.vms-table__select--all");
-            if (headerBox) {
-              const all = table.querySelectorAll<HTMLInputElement>("tbody input.vms-table__select:not(:disabled)");
-              let checked = 0;
-              all.forEach(b => { if (b.checked) checked++; });
-              headerBox.checked = all.length > 0 && checked === all.length;
-              headerBox.indeterminate = checked > 0 && checked < all.length;
-            }
-          });
-        } else {
-          box.disabled = true; // selection addresses rows by id; a row without one can't be selected
-        }
-        td.appendChild(box);
-        tr.appendChild(td);
-      }
       n.columns.forEach(col => {
         const td = document.createElement("td");
         td.className = "vms-table__td";
@@ -865,30 +775,18 @@ export class BrowserAdapter implements Adapter {
         }
         tr.appendChild(td);
       });
+      // Per-row buttons render as plain ButtonNodes in a trailing actions cell.
+      if (row.actions && row.actions.length > 0) {
+        const td = document.createElement("td");
+        td.className = "vms-table__td vms-table__td--actions";
+        for (const btn of row.actions) this.button(btn, td, on);
+        tr.appendChild(td);
+      }
       tbody.appendChild(tr);
     });
     table.appendChild(tbody);
 
     wrapper.appendChild(table);
-
-    // 0.13.0 — bulk-action toolbar rendered ABOVE the table. Each button's
-    // click harvests the table's currently-checked row ids and merges them as
-    // `selectedIds` into the action's context. Works with both server-truth
-    // mode (the DOM mirrors selectedIds so the harvest matches state) and
-    // local mode (the DOM is the only source of selection truth).
-    if (sel?.buttons && sel.buttons.length > 0) {
-      const toolbar = document.createElement("div");
-      toolbar.className = "vms-table__bulk-actions";
-      const harvest = (action: ActionEvent): void => {
-        const ids: string[] = [];
-        table.querySelectorAll<HTMLInputElement>("tbody input.vms-table__select:checked").forEach(b => {
-          if (b.dataset.id) ids.push(b.dataset.id);
-        });
-        on({ name: action.name, context: { ...(action.context ?? {}), selectedIds: ids } });
-      };
-      sel.buttons.forEach(btn => this.button(btn, toolbar, harvest));
-      wrapper.insertBefore(toolbar, table);
-    }
 
     if (n.pagination) {
       const pg = n.pagination;
@@ -904,20 +802,30 @@ export class BrowserAdapter implements Adapter {
       range.textContent = `${from}–${to} of ${pg.totalRows}`;
       footer.appendChild(range);
 
-      const pgAction = pg.action;
-      const mkBtn = (label: string, targetPage: number, disabled: boolean): HTMLButtonElement => {
+      const paginationBind = n.paginationBind;
+      const mkBtn = (
+        label: string,
+        targetPage: number,
+        action: ActionEvent | undefined,
+        disabled: boolean,
+      ): HTMLButtonElement => {
         const b = document.createElement("button");
         b.type = "button";
         b.className = "vms-button vms-button--secondary vms-table__pagination-btn";
         b.textContent = label;
         b.disabled = disabled;
-        if (!disabled)
-          b.addEventListener("click", () =>
-            on({ name: pgAction.name, context: { ...(pgAction.context ?? {}), page: targetPage } }));
+        if (!disabled && action) {
+          b.addEventListener("click", () => {
+            if (paginationBind != null) this.sa.write(paginationBind, targetPage);
+            on({ name: action.name });
+          });
+        }
         return b;
       };
-      footer.appendChild(mkBtn("‹ Prev", pg.page - 1, pg.page <= 1));
-      footer.appendChild(mkBtn("Next ›", pg.page + 1, pg.page >= totalPages));
+      const prevDisabled = pg.page <= 1 || pg.prevAction == null;
+      const nextDisabled = pg.page >= totalPages || pg.nextAction == null;
+      footer.appendChild(mkBtn("‹ Prev", pg.page - 1, pg.prevAction, prevDisabled));
+      footer.appendChild(mkBtn("Next ›", pg.page + 1, pg.nextAction, nextDisabled));
 
       wrapper.appendChild(footer);
     }
@@ -928,9 +836,6 @@ export class BrowserAdapter implements Adapter {
   private copyButton(n: CopyButtonNode, parent: HTMLElement): void {
     const btn = document.createElement("button");
     btn.type = "button";
-    // 0.9.0 (#14): variant modifier class, mirroring button() exactly. The
-    // existing .vms-button--{primary,secondary,danger} CSS rules apply
-    // automatically — no new style surface.
     btn.className = `vms-button${n.variant ? ` vms-button--${n.variant}` : ""}`;
     btn.textContent = n.label ?? "Copy";
     btn.addEventListener("click", () => {
@@ -940,20 +845,16 @@ export class BrowserAdapter implements Adapter {
           btn.textContent = n.copiedLabel ?? "Copied!";
           setTimeout(() => { btn.textContent = n.label ?? "Copy"; }, 1500);
         }).catch(() => {
-          // primary failed — try legacy execCommand fallback
           if (legacyCopy(n.text)) {
             btn.textContent = n.copiedLabel ?? "Copied!";
             setTimeout(() => { btn.textContent = n.label ?? "Copy"; }, 1500);
           }
-          // both paths failed: silent, no confirmation
         });
       } else {
-        // navigator.clipboard absent — try legacy
         if (legacyCopy(n.text)) {
           btn.textContent = n.copiedLabel ?? "Copied!";
           setTimeout(() => { btn.textContent = n.label ?? "Copy"; }, 1500);
         }
-        // else: silent
       }
     });
     parent.appendChild(btn);
