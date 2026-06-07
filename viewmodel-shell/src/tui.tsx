@@ -72,6 +72,7 @@ import type {
   ViewNode,
   PageNode,
   SectionNode,
+  StateAccess,
   TextNode as TextNodeType,
   LinkNode as LinkNodeType,
   ImageNode,
@@ -262,7 +263,12 @@ export class TuiAdapter implements Adapter {
   // (label swap) so server-driven re-renders (success path AND the dispatch-
   // error re-render path) naturally revert any in-flight UI without per-
   // button cleanup wiring.
-  render(vm: ViewNode, onAction: (action: ActionEvent) => void): void {
+  render(
+    vm: ViewNode,
+    onAction: (action: ActionEvent) => void,
+    // TODO Phase 7: implement bindable input flow for terminal — currently inputs are read-only display
+    _stateAccess?: StateAccess,
+  ): void {
     if (this.disposed) return;
     this.pendingButtonKey = null;
     this.pending = { vm, onAction };
@@ -406,10 +412,10 @@ export class TuiAdapter implements Adapter {
     } else {
       const c = summary.primaryCheckbox;
       if (c == null || c.action == null) return;
-      this.pending.onAction({
-        name: c.action.name,
-        context: { ...(c.action.context ?? {}), checked: !c.checked },
-      });
+      // Phase 6: action name only — the checked value lives in state at the
+      // checkbox's bind path. TUI bindable input flow is TODO for Phase 7;
+      // until then this dispatches the action without flipping local state.
+      this.pending.onAction({ name: c.action.name });
     }
   }
 
@@ -1215,28 +1221,22 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
   const isPaneFocusable = !ctx.modalActive || ctx.insideModal;
   const paneIndex = isPaneFocusable ? ctx.paneCounter.current++ : -1;
   const focused = isPaneFocusable && paneIndex === ctx.focusedPaneIndex;
-  // B5 — header click toggles sort. Direction policy: clicking the
-  // currently-sorted column flips asc↔desc; clicking any other column
-  // starts at asc. Matches BrowserAdapter table semantics.
+  // Phase 6 wire-shape: per-column sortActions keyed by column key. TUI input
+  // is stubbed until Phase 7; the click dispatches the per-column action by
+  // name only — sort intent should be written to state at node.sortBind by a
+  // future bindable TUI implementation.
+  // TODO Phase 7: implement bindable sort/filter/pagination state writes via stateAccess.
   const onHeaderClick = (columnKey: string): void => {
-    if (!node.sortAction) return;
-    const direction: "asc" | "desc" =
-      node.sortColumn === columnKey && node.sortDirection === "asc" ? "desc" : "asc";
-    ctx.onAction({
-      name: node.sortAction.name,
-      context: { ...(node.sortAction.context ?? {}), column: columnKey, direction },
-    });
+    const a = node.sortActions?.[columnKey];
+    if (!a) return;
+    ctx.onAction({ name: a.name });
   };
-  // Selection — leading [x]/[ ] column. TUI is render-only: checkboxes display
-  // selectedIds; clicks are inert (the TUI doesn't track DOM-equivalent state
-  // across the hook-less conformance walker). Bulk actions live in
-  // selection.buttons[]; the harvest reads sel.selectedIds (server's
-  // pre-selection). The browser carries the interactive surface.
-  const sel = node.selection;
-  const effectiveSet = sel ? new Set(sel.selectedIds) : null;
-  const allOnPage =
-    sel != null && node.rows.length > 0 &&
-    node.rows.every((r) => r.id != null && effectiveSet!.has(r.id));
+  // Phase 6 removed TableSelection from the framework. Per-row selection now
+  // expressed as bound CheckboxNode cells; bulk-action toolbars are plain
+  // ButtonNodes. TUI render is reduced accordingly.
+  const sel: undefined = undefined;
+  const effectiveSet: Set<string> | null = null;
+  const allOnPage = false;
   return (
     <scrollbox
       focused={focused}
@@ -1247,26 +1247,10 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
       flexShrink={1}
     >
       <box flexDirection="column">
-        {/* 0.13.0 — bulk-action toolbar ABOVE the table (mirrors BrowserAdapter).
-            Each button harvests effectiveSet on click and dispatches with
-            `selectedIds: [...]` in context. */}
-        {sel?.buttons && sel.buttons.length > 0 ? (
-          <box flexDirection="row" gap={1}>
-            {sel.buttons.map((btn, i) => {
-              const harvestCtx: RCtx = {
-                ...ctx,
-                onAction: (action: ActionEvent): void => {
-                  const ids = [...effectiveSet!];
-                  ctx.onAction({
-                    name: action.name,
-                    context: { ...(action.context ?? {}), selectedIds: ids },
-                  });
-                },
-              };
-              return <ButtonView key={i} node={btn} ctx={harvestCtx} />;
-            })}
-          </box>
-        ) : null}
+        {/* Phase 6 — TableSelection removed; bulk buttons are now plain
+            ButtonNodes the app places wherever. effectiveSet/allOnPage left
+            in place to keep the conformance walker compiling against an
+            empty result. */}
         {/* Header row */}
         <box flexDirection="row" gap={2}>
           {sel ? (
@@ -1275,10 +1259,11 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
             </text>
           ) : null}
           {node.columns.map((c) => {
-            const isSorted = node.sortColumn === c.key;
-            const caret = isSorted ? (node.sortDirection === "desc" ? " ↓" : " ↑") : "";
-            // B5 — only sortable headers respond to clicks (matches BrowserAdapter).
-            const clickable = c.sortable && node.sortAction != null;
+            // Phase 6 — sortBind holds {column, direction}. TUI display of the
+            // sort caret is TODO Phase 7 (would read from stateAccess.read).
+            const isSorted = false;
+            const caret = isSorted ? " ↑" : "";
+            const clickable = c.sortable && node.sortActions?.[c.key] != null;
             const onMouseDown = clickable ? (): void => onHeaderClick(c.key) : undefined;
             return (
               <text
@@ -1304,10 +1289,10 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
         ) : null}
         {/* Data rows */}
         {node.rows.map((row, ri) => {
-          // B5 — row click dispatches row.action when present.
-          const onRowClick = row.action
-            ? (): void => ctx.onAction(row.action!)
-            : undefined;
+          // Phase 6 — TableRow.action → TableRow.actions[]. Per-row buttons
+          // render as ButtonNodes; entire-row click is no longer a row-level
+          // concept. Apps that want a clickable row composed via row.actions[].
+          const onRowClick: (() => void) | undefined = undefined;
           return (
             <box
               key={row.id ?? ri}
@@ -1354,26 +1339,26 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
             </box>
           );
         })}
-        {/* Pagination footer — range label + prev/next. Same { page } payload
-            as BrowserAdapter. The server slices rows; we only render controls. */}
+        {/* Pagination footer — range label + prev/next. Phase 6: prev/next
+            now carry their own unique action names; target page is written
+            to state at TableNode.paginationBind by the bindable input layer
+            (TODO Phase 7). Until then the TUI fires the action name only. */}
         {node.pagination ? (() => {
           const pg = node.pagination!;
           const totalPages = Math.max(1, Math.ceil(pg.totalRows / pg.pageSize));
           const from = pg.totalRows === 0 ? 0 : (pg.page - 1) * pg.pageSize + 1;
           const to = Math.min(pg.page * pg.pageSize, pg.totalRows);
-          const go = (p: number): void => ctx.onAction({
-            name: pg.action.name,
-            context: { ...(pg.action.context ?? {}), page: p },
-          });
-          const canPrev = pg.page > 1;
-          const canNext = pg.page < totalPages;
+          const goPrev = (): void => { if (pg.prevAction) ctx.onAction({ name: pg.prevAction.name }); };
+          const goNext = (): void => { if (pg.nextAction) ctx.onAction({ name: pg.nextAction.name }); };
+          const canPrev = pg.page > 1 && pg.prevAction != null;
+          const canNext = pg.page < totalPages && pg.nextAction != null;
           return (
             <box flexDirection="row" gap={2}>
               <text fg="#888888">{`${from}–${to} of ${pg.totalRows}`}</text>
-              <text fg={canPrev ? "#88aaff" : "#555555"} {...(canPrev ? { onMouseDown: (): void => go(pg.page - 1) } : {})}>
+              <text fg={canPrev ? "#88aaff" : "#555555"} {...(canPrev ? { onMouseDown: goPrev } : {})}>
                 {"‹ Prev"}
               </text>
-              <text fg={canNext ? "#88aaff" : "#555555"} {...(canNext ? { onMouseDown: (): void => go(pg.page + 1) } : {})}>
+              <text fg={canNext ? "#88aaff" : "#555555"} {...(canNext ? { onMouseDown: goNext } : {})}>
                 {"Next ›"}
               </text>
             </box>
@@ -1417,18 +1402,13 @@ function ButtonView({ node, ctx }: { node: ButtonNode; ctx: RCtx }) {
 }
 
 function CheckboxView({ node, ctx }: { node: CheckboxNode; ctx: RCtx }) {
-  const glyph = node.checked ? "[x]" : "[ ]";
-  // B5 — mouse click toggles. When node.action is defined, dispatch it with
-  // the NEW checked value merged into context (matches BrowserAdapter's
-  // checkbox onChange wire: `{checked: !node.checked}`). When no action,
-  // the click has no semantic effect — the visual state is server-owned
-  // and only changes on the next server response that flips node.checked.
+  // Phase 6 — checkbox.checked removed; value lives in state at node.bind.
+  // TUI bindable read is TODO Phase 7; rendering as unchecked until then.
+  const glyph = "[ ]";
+  // Click dispatches the action name; bindable write-back is TODO Phase 7.
   const onMouseDown = (): void => {
     if (!node.action) return;
-    ctx.onAction({
-      name: node.action.name,
-      context: { ...(node.action.context ?? {}), checked: !node.checked },
-    });
+    ctx.onAction({ name: node.action.name });
   };
   return <text onMouseDown={onMouseDown}>{glyph} {node.label ?? ""}</text>;
 }
@@ -1439,15 +1419,15 @@ function CheckboxView({ node, ctx }: { node: CheckboxNode; ctx: RCtx }) {
 // render dim. Keyboard activation (Tab on focused tab-bar → cycle) is B5.
 
 function TabsView({ node, ctx }: { node: TabsNode; ctx: RCtx }) {
+  // Phase 6 — TabsNode.action removed; each tab carries its own unique
+  // action name. The renderer writes tab.value to state at node.bind before
+  // dispatching (TODO Phase 7 — bindable write here is a no-op for now).
   return (
     <box flexDirection="row" gap={1}>
       {node.tabs.map((t) => {
         const selected = t.value === node.selected;
         const onMouseDown = (): void => {
-          ctx.onAction({
-            name: node.action.name,
-            context: { ...(node.action.context ?? {}), value: t.value },
-          });
+          ctx.onAction({ name: t.action.name });
         };
         return (
           <text
@@ -1602,28 +1582,12 @@ function CopyButtonView({ node, ctx }: { node: CopyButtonNode; ctx: RCtx }) {
 // dispatches submitAction with `{ [name]: value, ... }` merged into context.
 
 function FormView({ node, ctx }: { node: FormNode; ctx: RCtx }) {
-  // 0.10.0 (#15) — harvest this form's current field values, merge into the
-  // given action's context, and dispatch. Generalized from the single-submit
-  // closure so the default submit AND each buttons[] entry can call it with
-  // a DIFFERENT action carrying the SAME live field values.
+  // Phase 6 — context-assembly removed. Field values live in state at their
+  // bind paths; the server reads them from `state`. The form dispatches just
+  // the action name. TUI form-harvest behavior under the new wire is TODO
+  // Phase 7 (would write each field value to state via stateAccess.write).
   const submitFormWith = (base: ActionEvent): void => {
-    const merged: Record<string, unknown> = { ...(base.context ?? {}) };
-    const collect = (n: ViewNode): void => {
-      if (n.type === "field") {
-        const wireValue = n.value ?? "";
-        // The map may not have an entry for fields the user hasn't touched
-        // (or for hidden fields we register on render). Fall back to the
-        // wire value in that case — the resolveFieldValue plumbing keeps the
-        // two in sync for fields that DID render.
-        const v = ctx.resolveFieldValue(n.name, wireValue);
-        // Checkbox-typed fields submit as boolean, not string.
-        merged[n.name] = n.inputType === "checkbox" ? v === "true" : v;
-      }
-      const children = (n as { children?: ViewNode[] }).children;
-      if (children) for (const c of children) collect(c);
-    };
-    for (const child of node.children) collect(child);
-    ctx.onAction({ name: base.name, context: merged });
+    ctx.onAction({ name: base.name });
   };
   // Enter-in-a-field submits the default action — only wired when present.
   const submitAction = node.submitAction;
@@ -1691,7 +1655,13 @@ function FormView({ node, ctx }: { node: FormNode; ctx: RCtx }) {
 //   read those props as user-visible information.
 
 function FieldView({ node, ctx }: { node: FieldNode; ctx: RCtx }) {
-  const wireValue = node.value ?? "";
+  // Phase 6 — FieldNode.value removed; current value lives in state at
+  // node.bind. Until TUI bindable input flow ships (Phase 7), the wire value
+  // is treated as empty and the local field-values map remains the source of
+  // displayed text. The `bind` field is recorded so the field can be wired
+  // when stateAccess plumbing arrives.
+  const wireValue = "";
+  void node.bind;
   // Resolve through the adapter so draft preservation runs as a side effect
   // even for hidden fields (the form needs their wire value at submit time).
   const currentValue = ctx.resolveFieldValue(node.name, wireValue);
@@ -1707,6 +1677,8 @@ function FieldView({ node, ctx }: { node: FieldNode; ctx: RCtx }) {
 
   // Submit handler — common to text/textarea/select. Wired to the parent
   // form (if any), else dispatches the field's own action (immediate-dispatch).
+  // Phase 6 — action carries name only; bindable write of latestValue to
+  // state at node.bind is TODO Phase 7.
   const handleSubmit = (latestValue?: string): void => {
     if (latestValue !== undefined) ctx.setFieldValue(node.name, latestValue);
     if (ctx.submitForm) {
@@ -1714,13 +1686,7 @@ function FieldView({ node, ctx }: { node: FieldNode; ctx: RCtx }) {
       return;
     }
     if (node.action) {
-      ctx.onAction({
-        name: node.action.name,
-        context: {
-          ...(node.action.context ?? {}),
-          [node.name]: latestValue ?? ctx.resolveFieldValue(node.name, wireValue),
-        },
-      });
+      ctx.onAction({ name: node.action.name });
     }
   };
 

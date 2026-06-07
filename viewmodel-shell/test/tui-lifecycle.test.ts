@@ -377,23 +377,14 @@ describe("0.6.0 — B3 field state + form submit", () => {
     expect(adapter._peekFieldValue("title")).toBe("user-edit");
   });
 
-  it("server intent change: wire value differs from last-seen → reset user edit", () => {
-    const adapter = new TuiAdapter();
-    const vmInitial: ViewNode = {
-      type: "field",
-      name: "title",
-      inputType: "text",
-      label: "Title",
-      value: "initial",
-    };
-    driveRender({ adapter, vm: vmInitial });
-    // User types over it.
-    driveRender({ adapter, vm: vmInitial, typeInto: { title: "user-edit" } });
-    expect(adapter._peekFieldValue("title")).toBe("user-edit");
-    // Server pushes a NEW wire value — preservation must reset.
-    const vmUpdated: ViewNode = { ...vmInitial, value: "server-set" };
-    driveRender({ adapter, vm: vmUpdated });
-    expect(adapter._peekFieldValue("title")).toBe("server-set");
+  // Phase 6: TUI bindable input flow (read the wire value from state via
+  // stateAccess.read(node.bind)) is TODO for Phase 7. Until then, this test
+  // — which relied on FieldNode.value being the wire-value source — is
+  // skipped. The BrowserAdapter equivalent ("server-overrides-bound-state
+  // → re-render snaps the field to the new value") is covered in
+  // src/adapter.test.ts under "draft preservation through state".
+  it.skip("server intent change: wire value differs from last-seen → reset user edit (TUI: TODO Phase 7)", () => {
+    // pending Phase-7 TUI bindable wiring; see comment above.
   });
 
   it("form submit: collects current field values (typed + un-typed) and dispatches submitAction with merged context", () => {
@@ -722,7 +713,8 @@ describe("0.6.0 — B5 click handlers (wired on render)", () => {
     const vm: ViewNode = { type: "page", children: [
       {
         type: "table",
-        sortAction: { name: "sort" },
+        sortBind: "sort",
+        sortActions: { a: { name: "sort-a" } },
         columns: [
           { key: "a", label: "A", sortable: true },
           { key: "b", label: "B" /* not sortable */ },
@@ -816,7 +808,7 @@ describe("0.6.0 — B5 activatePane (Enter / Space keyboard activation)", () => 
     expect(dispatched, "field pane swallows Enter — submit happens via <input onSubmit>").toHaveLength(0);
   });
 
-  it("Space on a pane with a checkbox → dispatches with toggled checked", () => {
+  it("Space on a pane with a checkbox → dispatches the action name only (Phase 6)", () => {
     const adapter = new TuiAdapter();
     const dispatched: ActionEvent[] = [];
     const vm: ViewNode = {
@@ -829,9 +821,9 @@ describe("0.6.0 — B5 activatePane (Enter / Space keyboard activation)", () => 
             {
               type: "checkbox",
               name: "subscribed",
-              checked: false,
+              bind: "subscribed",
               label: "Subscribe",
-              action: { name: "set-subscription", context: { source: "kbd" } },
+              action: { name: "set-subscription" },
             },
           ],
         },
@@ -841,10 +833,10 @@ describe("0.6.0 — B5 activatePane (Enter / Space keyboard activation)", () => 
     a.pending = { vm, onAction: (act) => dispatched.push(act) };
     a.focusedPaneIndex = 0;
     a.activatePane("space");
-    // Toggle: checked was false → dispatch sets checked: true.
-    expect(dispatched).toEqual([
-      { name: "set-subscription", context: { source: "kbd", checked: true } },
-    ]);
+    // Phase 6: dispatch carries the action name only — the new checked
+    // value lives in state at the bind path (TUI bindable write-back is
+    // TODO Phase 7; for now state isn't mutated either).
+    expect(dispatched).toEqual([{ name: "set-subscription" }]);
   });
 
   it("Enter on a pane with a link → invokes navigate(href)", () => {

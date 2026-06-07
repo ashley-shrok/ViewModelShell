@@ -5,6 +5,20 @@ export interface ActionEvent {
   files?: Record<string, File>;
 }
 
+// ─── Bind-path state access (Phase 6) ────────────────────────────────────────
+//
+// The shell exposes a `{ read, write }` seam over its mutable state object so
+// adapters can read each input's bound value (to render it) and write back on
+// user events (to keep state authoritative). The bind path is a dotted string
+// (e.g. `fields.title`, `rows.42.selected`); the helpers walk JSON-style:
+// numeric segments index into arrays, anything else into objects. Adapters
+// only ever see this interface — they never reference the shell directly.
+
+export interface StateAccess {
+  read(path: string): unknown;
+  write(path: string, value: unknown): void;
+}
+
 // ─── Adapter interface ────────────────────────────────────────────────────────
 // Implement this to target a new platform (browser, mobile, terminal, …).
 // The core references zero platform globals (this is a CI-enforced invariant) —
@@ -17,7 +31,18 @@ export interface ActionEvent {
 // the core's own `fetch`).
 
 export interface Adapter {
-  render(vm: ViewNode, onAction: (action: ActionEvent) => void): void;
+  /** Render the view tree. `stateAccess` is the shell-owned `{ read, write }`
+   *  seam over the live state object: the adapter reads input values via
+   *  `stateAccess.read(node.bind)` and writes user input back via
+   *  `stateAccess.write(node.bind, value)`. The third arg is OPTIONAL so
+   *  callers (tests, embedders) that have no live state can still mount
+   *  the adapter for class-emission / static-tree checks — adapters supply
+   *  a no-op fallback internally when omitted. */
+  render(
+    vm: ViewNode,
+    onAction: (action: ActionEvent) => void,
+    stateAccess?: StateAccess,
+  ): void;
   /** Hand the platform off to a URL (the browser adapter sets the page location).
    *  No safe no-op exists — if a redirect arrives and neither ShellOptions.onRedirect
    *  nor this method is available, the shell fails loudly. */
@@ -433,7 +458,7 @@ export class ViewModelShell {
       // 0.16.0 — same for the busy lockout.
       this.serverBusy = body.busy ?? false;
       this.syncBusy();
-      adapter.render(body.vm, (action) => this.dispatch(action));
+      adapter.render(body.vm, (action) => this.dispatch(action), this.stateAccessForAdapter());
       this.schedulePoll(body.nextPollIn);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -470,6 +495,9 @@ export class ViewModelShell {
         onLoading?.(true);
       }
       const form = new FormData();
+      // Phase 6 — wire-shape break: `_action` carries the action name only.
+      // The state at the input's bind path holds whatever value the previous
+      // `context` payload used to carry; the server reads it from there.
       form.append("_action", JSON.stringify({ name: action.name }));
       form.append("_state", JSON.stringify(this.currentState));
       if (action.files) {
@@ -504,7 +532,7 @@ export class ViewModelShell {
       // Skipped when no VM has loaded yet (pre-initial-load dispatch is
       // already an error case handled above; currentVm stays null there).
       if (this.currentVm !== null) {
-        this.options.adapter.render(this.currentVm, (a) => this.dispatch(a));
+        this.options.adapter.render(this.currentVm, (a) => this.dispatch(a), this.stateAccessForAdapter());
       }
     } finally {
       this.dispatching = false;
@@ -528,6 +556,47 @@ export class ViewModelShell {
 
   getCurrentVm(): ViewNode | null { return this.currentVm; }
   getCurrentState(): unknown { return this.currentState; }
+
+  /**
+   * Read the bound state value at a dotted path (e.g. "fields.title",
+   * "rows.42.selected"). Used by adapters (BrowserAdapter, TuiAdapter, …) to
+   * render an input's current value. Returns `undefined` when any segment
+   * along the path is missing — adapters treat that as "no value set" and
+   * render the appropriate empty form (empty string, unchecked, etc.).
+   *
+   * This is half of the bind-path seam introduced in Phase 6: the shell holds
+   * state mutably so that input events can update it (via `stateWrite`)
+   * without round-tripping to the server until a real dispatch fires.
+   */
+  stateRead(path: string): unknown {
+    return readPath(this.currentState, path);
+  }
+
+  /**
+   * Write a value into state at a dotted path. The shell mutates the held
+   * state object in place at the bind path; the next dispatch sends the
+   * updated state to the server. Intermediate objects/arrays are created on
+   * demand (numeric next segment → array, else object).
+   *
+   * This is the other half of the bind-path seam — the BrowserAdapter (or any
+   * adapter that supports user input) calls this on every keystroke / change
+   * event so drafts ARE state.
+   */
+  stateWrite(path: string, value: unknown): void {
+    this.currentState = writePath(this.currentState, path, value);
+  }
+
+  /**
+   * Build the read/write seam the Adapter receives as its third render arg.
+   * Backed by `stateRead` / `stateWrite` so the adapter never needs a direct
+   * reference to the shell.
+   */
+  private stateAccessForAdapter(): StateAccess {
+    return {
+      read: (path: string) => this.stateRead(path),
+      write: (path: string, value: unknown) => this.stateWrite(path, value),
+    };
+  }
 
   private failCapability(capability: "navigate" | "storage" | "saveFile", detail: string): void {
     const err = new Error(
@@ -577,7 +646,7 @@ export class ViewModelShell {
     }
     this.currentVm = body.vm!;
     this.currentState = body.state;
-    this.options.adapter.render(body.vm!, (a) => this.dispatch(a));
+    this.options.adapter.render(body.vm!, (a) => this.dispatch(a), this.stateAccessForAdapter());
     this.schedulePoll(body.nextPollIn);
   }
 
@@ -631,6 +700,84 @@ export class ViewModelShell {
       this.options.onError ? this.options.onError(error) : console.error("[ViewModelShell]", error);
     }
   }
+}
+
+// ─── Bind-path walkers (file-private; no platform globals) ───────────────────
+//
+// Tiny JSON walk + write helpers consumed by stateRead/stateWrite. Numeric
+// segments index into arrays when the current value is an array; otherwise
+// they're object keys. writePath creates intermediate objects/arrays on
+// demand when the next segment shape implies one. Bind paths arrive trimmed
+// of leading/trailing dots; an empty path writes to the root.
+
+function readPath(obj: unknown, path: string): unknown {
+  // Defense: a bind-less input that somehow reached the renderer would call
+  // here with path=undefined. The wire contract guarantees `bind` on every
+  // input, but the runtime should not crash if a malformed tree leaks
+  // through — return undefined and let the field render as empty.
+  if (path == null || path === "") return path == null ? undefined : obj;
+  const segs = path.split(".");
+  let cur: unknown = obj;
+  for (const seg of segs) {
+    if (cur == null) return undefined;
+    if (Array.isArray(cur)) {
+      const idx = Number(seg);
+      if (!Number.isInteger(idx) || idx < 0) return undefined;
+      cur = cur[idx];
+    } else if (typeof cur === "object") {
+      cur = (cur as Record<string, unknown>)[seg];
+    } else {
+      return undefined;
+    }
+  }
+  return cur;
+}
+
+function writePath(obj: unknown, path: string, value: unknown): unknown {
+  // Defense: drop writes from bind-less inputs (see readPath).
+  if (path == null) return obj;
+  if (path === "") return value;
+  const segs = path.split(".");
+  // Bootstrap a root if the current state is null/undefined; choose the shape
+  // implied by the first segment (numeric ⇒ array, else object).
+  let root: unknown = obj;
+  if (root == null || typeof root !== "object") {
+    root = isArrayIndexSegment(segs[0]!) ? [] : {};
+  }
+  let cur: unknown = root;
+  for (let i = 0; i < segs.length - 1; i++) {
+    const seg = segs[i]!;
+    const nextSeg = segs[i + 1]!;
+    const nextShape: "array" | "object" = isArrayIndexSegment(nextSeg) ? "array" : "object";
+    if (Array.isArray(cur)) {
+      const idx = Number(seg);
+      let nxt = cur[idx];
+      if (nxt == null || typeof nxt !== "object") {
+        nxt = nextShape === "array" ? [] : {};
+        cur[idx] = nxt;
+      }
+      cur = nxt;
+    } else {
+      const o = cur as Record<string, unknown>;
+      let nxt = o[seg];
+      if (nxt == null || typeof nxt !== "object") {
+        nxt = nextShape === "array" ? [] : {};
+        o[seg] = nxt;
+      }
+      cur = nxt;
+    }
+  }
+  const last = segs[segs.length - 1]!;
+  if (Array.isArray(cur)) {
+    cur[Number(last)] = value;
+  } else {
+    (cur as Record<string, unknown>)[last] = value;
+  }
+  return root;
+}
+
+function isArrayIndexSegment(seg: string): boolean {
+  return /^[0-9]+$/.test(seg);
 }
 
 // ─── Download helpers (file-private; no platform globals) ────────────────────
