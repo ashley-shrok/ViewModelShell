@@ -106,13 +106,11 @@ function writePath(obj: unknown, path: string, value: unknown): unknown {
   let cur: unknown = root;
   for (let i = 0; i < segs.length - 1; i++) {
     const seg = segs[i]!;
-    const nextSeg = segs[i + 1]!;
-    const nextShape: "array" | "object" = isArrayIndexSegment(nextSeg) ? "array" : "object";
     if (Array.isArray(cur)) {
       const idx = Number(seg);
       let nxt = cur[idx];
       if (nxt == null || typeof nxt !== "object") {
-        nxt = nextShape === "array" ? [] : {};
+        nxt = {};
         cur[idx] = nxt;
       }
       cur = nxt;
@@ -120,7 +118,7 @@ function writePath(obj: unknown, path: string, value: unknown): unknown {
       const o = cur as Record<string, unknown>;
       let nxt = o[seg];
       if (nxt == null || typeof nxt !== "object") {
-        nxt = nextShape === "array" ? [] : {};
+        nxt = {};
         o[seg] = nxt;
       }
       cur = nxt;
