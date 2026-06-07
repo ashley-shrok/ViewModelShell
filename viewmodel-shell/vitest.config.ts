@@ -10,6 +10,10 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
-    include: ["test/**/*.test.ts"],
+    // src/**/*.test.ts picks up pure-TS framework tests that live alongside
+    // their unit (e.g. src/tree-walker.test.ts colocates with server.ts's
+    // validateActionNames). test/**/*.test.ts remains for jsdom adapter /
+    // integration suites that need to import the renderer.
+    include: ["test/**/*.test.ts", "src/**/*.test.ts"],
   },
 });

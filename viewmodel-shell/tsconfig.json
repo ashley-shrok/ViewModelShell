@@ -13,5 +13,5 @@
     "noEmitOnError": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["src/tui.tsx", "src/tui-cli.ts"]
+  "exclude": ["src/tui.tsx", "src/tui-cli.ts", "src/**/*.test.ts"]
 }
