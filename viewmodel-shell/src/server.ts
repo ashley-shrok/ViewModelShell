@@ -189,11 +189,15 @@ function collectActions(
           // TableSelection was removed and per-row selection moved into
           // row.actions as bound CheckboxNodes (06-04).
           for (const node of row.actions) {
-            if (node.type === "button") {
-              recordAction((node as ButtonNode).action, enclosingForm, out);
-            } else if (node.type === "checkbox") {
-              const cbAction = (node as CheckboxNode).action;
-              if (cbAction) recordAction(cbAction, enclosingForm, out);
+            // TableRow.actions is typed ButtonNode[] but Phase 6 (06-04)
+            // started using it for bind-only CheckboxNodes too — the .NET
+            // twin types it IReadOnlyList<ViewNode>. Narrow through unknown
+            // so both branches type-check until the TS type widens.
+            const n = node as unknown as ButtonNode | CheckboxNode;
+            if (n.type === "button") {
+              recordAction(n.action, enclosingForm, out);
+            } else if (n.type === "checkbox") {
+              if (n.action) recordAction(n.action, enclosingForm, out);
             }
           }
         }
