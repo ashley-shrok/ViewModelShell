@@ -118,7 +118,7 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
   - [x] 07-01-PLAN.md — Framework envelope wire types + UnknownActionError/Exception + createAction envelope wrap (ERROR-01, ERROR-02, ERROR-03)
   - [x] 07-02-PLAN.md — Shell-side parse-then-branch + VmsActionError + ok? field on ShellResponse interface (ERROR-01, ERROR-02, ERROR-03)
   - [x] 07-03-PLAN.md — Demo controller sweep (.NET filter + 7 controllers + 7 TS servers) + FeatureProbe `boom` action (ERROR-02, ERROR-03)
-  - [ ] 07-04-PLAN.md — Parity ok:true sweep + new feature-probe-envelope fixture across 3 backends + expectStatus support (ERROR-01, ERROR-02, ERROR-03, RELEASE-05)
+  - [x] 07-04-PLAN.md — Parity ok:true sweep + new feature-probe-envelope fixture across 3 backends + expectStatus support (ERROR-01, ERROR-02, ERROR-03, RELEASE-05)
   - [ ] 07-05-PLAN.md — 1.0.0 version bump + consolidated MIGRATION + CHANGELOG + AGENTS surgical rewrite + README sweep + final gate (RELEASE-01..05)
 **UI hint**: no
 
@@ -135,4 +135,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. Preset-Grid Layout | 0.4.0 | 4/4 | Complete | 2026-05-18 |
 | 5. Canonical Examples + 0.4.0 Closeout | 0.4.0 | 6/6 | Complete | 2026-05-18 |
 | 6. Wire Shape Change | 1.0.0 | 5/5 | Complete   | 2026-06-07 |
-| 7. Error Envelope + ok Flag + 1.0.0 Closeout | 1.0.0 | 3/5 | In Progress|  |
+| 7. Error Envelope + ok Flag + 1.0.0 Closeout | 1.0.0 | 4/5 | In Progress|  |
