@@ -133,6 +133,15 @@ body {
 .vms-page--wide { max-width: var(--vms-page-max-wide); }
 .vms-page--full { max-width: none; }
 
+/* ── Section ── */
+.vms-section { display: flex; flex-direction: column; gap: var(--vms-space-sm); }
+.vms-section__heading {
+  font-size: var(--vms-text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vms-text-muted);
+}
+
 /* ── Layout preset: cards (LAYOUT-03, D-04) ──
    auto-fit intrinsically collapses toward 1 column as the container narrows;
    min(...,100%) floor prevents single-column overflow on a narrow viewport
@@ -168,6 +177,12 @@ body {
   grid-column: 1 / -1;
 }
 
+/* Grid items default to min-width: auto; setting min-width: 0 lets wide media (full-width images, long text) shrink to the track instead of blowing it out. */
+.vms-page--cards > *,
+.vms-section--cards > *,
+.vms-page--split > *,
+.vms-section--split > * { min-width: 0; }
+
 /* ── Layout preset: sidebar (D-28) — thin + wide app shell ──
    The common real-app shell: a narrow first column + a wide main that
    grows to fill. Flex-wrap "holy grail": main grows aggressively so the
@@ -193,15 +208,6 @@ body {
 }
 .vms-page--sidebar > .vms-page__title,
 .vms-section--sidebar > .vms-section__heading { flex: 0 0 100%; }
-
-/* ── Section ── */
-.vms-section { display: flex; flex-direction: column; gap: var(--vms-space-sm); }
-.vms-section__heading {
-  font-size: var(--vms-text-xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--vms-text-muted);
-}
 
 /* ── Section variant: card (THEME-04) — grouped surface, existing seam vars ── */
 .vms-section--card {

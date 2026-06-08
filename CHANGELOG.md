@@ -6,6 +6,24 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 1.0.1 — CSS cascade fix for section layout=cards/split (#17) (npm only)
+
+**npm:** `1.0.1` (PATCH — client-side CSS bugfix; no wire change) · **NuGet:** unchanged at `1.0.0` (no .NET-side change)
+
+### Fixed
+
+- **`SectionNode` with `layout: "cards"` or `"split"` no longer collapses to a 1-column flex stack** (#17). The base `.vms-section { display: flex }` rule was written below the `.vms-section--cards` / `.vms-section--split` `{ display: grid }` modifier rules in `default.css`. Equal specificity + later-wins meant the base flex always shadowed the grid modifiers — so a `SectionNode` with `layout: "cards"` or `"split"` silently rendered as a 1-per-row flex stack. The base block now ships above the modifier blocks (mirroring the already-correct `.vms-page` ordering). Additionally, `min-width: 0` is now set on direct children of `.vms-page--cards` / `.vms-section--cards` / `.vms-page--split` / `.vms-section--split` so wide media (full-width images, long unbroken strings, nested `overflow:auto` containers) shrinks to the grid track instead of blowing it out and re-collapsing the grid back to one column. `PageNode` was unaffected (`.vms-page` was already declared in the correct order); `.vms-section--sidebar` (intentionally `display: flex`) is unaffected.
+
+### Tests
+
+- New jsdom regression test in `viewmodel-shell/test/theme-modifiers.test.ts` loads the actual `default.css` into the test DOM and asserts the cascaded `getComputedStyle().display` value for the four affected cases (section cards/split = grid, page cards = grid, section sidebar = flex). The prior tests in this file only checked emitted classNames, which is exactly why this slipped through — the bug was in the cascade, not the emission. The new tests close that coverage gap.
+
+### Consumers
+
+Nothing to do — pure CSS bugfix, no API/wire change. `npm update @ashley-shrok/viewmodel-shell` and any `SectionNode` with `layout: "cards"` or `"split"` will start rendering as the intended grid. No MIGRATION.md note needed.
+
+---
+
 ## 1.0.0 — Truly Self-Describing Wire (npm + NuGet)
 
 **npm:** `1.0.0` (MAJOR — breaking wire-format change: context payload removed, bind paths added, error envelope, ok flag) · **NuGet:** `1.0.0` (MAJOR — same wire contract, aligned per the major.minor rule)
