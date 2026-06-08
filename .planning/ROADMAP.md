@@ -35,7 +35,7 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
 **Milestone Goal:** Deliver the framework's original "agents drive what the browser drives" pitch without the asterisk. Eliminate the `context` payload from the wire entirely — every input binds to a path in state, action names are unique per operation, the renderer becomes a thin interpreter — so an agent reading only the JSON the server emits can drive any VMS app identically to the browser. Pair this with framework-owned error envelopes and a top-level `ok` flag so failures are uniformly legible. Hard wire-format break; aligned npm + NuGet `1.0.0` major bump; no compatibility shims.
 
 - [x] **Phase 6: Wire Shape Change** - Context payload eliminated; every input carries a bind path; action names are unique per operation; renderer rewritten as a thin interpreter; all demos migrated; cross-backend parity green (completed 2026-06-07)
-- [ ] **Phase 7: Error Envelope + ok Flag + 1.0.0 Release Closeout** - Framework-owned error envelope + top-level `ok` flag on every response; aligned 1.0.0 npm+NuGet bump; MIGRATION.md, CHANGELOG.md, AGENTS.md updated; full parity + tests green at release time
+- [x] **Phase 7: Error Envelope + ok Flag + 1.0.0 Release Closeout** - Framework-owned error envelope + top-level `ok` flag on every response; aligned 1.0.0 npm+NuGet bump; MIGRATION.md, CHANGELOG.md, AGENTS.md updated; full parity + tests green at release time (completed 2026-06-08)
 
 ## Phase Details
 
@@ -119,7 +119,7 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
   - [x] 07-02-PLAN.md — Shell-side parse-then-branch + VmsActionError + ok? field on ShellResponse interface (ERROR-01, ERROR-02, ERROR-03)
   - [x] 07-03-PLAN.md — Demo controller sweep (.NET filter + 7 controllers + 7 TS servers) + FeatureProbe `boom` action (ERROR-02, ERROR-03)
   - [x] 07-04-PLAN.md — Parity ok:true sweep + new feature-probe-envelope fixture across 3 backends + expectStatus support (ERROR-01, ERROR-02, ERROR-03, RELEASE-05)
-  - [ ] 07-05-PLAN.md — 1.0.0 version bump + consolidated MIGRATION + CHANGELOG + AGENTS surgical rewrite + README sweep + final gate (RELEASE-01..05)
+  - [x] 07-05-PLAN.md — 1.0.0 version bump + consolidated MIGRATION + CHANGELOG + AGENTS surgical rewrite + README sweep + final gate (RELEASE-01..05)
 **UI hint**: no
 
 ## Progress
@@ -135,4 +135,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. Preset-Grid Layout | 0.4.0 | 4/4 | Complete | 2026-05-18 |
 | 5. Canonical Examples + 0.4.0 Closeout | 0.4.0 | 6/6 | Complete | 2026-05-18 |
 | 6. Wire Shape Change | 1.0.0 | 5/5 | Complete   | 2026-06-07 |
-| 7. Error Envelope + ok Flag + 1.0.0 Closeout | 1.0.0 | 4/5 | In Progress|  |
+| 7. Error Envelope + ok Flag + 1.0.0 Closeout | 1.0.0 | 5/5 | Complete   | 2026-06-08 |
