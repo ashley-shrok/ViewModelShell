@@ -83,13 +83,20 @@ describe("0.5.0 — download side-effect orchestration", () => {
     const [blob, filename, contentType] = saveFile.mock.calls[0]!;
     expect(filename).toBe("hello.txt");
     expect(contentType).toBe("text/plain; charset=utf-8");
-    expect(blob).toBeInstanceOf(Blob);
+    // Cross-realm safe: undici's Response.blob() can return a Blob from a
+    // different JS realm than the test environment's Blob global (Node 22
+    // failed `instanceof Blob` here; Node 24 happened to pass — the
+    // orchestration is identical, only the realm boundary differs). Assert
+    // the observable Blob surface (size + normalized mime) — that's both
+    // realm-independent AND a stronger check than constructor identity.
+    expect(blob.size).toBe(5);                       // "hello"
+    expect(blob.type).toBe("text/plain;charset=utf-8"); // Blob normalizes (strips space)
     // Byte passthrough is verified by the TuiAdapter saveFile test in
     // test/tui.test.ts (Node env, real Blob.arrayBuffer + writeFileSync
-    // round-trip). The jsdom Blob from Response.blob() in this env lacks
-    // both .text() and .arrayBuffer(), so we can't assert bytes here —
-    // and we don't need to: instanceof-Blob proves the orchestration
-    // hands the right object to the adapter.
+    // round-trip). The Response.blob() result in this jsdom env lacks both
+    // .text() and .arrayBuffer(), so we can't assert bytes here — and we
+    // don't need to: size + type prove the orchestration hands the right
+    // object to the adapter.
   });
 
   // ── B: side-effect filename hint, used when Content-Disposition is absent
