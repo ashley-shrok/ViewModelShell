@@ -12,9 +12,27 @@
 //
 // Imports use the local source via `.js` specifiers (NodeNext convention — the
 // same way src/browser.ts imports src/index.ts), NOT the published package.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import type { ViewNode } from "../src/index.js";
 import { BrowserAdapter } from "../src/browser.js";
+
+// #17 — load the real shipped stylesheet so we can assert getComputedStyle().display
+// (not just emitted className). Module-scope: executes once per test process.
+const cssText = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), "../styles/default.css"),
+  "utf8",
+);
+
+function injectStylesheet(): void {
+  if (document.head.querySelector('style[data-vms-default]')) return;
+  const style = document.createElement("style");
+  style.setAttribute("data-vms-default", "true");
+  style.textContent = cssText;
+  document.head.appendChild(style);
+}
 
 function freshContainer(): HTMLElement {
   const el = document.createElement("div");
@@ -237,5 +255,57 @@ describe('0.11.0 / #5 — ImageNode rendering', () => {
   it('size/shape omitted ⇒ className === "vms-image" (byte-identical baseline)', () => {
     const el = renderImage({ type: "image", src: "/a.png" });
     expect(el.className).toBe("vms-image");
+  });
+});
+
+describe('#17 — layout="cards"/"split" computed display is actually grid (cascade regression)', () => {
+  // The pre-existing describe blocks above are class-emission assertions: they
+  // verify the renderer emits e.g. `vms-section--cards`, but never load the
+  // stylesheet, so they cannot catch a cascade-shadowing bug where the modifier
+  // class is present yet overridden by a later base rule. That is exactly how
+  // #17 slipped through. The tests below inject the real default.css into the
+  // jsdom document and assert window.getComputedStyle(el).display — the actual
+  // property the shadowing broke.
+  //
+  // jsdom limitation: it does NOT compute grid track layout, so we can't assert
+  // "renders as >=2 columns" — but the cascaded `display` value IS the property
+  // that the shadowing bug clobbered, and asserting it directly is sufficient
+  // regression coverage. The min-width:0 grid-child rule (the secondary fix in
+  // Task 1) is not assertable in jsdom for the same reason; it's covered by
+  // inspection and the explanatory CSS comment.
+  beforeAll(() => injectStylesheet());
+
+  it('section with layout: "cards" computes display: grid (not flex) — #17 cascade fix', () => {
+    const el = renderSection({
+      type: "section",
+      children: [
+        { type: "text", value: "a" },
+        { type: "text", value: "b" },
+      ],
+      layout: "cards",
+    });
+    expect(window.getComputedStyle(el).display).toBe("grid");
+  });
+
+  it('section with layout: "split" computes display: grid', () => {
+    const el = renderSection({
+      type: "section",
+      children: [
+        { type: "text", value: "a" },
+        { type: "text", value: "b" },
+      ],
+      layout: "split",
+    });
+    expect(window.getComputedStyle(el).display).toBe("grid");
+  });
+
+  it('page with layout: "cards" still computes display: grid (no regression)', () => {
+    const el = renderPage({ type: "page", children: [], layout: "cards" });
+    expect(window.getComputedStyle(el).display).toBe("grid");
+  });
+
+  it('section with layout: "sidebar" still computes display: flex (intentional, untouched)', () => {
+    const el = renderSection({ type: "section", children: [], layout: "sidebar" });
+    expect(window.getComputedStyle(el).display).toBe("flex");
   });
 });
