@@ -147,15 +147,26 @@ public class AgentController(HelpDeskDb db) : ControllerBase
             ]));
         }
 
+        var dbEmpty = open + inProgress + resolved == 0;
+
         if (!withinCap)
         {
             children.Add(new TextNode(
                 $"{matching} tickets match — refine the filter (max {Cap} shown).",
                 "warning"));
         }
+        else if (tickets.Count == 0 && !dbEmpty)
+        {
+            // Filter narrowed to zero matches against a non-empty DB. The
+            // TableNode still renders below so the title filter input + status
+            // tabs stay accessible — without this message the empty body is
+            // ambiguous with "broken render".
+            children.Add(new TextNode("No tickets match your filter.", "muted"));
+        }
 
-        // Empty-state fallback for an empty queue.
-        if (withinCap && tickets.Count == 0 && open + inProgress + resolved == 0)
+        // Empty-state fallback for an empty queue (only when the DB itself is
+        // empty — the "filter matches nothing" case is handled above).
+        if (withinCap && tickets.Count == 0 && dbEmpty)
         {
             children.Add(new TextNode("No tickets in queue.", "muted"));
         }

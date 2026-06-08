@@ -422,6 +422,8 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
     });
   }
 
+  const dbEmpty = counts.open + counts.inProgress + counts.resolved === 0;
+
   // Over-cap notice rendered above the table so the filter input stays accessible.
   if (!withinCap) {
     children.push({
@@ -429,10 +431,16 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
       value: `${matching} tickets match — refine the filter (max ${AGENT_CAP} shown).`,
       style: "warning",
     });
+  } else if (rows.length === 0 && !dbEmpty) {
+    // Filter narrowed to zero matches against a non-empty DB. The table still
+    // renders below so the title filter input + status tabs stay accessible —
+    // without this message the empty body is ambiguous with "broken render".
+    children.push({ type: "text", value: "No tickets match your filter.", style: "muted" });
   }
 
-  // Empty-state message (the demo-friendly fallback for the empty-queue case).
-  if (withinCap && rows.length === 0 && counts.open + counts.inProgress + counts.resolved === 0) {
+  // Empty-state fallback for an empty queue (only when the DB itself is
+  // empty — the "filter matches nothing" case is handled above).
+  if (withinCap && rows.length === 0 && dbEmpty) {
     children.push({ type: "text", value: "No tickets in queue.", style: "muted" });
   } else {
     const titleCol: Record<string, unknown> = {

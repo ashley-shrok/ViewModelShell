@@ -101,6 +101,25 @@ public class AgentControllerTests : IDisposable
     }
 
     [Fact]
+    public void Get_FilterMatchesZeroAgainstNonEmptyDb_ShowsNoMatchMessageAndKeepsTable()
+    {
+        // DB has tickets, but the title filter narrows the result to zero.
+        // The user needs a distinct signal vs. an empty DB AND vs. broken
+        // render — and the TableNode must still render so the filter input
+        // stays reachable to edit/clear.
+        SeedTicket("Printer broken");
+        var ctrl  = CreateAgent();
+        var state = AgentState.Initial() with { TitleFilter = "xyzzy" };
+        var page  = Page(Ok(Act(ctrl, state, "filter-text")).Vm);
+
+        Assert.Contains(page.Children.OfType<TextNode>(), t => t.Value == "No tickets match your filter.");
+        Assert.DoesNotContain(page.Children.OfType<TextNode>(), t => t.Value == "No tickets in queue.");
+        var table = QueueTable(page);
+        Assert.Empty(table.Rows);
+        Assert.Equal("xyzzy", table.Columns.Single(c => c.Key == "title").FilterValue);
+    }
+
+    [Fact]
     public void Get_SeededTicket_AppearsAsTableRow()
     {
         SeedTicket("Printer broken");
