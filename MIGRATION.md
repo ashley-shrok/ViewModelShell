@@ -6,6 +6,75 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to '1.0.0' (npm @ashley-shrok/viewmodel-shell + NuGet AshleyShrok.ViewModelShell)
+
+1.0.0 is the milestone where the wire becomes truly self-describing: an agent reading only `{vm, state}` from a GET response and walking the tree can drive any VMS app end-to-end identically to the browser renderer. Two breaking changes ship together: the `context` payload is GONE from the wire, and every response now carries a framework-set `ok` flag with a uniform `{ok: false, errors: [...]}` envelope for failures.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `0.16.0` | **`1.0.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `0.16.0` | **`1.0.0`** |
+
+### What changed (consolidated across Phase 6 + Phase 7)
+
+1. **Context payload eliminated.** The dispatch wire is now `{action: {name}, state, files?}`. Every input node declares a `bind` path naming where its value lives in state; the renderer reads/writes through the path. The seven distinct context-assembly code paths in the renderer collapsed into one bind-path interpreter. WIRE-01..WIRE-08.
+
+2. **Action-name uniqueness rule.** Every dispatch-bearing node carries an action name only. Per-row identity is encoded IN the action name (`delete-row-42`, not `delete-row` with context). The framework enforces "one action name = one operation" at tree-build time; `ValidateActionNames` throws on violations. WIRE-04, WIRE-05.
+
+3. **Framework-owned `ok` flag on every response.** Every framework-rendered response now carries `ok: true | false` at the top level. Normal renders, redirects, sideEffects-only responses, polls — all uniformly carry `ok: true`. Framework-detected failures (malformed payload, unknown action, uncaught exception) carry `ok: false` with a structured `errors[]` array. Agents check one field. ERROR-03.
+
+4. **`{ok: false, errors: [{path?, message, code?}]}` envelope.** Replaces the old `{error: msg}` body shape on framework failures. `errors` is always an array; entries always have `message`; `path` and `code` are optional and ABSENT from the wire when not set (no `"path": null` etc.). Initial `code` vocabulary is small + stable + framework-only: `"parse_error"`, `"unknown_action"`, `"invalid_tree"`, `"uncaught_exception"`. App handlers never set `code`. ERROR-01, ERROR-02.
+
+5. **`UnknownActionError` (TS) / `UnknownActionException` (.NET).** New public exception classes — your dispatch `default:` arm throws this with the unknown name; the framework catches and surfaces `code: "unknown_action"`. No framework-shipped router primitive; you keep your switch-or-startsWith convention.
+
+6. **`VmsActionError` on the client side.** New exported class extending `Error` with `errors: ErrorEntry[]`, `status: number`, and a `code?` shortcut. Surfaced via the existing `onError` callback — non-VMS apps that wired `onError` for fetch failures keep working unchanged. Apps that want structured failure handling do `if (err instanceof VmsActionError) { ... err.errors ... }`.
+
+7. **`BadRequestError` / `BadRequest("...")` semantic split.** Stays in the public API on both backends, but the wire shape changes: the framework now wraps it into `{ok: false, errors: [{message: ...}]}` (no `code`). Reserved for structurally-invalid requests the user can't see (missing required action field); NOT for routine app validation. State-based validation (TextNode error + ValidationError state field — gotcha #4) is unchanged — those responses are still `ok: true`.
+
+### Migration recipe (single end-to-end pass for any consumer on 0.4.x or 0.16.x)
+
+For each VMS app you maintain:
+
+**Step 1 — Inputs.** Every input node now declares a `bind` path. Audit `FieldNode`, `CheckboxNode`, `TextareaNode`, `SelectNode`, `FileInputNode`, etc. — add `bind: "path.to.field"` matching where the value lives in your state record. Remove any code that harvests field values out of the DOM on submit.
+
+**Step 2 — Action names.** Every per-row / per-operation action name must be unique. Replace `{name: "delete-row", context: {id: 42}}` patterns with `{name: "delete-row-42"}`. The convention is yours — slashes (`row/42/delete`), dashes (`delete-row-42`), or anything else you like; the framework only checks uniqueness. Run a build / GET against your dev server — `ValidateActionNames` will throw on the first violation with a precise diagnostic.
+
+**Step 3 — Dispatch handlers.** Read your action handlers — anywhere they pull from `payload.context` becomes `payload.state` (the state record carries the values now). Switch on `payload.name`; if you need to extract a per-row id, parse the action name (`name.startsWith("delete-row-")` -> `parseInt(name.slice("delete-row-".length))`).
+
+**Step 4 — `default:` arm.** Replace:
+- `.NET`: `return BadRequest($"Unknown action: {name}")` → `throw new UnknownActionException(name)`.
+- `TS`: `throw new BadRequestError(\`Unknown action: ${name}\`)` → `throw new UnknownActionError(name)`.
+
+Add the new exception class to your import block (`using ViewModelShell;` already covers .NET; on TS, add `UnknownActionError` to your `@ashley-shrok/viewmodel-shell/server` import).
+
+**Step 5 — .NET only: register the framework exception filter.** In each `Program.cs`, add `options.Filters.Add<ShellExceptionFilter>()` to your `AddControllers(...)` lambda. This wires the envelope-construction edge — without it, .NET apps won't emit envelope responses on thrown exceptions.
+
+**Step 6 — Client `onError`.** Optional: if you want to branch on failure class, change your `onError` handler from `(err) => { console.error(err.message) }` to:
+```typescript
+onError: (err) => {
+  if (err instanceof VmsActionError) {
+    // err.errors[] has structured info; err.code === "unknown_action" / "parse_error" / etc.
+  } else {
+    // network/parse failure — plain Error
+  }
+}
+```
+
+**Step 7 — Side effects.** No changes needed: redirects, sideEffects, polling, busy, preventUnload, and the multipart file channel are unchanged.
+
+### What you DON'T need to change
+
+- State-based validation (TextNode + ValidationError state field — gotcha #4): unchanged, still `ok: true`.
+- Frontend wiring: same `ViewModelShell(...)` constructor, same `BrowserAdapter`, same imports — only behavior change is `onError` now optionally receiving `VmsActionError`.
+- CSS / themes / layout presets / density / card variants: unchanged.
+- Polling, redirects, side effects, busy, preventUnload, file uploads: unchanged.
+
+### Backwards-compat policy
+
+None. No compatibility shims, no legacy-context reader, no deprecation warnings. The framework ships the corrected protocol; apps migrate; this doc is the upgrade path. This is by design per the milestone charter.
+
+---
+
 ## Upgrading to `0.16.0` (busy lockout + generic per-round-trip lock — npm + NuGet)
 
 **Nothing to do for compatibility.** Every existing response renders byte-identically. The new `busy` field is opt-in for the explicit long-action lockout, and the implicit per-round-trip lock applies to your app automatically (it makes the dispatch guard's behavior visually honest — rapid clicks during a round-trip no longer flip checkboxes / depress buttons before being dropped).
