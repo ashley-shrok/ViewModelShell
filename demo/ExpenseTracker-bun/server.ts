@@ -307,7 +307,7 @@ Bun.serve({
       const state = initialState();
       const vm = buildVm(state);
       validateActionNames(vm);
-      return Response.json({ vm, state });
+      return Response.json({ ok: true, vm, state });
     }
     if (url.pathname === "/api/expenses/action" && request.method === "POST") {
       return actionHandler(request);

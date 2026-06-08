@@ -867,7 +867,7 @@ Bun.serve({
       const state = agentInitial();
       const vm = agentBuildVm(state);
       validateActionNames(vm);
-      return Response.json({ vm, state });
+      return Response.json({ ok: true, vm, state });
     }
     if (url.pathname === "/api/agent/action" && request.method === "POST") {
       return agentHandler(request);
@@ -876,7 +876,7 @@ Bun.serve({
       const state = requesterInitial();
       const vm = requesterBuildVm(state);
       validateActionNames(vm);
-      return Response.json({ vm, state });
+      return Response.json({ ok: true, vm, state });
     }
     if (url.pathname === "/api/requester/action" && request.method === "POST") {
       return requesterHandler(request);
