@@ -26,13 +26,17 @@ These are the bugs that take hours to find:
 
 3. **Use regex aliases, not string keys, in `vite.config.ts`.** A string key `"viewmodel-shell"` prefix-matches `"viewmodel-shell/browser"` and breaks the subpath import. Always use `/^viewmodel-shell$/` and `/^viewmodel-shell\/browser$/`.
 
-4. **Inline validation goes in the state record, not `BadRequest`.** Add a `ValidationError` field to your state record, set it on failure, clear on success, and include `new TextNode(state.ValidationError, "error")` in the view when non-null. The validation message round-trips with the state. See `demo/HelpDesk/AspNetCore/RequesterController.cs`. Use `BadRequest` only for malformed/programmatic input the user can't see (missing required action fields, unknown action names).
+4. **Inline validation goes in the state record, not `BadRequest`.** Add a `ValidationError` field to your state record, set it on failure, clear on success, and include `new TextNode(state.ValidationError, "error")` in the view when non-null. The validation message round-trips with the state — those responses are `ok: true` (state-based validation is NOT a framework failure). See `demo/HelpDesk/AspNetCore/RequesterController.cs`. `BadRequest`/`BadRequestError` IS correct for structurally-invalid requests the user can't see (missing required action field, action name missing from the form entirely) — the framework wraps those into `{ok: false, errors: [{message: ...}]}` (no `code`) at the framework edge. Never use it for routine app-level validation.
 
-5. **Tests need `global using Xunit;` in `GlobalUsings.cs`** (not auto-imported even with `ImplicitUsings`) and `<FrameworkReference Include="Microsoft.AspNetCore.App" />` to access `DefaultHttpContext`.
+5. **`UnknownActionError` / `UnknownActionException` is the `default:` arm.** Don't `return BadRequest(...)` or `throw new BadRequestError(...)` from your `default:` switch arm — throw `new UnknownActionException(payload.Name)` (.NET) or `throw new UnknownActionError(name)` (TS). The framework catches it and emits `{ok: false, errors: [{message: "Unknown action: ...", code: "unknown_action"}]}` at 400. `BadRequest` / `BadRequestError` is reserved for the structurally-invalid path (gotcha #4 above).
 
-6. **Null omission is now intrinsic — you no longer need to configure anything.** The wire contract ("an unset optional is *absent*, never `"field": null`") is baked into the published NuGet types: every nullable (`T?`) member carries `[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]`, which System.Text.Json honors **regardless of host `JsonSerializerOptions`** — so even default ASP.NET web JSON options emit the correct wire. The `DefaultIgnoreCondition = WhenWritingNull` line in every demo's `Program.cs` is now **redundant defense-in-depth, not load-bearing** (kept as the canonical pattern; safe to omit). This used to be a critical footgun (skip the config → `"field": null` everywhere → drift from TypeScript backends + strict-`tsc` consumer failures); it is no longer. Non-nullable members (incl. booleans like `CheckboxNode.Checked`) deliberately keep serializing `false`/`true` — they have semantic value. *Maintainer rule: a new nullable wire field MUST carry the attribute (see the header comment in `ViewModels.cs`) or it silently re-introduces null-vs-absent drift.*
+6. **Check `body.ok` ONCE at the response edge — don't branch on HTTP status.** The framework sets `ok` on every response (normal render, redirect, poll, sideEffects, busy, preventUnload — all `ok: true`; every framework-detected failure — `ok: false`). The shell surfaces `ok: false` responses as `VmsActionError` via the existing `onError` callback. Apps check `if (err instanceof VmsActionError)` in `onError` — not HTTP status codes, which are framework-internal routing signals.
 
-7. **Cross-backend parity testing lives in `parity/`.** Any new official backend must implement the fixtures listed in `parity/backends.json` and pass `bun run parity/run.ts`. The harness spins up every backend in parallel, runs the same action sequences against each, and diffs normalized responses step-for-step. Any wire-format drift fails the run.
+7. **Tests need `global using Xunit;` in `GlobalUsings.cs`** (not auto-imported even with `ImplicitUsings`) and `<FrameworkReference Include="Microsoft.AspNetCore.App" />` to access `DefaultHttpContext`.
+
+8. **Null omission is now intrinsic — you no longer need to configure anything.** The wire contract ("an unset optional is *absent*, never `"field": null`") is baked into the published NuGet types: every nullable (`T?`) member carries `[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]`, which System.Text.Json honors **regardless of host `JsonSerializerOptions`** — so even default ASP.NET web JSON options emit the correct wire. The `DefaultIgnoreCondition = WhenWritingNull` line in every demo's `Program.cs` is now **redundant defense-in-depth, not load-bearing** (kept as the canonical pattern; safe to omit). This used to be a critical footgun (skip the config → `"field": null` everywhere → drift from TypeScript backends + strict-`tsc` consumer failures); it is no longer. Non-nullable members (incl. booleans like `CheckboxNode.Checked`) deliberately keep serializing `false`/`true` — they have semantic value. *Maintainer rule: a new nullable wire field MUST carry the attribute (see the header comment in `ViewModels.cs`) or it silently re-introduces null-vs-absent drift.*
+
+9. **Cross-backend parity testing lives in `parity/`.** Any new official backend must implement the fixtures listed in `parity/backends.json` and pass `bun run parity/run.ts`. The harness spins up every backend in parallel, runs the same action sequences against each, and diffs normalized responses step-for-step. Any wire-format drift fails the run.
 
 ---
 
@@ -55,11 +59,11 @@ The server is a pure function `(state, action) → (newState, view)`. Every requ
 **POST (action dispatch)** — `multipart/form-data` with three kinds of entries:
 | Field | Purpose |
 |---|---|
-| `_action` | JSON: `{ "name": "...", "context": { ... } }` |
-| `_state` | JSON: the current state record |
+| `_action` | JSON: `{ "name": "..." }` — action name only; no `context` field |
+| `_state` | JSON: the current state record (carries all input values via `bind` paths) |
 | any file-input `name` | the `File` object (when forms have file fields) |
 
-Response is the same `{ "vm", "state" }` shape as GET. The shell stores `state` internally and sends it with the next dispatch automatically — apps don't manage state plumbing.
+Response is the same `{ "ok": true, "vm", "state" }` shape as GET (plus `ok: true`). On framework-detected failures: `{ "ok": false, "errors": [{"message": "...", "code": "..."}] }`. The shell stores `state` internally and sends it with the next dispatch automatically — apps don't manage state plumbing.
 
 ### The capability seam
 
@@ -174,6 +178,9 @@ These are already implemented — you don't need to do anything to get them, but
 - **Dispatch guard.** A second action can't be dispatched while a round trip is in flight. Concurrent clicks are silently dropped. `onLoading` fires around every dispatch.
 - **Focus and scroll preservation.** Focused element + caret position + scrolled containers are restored after each re-render.
 - **`getRequestHeaders` hook.** `ShellOptions.getRequestHeaders?: () => Record<string, string> | Promise<Record<string, string>>` is called before every `load()` and `dispatch()` request and merged into the headers. Use this for auth tokens, ASP.NET anti-forgery tokens (`RequestVerificationToken` header), or any other custom headers.
+- **Uniform `ok` flag.** Every framework-rendered response — normal render, redirect, sideEffects-only, poll, busy/preventUnload toggle — carries `ok: true`. Every framework-detected failure carries `ok: false` with structured `errors[]`. Apps don't set `ok`; the framework does.
+- **`VmsActionError` on existing `onError`.** A 4xx/5xx response with a parseable `{ok: false, errors: [...]}` body surfaces as a `VmsActionError` via your existing `onError` callback (status, errors, code shortcut). Apps that wired `onError` for fetch failures keep working unchanged; apps that want structured branching add `if (err instanceof VmsActionError)`.
+- **`UnknownActionError` / `UnknownActionException`.** Throw this from your dispatch `default:` arm; the framework's catch produces `{ok: false, errors: [{message: "Unknown action: ...", code: "unknown_action"}]}` at 400.
 
 ---
 
@@ -221,13 +228,13 @@ public class YourController : ControllerBase
             Request.Form["_state"].ToString());
 
         var state = payload.State;
-        // Read context with helpers, switch on payload.Name, produce new state via `with`:
+        // Switch on payload.Name, produce new state via `with`:
         switch (payload.Name)
         {
             case "your-action":
                 state = state with { /* changes */ };
                 break;
-            default: return BadRequest($"Unknown action: {payload.Name}");
+            default: throw new UnknownActionException(payload.Name);
         }
 
         return new ShellResponse<YourState>(BuildVm(state), state);
@@ -392,10 +399,12 @@ public async Task<ActionResult<ShellResponse<MyState>>> Action()
 
 JSON body shape — flat, no nested escaping:
 ```json
-{ "name": "add", "context": { "title": "X" }, "state": { ... } }
+{ "name": "add", "state": { ... } }
 ```
 
-`curl --json '{"name":"poll","state":{...}}' /api/your/action` just works. File-bearing actions still need multipart — JSON support is an opt-in convenience, not a replacement.
+No `context` field. All input values travel in `state` (via bind paths). `curl --json '{"name":"poll","state":{...}}' /api/your/action` just works. File-bearing actions still need multipart — JSON support is an opt-in convenience, not a replacement.
+
+On failure, the response body is `{ok: false, errors: [{path?, message, code?}]}` at 4xx/5xx — the same shape regardless of whether the failure was a parse error (400), unknown action (400), invalid tree (500), or uncaught exception (500). Agents check `body.ok`; framework-classified failures carry a `code` from the stable vocabulary (`parse_error`, `unknown_action`, `invalid_tree`, `uncaught_exception`).
 
 ### ShellResponse&lt;TState&gt; reference
 
@@ -410,6 +419,7 @@ Every field except `Vm` and `State` is optional. The combination determines what
 | `NextPollIn` | `int?` (ms) | Schedules the next poll at this delay. Falls back to `ShellOptions.pollInterval` if omitted. **Omit on a response with no `pollInterval` set to stop polling.** See the polling section for the fast-completion footgun. |
 | `PreventUnload` | `bool` (0.14.0) | When `true`, the shell asks the adapter to install a "warn before navigating away" guard (browser shows the native "Leave site?" dialog on tab-close / refresh / cross-origin nav). When `false` / omitted, the guard is cleared. **Idempotent on every response** — set it on each render while a long-running server action is pending; the next response that omits it (or sets it `false`) clears the guard. `BrowserAdapter` ships the implementation via `beforeunload`; the TUI is a no-op (terminals have no unload). Modern browsers control the dialog text; it is not customizable. |
 | `Busy` | `bool` (0.16.0) | When `true`, the shell **drops user-initiated dispatches** (polls bypass — they're how the server clears the state) and the `BrowserAdapter` toggles `.vms-busy` on its container. Default CSS makes every interactive descendant non-clickable (`cursor: wait` + `pointer-events: none`) so a rapid click during an in-flight round-trip can't visually flip a checkbox or depress a button — the lock is honest. Same idempotent on-every-response shape as `PreventUnload`; the two are naturally paired for long-running server actions ("Working…" modal + Busy + PreventUnload). The framework **also** applies `.vms-busy` implicitly for the duration of any single user-initiated dispatch (using the existing dispatching flag), so the rapid-click-during-round-trip problem is solved generically without consumers having to set `Busy` for every action. |
+| `Ok` | `bool` (defaults to `true`) | Framework-set on every response. Apps don't set this. Present in the wire as `"ok": true` on all normal responses (render, redirect, poll, sideEffects, busy, preventUnload). Framework-detected failures (parse error, unknown action, invalid tree, uncaught exception) emit `"ok": false` with structured `errors[]` instead of a normal response. Single check across every response shape; the shell surfaces `ok: false` responses as `VmsActionError` via the existing `onError` callback. |
 
 Factory methods on `ShellResponse<TState>`:
 - `ShellResponse<T>.RedirectTo(url)` — redirect response with `Vm`/`State` null.
@@ -426,6 +436,7 @@ import {
   createAction,
   shellRedirect,
   shellSideEffect,
+  UnknownActionError,
   type ActionPayload,
   type ViewNode,
 } from "@ashley-shrok/viewmodel-shell/server";
@@ -450,8 +461,10 @@ app.post("/api/tasks/action", createAction<TasksState>(async (payload) => {
       return {
         vm: buildVm(state),
         state,
-        sideEffects: [shellSideEffect.setLocalStorage("jwt", payload.context?.token as string)],
+        sideEffects: [shellSideEffect.setLocalStorage("jwt", (payload.state as { token: string }).token)],
       };
+    default:
+      throw new UnknownActionError(payload.name);
   }
   return { vm: buildVm(state), state };
 }));
@@ -525,10 +538,9 @@ Both layers are testable with normal unit tests — no browser, no Playwright, n
 
 ```csharp
 private static ActionResult<ShellResponse<YourState>> Act(
-    YourController ctrl, YourState state, string name,
-    Dictionary<string, JsonElement>? ctx = null)
+    YourController ctrl, YourState state, string name)
 {
-    var actionJson = JsonSerializer.Serialize(new { name, context = ctx });
+    var actionJson = JsonSerializer.Serialize(new { name });
     var stateJson  = JsonSerializer.Serialize(state);
     ctrl.ControllerContext.HttpContext.Request.Form = new FormCollection(
         new Dictionary<string, StringValues>

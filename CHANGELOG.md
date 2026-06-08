@@ -6,6 +6,41 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 1.0.0 — Truly Self-Describing Wire (npm + NuGet)
+
+**npm:** `1.0.0` (MAJOR — breaking wire-format change: context payload removed, bind paths added, error envelope, ok flag) · **NuGet:** `1.0.0` (MAJOR — same wire contract, aligned per the major.minor rule)
+
+Before: the wire was self-describing only when paired with the browser renderer — agents driving the API had to mentally simulate the renderer to know what `context` payload to send. After: an agent reading only `{vm, state}` from a GET and walking the tree can dispatch any action identically to the browser. The `context` field is gone; every input binds to a state path; action names are unique per operation; the renderer is a thin interpreter. Paired with a framework-owned `ok` flag + `{ok: false, errors: [...]}` envelope so failures are uniformly legible across every VMS app.
+
+### Why
+
+The original framework pitch — "agents drive what the browser drives" — had an asterisk: the browser renderer assembled a `context` payload using scope rules absent from the wire. v1.0.0 removes the asterisk. Agents now have one stable failure-check (`body.ok`) and one stable dispatch shape (`{action: {name}, state, files?}`).
+
+### Added (wire-shape and protocol)
+
+- Every input node declares a `bind` path (`bind: "fields.title"`); the renderer reads/writes through it.
+- Dispatch wire is `{action: {name}, state, files?}` — no `context` field.
+- Action-name uniqueness enforced at tree-build time (`ValidateActionNames`).
+- Top-level `ok: true | false` on every response.
+- `{ok: false, errors: [{path?, message, code?}]}` envelope on framework failures.
+- Stable framework-only `code` vocabulary: `parse_error`, `unknown_action`, `invalid_tree`, `uncaught_exception`.
+- New exception classes: `UnknownActionError` (TS, `@ashley-shrok/viewmodel-shell/server`) / `UnknownActionException` (.NET, `ViewModelShell` namespace).
+- New client error class: `VmsActionError extends Error` exported from `@ashley-shrok/viewmodel-shell` — surfaced via the existing `onError` callback with `errors`, `status`, and `code` shortcut.
+- .NET: `ShellExceptionFilter` registered in `Program.cs` translates thrown exceptions to envelope responses (no per-controller boilerplate).
+
+### Demo + parity
+
+- All 14 demo backends (.NET + bun, plus FeatureProbe-node) migrated to the new shape — `default:` arms throw the new exception classes, FeatureProbe gains a `boom` action exercising the uncaught-throw path.
+- Cross-backend parity: 8 fixtures (the existing 7 + new `feature-probe-envelope`) across all 15 backends byte-identical. The new fixture covers all three envelope cases (parse / unknown-action / uncaught) with strict status-code assertions per case.
+- `vitest run`: full TS suite green; new tests cover the envelope wrap on the server side and the parse-then-branch on the shell side.
+- `dotnet test`: full .NET suite green; new tests cover the envelope types, exception filter, and round-trip through every demo controller.
+
+### Consumers
+
+Breaking change — aligned npm + NuGet major bump. No compatibility shims. Upgrade path is one consolidated section in MIGRATION.md (single 0.4.x → 1.0.0 recipe; you don't read it in two chunks). The migration is mechanical: add bind paths on inputs, make action names unique, swap `default:` arms to throw the new exception, register the .NET filter, and optionally branch on `VmsActionError` in `onError`.
+
+---
+
 ## 0.16.0 — `ShellResponse.busy` (UI lockout) + generic per-round-trip lock (npm + NuGet)
 
 **npm:** `0.16.0` (MINOR — new optional wire field + new optional `Adapter` capability verb + default CSS rule) · **NuGet:** `0.16.0` (MINOR — `ShellResponse.Busy` property)

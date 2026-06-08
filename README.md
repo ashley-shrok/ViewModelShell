@@ -45,9 +45,9 @@ const shell = new ViewModelShell({
 shell.load();
 ```
 
-If your backend is .NET: copy `demo/Tasks/AspNetCore/ViewModels.cs` from the [GitHub repo](https://github.com/ashley-shrok/ViewModelShell) into your project and update the namespace — that file is the full backend record set (`ViewNode`, `PageNode`, `FormNode`, `ShellResponse<TState>`, `ActionPayload<TState>`, etc.).
+If your backend is .NET: install the `AshleyShrok.ViewModelShell` NuGet package — it ships the full backend record set (`ViewNode`, `PageNode`, `FormNode`, `ShellResponse<TState>`, `ActionPayload<TState>`, `UnknownActionException`, `ShellExceptionFilter`, etc.). Register `ShellExceptionFilter` in `Program.cs`: `builder.Services.AddControllers(o => o.Filters.Add<ShellExceptionFilter>())`.
 
-For other backends, implement the same JSON shape: a `GET` returning `{ vm, state }`, and a `POST` that takes `multipart/form-data` with `_action` and `_state` form fields and returns the next `{ vm, state }`. See [AGENTS.md](https://github.com/ashley-shrok/ViewModelShell/blob/main/AGENTS.md) for the full wire format.
+For other backends, implement the same JSON shape: a `GET` returning `{ ok: true, vm, state }`, and a `POST` that takes `multipart/form-data` with `_action` (JSON `{"name":"..."}`) and `_state` form fields and returns the next `{ ok: true, vm, state }`. See [AGENTS.md](https://github.com/ashley-shrok/ViewModelShell/blob/main/AGENTS.md) for the full wire format.
 
 ## Agents
 
@@ -56,7 +56,7 @@ Add one line to your page's `<head>` so agents reading the HTML know they can dr
 ```html
 <!-- Agent discoverability — this is a ViewModel Shell app: agents can drive it via the JSON wire
      (GET endpoint → {vm, state}; POST actionEndpoint multipart {_action, _state}). Docs: https://github.com/ashley-shrok/ViewModelShell -->
-<meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/0.12","endpoint":"/api/tasks","actionEndpoint":"/api/tasks/action"}'>
+<meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/1.0","endpoint":"/api/tasks","actionEndpoint":"/api/tasks/action"}'>
 ```
 
 All shipped demos include this — it's the recommended convention for any VMS-driven page that mounts a shell.
