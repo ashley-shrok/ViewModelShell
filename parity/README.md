@@ -66,6 +66,59 @@ segments; numeric segments index arrays). Example:
 Mark every backend in `backends.json` that should be tested against the
 fixture by adding the fixture name to its `fixtures` array.
 
+### Envelope-case steps (Phase 07 additions)
+
+Three additive optional fields on `FixtureStep` support testing failure paths:
+
+**`expectStatus?: number`** — for steps that expect a non-2xx HTTP status. When set, the
+runner asserts `res.status === expectStatus` instead of throwing on `!res.ok`, and also
+asserts `body.ok === false`. All success-path steps (no `expectStatus`) assert `body.ok === true`.
+This makes the `ok` flag a wire-level invariant enforced on every step of every fixture:
+
+```json
+{
+  "id": "unknown-action",
+  "method": "POST",
+  "action": { "name": "this-action-does-not-exist" },
+  "expectStatus": 400
+}
+```
+
+**`malformedBody?: "empty-action" | "non-json" | "missing-action-field"`** — instructs the
+runner to construct a deliberately broken `_action` multipart field for parse-error testing.
+When set, the step's `action` field is ignored. `"empty-action"` sends an empty string for
+`_action`; `"non-json"` sends a syntactically broken JSON string; `"missing-action-field"`
+omits the `_action` field entirely:
+
+```json
+{
+  "id": "malformed-payload",
+  "method": "POST",
+  "malformedBody": "empty-action",
+  "expectStatus": 400,
+  "compareIgnoreFields": ["errors.0.message"]
+}
+```
+
+**`compareIgnoreFields?: string[]`** — a list of dotted paths into the captured response that
+the cross-backend diff skips for this step. Paths use dot notation with numeric segments for
+array indices (e.g. `"errors.0.message"` skips `errors[0].message`). This field exists to
+accommodate library-flavored divergence — use it **SPARINGLY**. Its only intended use is
+parse-error messages where .NET System.Text.Json and JS JSON.parse produce different human-readable
+strings while agreeing on the structured fields (`ok`, `status`, `errors[0].code`). Do NOT use
+it to paper over real wire-shape drift; reviewers should treat additions with scrutiny. The
+existing `feature-probe-envelope` fixture demonstrates the only sanctioned use:
+
+```json
+{
+  "id": "malformed-payload",
+  "method": "POST",
+  "malformedBody": "empty-action",
+  "expectStatus": 400,
+  "compareIgnoreFields": ["errors.0.message"]
+}
+```
+
 ## Why this exists
 
 ViewModel Shell is a wire-format contract. The contract is what consumer

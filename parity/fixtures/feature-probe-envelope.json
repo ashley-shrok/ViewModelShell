@@ -1,0 +1,31 @@
+{
+  "name": "feature-probe-envelope",
+  "endpoint": "/api/probe",
+  "actionEndpoint": "/api/probe/action",
+  "$comment": "Phase 7 envelope cases. Three POST steps exercise (1) malformed body -> 400 + code:parse_error, (2) unknown action -> 400 + code:unknown_action, (3) uncaught throw -> 500 + code:uncaught_exception. All three share the {ok:false, errors:[...]} shape; only status + code differ. Hosted on FeatureProbe because the dispatch already covers every framework feature and now adds a `boom` action throwing a generic Error. The parse-error step's errors[0].message legitimately differs between .NET System.Text.Json and JS JSON.parse — compareIgnoreFields skips that one field on that one step rather than retroactively rewriting Plan 01's OfParseError factory (D-18: shipped code is locked).",
+  "steps": [
+    {
+      "id": "initial-load",
+      "method": "GET"
+    },
+    {
+      "id": "malformed-payload",
+      "method": "POST",
+      "malformedBody": "empty-action",
+      "expectStatus": 400,
+      "compareIgnoreFields": ["errors.0.message"]
+    },
+    {
+      "id": "unknown-action",
+      "method": "POST",
+      "action": { "name": "this-action-does-not-exist" },
+      "expectStatus": 400
+    },
+    {
+      "id": "uncaught-throw",
+      "method": "POST",
+      "action": { "name": "boom" },
+      "expectStatus": 500
+    }
+  ]
+}

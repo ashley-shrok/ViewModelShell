@@ -61,6 +61,21 @@ interface FixtureStep {
   /** File attachments to include in the multipart form (e.g. for FieldNode inputType="file").
    *  Keyed by form field name; value is { name, content }. */
   attach?: Record<string, { name: string; content: string }>;
+  /** Phase 07 — for envelope-case steps that expect non-2xx. When set, the runner asserts
+   *  res.status === expectStatus instead of throwing on !res.ok. */
+  expectStatus?: number;
+  /** Phase 07 — for parse-error steps. Instructs the runner to construct a deliberately
+   *  malformed multipart body. "empty-action" sends _action with an empty-string value;
+   *  "non-json" sends _action with a syntactically-broken JSON string; "missing-action-field"
+   *  omits the _action form field entirely. When set, the step's `action` field is ignored. */
+  malformedBody?: "empty-action" | "non-json" | "missing-action-field";
+  /** Phase 07 — dotted paths into the captured response that the cross-backend diff should
+   *  IGNORE for this step. Used when backends legitimately differ on a field (e.g. parse-error
+   *  messages from System.Text.Json vs JSON.parse). Walked AFTER normalize, BEFORE diff.
+   *  Example: ["errors.0.message"] skips the message on entry 0 of the errors array.
+   *  Use SPARINGLY — its purpose is to accommodate library-flavored divergence (e.g. parse-error
+   *  messages), NOT to paper over real wire-shape drift. */
+  compareIgnoreFields?: string[];
 }
 
 interface Fixture {
@@ -72,11 +87,14 @@ interface Fixture {
 
 interface CapturedResponse {
   step: string;
+  status?: number;
+  ok?: boolean;
   vm: unknown;
   state: unknown;
   redirect?: string;
   sideEffects?: unknown;
   nextPollIn?: number;
+  errors?: unknown;
 }
 
 const manifestPath = resolve(__dirname, "backends.json");
@@ -201,9 +219,21 @@ async function runFixtureAgainst(cfg: BackendConfig, fixture: Fixture): Promise<
     } else {
       url = `${cfg.baseUrl}${step.actionEndpoint ?? fixture.actionEndpoint}`;
       const form = new FormData();
-      // Phase 6 wire shape (0.17.0 / WIRE-07): the _action JSON carries `{name}` only.
-      // Per-row / per-tab identity is in the action name; typed form values live in state.
-      form.append("_action", JSON.stringify({ name: step.action!.name }));
+      // Phase 7 — parse-error fixture support. When malformedBody is set, deliberately
+      // construct a broken _action payload to exercise the framework's parse-error envelope.
+      // Skip the normal `{name}` JSON construction entirely; the step's `action` field is
+      // permitted to be absent in this branch.
+      if (step.malformedBody === "empty-action") {
+        form.append("_action", "");
+      } else if (step.malformedBody === "non-json") {
+        form.append("_action", "not json{");
+      } else if (step.malformedBody === "missing-action-field") {
+        // Skip appending _action entirely.
+      } else {
+        // Phase 6 wire shape (0.17.0 / WIRE-07): the _action JSON carries `{name}` only.
+        // Per-row / per-tab identity is in the action name; typed form values live in state.
+        form.append("_action", JSON.stringify({ name: step.action!.name }));
+      }
       form.append("_state", JSON.stringify(lastState));
       if (step.attach) {
         for (const [fieldName, file] of Object.entries(step.attach)) {
@@ -214,15 +244,53 @@ async function runFixtureAgainst(cfg: BackendConfig, fixture: Fixture): Promise<
     }
 
     const res = await fetch(url, init);
-    if (!res.ok) {
-      throw new Error(`${cfg.name} step '${step.id}' failed: ${res.status} ${res.statusText}`);
+    if (step.expectStatus != null) {
+      if (res.status !== step.expectStatus) {
+        throw new Error(`${cfg.name} step '${step.id}' expected status ${step.expectStatus}, got ${res.status} ${res.statusText}`);
+      }
+    } else {
+      if (!res.ok) {
+        throw new Error(`${cfg.name} step '${step.id}' failed: ${res.status} ${res.statusText}`);
+      }
     }
-    const body = await res.json() as CapturedResponse & { vm: unknown; state: unknown };
-    captured.push({ step: step.id, ...body });
-    lastState = body.state;
+    let body: any;
+    try {
+      body = await res.json();
+    } catch (parseErr) {
+      throw new Error(`${cfg.name} step '${step.id}' body was not JSON: ${(parseErr as Error).message}`);
+    }
+    // D-20 sweep — assert ok:true on success-path steps. expectStatus-bearing steps
+    // assert ok:false (the whole point of those steps). Anything else is a fixture bug.
+    if (step.expectStatus == null && body.ok !== true) {
+      throw new Error(`${cfg.name} step '${step.id}' expected ok:true on success path, got ok:${body.ok}`);
+    }
+    if (step.expectStatus != null && body.ok !== false) {
+      throw new Error(`${cfg.name} step '${step.id}' expected ok:false on envelope path, got ok:${body.ok}`);
+    }
+    captured.push({ step: step.id, status: res.status, ...body });
+    lastState = body.state ?? lastState;  // envelope responses have no `state` — keep prior
   }
 
   return captured;
+}
+
+/** Phase 07 — walks a deep-clone of a captured response and deletes the value at the given
+ *  dotted path. Used to implement per-step compareIgnoreFields before normalize/diff so that
+ *  fields with legitimate cross-backend divergence (e.g. parse-error messages from
+ *  System.Text.Json vs JSON.parse) don't fail the parity check. No-ops on missing segments. */
+function clearPath(obj: unknown, path: string): void {
+  if (obj == null || path === "") return;
+  const segs = path.split(".");
+  let cur: any = obj;
+  for (let i = 0; i < segs.length - 1; i++) {
+    const seg = segs[i]!;
+    const next = Array.isArray(cur) ? cur[Number(seg)] : cur[seg];
+    if (next == null || typeof next !== "object") return;
+    cur = next;
+  }
+  const last = segs[segs.length - 1]!;
+  if (Array.isArray(cur)) delete cur[Number(last)];
+  else delete cur[last];
 }
 
 function loadFixture(name: string): Fixture {
@@ -287,20 +355,35 @@ async function main() {
       // Diff every backend against the first one.
       const [baseline, ...others] = eligible;
       const baselineResp = results.get(baseline.name)!;
+      let fixtureOk = true;
       for (const other of others) {
         const otherResp = results.get(other.name)!;
         for (let i = 0; i < baselineResp.length; i++) {
-          const a = normalize(baselineResp[i]);
-          const b = normalize(otherResp[i]);
+          // Phase 07 — apply compareIgnoreFields before normalize/diff. Walk a deep clone of
+          // each captured response and delete the named dotted paths for this step. This
+          // accommodates library-flavored divergence (e.g. parse-error messages from
+          // System.Text.Json vs JSON.parse) without touching shipped backend code (D-18).
+          const step = fixture.steps[i];
+          let baseClone: unknown = JSON.parse(JSON.stringify(baselineResp[i]));
+          let otherClone: unknown = JSON.parse(JSON.stringify(otherResp[i]));
+          if (step?.compareIgnoreFields) {
+            for (const field of step.compareIgnoreFields) {
+              clearPath(baseClone, field);
+              clearPath(otherClone, field);
+            }
+          }
+          const a = normalize(baseClone);
+          const b = normalize(otherClone);
           const d = diff(a, b);
           if (d) {
             console.error(`\n  PARITY FAILURE at step '${baselineResp[i].step}' (${baseline.name} vs ${other.name}):`);
             console.error(`    ${d}`);
             exitCode = 1;
+            fixtureOk = false;
           }
         }
       }
-      if (exitCode === 0) {
+      if (fixtureOk) {
         console.log(`  ✓ all backends agree`);
       }
     }
