@@ -538,6 +538,7 @@ function agentBuildTicketPage(ticket: Ticket, state: AgentState): ViewNode {
       {
         type: "section",
         heading: "Agent Notes",
+        collapsible: true,
         children: [
           {
             type: "form",
