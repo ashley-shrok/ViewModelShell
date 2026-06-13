@@ -6,6 +6,37 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 1.1.0 — TableRow.action restored + actions[] mixed-type fix (npm + NuGet)
+
+**npm:** `1.1.0` (MINOR — additive wire field; widened TS union) · **NuGet:** `1.1.0` (MINOR — additive wire field, lockstep)
+
+Two related `TableNode` bugs ship as one minor bump. Both were silent in the Phase-6 refactor that introduced unique-named per-row actions; the second one was actively masking the per-row selection checkbox in HelpDesk.
+
+### Fixed
+
+- **`TableRow.actions[]` silently dropped non-`ButtonNode` entries.** The TypeScript type was `ButtonNode[]` but consumers (including HelpDesk) were putting `CheckboxNode` entries in there for per-row selection; the renderer called `this.button()` blindly on every entry, so the checkbox rendered as an empty `<button>`. The TS type is now `(ButtonNode | CheckboxNode)[]` (closed union); the .NET side stays `IReadOnlyList<ViewNode>` so System.Text.Json keeps emitting the polymorphic `type` discriminator. The renderer now dispatches by `entry.type` — `"button"` → `this.button()`, `"checkbox"` → `this.checkbox()` — and per-row checkboxes render as real `<input type="checkbox">` elements again.
+
+### Restored / Improved
+
+- **`TableRow.action` — click-anywhere row dispatch primitive.** This was removed during the Phase-6 wire-shape refactor (commit 61193ff, cleaned up in 2410fe3). 1.1.0 brings it back, now with full keyboard activation (`Enter` dispatches; `Space` `preventDefault`s page scroll then dispatches; `Tab` does NOT dispatch) and ARIA exposure (`role="button"`, `tabindex=0`, `aria-label` derived from non-empty cell text joined by ` · `, falling back to `Row {id}` if cells are empty). Clicking a per-row button/checkbox or a cell `linkLabel` anchor stops propagation, so the row action never double-fires. A `.vms-table__row--clickable:focus-visible` outline using `var(--vms-accent)` passes the WCAG-AA contrast guard on the shipped default plus all 12 themes. No `context` field — per-row identity is encoded in the action name, consistent with the Phase-6 wire.
+
+### Demo migration
+
+- **HelpDesk agent queue** (both `demo/HelpDesk/AspNetCore` and `demo/HelpDesk-bun`) migrated to the canonical pattern: `row.action = select-ticket-{id}` for the click-anywhere navigation, `row.actions[] = [CheckboxNode]` for the per-row bulk-selection checkbox. The per-row "Open" `ButtonNode` is gone — the row IS the affordance now, and the renderer adds the keyboard + ARIA automatically. HelpDesk is the canonical reference for using both together.
+
+### Tests
+
+- New `viewmodel-shell/test/table-row-action.test.ts` (10 jsdom tests) covers click/keyboard/ARIA for `row.action`, `stopPropagation` containment on per-row controls and cell anchors, the `CheckboxNode`-actually-renders fix, and the row-without-`action` backward-compat case.
+- `demo/HelpDesk/AspNetCore.Tests/AgentControllerTests.cs` updated: asserts CheckboxNode still present in `row.Actions`, asserts `ButtonNode` is gone, asserts `row.Action.Name == select-ticket-{id}`.
+- Cross-backend parity (`bun run parity/run.ts`) green — the wire action sequence is unchanged, so the fixture script needed no edits.
+- vitest: 240 → 250 + 1 skipped (10 new, no regressions). .NET HelpDesk AgentController tests: 25/25 (was 25/25 with the prior test renamed). CI guards (`check:core-globals`, `check:aa-contrast`) both green.
+
+### Consumers
+
+Additive — nothing to do. Apps working around the broken `actions[]` rendering by avoiding non-`ButtonNode` entries can now drop the workaround. See `MIGRATION.md` § 1.1.0.
+
+---
+
 ## 1.0.1 — CSS cascade fix for section layout=cards/split (#17) (npm only)
 
 **npm:** `1.0.1` (PATCH — client-side CSS bugfix; no wire change) · **NuGet:** unchanged at `1.0.0` (no .NET-side change)

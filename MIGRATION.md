@@ -6,6 +6,34 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to '1.1.0' (npm @ashley-shrok/viewmodel-shell + NuGet AshleyShrok.ViewModelShell)
+
+1.1.0 is additive. Two related `TableNode` bug fixes ship as one minor bump; no consumer code changes are required to upgrade. The optional cleanup below is for apps that worked around either bug.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `1.0.0` / `1.0.1` | **`1.1.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `1.0.0` | **`1.1.0`** |
+
+### What changed (one paragraph)
+
+`TableRow.action` is back — set it to an `ActionEvent` (TS) or `ActionDescriptor` (.NET) and the entire row becomes click-anywhere with full keyboard (Enter / Space — Space preventDefaults page scroll) and ARIA (`role="button"`, `tabindex=0`, `aria-label` from cell text). Per-row buttons, checkboxes, and cell `linkLabel` anchors `stopPropagation` so they don't also fire the row action. Separately, `TableRow.actions[]` is now `(ButtonNode | CheckboxNode)[]` on TS (was `ButtonNode[]`); the renderer dispatches by `entry.type`, so a `CheckboxNode` entry actually renders as `<input type="checkbox">` instead of silently rendering as an empty button. The .NET side stays `IReadOnlyList<ViewNode>` for polymorphic-discriminator emission. See `demo/HelpDesk/AspNetCore` and `demo/HelpDesk-bun` for the canonical pattern (row.action for navigation, row.actions[] for the selection checkbox).
+
+### Optional cleanup (apps that worked around the broken renderer)
+
+If you avoided putting non-`ButtonNode` entries in `row.actions[]` because they rendered as empty buttons — you can stop. Drop the workaround:
+
+- Per-row selection checkboxes that were rendered in a `cells[…]` column to dodge the broken renderer can move back into `row.actions[]` as `CheckboxNode` entries; they will render correctly now.
+- Per-row "Open"/navigation buttons whose only job was to dispatch a `select-row-{id}` action can be replaced by setting `row.action = { name: "select-row-{id}" }` (TS) or `Action: new ActionDescriptor("select-row-{id}")` (.NET). You get the click-anywhere UX plus keyboard + ARIA for free.
+
+### Not breaking
+
+- All existing `row.actions[]` arrays of pure `ButtonNode` entries keep working byte-identically.
+- Rows without `row.action` get no `--clickable` class, no `tabindex`, no `role`, no `aria-label` — backward-compatible.
+- Wire is additive: a 1.0.x backend not setting `Action` produces JSON with no `action` field (the `[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]` rule applies); a 1.1.0 client renders it as a non-clickable row.
+
+---
+
 ## Upgrading to '1.0.0' (npm @ashley-shrok/viewmodel-shell + NuGet AshleyShrok.ViewModelShell)
 
 1.0.0 is the milestone where the wire becomes truly self-describing: an agent reading only `{vm, state}` from a GET response and walking the tree can drive any VMS app end-to-end identically to the browser renderer. Two breaking changes ship together: the `context` payload is GONE from the wire, and every response now carries a framework-set `ok` flag with a uniform `{ok: false, errors: [...]}` envelope for failures.
