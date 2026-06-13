@@ -358,17 +358,12 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
     const rowActions: ViewNode[] = [
       // Per-row selection checkbox bound to `selectedIds.${id}` (renderer
       // writes true/false directly to that slot on click; no dispatch needed).
+      // Clicking the checkbox stops propagation so it doesn't also fire the
+      // click-anywhere row.action below.
       {
         type: "checkbox",
         name: `select-${t.id}`,
         bind: `selectedIds.${t.id}`,
-      },
-      // Per-row "Open" button — unique action name per row.
-      {
-        type: "button",
-        label: "Open",
-        action: { name: `select-ticket-${t.id}` },
-        variant: "secondary",
       },
     ];
     const row: {
@@ -376,6 +371,7 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
       id?: string;
       actions?: ViewNode[];
       variant?: string;
+      action?: { name: string };
     } = {
       cells: {
         title:    t.title,
@@ -386,6 +382,9 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
       },
       id: String(t.id),
       actions: rowActions,
+      // Click-anywhere row navigation — same target as the old "Open" button,
+      // just on the whole row (keyboard + ARIA emitted by the renderer).
+      action: { name: `select-ticket-${t.id}` },
     };
     if (variant !== undefined) row.variant = variant;
     return row;

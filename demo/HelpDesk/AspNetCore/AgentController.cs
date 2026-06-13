@@ -177,11 +177,10 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                 var rowActions = new List<ViewNode>
                 {
                     // Per-row selection checkbox — bind writes true/false
-                    // directly to selectedIds.{id} (no action needed).
+                    // directly to selectedIds.{id} (no action needed). Clicking
+                    // the checkbox stops propagation so it doesn't also fire
+                    // the click-anywhere row.Action below.
                     new CheckboxNode($"select-{t.Id}", $"selectedIds.{t.Id}", null, null),
-                    new ButtonNode("Open",
-                        new ActionDescriptor($"select-ticket-{t.Id}"),
-                        "secondary"),
                 };
                 return new TableRow(
                     Cells: new Dictionary<string, string>
@@ -194,7 +193,11 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                     },
                     Id:      t.Id.ToString(),
                     Actions: rowActions,
-                    Variant: TicketVariant(t));
+                    Variant: TicketVariant(t),
+                    // Click-anywhere row navigation — same target as the old
+                    // "Open" button, just on the whole row (keyboard + ARIA
+                    // automatic via the renderer; see TableRow.Action XML doc).
+                    Action:  new ActionDescriptor($"select-ticket-{t.Id}"));
             }).ToList();
 
             children.Add(new TableNode(
