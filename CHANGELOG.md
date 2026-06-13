@@ -6,6 +6,37 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 1.2.0 — SectionNode.collapsible (npm + NuGet)
+
+**npm:** `1.2.0` (MINOR — additive wire field; new TS optional fields) · **NuGet:** `1.2.0` (MINOR — additive wire field, lockstep)
+
+A new client-side aesthetic disclosure primitive on `SectionNode`. Apps can mark secondary content (e.g. HelpDesk "Agent Notes" beneath the ticket header) collapsible without inventing per-app JS, custom CSS, or a server-driven open/close protocol.
+
+### Added
+
+- **`SectionNode.collapsible: true`.** Renders the section as a native `<details>`/`<summary>` widget — closed on first render — with the heading promoted to the `<summary>` label. Open/closed state is DOM-local and the server does NOT round-trip it (intentional — same conceptual model as draft text values in unsubmitted form inputs). The renderer snapshots `<details>.open` before each re-render and restores it after, the same pattern already used for focus and scroll preservation. Keying: `id ?? heading ?? "vms-section-anon"`, disambiguated by per-render ordinal. Headingless collapsible sections use the documented fallback summary label `"Show details"`. Omitted/false renders byte-identical to 1.1.0 — existing call sites unchanged.
+- **`SectionNode.id?: string`.** Optional stable preservation key for the renderer's open-state snapshot when `collapsible: true`. Use it when `heading` isn't unique within a page or is absent; otherwise the renderer falls back to the heading + per-render ordinal.
+
+### Demo migration
+
+- HelpDesk Agent ticket detail page (both `demo/HelpDesk/AspNetCore` and `demo/HelpDesk-bun`) now marks "Agent Notes" as collapsible. Ticket Info and Actions remain non-collapsible. Cross-backend parity confirms both backends emit the same wire shape on the `select-ticket-*` step.
+
+### A11y
+
+- Native `<details>` gives keyboard activation (Enter/Space), focus, and SR announcement for free — no app ARIA needed.
+- `.vms-section__summary:focus-visible` uses `var(--vms-accent)` (the 1.1.0 row-click ring idiom), AA-contrast across the shipped default plus all 12 themes.
+
+### Tests
+
+- New `viewmodel-shell/test/section-collapsible.test.ts` (13 jsdom cases) covers render shape, default-closed, summary-is-heading, no double-heading, byte-identical fallthrough when omitted/false, and the full preservation matrix (open survives same-key re-render, identity change drops, removal + re-add drops, id-keying for duplicate headings, ordinal-keying for anonymous, keyboard summary-click toggle).
+- New `demo/HelpDesk/AspNetCore.Tests/AgentControllerTests.TicketPage_AgentNotesSection_IsCollapsible` guards both halves of the demo contract (Agent Notes IS collapsible; Ticket Info / Actions are NOT). AgentControllerTests goes from 25 to 26.
+
+### Consumers
+
+Additive — nothing to do. If you want to opt a section into collapsibility, set `collapsible: true`. The escape hatch for the rare server-driven-expansion case (e.g. auto-expand the section containing a validation error) is documented in `MIGRATION.md` § 1.2.0: re-key the section by changing its heading or id, or wrap it in a new node — the renderer drops the preserved state and the section re-renders in its (closed) default. No `forceExpand` / `defaultOpen` wire field by design.
+
+---
+
 ## 1.1.0 — TableRow.action restored + actions[] mixed-type fix (npm + NuGet)
 
 **npm:** `1.1.0` (MINOR — additive wire field; widened TS union) · **NuGet:** `1.1.0` (MINOR — additive wire field, lockstep)
