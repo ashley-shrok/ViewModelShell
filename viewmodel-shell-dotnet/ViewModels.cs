@@ -244,7 +244,18 @@ public record SectionNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Heading,
     IReadOnlyList<ViewNode> Children,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null,
+    // 1.2.0 — client-side disclosure widget. true = renderer emits
+    // <details>/<summary> (closed by default; open state DOM-local and
+    // preserved across re-renders by the browser adapter). Omitted/false =
+    // today's <section> rendering, byte-identical. Server does NOT
+    // round-trip the open state — same posture as draft form text.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Collapsible = null,
+    // 1.2.0 — optional stable preservation key for the renderer's open-state
+    // snapshot when Collapsible:true. Provide when Heading isn't unique
+    // within a page or is absent; otherwise the renderer falls back to
+    // Heading ?? "vms-section-anon" disambiguated by per-render ordinal.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id = null
 ) : ViewNode;
 
 public record ListNode(

@@ -130,6 +130,10 @@ export interface SectionNode {
   variant?: "card";
   /** Layout preset arranging direct children. Omitted or "stack" = current vertical flow (no modifier class). "split" (equal 2-up), "cards" (uniform grid), "sidebar" (thin + wide app shell) emit .vms-section--{value}. Closed union (D-01/D-02; sidebar D-28). */
   layout?: "stack" | "split" | "cards" | "sidebar";
+  /** Optional stable preservation key for the renderer's collapsible-section open-state snapshot. Used only when `collapsible: true`. Provide when `heading` isn't unique within a page or is absent — otherwise the renderer falls back to `heading ?? "vms-section-anon"`, disambiguated by per-render ordinal. Omitted = use the heading fallback. */
+  id?: string;
+  /** When true, the section renders as a native `<details>`/`<summary>` disclosure widget (closed by default). Aesthetic, client-side primitive — the open/closed state is DOM-local and the server does NOT round-trip it (same conceptual model as draft text values in unsubmitted form inputs). The browser adapter snapshots `<details>.open` before each re-render and restores it after, keyed by `id ?? heading ?? "vms-section-anon"` (disambiguated by per-render ordinal); a re-key drops the preserved state (the documented escape hatch for rare server-driven expansion). The summary label is the section's `heading`; a headingless collapsible section uses the fallback string `"Show details"`. If a section needs to start open, do not mark it collapsible. Omitted/false = today's `<section>` rendering, byte-identical. */
+  collapsible?: boolean;
   children: ViewNode[];
 }
 
