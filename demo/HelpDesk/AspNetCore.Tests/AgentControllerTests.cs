@@ -143,7 +143,7 @@ public class AgentControllerTests : IDisposable
     }
 
     [Fact]
-    public void QueueRow_HasBoundSelectionCheckboxAndUniqueOpenAction()
+    public void QueueRow_HasBoundSelectionCheckboxAndClickAnywhereRowAction()
     {
         var id = SeedTicket();
         var table = QueueTable(Page(CreateAgent().Get().Vm));
@@ -151,14 +151,17 @@ public class AgentControllerTests : IDisposable
         Assert.Equal(id.ToString(), row.Id);
         Assert.NotNull(row.Actions);
 
-        // Selection checkbox bound to selectedIds.{id}.
+        // Selection checkbox bound to selectedIds.{id} is still present.
         var checkbox = row.Actions!.OfType<CheckboxNode>().Single();
         Assert.Equal($"selectedIds.{id}", checkbox.Bind);
 
-        // Per-row "Open" button with unique action name.
-        var openBtn = row.Actions!.OfType<ButtonNode>().Single();
-        Assert.Equal("Open", openBtn.Label);
-        Assert.Equal($"select-ticket-{id}", openBtn.Action.Name);
+        // The per-row "Open" ButtonNode is GONE — replaced by row.Action so
+        // the entire row is click-anywhere navigation (260613-qmh / 1.1.0).
+        Assert.Empty(row.Actions!.OfType<ButtonNode>());
+
+        // Row-level click-anywhere action carries the navigation intent.
+        Assert.NotNull(row.Action);
+        Assert.Equal($"select-ticket-{id}", row.Action!.Name);
     }
 
     [Fact]
