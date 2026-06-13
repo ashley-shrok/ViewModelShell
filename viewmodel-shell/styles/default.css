@@ -217,6 +217,26 @@ body {
   padding: var(--vms-space-md);
 }
 
+/* ── Section: collapsible (1.2.0 — client-side disclosure via native <details>) ──
+   Open/closed state is DOM-local; the BrowserAdapter snapshots and restores it
+   across server-driven re-renders the same way it does for focus and scroll.
+   :focus-visible matches the 1.1.0 row-click idiom (.vms-table__row--clickable). */
+.vms-section--collapsible {
+  /* native <details> block layout is correct as-is; .vms-section flex inheritance still applies. */
+}
+.vms-section__summary {
+  font-size: var(--vms-text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vms-text-muted);
+  cursor: pointer;
+  list-style: revert; /* keep the native disclosure triangle visible — universal "expand" affordance */
+}
+.vms-section__summary:focus-visible {
+  outline: 2px solid var(--vms-accent);
+  outline-offset: 2px;
+}
+
 /* ── Stat bar ── */
 .vms-stat-bar { display: flex; gap: var(--vms-space-lg); flex-wrap: wrap; }
 .vms-stat-bar__item { display: flex; align-items: baseline; gap: var(--vms-space-xs); }
