@@ -6,6 +6,31 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to '1.2.0' (npm @ashley-shrok/viewmodel-shell + NuGet AshleyShrok.ViewModelShell)
+
+1.2.0 is purely additive. A new client-side aesthetic disclosure primitive lands on `SectionNode`; no consumer code changes are required to upgrade.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `1.1.0` | **`1.2.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `1.1.0` | **`1.2.0`** |
+
+### What changed (one paragraph)
+
+`SectionNode` gains two optional wire fields: `collapsible?: boolean` and `id?: string`. With `collapsible: true`, the browser adapter renders the section as a native `<details>`/`<summary>` widget (closed on first render); the heading becomes the summary label. The open/closed state is DOM-local — the server does NOT round-trip it (intentional, mirrors the framework's existing draft-text preservation precedent). The adapter snapshots `<details>.open` before each re-render and restores it after, keyed by `id ?? heading ?? "vms-section-anon"` (disambiguated by per-render ordinal when keys collide). With `collapsible` omitted/false, the section renders byte-identical to 1.1.0. The .NET side gains the lockstep `Collapsible: bool?` + `Id: string?` parameters at the END of the `SectionNode` positional list (both with `JsonIgnore` null-omission) so existing positional call sites compile unchanged.
+
+### Not breaking
+
+- All existing `SectionNode` call sites — TypeScript or .NET, positional or named — keep working byte-identically. `collapsible` and `id` default to omitted, the wire stays additive, and the renderer's `collapsible !== true` branch is the pre-1.2.0 `<section>` code path verbatim.
+- The TUI adapter is unaffected: it destructures only the `SectionNode` fields it uses, so new optional fields are naturally ignored.
+- Cross-backend parity is green: the new wire field flows identically through both the .NET and bun helpdesk backends in the canonical fixture.
+
+### Escape hatch — server-driven expansion
+
+For the rare case an app legitimately needs server-driven open state (e.g. auto-expand the section containing a server-rendered validation error after a re-render): **re-key the section.** Change the heading, change the `id`, or wrap the section in an additional node — any of those changes the snapshot key the renderer derives, the preserved open state is dropped, and the section re-renders in its (closed) default. This is the documented rare-case escape hatch; the framework deliberately ships **no `forceExpand` / `defaultOpen` wire field**. If a section needs to start open every time, don't mark it collapsible.
+
+---
+
 ## Upgrading to '1.1.0' (npm @ashley-shrok/viewmodel-shell + NuGet AshleyShrok.ViewModelShell)
 
 1.1.0 is additive. Two related `TableNode` bug fixes ship as one minor bump; no consumer code changes are required to upgrade. The optional cleanup below is for apps that worked around either bug.

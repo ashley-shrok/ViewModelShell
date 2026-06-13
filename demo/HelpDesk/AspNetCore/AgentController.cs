@@ -285,7 +285,7 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                     SubmitLabel:  "Save Notes",
                     Children:     NotesFormChildren(state.NotesSaved)
                 )
-            ]),
+            ], Collapsible: true),
             new SectionNode("Actions", actionChildren),
         ]);
     }

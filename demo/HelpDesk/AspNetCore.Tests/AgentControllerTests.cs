@@ -190,6 +190,19 @@ public class AgentControllerTests : IDisposable
         Assert.Contains(page.Children.OfType<SectionNode>(), s => s.Heading == "Actions");
     }
 
+    // 1.2.0 — guard the Agent Notes collapsibility wiring on both halves:
+    // Agent Notes IS collapsible; Ticket Info + Actions are NOT.
+    [Fact]
+    public void TicketPage_AgentNotesSection_IsCollapsible()
+    {
+        var id = SeedTicket("Broken keyboard");
+        var resp = Ok(Act(CreateAgent(), AgentState.Initial(), $"select-ticket-{id}"));
+        var sections = Page(resp.Vm).Children.OfType<SectionNode>().ToList();
+        Assert.True(sections.First(s => s.Heading == "Agent Notes").Collapsible == true);
+        Assert.True(sections.First(s => s.Heading == "Ticket Info").Collapsible != true);
+        Assert.True(sections.First(s => s.Heading == "Actions").Collapsible    != true);
+    }
+
     [Fact]
     public void TicketPage_OpenTicket_HasMarkInProgressButton()
     {

@@ -49,6 +49,17 @@ const noopStateAccess: StateAccess = {
 export class BrowserAdapter implements Adapter {
   private fileRegistry = new Map<string, File>();
   private sa: StateAccess = noopStateAccess;
+  // 1.2.0 — open-state snapshot for SectionNode.collapsible. Captured by
+  // render() BEFORE this.container.innerHTML = "" by walking
+  // [data-section-key] details elements; consumed by render() AFTER node()
+  // rebuilds the tree to restore user-opened sections. Cleared at the bottom
+  // of every render(). Same conceptual seam as focusId / scrollMap above.
+  private detailsOpenSnapshot: Map<string, boolean> = new Map();
+  // 1.2.0 — per-render disambiguator for collapsible-section preservation
+  // keys. Reset at the top of every render(); incremented in section() when
+  // collapsible:true so that multiple sections sharing the same base key
+  // (anonymous, or duplicate heading) get distinct final keys.
+  private sectionKeyCounter: Map<string, number> = new Map();
 
   constructor(private container: HTMLElement) {}
 
@@ -77,6 +88,19 @@ export class BrowserAdapter implements Adapter {
         scrollMap.set(el.id, { top: el.scrollTop, left: el.scrollLeft });
     });
 
+    // 1.2.0 — snapshot collapsible-section open state by stable key. Same
+    // pattern as focusId/scrollMap above: capture before innerHTML wipe, walk
+    // the rebuilt tree after node() returns, restore matching keys. Reset
+    // the per-render section-key counter to 0 so snapshot keys and restore
+    // keys compute identically across the two walks.
+    const openMap = new Map<string, boolean>();
+    this.container.querySelectorAll<HTMLDetailsElement>("[data-section-key]").forEach(el => {
+      const key = el.dataset.sectionKey;
+      if (key != null) openMap.set(key, el.open);
+    });
+    this.detailsOpenSnapshot = openMap;
+    this.sectionKeyCounter = new Map();
+
     this.container.innerHTML = "";
     this.node(vm, this.container, onAction);
 
@@ -98,6 +122,21 @@ export class BrowserAdapter implements Adapter {
     });
 
     window.scrollTo(winScrollX, winScrollY);
+
+    // 1.2.0 — restore collapsible-section open state after node() rebuild +
+    // after focus/scroll restore. Keys absent from the new tree are
+    // naturally dropped (querySelectorAll just doesn't find them); new
+    // sections that didn't exist pre-render are naturally fresh-closed (no
+    // map entry). Only true entries need restore action — false entries
+    // match the native default and are no-ops.
+    this.container.querySelectorAll<HTMLDetailsElement>("[data-section-key]").forEach(el => {
+      const key = el.dataset.sectionKey;
+      if (key != null && this.detailsOpenSnapshot.get(key) === true) {
+        el.open = true;
+      }
+    });
+    this.detailsOpenSnapshot.clear();
+    this.sectionKeyCounter.clear();
   }
 
   navigate(url: string): void {
@@ -237,6 +276,37 @@ export class BrowserAdapter implements Adapter {
   }
 
   private section(n: SectionNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    // 1.2.0 — collapsible:true branch emits native <details>/<summary>; the
+    // open/closed state is DOM-local and preserved across re-renders by the
+    // render() snapshot/restore loop. Omitted/false renders byte-identical
+    // to the pre-1.2.0 <section> tree (no className drift, no data-* attr).
+    if (n.collapsible === true) {
+      const baseKey = n.id ?? n.heading ?? "vms-section-anon";
+      const ordinal = this.sectionKeyCounter.get(baseKey) ?? 0;
+      this.sectionKeyCounter.set(baseKey, ordinal + 1);
+      const finalKey = `${baseKey}:${ordinal}`;
+
+      const el = document.createElement("details");
+      el.className = `vms-section vms-section--collapsible${
+        n.variant === "card" ? " vms-section--card" : ""}${
+        n.layout && n.layout !== "stack" ? ` vms-section--${n.layout}` : ""}`;
+      el.dataset.sectionKey = finalKey;
+      // Initial render is always closed — the post-render restore loop in
+      // render() re-applies `open=true` for keys the user had open before.
+
+      const summary = document.createElement("summary");
+      summary.className = "vms-section__summary";
+      // Headingless fallback label — documented in TSDoc on
+      // SectionNode.collapsible and in AGENTS.md "Non-obvious framework
+      // behaviors". Choice locked.
+      summary.textContent = n.heading ?? "Show details";
+      el.appendChild(summary);
+
+      this.kids(n.children, el, on);
+      parent.appendChild(el);
+      return;
+    }
+
     const el = document.createElement("section");
     el.className = `vms-section${n.variant === "card" ? " vms-section--card" : ""}${
       n.layout && n.layout !== "stack" ? ` vms-section--${n.layout}` : ""}`;
