@@ -295,10 +295,22 @@ export interface TableColumn {
 export interface TableRow {
   id?: string;
   cells: Record<string, string>;
-  /** Per-row action buttons. Each is a full ButtonNode with its own unique
-   *  action name (e.g. `delete-row-42`, `close-ticket-42`) — per-row identity
-   *  is encoded in the name, not as a separate context payload. */
-  actions?: ButtonNode[];
+  /** Click-anywhere row dispatch primitive. When set, the renderer makes the
+   *  entire row clickable AND keyboard-activatable (Enter / Space — Space
+   *  preventDefaults page scroll) AND exposes accessibility (role="button",
+   *  tabindex=0, aria-label derived from cell text). Per-row identity is
+   *  encoded in the action name (e.g. `select-ticket-42`) — no context field,
+   *  consistent with the Phase 6 wire. Coexists with `actions[]`: clicking a
+   *  per-row button, checkbox, or cell linkLabel anchor does NOT also fire
+   *  `row.action` (the renderer stops propagation on those targets). */
+  action?: ActionEvent;
+  /** Per-row interactive controls rendered in a trailing actions cell. Each
+   *  entry is either a ButtonNode (its own unique action name encodes per-row
+   *  identity, e.g. `delete-row-42`) or a CheckboxNode (its own `bind` path
+   *  per row). The renderer dispatches by `entry.type` so both types render
+   *  correctly — a previous version typed this as `ButtonNode[]` and called
+   *  the button renderer blindly, silently dropping non-button entries. */
+  actions?: (ButtonNode | CheckboxNode)[];
   variant?: string;
 }
 

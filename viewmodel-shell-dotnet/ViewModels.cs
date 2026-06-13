@@ -352,13 +352,25 @@ public record TableColumn(
 public record TableRow(
     Dictionary<string, string> Cells,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id = null,
-    // Per-row action buttons. Each is a ButtonNode with its own unique action
-    // name (e.g. delete-row-42) — per-row identity is encoded in the action
-    // name, not as a separate context payload. Typed as IReadOnlyList<ViewNode>
-    // (not ButtonNode) so System.Text.Json emits the polymorphic "type":"button"
-    // discriminator on the wire — the same maintainer rule from FormNode.Buttons.
+    // Per-row interactive controls rendered in a trailing actions cell. Each
+    // entry is either a ButtonNode (with its own unique action name, e.g.
+    // delete-row-42) or a CheckboxNode (with its own per-row bind path).
+    // Typed as IReadOnlyList<ViewNode> (not the closed TS union) so
+    // System.Text.Json emits the polymorphic "type":"button"|"checkbox"
+    // discriminator on the wire — the same maintainer rule as FormNode.Buttons.
+    // The renderer dispatches by entry.type, so both types render correctly.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Actions = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant = null,
+    // Click-anywhere row dispatch primitive. When set, the renderer makes the
+    // entire row clickable AND keyboard-activatable (Enter / Space — Space
+    // preventDefaults page scroll) AND exposes accessibility (role="button",
+    // tabindex=0, aria-label derived from cell text). Per-row identity is
+    // encoded in the action name (e.g. select-ticket-42). Coexists with
+    // Actions: clicking a per-row button, checkbox, or cell linkLabel anchor
+    // does NOT also fire Action (the renderer stops propagation on those
+    // targets). Nullable wire field — carries the JsonIgnore-when-null
+    // maintainer rule from the file header.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null
 );
 
 // Server-driven pagination metadata for TableNode. The server slices Rows to the

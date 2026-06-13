@@ -784,10 +784,15 @@ export class BrowserAdapter implements Adapter {
         tr.appendChild(td);
       });
       // Per-row buttons render as plain ButtonNodes in a trailing actions cell.
+      // Task 2 (260613-qmh) widens this to dispatch by entry.type so CheckboxNode
+      // entries render via this.checkbox(); this Task-1 narrowing is a temporary
+      // type-bridge that keeps tsc green between commits without changing behavior.
       if (row.actions && row.actions.length > 0) {
         const td = document.createElement("td");
         td.className = "vms-table__td vms-table__td--actions";
-        for (const btn of row.actions) this.button(btn, td, on);
+        for (const entry of row.actions) {
+          if (entry.type === "button") this.button(entry, td, on);
+        }
         tr.appendChild(td);
       }
       tbody.appendChild(tr);
