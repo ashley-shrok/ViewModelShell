@@ -671,8 +671,14 @@ export class BrowserAdapter implements Adapter {
    *  sortActions[col.key]; filter inputs are bound to filterBinds[col.key],
    *  every keystroke writes, Enter dispatches filterAction; pagination
    *  prev/next write the target page to paginationBind then dispatch
-   *  prevAction/nextAction. Per-row buttons are plain ButtonNodes. Selection
-   *  is no longer a framework concept. */
+   *  prevAction/nextAction. Per-row controls (row.actions[]) are a mix of
+   *  ButtonNode and CheckboxNode dispatched by entry.type. When row.action
+   *  is set, the entire <tr> becomes clickable + keyboard-activatable
+   *  (Enter / Space — Space preventDefaults page scroll) and exposes
+   *  role="button", tabindex=0, and an aria-label derived from cell text;
+   *  clicks on per-row controls or cell linkLabel anchors stopPropagation
+   *  so they don't also fire row.action. Selection is no longer a framework
+   *  concept. */
   private table(n: TableNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const wrapper = document.createElement("div");
     wrapper.className = "vms-table-wrapper";
@@ -762,8 +768,32 @@ export class BrowserAdapter implements Adapter {
       const tr = document.createElement("tr");
       let rowClass = "vms-table__row";
       if (row.variant) rowClass += ` vms-table__row--${row.variant}`;
+      if (row.action) rowClass += " vms-table__row--clickable";
       tr.className = rowClass;
       if (row.id) tr.dataset.id = row.id;
+      // row.action — click-anywhere + keyboard + ARIA. Per-row controls and
+      // cell linkLabel anchors stopPropagation below so they don't double-fire.
+      if (row.action) {
+        const rowActionName = row.action.name;
+        tr.tabIndex = 0;
+        tr.setAttribute("role", "button");
+        const labelParts = Object.values(row.cells)
+          .filter(v => v && v.trim())
+          .map(v => v.trim());
+        const ariaLabel = labelParts.length > 0
+          ? labelParts.join(" · ")
+          : (row.id ? `Row ${row.id}` : "");
+        if (ariaLabel) tr.setAttribute("aria-label", ariaLabel);
+        tr.addEventListener("click", () => { on({ name: rowActionName }); });
+        tr.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            on({ name: rowActionName });
+          } else if (e.key === " " || e.key === "Spacebar") {
+            e.preventDefault(); // suppress page scroll
+            on({ name: rowActionName });
+          }
+        });
+      }
       n.columns.forEach(col => {
         const td = document.createElement("td");
         td.className = "vms-table__td";
@@ -777,21 +807,30 @@ export class BrowserAdapter implements Adapter {
             a.target = "_blank";
             a.rel = "noopener noreferrer";
           }
+          if (row.action) {
+            a.addEventListener("click", (e) => { e.stopPropagation(); });
+          }
           td.appendChild(a);
         } else {
           td.textContent = cellValue;
         }
         tr.appendChild(td);
       });
-      // Per-row buttons render as plain ButtonNodes in a trailing actions cell.
-      // Task 2 (260613-qmh) widens this to dispatch by entry.type so CheckboxNode
-      // entries render via this.checkbox(); this Task-1 narrowing is a temporary
-      // type-bridge that keeps tsc green between commits without changing behavior.
+      // Per-row interactive controls — dispatch by entry.type so a CheckboxNode
+      // renders as a real <input type="checkbox"> rather than silently as an
+      // empty button. When row.action is set, swallow clicks on the actions td
+      // so toggling a per-row control doesn't ALSO fire the row action.
       if (row.actions && row.actions.length > 0) {
         const td = document.createElement("td");
         td.className = "vms-table__td vms-table__td--actions";
         for (const entry of row.actions) {
           if (entry.type === "button") this.button(entry, td, on);
+          else if (entry.type === "checkbox") this.checkbox(entry, td, on);
+          // forward-compatible: unknown entry types no-op (the closed TS union
+          // narrows; the runtime guard is for late-arriving wire shapes).
+        }
+        if (row.action) {
+          td.addEventListener("click", (e) => { e.stopPropagation(); });
         }
         tr.appendChild(td);
       }

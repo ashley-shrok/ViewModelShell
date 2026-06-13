@@ -605,6 +605,10 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-table__row:not(:last-child) .vms-table__td { border-bottom: 1px solid var(--vms-border); }
 .vms-table__row--clickable { cursor: pointer; }
 .vms-table__row--clickable:hover { background: var(--vms-surface); }
+.vms-table__row--clickable:focus-visible {
+  outline: 2px solid var(--vms-accent);
+  outline-offset: -2px;
+}
 /* Row status variants — tints derive from theme vars (color-mix), so a
    custom :root theme recolors them automatically; no app CSS, no literals. */
 .vms-table__row--done     { opacity: 0.6; }
