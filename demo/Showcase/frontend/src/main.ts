@@ -438,6 +438,24 @@ function dashboardView(): ViewNode[] {
         ],
       },
     ]},
+    // 1.5.0 — SectionNode.link demo: clickable cards that navigate via <a href>,
+    // preserving every native browser link behavior (middle-click new tab,
+    // Ctrl/Cmd-click, right-click context menu, drag-to-bookmarks, status-bar
+    // URL preview). Issue #21.
+    { type: "section", heading: "Resources", layout: "cards", children: [
+      { type: "section", variant: "card", link: { url: "https://github.com/ashley-shrok/ViewModelShell#readme", external: true }, children: [
+        { type: "text", value: "Read the docs", style: "subheading" },
+        { type: "text", value: "Architecture, gotchas, and runnable demos.", style: "muted" },
+      ]},
+      { type: "section", variant: "card", link: { url: "https://github.com/ashley-shrok/ViewModelShell", external: true }, children: [
+        { type: "text", value: "View on GitHub", style: "subheading" },
+        { type: "text", value: "Source for both the npm + NuGet packages.", style: "muted" },
+      ]},
+      { type: "section", variant: "card", link: { url: "https://github.com/ashley-shrok/ViewModelShell/issues", external: true }, children: [
+        { type: "text", value: "Report an issue", style: "subheading" },
+        { type: "text", value: "File a bug or request a primitive.", style: "muted" },
+      ]},
+    ]},
     { type: "section", children: [
       { type: "button", label: "New report", action: { name: "dashboard:new-report" }, variant: "primary" },
     ]},
