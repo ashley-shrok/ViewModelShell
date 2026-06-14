@@ -23,6 +23,7 @@ import {
   BadRequestError,
   UnknownActionError,
   createAction,
+  createAgentSkillHandler,
   validateActionNames,
   type ViewNode,
 } from "@ashley-shrok/viewmodel-shell/server";
@@ -867,6 +868,14 @@ const requesterHandler = createAction<RequesterState>(async (payload) => {
 
 const port = Number(process.env.PORT ?? "3005");
 
+// Canonical agent skill (1.6.0): serves a markdown operating manual for the VMS wire
+// protocol at /.well-known/vms-skill.md with a HelpDesk-specific preamble prepended.
+// Preamble text is byte-equal to the .NET twin's mount in demo/HelpDesk/AspNetCore/Program.cs
+// so the parity gate (parity/check-skill.ts) diffs identical bodies across both backends.
+const skillHandler = createAgentSkillHandler({
+  appPreamble: "This is a help-desk ticketing app. Two roles share one SQLite DB: requesters create tickets at `/api/requester`; agents act on them at `/api/agent`. State holds the current view (queue / detail), the active filter, and per-row selection — see each controller's bind paths in the rendered tree.",
+});
+
 Bun.serve({
   port,
   async fetch(request: Request): Promise<Response> {
@@ -888,6 +897,9 @@ Bun.serve({
     }
     if (url.pathname === "/api/requester/action" && request.method === "POST") {
       return requesterHandler(request);
+    }
+    if (url.pathname === "/.well-known/vms-skill.md" && request.method === "GET") {
+      return skillHandler(request);
     }
     return new Response("Not Found", { status: 404 });
   },
