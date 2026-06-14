@@ -6,6 +6,89 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to '1.5.0' / '1.4.0' (lockstep — npm @ashley-shrok/viewmodel-shell + NuGet AshleyShrok.ViewModelShell)
+
+1.5.0 / 1.4.0 adds `SectionNode.link` — a URL-link navigator variant of the clickable-card primitive. Mirrors `SectionNode.action` (1.4.0 / 1.3.0 — see entry below) but emits a wrapping `<a href>` instead of a dispatcher `<section role="button">`, so every native browser link affordance works for free (middle-click new tab, Ctrl/Cmd-click, right-click context menu, drag-to-bookmarks, status-bar URL preview, accessible link semantics). Both packages move in lockstep because it is an additive wire field on both backends; the wire stays byte-identical when `link` is omitted, so a server upgraded ahead of its clients is fully back-compatible (and vice versa).
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `1.4.0` | **`1.5.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `1.3.0` | **`1.4.0`** |
+
+### What changed (one paragraph)
+
+`SectionNode.action` (the 1.4.0 / 1.3.0 dispatcher primitive) covers the case where clicking a card runs server-side work. When a card is conceptually a NAVIGATIONAL link (docs tile, gallery item, launcher tile), nesting a `LinkNode` inside loses click-anywhere ergonomics, and using `.action` + server redirect loses every modifier-click behavior browsers grant anchor elements (middle-click new tab, Ctrl/Cmd-click new tab, right-click context menu, drag-to-bookmarks, status-bar URL preview). `SectionNode.link` is the navigator sibling: set `link: { url, external? }` and the BrowserAdapter emits a wrapping `<a href>` so every one of those affordances works natively. Closes [issue #21](https://github.com/ashley-shrok/ViewModelShell/issues/21).
+
+### Consumer action required: none.
+
+The field is additive and optional. A `SectionNode` without `link` renders byte-identical to 1.4.0 / 1.3.0 (no `<a>` wrapper, no class drift, no `href` / `target` / `rel`, no listeners; the wire stays absent via the existing `JsonIgnore(WhenWritingNull)` posture).
+
+### Not breaking
+
+- The JSON wire is unchanged for every existing section — `link` is omitted on serialization when null. Old clients talking to new servers (and vice versa) work byte-identically; cross-backend parity is green.
+- The TUI experimental adapter treats a focused-pane `section.link` as link-actionable so Enter dispatches `navigate(url)` — additive, no removal, no behavior change for existing TUI consumers.
+- Every existing demo's .NET call sites compile unchanged — `Link` is a trailing positional param with default `null` so positional `new SectionNode(heading, children, Variant: "card", Action: ...)` keeps working.
+
+### New capability — minimal linked card
+
+**TypeScript (any backend):**
+```typescript
+const tile: SectionNode = {
+  type: "section",
+  variant: "card",
+  heading: "Read the docs",
+  link: { url: "https://example.com/docs", external: true },
+  children: [
+    { type: "text", value: "Architecture, gotchas, runnable demos.", style: "muted" },
+  ],
+};
+```
+
+**C# (ASP.NET Core controller):**
+```csharp
+var tile = new SectionNode(
+    Heading: "Read the docs",
+    Children: new ViewNode[]
+    {
+        new TextNode("Architecture, gotchas, runnable demos.", "muted"),
+    },
+    Variant: "card",
+    Link: new SectionLink("https://example.com/docs", External: true));
+```
+
+The wrapper `<a href>` gives every native browser link affordance for free — middle-click new tab, Ctrl/Cmd-click new tab, right-click context menu, drag-to-bookmarks, status-bar URL preview, accessible link semantics. No `role`, no `tabindex`, no `aria-label` needed; the anchor element provides them natively.
+
+### What the framework rejects (and how to fix)
+
+If you build a tree that violates any rule below, the framework throws at the server edge and the response carries `{ ok: false, errors: [{ code: "invalid_tree", message: "..." }] }` at HTTP 500. This is a hard failure by design — silent rendering of these patterns produces broken click-ownership or invalid HTML.
+
+1. **`action` + `link` on the same section.** A `SectionNode` is either a dispatcher (action) or a navigator (link); they create different user expectations of what a click means. Pick one — drop either `action` or `link`.
+2. **`link` + `collapsible: true` on the same section.** A collapsible section's `<summary>` IS the click target; a linked card makes the whole section the click target. Pick one.
+3. **`link` nested inside another `link`.** HTML5 prohibits nested `<a>` elements. Restructure so only the outer (or only the inner) section carries `link`.
+4. **`link` nested inside `action` (or vice versa).** Click-ownership in the overlap is ambiguous — a linked card inside a dispatcher card, or vice versa, creates two competing primary interactions. Restructure so the outer card alone owns the affordance (refactor the inner to a styling-only `variant: "card"` with no `link` / no `action`).
+
+A styling-only `variant: "card"` inner section (no `link`, no `action`) inside a linked or clickable outer card is explicitly VALID:
+
+```typescript
+// VALID — outer card is linked; inner is styling-only.
+{
+  type: "section",
+  variant: "card",
+  link: { url: "https://example.com/outer", external: true },
+  children: [
+    {
+      type: "section",
+      variant: "card",
+      children: [
+        { type: "text", value: "Inner styling-only card content" },
+      ],
+    },
+  ],
+}
+```
+
+---
+
 ## Upgrading to '1.4.0' / '1.3.0' (lockstep — npm @ashley-shrok/viewmodel-shell + NuGet AshleyShrok.ViewModelShell)
 
 1.4.0 / 1.3.0 adds `SectionNode.action` — a click-anywhere clickable-card primitive that mirrors `TableRow.action` (1.1.0) at the section level. Both packages move in lockstep because it is an additive wire field on both backends; the wire stays byte-identical when `action` is omitted, so a server upgraded ahead of its clients is fully back-compatible (and vice versa).
