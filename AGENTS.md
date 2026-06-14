@@ -506,10 +506,33 @@ Every backend-bearing demo page in this repo carries a one-line HTML comment + a
 ```html
 <!-- Agent discoverability — this is a ViewModel Shell app: agents can drive it via the JSON wire
      (GET endpoint → {vm, state}; POST actionEndpoint multipart {_action, _state}). Docs: https://github.com/ashley-shrok/ViewModelShell -->
-<meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/0.12","endpoint":"/api/<x>","actionEndpoint":"/api/<x>/action"}'>
+<meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/1.0","endpoint":"/api/<x>","actionEndpoint":"/api/<x>/action","skill":"/.well-known/vms-skill.md"}'>
 ```
 
-The `protocol` token is `viewmodel-shell/<major.minor>` — bump only when the wire shape itself changes (additive wire changes within a minor, like `0.12.0`'s table selection/pagination, don't require a bump because old agents still work).
+The `protocol` token is `viewmodel-shell/<major.minor>` of the **wire shape**, NOT the npm/NuGet package version — bump only when the wire itself changes shape (additive wire changes within a minor don't require a bump because old agents still work). As of npm 1.6.0 / NuGet 1.5.0 the wire shape is still at `viewmodel-shell/1.0` — the wire has not undergone a breaking change since the protocol token was introduced. So the package can be 1.6.0 while the protocol token stays 1.0; that is correct.
+
+**Agent skill (1.6.0 / 1.5.0):** the optional `skill` field on the same meta tag points at a markdown operating manual for the VMS wire protocol. Agents driving the API cold — `curl`, `WebFetch`, an LLM reading the page — can `GET` that URL to obtain a self-contained protocol manual (action dispatch shape, state round-trip rules, response envelope vocabulary, side-effect verbs, polling, errors, file uploads). Old agents that don't know about the field simply ignore it; old apps without the field continue to work.
+
+**Mount the skill endpoint.** Both backends ship a one-liner helper that serves the canonical markdown at any URL you pick (recommended: `/.well-known/vms-skill.md`), with an optional `appPreamble` prepended under a `## App-specific notes` heading + `---` separator. Body is built once at mount / handler-creation time; per-request cost is just a `Response.WriteAsync`.
+
+**.NET** (any `IEndpointRouteBuilder` host — typically `app` in Program.cs):
+```csharp
+using ViewModelShell;
+app.MapVmsAgentSkill(appPreamble: "App-specific context for agents.");
+// or with a custom path:
+app.MapVmsAgentSkill("/.well-known/vms-skill.md", appPreamble: "...");
+```
+
+**TypeScript** (Bun / Deno / Hono / Cloudflare Workers — anything Web Fetch native):
+```typescript
+import { createAgentSkillHandler } from "@ashley-shrok/viewmodel-shell/server";
+const skillHandler = createAgentSkillHandler({ appPreamble: "App-specific context for agents." });
+// mount on /.well-known/vms-skill.md per your router; the handler is (Request) => Response.
+```
+
+Both helpers serve `Content-Type: text/markdown; charset=utf-8`. Missing-resource is fail-loud — the .NET helper throws `InvalidOperationException` at mount time (not at first request) if the embedded resource is absent, and the TS helper throws at module-init if the markdown file is absent from the package. This mirrors the capability-seam fail-loud rule above.
+
+**Canonical skill source:** `viewmodel-shell/agent-skill.md` (npm-side, single source of truth). The .NET package embeds a byte-identical copy at `viewmodel-shell-dotnet/AgentSkill.md` as a logical resource (`AshleyShrok.ViewModelShell.AgentSkill.md`); the parity gate in `parity/check-skill.ts` diffs both source files AND the served HTTP bodies on the HelpDesk twins, so the .NET copy cannot silently drift. **Maintainer rule:** any change to the wire shape, response envelope, side-effect verb set, error code vocabulary, or polling semantics MUST update `viewmodel-shell/agent-skill.md` in the same change, then re-copy to `viewmodel-shell-dotnet/AgentSkill.md`. The parity gate fails the build on drift, so this isn't optional — but updating the skill in the same change is what keeps it useful.
 
 **Convention rule:** any new demo page that mounts a VMS shell MUST include this meta (`grep -L 'viewmodel-shell"' demo/**/*.html` should return nothing among backend-bearing pages). Chooser/landing pages with no shell mount (e.g. `demo/HelpDesk/frontend/index.html`) and the pure-frontend `demo/Showcase/` don't carry it — they have no endpoint to advertise. The parity suite doesn't check it (it's an out-of-band discoverability signal, not part of the wire); reviewers do.
 
