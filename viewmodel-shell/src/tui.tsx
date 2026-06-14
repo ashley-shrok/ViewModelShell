@@ -28,7 +28,8 @@
 //                         checkbox Space-toggle) is B5 polish.
 // Phase scope (B2 — preserved):
 //   page                — layout presets stack|split|cards|sidebar
-//   section             — focus pane (scrollbox) in non-stack layouts; plain box otherwise
+//   section             — focus pane (scrollbox) in non-stack layouts; plain box otherwise.
+//                         section.link → focused-pane Enter dispatches navigate(url) (1.5.0)
 //   list / list-item    — scrollbox host (overflow recoverable; wheel/keyboard scroll)
 //   table               — scrollbox host + sortable headers + per-column filter +
 //                         clickable rows + linkLabel cells
@@ -406,6 +407,11 @@ export class TuiAdapter implements Adapter {
         this.pending.onAction(a.action);
       } else if (a.type === "link") {
         this.navigate(a.href);
+      } else if (a.type === "section-link") {
+        // 1.5.0 — SectionNode.link parity for the TUI: focused pane Enter
+        // navigates to the section's URL via the same `navigate` verb that
+        // LinkNode uses. Mirrors the BrowserAdapter's <a href> wrapper.
+        this.navigate(a.url);
       } else if (a.type === "copy-button") {
         this.copy(a.text);
       }
@@ -616,10 +622,21 @@ function countPanes(vm: ViewNode): number {
  *  is used by App for the status bar + by TuiAdapter for Enter/Space keybind
  *  activation. Walker has no side effects — safe to call any time.
  */
+/** Synthetic actionable surfaced by a focused pane whose section has `link.url`
+ *  set (1.5.0 — SectionNode.link). The TUI treats this as link-actionable so
+ *  Enter dispatches `navigate(url)` — mirrors LinkNode handling at the pane
+ *  level. No equivalent in the BrowserAdapter (which gets native anchor
+ *  semantics for free); the TUI needs to synthesize this because its focus
+ *  model is pane-based, not element-based. */
+interface SectionLinkActionable {
+  readonly type: "section-link";
+  readonly url: string;
+}
+
 interface PaneSummary {
   heading: string | null;
   hasInputs: boolean;
-  primaryActionable: ButtonNode | LinkNodeType | CopyButtonNode | null;
+  primaryActionable: ButtonNode | LinkNodeType | CopyButtonNode | SectionLinkActionable | null;
   primaryCheckbox: CheckboxNode | null;
 }
 
@@ -669,8 +686,17 @@ function focusedPaneSummary(vm: ViewNode, index: number): PaneSummary | null {
   const pane = target as ViewNode;
   const heading: string | null = pane.type === "section" ? (pane.heading ?? null) : null;
   let hasInputs = false;
-  let primaryActionable: ButtonNode | LinkNodeType | CopyButtonNode | null = null;
+  let primaryActionable: ButtonNode | LinkNodeType | CopyButtonNode | SectionLinkActionable | null = null;
   let primaryCheckbox: CheckboxNode | null = null;
+  // 1.5.0 — when the pane IS a section with `link.url` set, surface it as a
+  // synthetic link-actionable BEFORE scanning descendants so Enter on the
+  // focused pane navigates via the wrapper anchor's URL (mirrors how the
+  // BrowserAdapter gives a `<a href>` wrapper native link semantics for free).
+  // Descendant LinkNode/Button/etc. can still win if no section-level link
+  // is set; the section-link only seeds primaryActionable when present.
+  if (pane.type === "section" && pane.link && pane.link.url.trim().length > 0) {
+    primaryActionable = { type: "section-link", url: pane.link.url };
+  }
   const scan = (node: ViewNode): void => {
     if (node.type === "field") hasInputs = true;
     if (primaryActionable == null) {
@@ -892,6 +918,12 @@ function paneActivationHint(summary: PaneSummary | null): { key: string; label: 
     let label: string;
     if (a.type === "button") label = a.label;
     else if (a.type === "link") label = a.label;
+    else if (a.type === "section-link") {
+      // 1.5.0 — synthetic actionable from SectionNode.link. No `label` field;
+      // the section's heading is shown separately by StatusBar, so use the
+      // pane's heading when available (else generic "open").
+      label = summary.heading ?? "open";
+    }
     else label = a.label ?? "copy"; // copy-button
     // Truncate long labels so the status bar fits a single line cleanly.
     const truncated = label.length > 16 ? label.slice(0, 13) + "..." : label;

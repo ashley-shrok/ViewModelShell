@@ -159,6 +159,48 @@ export interface SectionNode {
    *  Omitted = today's section rendering, byte-identical (no class drift, no
    *  extra attrs, no listeners). */
   action?: ActionEvent;
+  /** URL-link navigator variant of the clickable-card primitive — the sibling
+   *  of `action` (1.4.0). Set this to make the entire section a navigational
+   *  anchor: the BrowserAdapter emits a wrapping `<a href={url}>` element so
+   *  every NATIVE browser link affordance works for free — left-click navigate,
+   *  middle-click new tab, Ctrl/Cmd-click new tab, Shift-click new window,
+   *  right-click context menu, drag-to-bookmarks, status-bar URL preview, and
+   *  accessible link semantics. No JS substitute exists for those; browsers
+   *  implement them at the anchor-element level.
+   *
+   *  Reach for `link` (this field) when the card is conceptually a
+   *  NAVIGATIONAL target (docs tile, gallery item, launcher tile). Reach for
+   *  `action` (the sibling above) when the card is a DISPATCHER that runs
+   *  server-side work. Closes [issue #21](https://github.com/ashley-shrok/ViewModelShell/issues/21).
+   *
+   *  Wire shape — INLINE object `{ url, external? }`, not flat sibling fields.
+   *  When `external: true` is set, the renderer additionally adds
+   *  `target="_blank"` and `rel="noopener noreferrer"` (mirroring LinkNode's
+   *  external attribute pattern byte-for-byte). Clicks on nested ButtonNode /
+   *  CheckboxNode / FieldNode / LinkNode / cell `linkLabel` anchors INSIDE a
+   *  linked card do NOT also fire the wrapper anchor's navigation (the
+   *  renderer stops propagation on those targets; for nested anchors it
+   *  additionally `preventDefault`s the wrapper's default so the inner anchor
+   *  wins). No `role`, no `tabindex`, no `aria-label` — the anchor element
+   *  provides every link / keyboard / focus / a11y semantic natively.
+   *
+   *  Tree validation rejects four invalid combos at the server edge with
+   *  `invalid_tree`:
+   *    (a) `link` set together with `action` on the same section — a
+   *        SectionNode is either a dispatcher (action) or a navigator (link);
+   *        they create different user expectations of what a click means.
+   *        Pick one.
+   *    (b) `link` set together with `collapsible: true` on the same section —
+   *        same rationale as action+collapsible (the summary IS the click
+   *        target; a linked card makes the whole section the click target).
+   *    (c) a SectionNode with `link` nested inside another SectionNode with
+   *        `link` — HTML5 prohibits nested `<a>` elements.
+   *    (d) a SectionNode with `link` nested inside a SectionNode with `action`
+   *        (or vice versa) — click-ownership in the overlap is ambiguous.
+   *
+   *  Omitted = today's section rendering, byte-identical (no `<a>` wrapper,
+   *  no class drift, no extra attrs). */
+  link?: { url: string; external?: boolean };
   children: ViewNode[];
 }
 
