@@ -8,6 +8,7 @@ import { readFileSync, existsSync, rmSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalize, diff } from "./normalize";
+import { checkSourceTwins, checkHttpTwins } from "./check-skill";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -386,6 +387,30 @@ async function main() {
       if (fixtureOk) {
         console.log(`  ✓ all backends agree`);
       }
+    }
+
+    // ─── Canonical agent skill (1.6.0 / 1.5.0) ───────────────────────────────
+    // Phase 1: diff the npm + .NET source files on disk (catches the .NET twin
+    // drifting from the canonical npm source). Runs regardless of which
+    // backends are configured.
+    // Phase 2: GET /.well-known/vms-skill.md from each HelpDesk backend; assert
+    // byte-identical bodies + correct content-type + preamble plumbing.
+    console.log("\nSkill parity:");
+    try {
+      checkSourceTwins();
+      const helpdeskBackends = manifest.backends.filter(b =>
+        b.name === "dotnet-helpdesk" || b.name === "bun-helpdesk"
+      );
+      if (helpdeskBackends.length > 0) {
+        await checkHttpTwins(
+          helpdeskBackends.map(b => ({ name: b.name, url: b.baseUrl })),
+        );
+      } else {
+        console.log("  (skipping HTTP skill twins — HelpDesk backends not configured)");
+      }
+    } catch (skillErr) {
+      console.error(`  ✗ ${(skillErr as Error).message}`);
+      exitCode = 1;
     }
   } finally {
     console.log("\nShutting down backends...");
