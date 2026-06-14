@@ -351,4 +351,127 @@ public class ViewTreeValidationTests
         var ex = Assert.Throws<InvalidOperationException>(() => response.Validate());
         Assert.Contains("Nested SectionNode.Action", ex.Message);
     }
+
+    // ─── SectionNode.Link validation (issue #21 / 260614-bmd) ────────────────
+
+    private static SectionNode LinkedCard(string? heading, SectionLink? link, params ViewNode[] children) =>
+        new(Heading: heading, Children: children, Link: link);
+
+    [Fact]
+    public void Validate_SectionLink_Plain_Passes()
+    {
+        var tree = Page(LinkedCard("Read the docs", new SectionLink("https://example.com/docs", External: true),
+            new TextNode("Architecture, gotchas, demos.", "muted")));
+        var ex = Record.Exception(() => ViewTreeValidation.ValidateSectionAction(tree));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Validate_SectionLink_PlusAction_Throws()
+    {
+        var section = new SectionNode(
+            Heading: "Conflict",
+            Children: Array.Empty<ViewNode>(),
+            Action: new ActionDescriptor("dispatch-conflict"),
+            Link: new SectionLink("https://example.com"));
+        var tree = Page(section);
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ViewTreeValidation.ValidateSectionAction(tree));
+        Assert.Contains("either a dispatcher (Action) or a navigator (Link)", ex.Message);
+        Assert.Contains("Conflict", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_SectionLink_PlusCollapsible_Throws()
+    {
+        var section = new SectionNode(
+            Heading: "BadCollapsible",
+            Children: Array.Empty<ViewNode>(),
+            Collapsible: true,
+            Link: new SectionLink("https://example.com"));
+        var tree = Page(section);
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ViewTreeValidation.ValidateSectionAction(tree));
+        Assert.Contains("Link and Collapsible: true", ex.Message);
+        Assert.Contains("BadCollapsible", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_SectionLink_NestedLinkInLink_Throws()
+    {
+        var inner = LinkedCard("Inner", new SectionLink("https://example.com/inner"));
+        var outer = LinkedCard("Outer", new SectionLink("https://example.com/outer"), inner);
+        var tree = Page(outer);
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ViewTreeValidation.ValidateSectionAction(tree));
+        Assert.Contains("HTML5 prohibits nested", ex.Message);
+        Assert.Contains("Outer", ex.Message);
+        Assert.Contains("Inner", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_SectionLink_NestedLinkInAction_Throws()
+    {
+        var inner = LinkedCard("Inner", new SectionLink("https://example.com/inner"));
+        var outer = Card("Outer", new ActionDescriptor("select-outer"), inner);
+        var tree = Page(outer);
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ViewTreeValidation.ValidateSectionAction(tree));
+        Assert.Contains("Click-ownership", ex.Message);
+        Assert.Contains("Outer", ex.Message);
+        Assert.Contains("Inner", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_SectionLink_NestedActionInLink_Throws()
+    {
+        var inner = Card("Inner", new ActionDescriptor("select-inner"));
+        var outer = LinkedCard("Outer", new SectionLink("https://example.com/outer"), inner);
+        var tree = Page(outer);
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ViewTreeValidation.ValidateSectionAction(tree));
+        Assert.Contains("Click-ownership", ex.Message);
+        Assert.Contains("Outer", ex.Message);
+        Assert.Contains("Inner", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_SectionLink_StylingOnlyInnerCard_Passes()
+    {
+        // Linked outer card contains a styling-only Variant:"card" section
+        // (no Action and no Link) with an internal button. Locked decision:
+        // this is VALID.
+        var innerStyling = new SectionNode(
+            Heading: null,
+            Children: new ViewNode[] { Btn("close-outer", "Close") },
+            Variant: "card");
+        var outer = LinkedCard("Outer", new SectionLink("https://example.com"), innerStyling);
+        var tree = Page(outer);
+        var ex = Record.Exception(() => ViewTreeValidation.ValidateSectionAction(tree));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Validate_SectionLink_ExternalDefaultsFalse()
+    {
+        // Record-shape pin: catches accidental default flips. Default ctor
+        // sets External = false; explicit External: true sets true.
+        Assert.False(new SectionLink("https://example.com").External);
+        Assert.True(new SectionLink("https://example.com", External: true).External);
+        Assert.Equal("https://example.com", new SectionLink("https://example.com").Url);
+    }
+
+    [Fact]
+    public void ShellResponse_Validate_RunsSectionLinkValidation()
+    {
+        // Mirrors ShellResponse_Validate_RunsSectionActionValidation — confirms
+        // the ShellResponse<TState>.Validate() seam runs the extended walk
+        // (which catches the link-in-link case).
+        var inner = LinkedCard("Inner", new SectionLink("https://example.com/inner"));
+        var outer = LinkedCard("Outer", new SectionLink("https://example.com/outer"), inner);
+        var tree = Page(outer);
+        var response = new ShellResponse<TestState>(tree, new TestState("all"));
+        var ex = Assert.Throws<InvalidOperationException>(() => response.Validate());
+        Assert.Contains("HTML5 prohibits nested", ex.Message);
+    }
 }

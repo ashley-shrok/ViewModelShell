@@ -6,6 +6,43 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 1.5.0 / 1.4.0 — SectionNode.link URL-wrapper clickable cards (npm + NuGet)
+
+**npm:** `1.5.0` (MINOR — additive wire field; new TS optional field) · **NuGet:** `1.4.0` (MINOR — additive wire field on the SectionNode record + new SectionLink helper record)
+
+Closes [issue #21](https://github.com/ashley-shrok/ViewModelShell/issues/21). `SectionNode.action` (1.4.0 / 1.3.0 — see entry below) covers the dispatcher case: clicking the card runs server-side work. When a card is conceptually a NAVIGATIONAL link (docs tile, gallery item, launcher tile, "View on GitHub" tile), nesting a `LinkNode` inside loses click-anywhere ergonomics, and using `.action` plus a server redirect loses every modifier-click affordance the browser would otherwise grant for free — middle-click new tab, Ctrl/Cmd-click new tab, Shift-click new window, right-click context menu, drag-to-bookmarks, status-bar URL preview, accessible link semantics. `SectionNode.link` is the navigator sibling of `.action`: the renderer emits a wrapping `<a href>` element so every one of those affordances works natively, no JS substitute needed (browsers implement them at the anchor-element level).
+
+### Added
+
+- **`SectionNode.link?: { url: string; external?: boolean }`** (TS) / **`SectionNode.Link: SectionLink?`** (.NET — with `SectionLink(string Url, bool External = false)` as a new positional helper record). When set, the BrowserAdapter creates an `<a>` element (instead of `<section>`), wires `href = link.url`, and (when `external: true`) adds `target="_blank"` and `rel="noopener noreferrer"` — mirroring `LinkNode`'s external-attribute pattern byte-for-byte. The heading still renders as `<h2 class="vms-section__heading">` inside the anchor. No `role="button"`, no `tabindex="0"`, no `aria-label` — the anchor element provides every link / keyboard / focus / a11y semantic natively. Containment: clicks on nested `ButtonNode` / `CheckboxNode` / `FieldNode` / `LinkNode` and cell `linkLabel` anchors INSIDE a linked card stop propagation so they don't trigger the wrapper anchor's navigation; for nested anchors the renderer additionally `preventDefault`s so a bubbled click cannot re-trigger the wrapper.
+- **`.vms-section--linked` CSS class** with cursor + anchor color reset (`color: inherit`) + text-decoration reset (`text-decoration: none`) — without these the wrapper anchor would render with browser-default blue underlined heading text. Hover ring (`box-shadow: 0 0 0 1px var(--vms-accent-dim)`) and `:focus-visible` outline (`2px solid var(--vms-accent)` with positive `outline-offset: 2px`) mirror the `.vms-section--clickable` idiom. AA-contrast guard passes on the shipped default plus all 12 themes (the outline uses `--vms-accent`, the same token gated by the existing pair coverage).
+- **Tree validation — four new rejections**, on top of the two from 1.4.0 / 1.3.0. All throw at the server edge with `code: "invalid_tree"` (500) so a server-built tree that violates any rule fails fast in dev rather than silently producing broken click-ownership or invalid HTML:
+  - `action` + `link` on the same section — a `SectionNode` is either a dispatcher (action) or a navigator (link); they create different user expectations of what a click means. Pick one.
+  - `link` + `collapsible: true` on the same section — same rationale as `action` + `collapsible`.
+  - `link` nested inside another `link` — HTML5 prohibits nested `<a>` elements.
+  - `link` nested inside `action` (and vice versa) — click-ownership in the overlap is ambiguous (a linked card inside a dispatcher card, or vice versa, creates two competing primary interactions).
+- **`validateSectionAction` walk extended** (TS twin in `viewmodel-shell/src/server.ts` + .NET `ViewTreeValidation.ValidateSectionAction` in `viewmodel-shell-dotnet/ViewModels.cs`). The threaded ancestor parameter was renamed `outerClickable` → `outerInteractive` (semantic widening — "an ancestor section has either action OR link set"). The existing two rules (`action` + `collapsible:true`; nested `action`-in-`action`) are preserved unchanged; the action-in-action rule now also catches `action`-in-`link` due to the unified parameter, with a differentiated message.
+- **TUI experimental adapter (`viewmodel-shell/src/tui.tsx`):** a focused pane whose section has `link.url` set is treated as link-actionable — pressing Enter dispatches `this.navigate(url)`, mirroring how `LinkNode` is handled at the pane level. Parity for the TUI experience at minimal cost.
+
+### Demo migration
+
+- `demo/Showcase/frontend/src/main.ts` (Dashboard archetype) gains a "Resources" cards strip with three external-link tiles ("Read the docs", "View on GitHub", "Report an issue") demonstrating `SectionNode.link` with real GitHub URLs.
+- `demo/FeatureProbe/AspNetCore` and `demo/FeatureProbe-bun` gain a sibling `Linked card` section next to the existing `Clickable Card` (issue #20 — `SectionNode.action` parity). Cross-backend parity confirms both backends emit byte-identical wire including the new `link: { url, external }` shape on the SectionNode.
+
+### Tests
+
+- New `viewmodel-shell/test/section-link.test.ts` (10 jsdom cases) covers A external linked card emits `<a>` with href + target + rel; B internal (non-external) linked card omits target/rel; C className shape (`vms-section vms-section--linked`, NOT `--clickable`); D heading renders inside the anchor; E/F/G containment for nested Button / Checkbox / inner LinkNode (sentinel listener on the wrapper anchor never fires); H anchor element has no role / no tabindex / no aria-label; I backward-compat (section without link AND without action renders as `<section>`, no class drift, no href/target/rel); J combined `variant: "card"` + `layout: "split"` modifiers on the linked `<a>`.
+- New `viewmodel-shell/test/tree-walker.test.ts` (8 cases) covers the four new rejections (link+action, link+collapsible, link-in-link, link-in-action / action-in-link) plus regression baselines (styling-only inner card inside both action and link cards still passes after the rename).
+- `viewmodel-shell-dotnet/Tests/ViewTreeValidationTests.cs` gains nine new `[Fact]`s: plain linked card passes, link+action throws, link+collapsible throws, three nesting throws (link-in-link, link-in-action, action-in-link), styling-only inner card passes, `SectionLink.External` defaults to false (record-shape pin to catch accidental default flips), and the `ShellResponse<TState>.Validate()` integration pin for the link case. The Tests project goes from 51 to 60 facts.
+
+### Consumers
+
+Additive — nothing to do. A `SectionNode` without `link` renders byte-identical to 1.4.0 / 1.3.0 (no `<a>` wrapper, no `vms-section--linked` class, no `href` / `target` / `rel`, no listeners). The wire stays absent when `link` is omitted (`JsonIgnore-on-null` on the .NET nullable; optional field in TS).
+
+If you want to opt a card into URL-link navigation, set `link: { url: "...", external?: true }`. See `MIGRATION.md` § 1.5.0 / 1.4.0 for copy-pasteable TS + C# snippets plus the four mutually-exclusive combos the framework rejects.
+
+---
+
 ## 1.4.0 / 1.3.0 — SectionNode.action clickable cards (npm + NuGet)
 
 **npm:** `1.4.0` (MINOR — additive wire field; new TS optional field) · **NuGet:** `1.3.0` (MINOR — additive wire field, NuGet catches up from being unchanged in CSS-only npm 1.3.0)

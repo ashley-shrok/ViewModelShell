@@ -197,12 +197,24 @@ function buildVm(state: FeatureProbeState): ViewNode {
       { type: "text", value: `Clicked ${state.cardClickCount} time${state.cardClickCount === 1 ? "" : "s"}`, style: "muted" },
     ],
   };
+  // 1.5.0 — linked SectionNode (parity coverage for SectionNode.link, issue #21).
+  // Pure client-side navigation — no state change, no dispatch arm; the wire
+  // shape itself is the parity gate.
+  const linkedCardSection: ViewNode = {
+    type: "section",
+    heading: "Linked card",
+    variant: "card",
+    link: { url: "https://example.com/probe", external: true },
+    children: [
+      { type: "text", value: "Renders as <a href> for native link affordances.", style: "muted" },
+    ],
+  };
   return {
     type: "page",
     title: "Feature Probe",
     density: "compact",
     layout: "cards",
-    children: [probeSection, clickableCardSection, buildTableSection(state)],
+    children: [probeSection, clickableCardSection, linkedCardSection, buildTableSection(state)],
   };
 }
 

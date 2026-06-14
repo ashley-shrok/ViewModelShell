@@ -307,6 +307,61 @@ export class BrowserAdapter implements Adapter {
       return;
     }
 
+    // 1.5.0 — SectionNode.link URL-wrapper variant (issue #21). When set,
+    // emit a wrapping <a href> element instead of <section> so every native
+    // browser link affordance works for free (middle-click / Ctrl/Cmd-click
+    // new tab, right-click context menu, drag-to-bookmarks, status-bar URL).
+    // Validation guarantees link + action and link + collapsible are
+    // mutually exclusive, and link cannot be nested inside another link or
+    // action — see validateSectionAction in server.ts.
+    if (n.link) {
+      const a = document.createElement("a");
+      a.className = `vms-section vms-section--linked${
+        n.variant === "card" ? " vms-section--card" : ""}${
+        n.layout && n.layout !== "stack" ? ` vms-section--${n.layout}` : ""}`;
+      a.href = n.link.url;
+      // Mirror LinkNode's external-attribute pattern (browser.ts ~line 666)
+      // byte-for-byte: target=_blank + rel=noopener noreferrer when external.
+      if (n.link.external) {
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+      }
+      if (n.heading) {
+        const h = document.createElement("h2");
+        h.className = "vms-section__heading";
+        h.textContent = n.heading;
+        a.appendChild(h);
+      }
+      this.kids(n.children, a, on);
+      // Containment: clicks on nested interactive controls must NOT trigger
+      // the wrapper anchor's navigation. For non-anchor controls, stopPropagation
+      // is enough — the wrapper anchor's default navigation only fires on the
+      // anchor element itself, and stopPropagation prevents bubbled re-fires.
+      // For nested anchors (cell linkLabels), we additionally preventDefault on
+      // the click so a bubbled click cannot re-trigger the wrapper anchor's
+      // default navigation in browsers that handle nested <a> ambiguously. The
+      // catch-all `a[href]` selector includes the wrapper itself — skip it via
+      // `ctrl === a` so the wrapper's own click is NOT preventDefaulted.
+      //
+      // TODO: LinkNode-inside-section.link is left to the existing LinkNode
+      // renderer; spec-wise nested <a> is invalid HTML (issue #21 deliberately
+      // does NOT block it because the tree-validation rule only catches the
+      // sibling SectionNode-level case). A follow-up runtime warning when an
+      // inner LinkNode lives inside a section.link wrapper could surface this
+      // to consumers; until then, consumers can avoid the combo.
+      a.querySelectorAll<HTMLElement>(
+        ".vms-button, .vms-checkbox__input, .vms-checkbox, .vms-field__input, .vms-table__link, a[href]"
+      ).forEach(ctrl => {
+        if (ctrl === a) return;
+        ctrl.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (ctrl instanceof HTMLAnchorElement) e.preventDefault();
+        });
+      });
+      parent.appendChild(a);
+      return;
+    }
+
     const el = document.createElement("section");
     el.className = `vms-section${n.variant === "card" ? " vms-section--card" : ""}${
       n.layout && n.layout !== "stack" ? ` vms-section--${n.layout}` : ""}${

@@ -247,6 +247,16 @@ public record PageNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Width = null
 ) : ViewNode;
 
+// 1.4.0 — SectionNode.Link URL-wrapper variant of the clickable-card primitive
+// (issue #21). Nested record (`{ Url, External }`) matches the TS shape exactly
+// — `link?: { url, external? }`. External is non-nullable bool defaulting to
+// false; same wire posture as LinkNode.External (serializes as "external":
+// false when defaulted). Url is required, non-nullable, must be non-empty
+// (the renderer trusts it as `<a href={Url}>`); validation is the caller's
+// responsibility because empty URLs render as anchors-without-href which
+// browsers treat as styling-only — semantically wrong, but not a tree-shape bug.
+public record SectionLink(string Url, bool External = false);
+
 public record SectionNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Heading,
     IReadOnlyList<ViewNode> Children,
@@ -269,13 +279,28 @@ public record SectionNode(
     // tabindex=0 + aria-label) and stops propagation on nested interactive
     // controls (Button/Checkbox/Link) so they don't double-fire. Tree
     // validation (ViewTreeValidation.ValidateSectionAction, invoked by
-    // ShellResponse<TState>.Validate()) rejects two invalid combos with
-    // invalid_tree: (a) Action set together with Collapsible:true on the same
-    // section, and (b) a SectionNode.Action nested inside another
-    // SectionNode.Action. A styling-only Variant:"card" section (no Action)
-    // inside a clickable card is valid. JsonIgnore-on-null per the
+    // ShellResponse<TState>.Validate()) rejects four invalid combos with
+    // invalid_tree (extended in 1.4.0 with SectionNode.Link rules):
+    //   (a) Action + Collapsible:true on the same section.
+    //   (b) Action + Link on the same section (issue #21 — dispatcher OR navigator, never both).
+    //   (c) Link + Collapsible:true on the same section.
+    //   (d) Action / Link nested inside another section with Action / Link
+    //       (HTML5 nested-<a> prohibition + click-ownership ambiguity).
+    // A styling-only Variant:"card" section (no Action and no Link) inside
+    // a clickable or linked card is valid. JsonIgnore-on-null per the
     // file-header maintainer rule.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null,
+    // 1.4.0 — URL-wrapper navigator variant of the clickable-card primitive
+    // (issue #21). When set, the BrowserAdapter emits a wrapping <a href={Url}>
+    // element so every native browser link affordance works for free
+    // (middle-click, Ctrl/Cmd-click, right-click context menu, drag-to-bookmarks,
+    // status-bar URL preview, accessible link semantics). External:true adds
+    // target="_blank" + rel="noopener noreferrer". Clicks on nested
+    // Button/Checkbox/Field/Link controls stop propagation so they don't
+    // navigate the wrapper. Tree validation rejects Action+Link, Link+Collapsible,
+    // link-in-link, and mixed link/action nesting (see the Action TSDoc above for
+    // the full set of rejections). JsonIgnore-on-null per the file-header rule.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SectionLink? Link = null
 ) : ViewNode;
 
 public record ListNode(
@@ -513,71 +538,120 @@ public static class ViewTreeValidation
     }
 
     /// <summary>
-    /// Walk a ViewNode tree and reject two invalid SectionNode.Action combos:
-    /// (a) Action + Collapsible:true on the same section, and (b) a clickable
-    /// section nested inside another clickable section. A styling-only
-    /// Variant:"card" section (no Action) inside a clickable card is valid.
+    /// Walk a ViewNode tree and reject five invalid SectionNode.Action / .Link
+    /// combos (issue #20 + issue #21):
+    ///   (a) Action + Collapsible:true on the same section.
+    ///   (b) Action + Link on the same section — dispatcher OR navigator, never both.
+    ///   (c) Link + Collapsible:true on the same section.
+    ///   (d) Action nested inside another section with Action OR Link.
+    ///   (e) Link nested inside another section with Link OR Action.
+    /// A styling-only Variant:"card" section (no Action and no Link) inside a
+    /// clickable or linked card is valid.
     /// </summary>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when either invalid combo is found. The framework's exception
+    /// Thrown when any invalid combo is found. The framework's exception
     /// filter maps this to a 500 with code "invalid_tree", same path as
     /// <see cref="ValidateActionNames"/>.
     /// </exception>
     public static void ValidateSectionAction(ViewNode root)
     {
-        WalkForSectionAction(root, outerClickable: null);
+        WalkForSectionAction(root, outerInteractive: null);
     }
 
-    private static void WalkForSectionAction(ViewNode node, SectionNode? outerClickable)
+    private static void WalkForSectionAction(ViewNode node, SectionNode? outerInteractive)
     {
         switch (node)
         {
             case PageNode page:
-                foreach (var child in page.Children) WalkForSectionAction(child, outerClickable);
+                foreach (var child in page.Children) WalkForSectionAction(child, outerInteractive);
                 break;
 
             case SectionNode section:
-                // (a) Action + Collapsible:true on the same section — invalid.
+                var hdr = string.IsNullOrEmpty(section.Heading) ? "(headingless)" : section.Heading;
+                // (b) Action + Link on the same section — invalid. Checked FIRST
+                // so the most actionable error wins if the consumer sets both.
+                if (section.Action is not null && section.Link is not null)
+                {
+                    throw new InvalidOperationException(
+                        $"SectionNode '{hdr}' has both Action and Link set. " +
+                        "A SectionNode is either a dispatcher (Action) or a navigator (Link) — " +
+                        "they create different user expectations of what a click means. Pick one.");
+                }
+                // (c) Link + Collapsible:true on the same section — invalid.
+                if (section.Link is not null && section.Collapsible == true)
+                {
+                    throw new InvalidOperationException(
+                        $"SectionNode '{hdr}' has both Link and Collapsible: true set. " +
+                        "A collapsible section's summary IS the click target; a linked card " +
+                        "makes the whole section the click target. Pick one.");
+                }
+                // (a) Action + Collapsible:true on the same section — invalid (existing, unchanged).
                 if (section.Action is not null && section.Collapsible == true)
                 {
-                    var hdr = string.IsNullOrEmpty(section.Heading) ? "(headingless)" : section.Heading;
                     throw new InvalidOperationException(
                         $"SectionNode '{hdr}' has both Action and Collapsible: true set. " +
                         "A collapsible section's summary IS the click target; a clickable card " +
                         "makes the whole section the click target. Pick one.");
                 }
-                // (b) Nested action-in-action — invalid.
-                if (section.Action is not null && outerClickable is not null)
+                // (e) Nested link-in-link / link-in-action — invalid.
+                if (section.Link is not null && outerInteractive is not null)
                 {
-                    var innerHdr = string.IsNullOrEmpty(section.Heading) ? "(headingless)" : section.Heading;
-                    var outerHdr = string.IsNullOrEmpty(outerClickable.Heading) ? "(headingless)" : outerClickable.Heading;
-                    throw new InvalidOperationException(
-                        $"Nested SectionNode.Action: inner section '{innerHdr}' is inside clickable outer " +
-                        $"section '{outerHdr}'. Nested role='button' elements are an accessibility violation, " +
-                        "and click-ownership in the overlap is ambiguous. Use a styling-only inner section " +
-                        "(variant: 'card', no Action) with internal buttons instead.");
+                    var outerHdr = string.IsNullOrEmpty(outerInteractive.Heading) ? "(headingless)" : outerInteractive.Heading;
+                    if (outerInteractive.Link is not null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Nested SectionNode.Link: inner section '{hdr}' is inside linked outer " +
+                            $"section '{outerHdr}'. HTML5 prohibits nested <a> elements.");
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException(
+                            $"SectionNode.Link inner section '{hdr}' is inside clickable outer " +
+                            $"SectionNode.Action '{outerHdr}'. Click-ownership in the overlap is ambiguous — " +
+                            "a linked card inside a dispatcher card creates two competing primary interactions.");
+                    }
                 }
-                var nextOuter = section.Action is not null ? section : outerClickable;
+                // (d) Nested action-in-action / action-in-link — invalid.
+                if (section.Action is not null && outerInteractive is not null)
+                {
+                    var outerHdr = string.IsNullOrEmpty(outerInteractive.Heading) ? "(headingless)" : outerInteractive.Heading;
+                    if (outerInteractive.Action is not null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Nested SectionNode.Action: inner section '{hdr}' is inside clickable outer " +
+                            $"section '{outerHdr}'. Nested role='button' elements are an accessibility violation, " +
+                            "and click-ownership in the overlap is ambiguous. Use a styling-only inner section " +
+                            "(variant: 'card', no Action) with internal buttons instead.");
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException(
+                            $"SectionNode.Action inner section '{hdr}' is inside linked outer " +
+                            $"SectionNode.Link '{outerHdr}'. Click-ownership in the overlap is ambiguous — " +
+                            "a dispatcher card inside a linked card creates two competing primary interactions.");
+                    }
+                }
+                var nextOuter = (section.Action is not null || section.Link is not null) ? section : outerInteractive;
                 foreach (var child in section.Children) WalkForSectionAction(child, nextOuter);
                 break;
 
             case ListNode list:
-                foreach (var child in list.Children) WalkForSectionAction(child, outerClickable);
+                foreach (var child in list.Children) WalkForSectionAction(child, outerInteractive);
                 break;
 
             case ListItemNode item:
-                foreach (var child in item.Children) WalkForSectionAction(child, outerClickable);
+                foreach (var child in item.Children) WalkForSectionAction(child, outerInteractive);
                 break;
 
             case FormNode form:
-                foreach (var child in form.Children) WalkForSectionAction(child, outerClickable);
+                foreach (var child in form.Children) WalkForSectionAction(child, outerInteractive);
                 break;
 
             case ModalNode modal:
-                foreach (var child in modal.Children) WalkForSectionAction(child, outerClickable);
+                foreach (var child in modal.Children) WalkForSectionAction(child, outerInteractive);
                 if (modal.Footer is { } footer)
                 {
-                    foreach (var f in footer) WalkForSectionAction(f, outerClickable);
+                    foreach (var f in footer) WalkForSectionAction(f, outerInteractive);
                 }
                 break;
 

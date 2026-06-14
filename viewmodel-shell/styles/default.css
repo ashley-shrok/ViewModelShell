@@ -234,6 +234,23 @@ body {
   outline-offset: 2px;
 }
 
+/* ── Section: linked (1.5.0 — SectionNode.link URL-wrapper variant, issue #21) ──
+   Sibling of .vms-section--clickable, applied to a wrapping <a href> instead of
+   a <section role="button">. Mirrors the clickable rules for cursor + hover +
+   :focus-visible so a linked card has the same affordance shape as a dispatcher
+   card. Additionally resets the anchor-default text styling: without these
+   `color: inherit` + `text-decoration: none` rules a linked card would render
+   with browser-default blue underlined heading text, since the wrapper element
+   is now an <a>. The `:focus-visible` outline uses the same AA-passing
+   --vms-accent token gated by the existing pair coverage, so all 12 themes
+   pass the contrast guard without additional work. */
+.vms-section--linked { cursor: pointer; color: inherit; text-decoration: none; }
+.vms-section--linked:hover { box-shadow: 0 0 0 1px var(--vms-accent-dim); }
+.vms-section--linked:focus-visible {
+  outline: 2px solid var(--vms-accent);
+  outline-offset: 2px;
+}
+
 /* ── Section: collapsible (1.2.0 — client-side disclosure via native <details>) ──
    Open/closed state is DOM-local; the BrowserAdapter snapshots and restores it
    across server-driven re-renders the same way it does for focus and scroll.
