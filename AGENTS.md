@@ -576,6 +576,28 @@ Worked, runnable examples live under `demo/` — read the ones nearest your app'
 - **Don't add features the framework doesn't have a clean place for.** When a request would require a workaround, that's usually a signal that the framework needs a new primitive — ask before patching around it.
 - **The .NET `ViewNode` types live in ONE place — `viewmodel-shell-dotnet/ViewModels.cs`.** Every .NET demo consumes it via `<ProjectReference>` to `AshleyShrok.ViewModelShell.csproj` (there are **no** hand-copied `ViewModels.cs` files under `demo/` — verify with `find demo -name ViewModels.cs`, which returns nothing). So a node-type / wire-format change is a single edit there; it propagates to every demo on rebuild. The TypeScript twin is `viewmodel-shell/src/{index,server}.ts`. The two backends are kept byte-aligned by the cross-backend parity suite (`parity/`) — run it; it's what actually enforces no-drift.
 - **`CHANGELOG.md` + `MIGRATION.md` are release-gated, not HEAD-synced.** They are append-only, version-specific history and are intentionally *not* kept in lockstep with `main` — they may lag between releases, and that's fine. The only rule: whenever you bump a package version / publish (npm or NuGet), add the matching `CHANGELOG.md` entry — and a `MIGRATION.md` note if consumers must do anything — in that same change. Never retro-edit old entries when a node is added.
+- **🚨 A version bump is NOT a release — the registries are. Publishing is mandatory and manual.** Bumping `version` in `viewmodel-shell/package.json` or `Version` in `AshleyShrok.ViewModelShell.csproj` and pushing to git **does not release anything**. Consumers `npm install` / `dotnet add package` from the **registries**, not from this repo. Every version bump MUST be accompanied — in the same operator session — by the publish command(s) below. There is **no** CI publish workflow by design (npm auth-token expiry makes automated publishing more trouble than it's worth); the operator runs these by hand.
+  - **npm** (if `viewmodel-shell/package.json` version changed):
+    ```bash
+    cd /home/ubuntu/ViewModelShell/viewmodel-shell
+    npm publish  # prepublishOnly runs `npm run build` first; auth via ~/.npmrc on this box
+    npm view @ashley-shrok/viewmodel-shell version  # confirm registry now matches
+    ```
+  - **NuGet** (if `viewmodel-shell-dotnet/AshleyShrok.ViewModelShell.csproj` `<Version>` changed):
+    ```bash
+    cd /home/ubuntu/ViewModelShell/viewmodel-shell-dotnet
+    dotnet pack -c Release  # emits bin/Release/AshleyShrok.ViewModelShell.<version>.nupkg
+    dotnet nuget push bin/Release/AshleyShrok.ViewModelShell.<version>.nupkg \
+      --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
+    curl -s https://api.nuget.org/v3-flatcontainer/ashleyshrok.viewmodelshell/index.json \
+      | python3 -c "import sys,json; print(json.load(sys.stdin)['versions'][-1])"  # confirm
+    ```
+  - **CSS-only / non-.NET releases skip NuGet.** Asymmetric bumps are allowed (e.g. 1.3.0 was npm-only) — the CHANGELOG entry names the moving package(s) explicitly so the next operator knows what to publish.
+  - **Credential precheck — surface gaps BEFORE bumping, not after.** Before editing `package.json` / `.csproj` versions, verify:
+    - `~/.npmrc` has `//registry.npmjs.org/:_authToken=...` (the npm token).
+    - `$NUGET_API_KEY` is set OR the NuGet config has a usable key.
+    - If either is missing for a registry you need to publish to, **stop and tell the operator** before bumping. A bumped-but-unpublished version drifts the repo from the registry silently and erodes trust in CHANGELOG — exactly the loophole that left npm stuck at 1.0.1 through three releases (1.1.0, 1.2.0, 1.3.0) before being caught externally by a consumer.
+  - **Recovery from a missed publish.** If you find the registry behind the repo, publish the backlog in version order from each tagged release commit (`git checkout <tag>; npm publish; cd ..; git checkout main`) so `npm view ... versions` matches CHANGELOG history. Same pattern for NuGet (`git checkout <tag>; dotnet pack; dotnet nuget push ...`). Do **not** retag or rewrite the existing release commits.
 - **Test suites are non-negotiable.** Every framework change keeps the existing tests green and adds tests for new behavior.
 - **The core stays platform-agnostic — and it is enforced, not trusted.** `viewmodel-shell/src/index.ts` must reference zero platform globals. A new platform side-effect goes behind a capability verb on the `Adapter` interface (and into `BrowserAdapter`), never into core. `npm run check:core-globals` (the `viewmodel-shell/scripts/check-core-platform-globals.mjs` guard, a gating step in `.github/workflows/parity.yml`) fails the build on any `window`/`document`/`localStorage`/`sessionStorage`/`XMLHttpRequest` reference in core — run it before you push. A capability that has no safe core default (like `navigate`/`storage`) must fail loudly when its adapter method is absent, never silently no-op. See *The capability seam* under Architecture.
 
