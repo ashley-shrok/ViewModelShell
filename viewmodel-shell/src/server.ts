@@ -27,6 +27,25 @@ import type {
 // everything it needs from one place.
 export * from "./index.js";
 
+// ─── Canonical agent skill load (1.6.0 / 1.5.0) ──────────────────────────────
+// Loaded once at module init so createAgentSkillHandler can bake the body at
+// handler-creation time (no per-request fs work). The path resolution works for
+// BOTH layouts:
+//   - Source/dev (vitest):    src/server.ts → ../agent-skill.md
+//   - Published tarball:      dist/server.js → ../agent-skill.md (file is in
+//                             package root, listed in package.json `files`)
+// If `agent-skill.md` is missing at module init the import throws — the
+// fail-loud rule (see AGENTS.md capability-seam doc) applies: a silent 404
+// from the skill endpoint would defeat the purpose.
+import { readFileSync as __vmsReadFileSync } from "node:fs";
+import { fileURLToPath as __vmsFileURLToPath } from "node:url";
+import { dirname as __vmsDirname, join as __vmsJoin } from "node:path";
+const __vmsAgentSkillDir = __vmsDirname(__vmsFileURLToPath(import.meta.url));
+const AGENT_SKILL_MARKDOWN = __vmsReadFileSync(
+  __vmsJoin(__vmsAgentSkillDir, "..", "agent-skill.md"),
+  "utf8",
+);
+
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────
 //
 // The wire contract says "one action name = one operation." Per-row identity
@@ -468,6 +487,76 @@ export const shellSideEffect = {
   download: (url: string, filename?: string): ShellSideEffect =>
     ({ type: "download", url, ...(filename != null ? { filename } : {}) }),
 };
+
+// ─── Canonical agent skill mount helper (1.6.0 / 1.5.0) ──────────────────────
+
+/**
+ * Mount the canonical VMS agent skill markdown as an HTTP handler.
+ *
+ * The skill is a self-contained operating manual for the VMS wire protocol
+ * (action dispatch shape, state round-trip rules, response envelope vocabulary,
+ * side-effect verbs, polling, errors, file uploads). Advertise it to agents
+ * driving your app via the `skill` field on the
+ * `<meta name="viewmodel-shell">` discoverability tag, pointing at whatever URL
+ * you mount this handler at (recommended: `/.well-known/vms-skill.md`).
+ *
+ * **Canonical source:** `viewmodel-shell/agent-skill.md` (shipped in the npm
+ * package's `files` array; the .NET package embeds a byte-identical copy at
+ * `viewmodel-shell-dotnet/AgentSkill.md` — see `parity/check-skill.ts`).
+ *
+ * **Preamble shape.** When `appPreamble` is supplied (non-empty after trim),
+ * the served body is:
+ *
+ * ```
+ * ## App-specific notes
+ *
+ * <preamble verbatim>
+ *
+ * ---
+ *
+ * <canonical-skill-body verbatim>
+ * ```
+ *
+ * When omitted (or whitespace-only), the served body is the canonical skill
+ * verbatim. The body is computed ONCE at handler-creation time; per-request
+ * cost is a single `new Response(body)`. Multiple handlers with different
+ * preambles are cheap and fully independent.
+ *
+ * **Cross-runtime.** Pure Web Fetch API — works in Bun, Deno, Hono, Cloudflare
+ * Workers, and Node 18+. The application's router owns method/path routing;
+ * the handler accepts any request and unconditionally serves the markdown body
+ * with `Content-Type: text/markdown; charset=utf-8`.
+ *
+ * @example
+ * ```ts
+ * import { createAgentSkillHandler } from "@ashley-shrok/viewmodel-shell/server";
+ * const skillHandler = createAgentSkillHandler({
+ *   appPreamble: "This is the foo app. Auth: Bearer JWT in Authorization.",
+ * });
+ * Bun.serve({
+ *   async fetch(req) {
+ *     const url = new URL(req.url);
+ *     if (url.pathname === "/.well-known/vms-skill.md" && req.method === "GET") {
+ *       return skillHandler(req);
+ *     }
+ *     // ... your other routes
+ *   },
+ * });
+ * ```
+ */
+export function createAgentSkillHandler(
+  opts: { appPreamble?: string } = {},
+): (req: Request) => Response {
+  const preamble = opts.appPreamble?.trim() ?? "";
+  const body = preamble.length === 0
+    ? AGENT_SKILL_MARKDOWN
+    : `## App-specific notes\n\n${preamble}\n\n---\n\n${AGENT_SKILL_MARKDOWN}`;
+  return (_req: Request) =>
+    new Response(body, {
+      status: 200,
+      headers: { "Content-Type": "text/markdown; charset=utf-8" },
+    });
+}
 
 // ─── Action handler factory ──────────────────────────────────────────────────
 
