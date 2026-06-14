@@ -32,7 +32,11 @@ public record FeatureProbeState(
     string LocalValue,
     string SessionValue,
     string DownloadUrl,
-    string DownloadFilename
+    string DownloadFilename,
+    // 1.3.0 — SectionNode.Action click-anywhere card exercised by the parity
+    // fixture: select-card increments this counter, BuildVm renders a clickable
+    // SectionNode that dispatches "select-card".
+    int CardClickCount
 )
 {
     public static FeatureProbeState Initial() => new(
@@ -49,7 +53,8 @@ public record FeatureProbeState(
         LocalValue: "",
         SessionValue: "",
         DownloadUrl: "",
-        DownloadFilename: ""
+        DownloadFilename: "",
+        CardClickCount: 0
     );
 }
 
@@ -188,6 +193,11 @@ public class FeatureProbeController : ControllerBase
         {
             // Renderer wrote target page to state.TablePage before dispatch.
         }
+        else if (name == "select-card")
+        {
+            // 1.3.0 — SectionNode.Action click. Increment counter; BuildVm reflects it.
+            state = state with { CardClickCount = state.CardClickCount + 1 };
+        }
         else if (name == "boom")
         {
             // Deliberate uncaught throw — exercises the generic-Exception path through
@@ -245,8 +255,19 @@ public class FeatureProbeController : ControllerBase
             ]));
 
         var probeSection = new SectionNode("Probe", children, Variant: "card", Layout: "split");
+        // 1.3.0 — clickable SectionNode (parity coverage for SectionNode.Action).
+        var clickableCardSection = new SectionNode(
+            Heading: "Clickable Card",
+            Children: new ViewNode[]
+            {
+                new TextNode(
+                    $"Clicked {state.CardClickCount} time{(state.CardClickCount == 1 ? "" : "s")}",
+                    "muted"),
+            },
+            Variant: "card",
+            Action: new ActionDescriptor("select-card"));
         return new PageNode("Feature Probe",
-            new List<ViewNode> { probeSection, BuildTableSection(state) },
+            new List<ViewNode> { probeSection, clickableCardSection, BuildTableSection(state) },
             Density: "compact", Layout: "cards");
     }
 

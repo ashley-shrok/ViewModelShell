@@ -44,6 +44,10 @@ interface FeatureProbeState {
   sessionValue: string;
   downloadUrl: string;
   downloadFilename: string;
+  // 1.4.0 — SectionNode.action click-anywhere card exercised by the parity
+  // fixture: select-card increments this counter, BuildVm renders a clickable
+  // SectionNode that dispatches "select-card".
+  cardClickCount: number;
 }
 
 function initialState(): FeatureProbeState {
@@ -61,6 +65,7 @@ function initialState(): FeatureProbeState {
     sessionValue: "",
     downloadUrl: "",
     downloadFilename: "",
+    cardClickCount: 0,
   };
 }
 
@@ -182,12 +187,22 @@ function buildVm(state: FeatureProbeState): ViewNode {
     layout: "split",
     children,
   };
+  // 1.4.0 — clickable SectionNode (parity coverage for SectionNode.action).
+  const clickableCardSection: ViewNode = {
+    type: "section",
+    heading: "Clickable Card",
+    variant: "card",
+    action: { name: "select-card" },
+    children: [
+      { type: "text", value: `Clicked ${state.cardClickCount} time${state.cardClickCount === 1 ? "" : "s"}`, style: "muted" },
+    ],
+  };
   return {
     type: "page",
     title: "Feature Probe",
     density: "compact",
     layout: "cards",
-    children: [probeSection, buildTableSection(state)],
+    children: [probeSection, clickableCardSection, buildTableSection(state)],
   };
 }
 
@@ -269,6 +284,9 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
     // (Server just re-renders the slice for the new page.)
   } else if (name === "table-page-next") {
     // Same as prev.
+  } else if (name === "select-card") {
+    // 1.4.0 — SectionNode.action click. Increment counter; BuildVm reflects it.
+    state = { ...state, cardClickCount: state.cardClickCount + 1 };
   } else if (name === "boom") {
     // Deliberate uncaught throw — exercises the generic-Error path through
     // createAction's catch arm. Used by the Plan 04 parity fixture to verify
