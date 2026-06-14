@@ -6,6 +6,61 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to '1.3.0' (npm @ashley-shrok/viewmodel-shell only)
+
+1.3.0 is a visible default shift in the shipped stylesheet — no wire/API change. The `--vms-text-*` token scale moves up one rung to align with modern web-density norms; `--vms-text-base` is now `0.875rem` (14px) instead of `0.8125rem` (13px). The NuGet package is NOT republished — this change has no .NET surface.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `1.2.0` | **`1.3.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `1.2.0` | (unchanged) |
+
+### What changed (one paragraph)
+
+The shipped `default.css` type scale was a desktop-app-density set — buttons, body text, checkboxes, and validation messages all rendered at 13px (`--vms-text-base: 0.8125rem`). That read as small on web/launcher pages where users expect web-scale type. The whole scale shifts up one rung — `xs` 11→12px, `sm` 12→13px, `base` 13→**14**px, `md` 14→16px, `lg` 16→18px, `xl` 22→24px; `2xl` stays at 36px. Spacing tokens (`--vms-space-*`) are unchanged — the complaint was about type, not gaps. None of the shipped themes redefine `--vms-text-*`, so every theme picks up the new scale automatically. No `ViewNode` types, action payloads, or emitted class names change; the parity suite emits byte-identical JSON.
+
+### Not breaking
+
+- The JSON wire is unchanged — old clients talking to new servers (and vice versa) work byte-identically. Cross-backend parity is green.
+- The `--vms-*` override seam is unchanged — apps that retuned `--vms-text-base` (or any other token) via the documented per-app `:root{}` override seam keep their override; per-app values still win.
+- The TUI adapter is unaffected — terminals have no font-size, so the scale shift is a no-op there.
+
+### Most apps: nothing to do
+
+Bump the npm dep, rebuild, ship. Buttons/body/inputs render ~1 rem rung larger; tables and forms feel slightly more spacious; nothing changes structurally.
+
+### Optional — pin the prior (pre-1.3.0) scale
+
+For apps that deliberately want the old desktop-app-density look (e.g. a dense internal admin tool whose users prefer 13px body), add an `app-tokens.css` to your frontend and import it AFTER your theme:
+
+```css
+/* app-tokens.css — pin the pre-1.3.0 type scale */
+:root {
+  --vms-text-xs:    0.6875rem; /* 11px */
+  --vms-text-sm:    0.75rem;   /* 12px */
+  --vms-text-base:  0.8125rem; /* 13px */
+  --vms-text-md:    0.875rem;  /* 14px */
+  --vms-text-lg:    1rem;      /* 16px */
+  --vms-text-xl:    1.375rem;  /* 22px */
+  --vms-text-2xl:   2.25rem;   /* 36px */
+}
+```
+
+```typescript
+// main.ts
+import "@ashley-shrok/viewmodel-shell/styles.css";
+import "@ashley-shrok/viewmodel-shell/themes/light-amber.css"; // your chosen theme
+import "./app-tokens.css"; // pin the prior scale — AFTER the theme
+```
+
+This is the documented `--vms-*` override seam (see AGENTS.md § Design system), not a workaround.
+
+### Issue resolved
+
+- Closes the framing portion of [#19](https://github.com/ashley-shrok/ViewModelShell/issues/19) (ButtonNode.size — per-button font/padding scale). The presentational `size` prop is **not** added. The original use case (a couple of prominent launcher buttons that should read larger) splits cleanly into two existing concerns: (1) "text feels small" — addressed at the scale level by this release; (2) "this button is structurally more important" — addressed by wrapping the action in a `SectionNode variant:"card"` tile with a heading + short blurb, which is how VMS expresses hierarchy semantically. See `demo/Showcase/` archetype views for the canonical card-tile idiom.
+
+---
+
 ## Upgrading to '1.2.0' (npm @ashley-shrok/viewmodel-shell + NuGet AshleyShrok.ViewModelShell)
 
 1.2.0 is purely additive. A new client-side aesthetic disclosure primitive lands on `SectionNode`; no consumer code changes are required to upgrade.

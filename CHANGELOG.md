@@ -6,6 +6,43 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 1.3.0 — Type-scale realignment to web-density norms (npm only)
+
+**npm:** `1.3.0` (MINOR — visible default shift, no wire/API change) · **NuGet:** unchanged (CSS-only change, no .NET surface)
+
+The shipped `default.css` type scale was a desktop-app-density set — `--vms-text-base` was `0.8125rem` (13px), so buttons, body text, checkboxes, and error/warning text all rendered at 13px. That reads as small on web/launcher pages, where users expect web-scale type (16px is the browser default, Tailwind/Bootstrap/Material body is 16px). The whole scale shifts up one rung to align with modern dense-productivity UIs (Linear, Notion, GitHub) — `--vms-text-base` is now `0.875rem` (14px). The shift originated in issue #19 (per-button size scale): the underlying complaint was "text feels small," not "buttons need a presentational `size` prop" — addressing it at the scale level resolves the root cause without adding a non-semantic node field.
+
+### Changed
+
+- **`--vms-text-*` tokens in `viewmodel-shell/styles/default.css`** bumped one rung each:
+  | Token | Was | Now | px (at 16px root) |
+  |---|---|---|---|
+  | `--vms-text-xs` | `0.6875rem` | `0.75rem` | 11 → 12 |
+  | `--vms-text-sm` | `0.75rem` | `0.8125rem` | 12 → 13 |
+  | `--vms-text-base` | `0.8125rem` | `0.875rem` | 13 → **14** |
+  | `--vms-text-md` | `0.875rem` | `1rem` | 14 → 16 |
+  | `--vms-text-lg` | `1rem` | `1.125rem` | 16 → 18 |
+  | `--vms-text-xl` | `1.375rem` | `1.5rem` | 22 → 24 |
+  | `--vms-text-2xl` | `2.25rem` | `2.25rem` | 36 (unchanged) |
+- **Spacing tokens (`--vms-space-*`) unchanged.** The complaint was about type, not gaps; bumping spacing would push every table row, section, and form taller without addressing the actual readability gap.
+- **No node/wire/API change.** The fix lives entirely in shipped CSS; every `ViewNode` type, action payload, and emitted class name is byte-identical to 1.2.0. The parity suite emits the same JSON; the .NET package is not republished.
+
+### Themes
+
+- None of the shipped themes under `viewmodel-shell/styles/themes/` redefine `--vms-text-*` (only colors), so every theme picks up the new scale automatically. No theme-file changes were required.
+
+### Consumers
+
+- **Most apps: nothing to do.** Rebuild and the new scale ships through.
+- **Apps that want to pin the old scale** (e.g. a dense admin tool that liked the 13px-base look): override all seven tokens in a per-app `:root{}` stylesheet imported after the theme. The exact override block is in `MIGRATION.md` § 1.3.0.
+- **Apps that already retuned `--vms-text-base`** via the documented `--vms-*` override seam keep their override unchanged — the per-app `:root{}` value still wins over the new default.
+
+### Issue resolved
+
+- Closes the framing portion of #19 (ButtonNode.size). The presentational `size` prop is **not** added — it conflates "visual emphasis" (a structural concern best expressed via `SectionNode variant:"card"` tiles) with "type feels small" (the actual gap, now fixed at the scale level). Apps that need a single prominent launcher action should reach for the card-tile pattern; see `demo/Showcase/` archetype views for the canonical hierarchy idiom.
+
+---
+
 ## 1.2.0 — SectionNode.collapsible (npm + NuGet)
 
 **npm:** `1.2.0` (MINOR — additive wire field; new TS optional fields) · **NuGet:** `1.2.0` (MINOR — additive wire field, lockstep)

@@ -49,13 +49,17 @@
   --vms-space-md:   1rem;
   --vms-space-lg:   1.5rem;
   --vms-space-xl:   2.25rem;
-  /* Type scale — all rem, modular ~1.2, base --vms-text-base 0.8125rem (D-06/D-09) */
-  --vms-text-xs:    0.6875rem;
-  --vms-text-sm:    0.75rem;
-  --vms-text-base:  0.8125rem;
-  --vms-text-md:    0.875rem;
-  --vms-text-lg:    1rem;
-  --vms-text-xl:    1.375rem;
+  /* Type scale — all rem, base --vms-text-base 0.875rem (14px) aligning with
+     modern dense-productivity UI norms (Linear, Notion, GitHub). Bumped from
+     the pre-1.3.0 desktop-app-density scale (base 0.8125rem / 13px) which read
+     as small on web/launcher pages. To pin the prior scale per-app, override
+     all seven tokens in your app stylesheet — see MIGRATION.md § 1.3.0. */
+  --vms-text-xs:    0.75rem;
+  --vms-text-sm:    0.8125rem;
+  --vms-text-base:  0.875rem;
+  --vms-text-md:    1rem;
+  --vms-text-lg:    1.125rem;
+  --vms-text-xl:    1.5rem;
   --vms-text-2xl:   2.25rem;
   /* Page shell (D-12) — additive override seam (issue #13); host/theme-retunable
      via a single :root{} override imported after the theme. The two width
