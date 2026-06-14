@@ -37,6 +37,9 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <!-- For AgentSkillExtensions tests: WebApplication.CreateBuilder + UseTestServer + GetTestClient.
+         Pin to 9.0.x to match the test project's net9.0 target framework. -->
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="9.0.*" />
   </ItemGroup>
 
   <ItemGroup>

@@ -10,7 +10,7 @@
 
     <!-- ── NuGet packaging ─────────────────────────────────────────── -->
     <PackageId>AshleyShrok.ViewModelShell</PackageId>
-    <Version>1.4.0</Version>
+    <Version>1.5.0</Version>
     <Authors>ashley-shrok</Authors>
     <Description>Server-driven UI framework — backend types. Wire-format-aligned with the @ashley-shrok/viewmodel-shell npm package: ViewNode hierarchy with [JsonPolymorphic] discriminators, ActionPayload&lt;TState&gt;, ShellResponse&lt;TState&gt;. Drop the package reference into any .NET project to produce the JSON contract that the TypeScript adapter renders.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -34,6 +34,25 @@
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- ── Agent skill (1.5.0) ──────────────────────────────────────────────────
+       The canonical agent skill markdown is embedded as a logical resource so
+       AgentSkillExtensions.LoadCanonical() can read it from
+       Assembly.GetManifestResourceStream("AshleyShrok.ViewModelShell.AgentSkill.md").
+       The LogicalName attribute is required: without it, MSBuild auto-derives a
+       brittle resource name from the root namespace + file path. The byte-identity
+       to viewmodel-shell/agent-skill.md is enforced by parity/check-skill.ts. -->
+  <ItemGroup>
+    <EmbeddedResource Include="AgentSkill.md" LogicalName="AshleyShrok.ViewModelShell.AgentSkill.md" />
+  </ItemGroup>
+
+  <!-- ── Test friendship ──────────────────────────────────────────────────────
+       Allow viewmodel-shell-dotnet/Tests/ to call internal helpers like
+       AgentSkillExtensions.LoadCanonical so we can pin "the embedded resource is
+       really present in the built dll" without an integration-level smoke test. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tests" />
   </ItemGroup>
 
   <!-- The framework-level test project lives at viewmodel-shell-dotnet/Tests/
