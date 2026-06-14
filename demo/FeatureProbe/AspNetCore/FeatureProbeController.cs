@@ -266,8 +266,19 @@ public class FeatureProbeController : ControllerBase
             },
             Variant: "card",
             Action: new ActionDescriptor("select-card"));
+        // 1.4.0 — linked SectionNode (parity coverage for SectionNode.Link, issue #21).
+        // Pure client-side navigation — no state change, no dispatch arm needed;
+        // the wire shape itself is the parity gate.
+        var linkedCardSection = new SectionNode(
+            Heading: "Linked card",
+            Children: new ViewNode[]
+            {
+                new TextNode("Renders as <a href> for native link affordances.", "muted"),
+            },
+            Variant: "card",
+            Link: new SectionLink("https://example.com/probe", External: true));
         return new PageNode("Feature Probe",
-            new List<ViewNode> { probeSection, clickableCardSection, BuildTableSection(state) },
+            new List<ViewNode> { probeSection, clickableCardSection, linkedCardSection, BuildTableSection(state) },
             Density: "compact", Layout: "cards");
     }
 
