@@ -309,7 +309,8 @@ export class BrowserAdapter implements Adapter {
 
     const el = document.createElement("section");
     el.className = `vms-section${n.variant === "card" ? " vms-section--card" : ""}${
-      n.layout && n.layout !== "stack" ? ` vms-section--${n.layout}` : ""}`;
+      n.layout && n.layout !== "stack" ? ` vms-section--${n.layout}` : ""}${
+      n.action ? " vms-section--clickable" : ""}`;
     if (n.heading) {
       const h = document.createElement("h2");
       h.className = "vms-section__heading";
@@ -317,6 +318,41 @@ export class BrowserAdapter implements Adapter {
       el.appendChild(h);
     }
     this.kids(n.children, el, on);
+    // SectionNode.action — click-anywhere + keyboard + ARIA. Mirrors
+    // TableRow.action (1.1.0). Containment via stopPropagation on nested
+    // interactive controls AFTER kids() has rendered them.
+    if (n.action) {
+      const actionName = n.action.name;
+      el.tabIndex = 0;
+      el.setAttribute("role", "button");
+      // aria-label derivation: heading > joined descendant text (capped) > "Card".
+      let ariaLabel = "";
+      if (n.heading && n.heading.trim().length > 0) {
+        ariaLabel = n.heading.trim();
+      } else {
+        const text = (el.textContent ?? "").trim().replace(/\s+/g, " · ");
+        ariaLabel = text.length > 0 ? text.slice(0, 200) : "Card";
+      }
+      el.setAttribute("aria-label", ariaLabel);
+      el.addEventListener("click", () => { on({ name: actionName }); });
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          on({ name: actionName });
+        } else if (e.key === " " || e.key === "Spacebar") {
+          e.preventDefault(); // suppress page scroll
+          on({ name: actionName });
+        }
+      });
+      // Containment: clicks on nested interactive controls must NOT bubble to
+      // the section's click handler. Selectors mirror the TableRow.action
+      // wiring (per-row button / checkbox / linkLabel anchor) plus a catch-all
+      // for any anchor inside the card (LinkNode renders as <a>).
+      el.querySelectorAll<HTMLElement>(
+        ".vms-button, .vms-checkbox__input, .vms-checkbox, .vms-table__link, a[href]"
+      ).forEach(ctrl => {
+        ctrl.addEventListener("click", (e) => { e.stopPropagation(); });
+      });
+    }
     parent.appendChild(el);
   }
 
