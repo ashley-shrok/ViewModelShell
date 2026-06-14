@@ -6,6 +6,37 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 1.6.0 / 1.5.0 — Canonical agent skill + discoverability endpoint (npm + NuGet)
+
+**npm:** `1.6.0` (MINOR — additive surface, new helper export from the `/server` subpath, new shipped markdown file) · **NuGet:** `1.5.0` (MINOR — additive surface, new `MapVmsAgentSkill` extension on `IEndpointRouteBuilder`, embedded resource for the canonical skill).
+
+Both packages now ship a canonical markdown operating manual for the VMS wire protocol — the same content an LLM or curl-driven agent would need to drive a VMS app without a browser. A new optional `skill` field on the existing `<meta name="viewmodel-shell">` tag advertises where the skill is served; agents that know about it fetch it for the protocol manual, old agents ignore the unknown field. Mounting the endpoint is a one-liner on either backend. The skill IS the protocol manual: it documents action dispatch shape (JSON + multipart), state round-trip rules + bind paths, response envelope vocabulary (`ok`, `vm`, `state`, `redirect`, `sideEffects`, `nextPollIn`, `busy`, `preventUnload`), side-effect verbs + the forward-compat "silently ignore unknown" rule, error code vocabulary, polling cadence, file uploads, and protocol versioning. Tone is imperative and operational — the reader is an agent that needs to do work in the next 60 seconds.
+
+### Added
+
+- **`viewmodel-shell/agent-skill.md`** — the canonical agent skill markdown (shipped in the npm `files` array; embedded as a logical resource by the .NET package as `AshleyShrok.ViewModelShell.AgentSkill.md`; byte-identical between the two backends, parity-gated to prevent drift). Eleven sections in fixed order: What this is · Endpoints · Action dispatch shape · The round-trip rule · Response envelope · Side-effect verbs · Errors · Auth · Polling · Files · Versioning.
+- **TypeScript helper `createAgentSkillHandler({appPreamble?})`** exported from `@ashley-shrok/viewmodel-shell/server` — returns a Web Fetch `(Request) => Response` handler. Compatible with Bun, Deno, Hono, Cloudflare Workers, Node 18+. Body cached at handler creation; per-request cost is a single `new Response(body)`.
+- **.NET helper `AgentSkillExtensions.MapVmsAgentSkill(this IEndpointRouteBuilder, string path = "/.well-known/vms-skill.md", string? appPreamble = null)`** — minimal-API endpoint extension. Lazily loads the embedded resource ONCE at mount time and fails loud at startup (`InvalidOperationException`) if absent — the fail-loud rule applies, a silently-404'd skill endpoint would defeat the purpose.
+- **Optional `skill` field on the existing `<meta name="viewmodel-shell">` JSON content.** Purely additive: omitting it is the pre-1.6.0 behavior; old apps and old agents both still work.
+- **Per-app preamble support:** when `appPreamble` is supplied (non-empty after trim), the served body prepends the preamble under a `## App-specific notes` heading + `---` separator, then the canonical body verbatim. Apps use this to name their domain, auth specifics, or any context an agent should read before the protocol manual. Whitespace-only preamble is treated as no preamble.
+
+### Demo migration
+
+- **HelpDesk** (both .NET twin and bun twin) mounts the skill endpoint at `/.well-known/vms-skill.md` with a short help-desk-specific preamble naming the domain (requesters / agents / one SQLite DB / per-controller bind paths). Both `agent.html` and `requester.html` meta tags now carry the `skill` field. This is the worked example and the parity surface — `parity/check-skill.ts` GETs the URL from both backends and asserts byte-identical bodies + correct content-type + preamble plumbing.
+- Other demos are unchanged. Future demos can adopt the mount via the one-liner per backend.
+
+### Tests
+
+- **New vitest suite `viewmodel-shell/test/agent-skill.test.ts`** (6 cases): handler returns 200 + correct content-type; canonical body verbatim when no preamble; preamble prepended under heading with separator; whitespace-only preamble treated as no preamble; idempotent across invocations; independent across handler instances.
+- **New xUnit suite `viewmodel-shell-dotnet/Tests/AgentSkillTests.cs`** (6 facts): default-path 200 + canonical body verbatim; custom path 200 + default 404; preamble prepended; content-type `text/markdown; charset=utf-8`; empty/whitespace preamble omits header; `LoadCanonical` returns non-empty body containing the protocol token (proves the embedded resource is the real canonical skill, not a placeholder).
+- **Parity gate:** `parity/check-skill.ts` runs after the JSON-fixture sweep — phase 1 diffs the npm + .NET source files byte-for-byte (catches a drifted .NET copy with a clear "Fix: cp …" message); phase 2 GETs the skill URL from both HelpDesk backends and asserts identical bodies + content-type + preamble substring. Wired into `parity/run.ts` after the existing fixture loop.
+
+### Consumers
+
+Additive — nothing required. No existing API changed; no existing wire shape changed; old apps without the meta-tag `skill` field continue to work; old agents that don't know about the field continue to work. Consumers that want to advertise a skill mount the helper + add the `skill` field; everyone else upgrades cleanly without code changes.
+
+---
+
 ## 1.5.0 / 1.4.0 — SectionNode.link URL-wrapper clickable cards (npm + NuGet)
 
 **npm:** `1.5.0` (MINOR — additive wire field; new TS optional field) · **NuGet:** `1.4.0` (MINOR — additive wire field on the SectionNode record + new SectionLink helper record)

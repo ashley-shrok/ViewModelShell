@@ -6,6 +6,83 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `1.6.0` / `1.5.0` (lockstep — npm @ashley-shrok/viewmodel-shell + NuGet AshleyShrok.ViewModelShell)
+
+1.6.0 / 1.5.0 ships a canonical agent skill — a self-contained markdown operating manual for the VMS wire protocol that an external agent (curl, WebFetch, an LLM) can `GET` over HTTP to learn how to drive a VMS app without a browser. New helper APIs (`MapVmsAgentSkill` on .NET, `createAgentSkillHandler` on TS) make mounting the endpoint a one-liner. The existing `<meta name="viewmodel-shell">` discoverability tag gains an optional `skill` field pointing at the served URL. Both packages move in lockstep because the canonical markdown is shipped from both (npm `files` array; NuGet logical resource), kept byte-identical by a parity gate.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `1.5.0` | **`1.6.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `1.4.0` | **`1.5.0`** |
+
+### What changed (one paragraph)
+
+Today, the BrowserAdapter encapsulates the entire wire protocol (multipart `_action` + `_state`, JSON-body opt-in, state round-trip rules, bind paths, response envelope, side-effect verbs, polling, dispatch guard, file persistence) for human visitors who load the app in a browser; an agent driving the API cold (curl, WebFetch, an LLM) sees a JSON tree but none of the operating knowledge. The canonical agent skill closes that gap with a tight, imperative ~1-3-page operating manual mounted at `/.well-known/vms-skill.md` (or wherever you choose) and advertised via the meta tag's new `skill` field. Apps may prepend an optional preamble (auth specifics, domain context) above the canonical body.
+
+### Consumer action required: none.
+
+The skill is additive — apps that don't mount the endpoint and don't add the `skill` field behave exactly as 1.5.0 / 1.4.0. Old agents that don't know about the field ignore it. No wire-shape change.
+
+### Not breaking
+
+- No `ViewNode` field added or removed; no JSON wire shape change.
+- No HTTP response envelope change.
+- No CSS or DOM change.
+- The existing `<meta name="viewmodel-shell">` JSON content is forward-compatible with the new optional field — old agents skip unknown fields.
+- Every existing demo's controllers and routes compile and run unchanged.
+
+### New capability — opt-in mount
+
+To advertise a skill to agents driving your VMS app:
+
+**.NET (ASP.NET Core minimal API or controllers):**
+```csharp
+using ViewModelShell;
+
+app.MapControllers();
+app.MapVmsAgentSkill(appPreamble: "This is the foo app. Auth: Bearer JWT in Authorization."); // optional preamble
+app.MapFallbackToFile("index.html");
+```
+
+Mount the skill BEFORE `MapFallbackToFile` so the explicit `MapGet` route claims `/.well-known/vms-skill.md` before the SPA fallback. The body is built ONCE at mount time; if the embedded resource is somehow missing, the call throws `InvalidOperationException` immediately (fail-loud, not on first request).
+
+**TypeScript (Bun shown; same shape for Deno/Hono/Cloudflare Workers):**
+```typescript
+import { createAgentSkillHandler } from "@ashley-shrok/viewmodel-shell/server";
+
+const skillHandler = createAgentSkillHandler({
+  appPreamble: "This is the foo app. Auth: Bearer JWT in Authorization.",
+});
+
+Bun.serve({
+  async fetch(req) {
+    const url = new URL(req.url);
+    if (url.pathname === "/.well-known/vms-skill.md" && req.method === "GET") {
+      return skillHandler(req);
+    }
+    // ... your existing routes
+  },
+});
+```
+
+Then add the `skill` field to your app's `<meta name="viewmodel-shell">` tag:
+```html
+<meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/1.0","endpoint":"/api/x","actionEndpoint":"/api/x/action","skill":"/.well-known/vms-skill.md"}'>
+```
+
+Agents that fetch the meta tag will see the skill URL, fetch it, and read the canonical protocol manual — or your preamble prepended above it under a `## App-specific notes` heading.
+
+### What's new at the meta-tag level
+
+- New optional `skill` field on the meta-tag JSON content. Pointing it at the URL where you mounted the helper is the entire integration. Old agents not aware of the field ignore it.
+- The `protocol` token still tracks the **wire shape** (currently `viewmodel-shell/1.0`), not the package version. A package can be 1.6.0 while the protocol token is `viewmodel-shell/1.0` because the wire shape hasn't broken.
+
+### Working example
+
+`demo/HelpDesk/AspNetCore/Program.cs` (and its bun twin `demo/HelpDesk-bun/server.ts`) mount the skill at `/.well-known/vms-skill.md` with a short preamble naming the app's domain. Both `agent.html` and `requester.html` carry the `skill` field. The parity gate (`parity/check-skill.ts`) GETs the URL from both backends and asserts byte-identical bodies + correct content-type + preamble plumbing — a useful reference for verifying your own mount.
+
+---
+
 ## Upgrading to '1.5.0' / '1.4.0' (lockstep — npm @ashley-shrok/viewmodel-shell + NuGet AshleyShrok.ViewModelShell)
 
 1.5.0 / 1.4.0 adds `SectionNode.link` — a URL-link navigator variant of the clickable-card primitive. Mirrors `SectionNode.action` (1.4.0 / 1.3.0 — see entry below) but emits a wrapping `<a href>` instead of a dispatcher `<section role="button">`, so every native browser link affordance works for free (middle-click new tab, Ctrl/Cmd-click, right-click context menu, drag-to-bookmarks, status-bar URL preview, accessible link semantics). Both packages move in lockstep because it is an additive wire field on both backends; the wire stays byte-identical when `link` is omitted, so a server upgraded ahead of its clients is fully back-compatible (and vice versa).
