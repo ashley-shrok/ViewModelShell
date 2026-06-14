@@ -202,7 +202,14 @@ public record ShellResponse<TState>(
     /// </exception>
     public ShellResponse<TState> Validate()
     {
-        if (Vm is not null) ViewTreeValidation.ValidateActionNames(Vm);
+        if (Vm is not null)
+        {
+            ViewTreeValidation.ValidateActionNames(Vm);
+            // 1.3.0 — SectionNode.Action shape checks (rejects action+collapsible
+            // on the same section and nested action-in-action). Mirrors the
+            // ValidateActionNames seam — InvalidOperationException → invalid_tree.
+            ViewTreeValidation.ValidateSectionAction(Vm);
+        }
         return this;
     }
 }
@@ -255,7 +262,20 @@ public record SectionNode(
     // snapshot when Collapsible:true. Provide when Heading isn't unique
     // within a page or is absent; otherwise the renderer falls back to
     // Heading ?? "vms-section-anon" disambiguated by per-render ordinal.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id = null,
+    // 1.3.0 — click-anywhere clickable-card primitive. Mirrors TableRow.Action
+    // (1.1.0) at the section level. When set, the BrowserAdapter makes the
+    // whole section clickable (click + keyboard Enter/Space + role="button" +
+    // tabindex=0 + aria-label) and stops propagation on nested interactive
+    // controls (Button/Checkbox/Link) so they don't double-fire. Tree
+    // validation (ViewTreeValidation.ValidateSectionAction, invoked by
+    // ShellResponse<TState>.Validate()) rejects two invalid combos with
+    // invalid_tree: (a) Action set together with Collapsible:true on the same
+    // section, and (b) a SectionNode.Action nested inside another
+    // SectionNode.Action. A styling-only Variant:"card" section (no Action)
+    // inside a clickable card is valid. JsonIgnore-on-null per the
+    // file-header maintainer rule.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null
 ) : ViewNode;
 
 public record ListNode(
@@ -489,6 +509,83 @@ public static class ViewTreeValidation
                     $"nodes (e.g. '{group.Key}-X' / '{group.Key}-Y') or move them into the same surrounding " +
                     "form if they are intended to fire the same operation.");
             }
+        }
+    }
+
+    /// <summary>
+    /// Walk a ViewNode tree and reject two invalid SectionNode.Action combos:
+    /// (a) Action + Collapsible:true on the same section, and (b) a clickable
+    /// section nested inside another clickable section. A styling-only
+    /// Variant:"card" section (no Action) inside a clickable card is valid.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when either invalid combo is found. The framework's exception
+    /// filter maps this to a 500 with code "invalid_tree", same path as
+    /// <see cref="ValidateActionNames"/>.
+    /// </exception>
+    public static void ValidateSectionAction(ViewNode root)
+    {
+        WalkForSectionAction(root, outerClickable: null);
+    }
+
+    private static void WalkForSectionAction(ViewNode node, SectionNode? outerClickable)
+    {
+        switch (node)
+        {
+            case PageNode page:
+                foreach (var child in page.Children) WalkForSectionAction(child, outerClickable);
+                break;
+
+            case SectionNode section:
+                // (a) Action + Collapsible:true on the same section — invalid.
+                if (section.Action is not null && section.Collapsible == true)
+                {
+                    var hdr = string.IsNullOrEmpty(section.Heading) ? "(headingless)" : section.Heading;
+                    throw new InvalidOperationException(
+                        $"SectionNode '{hdr}' has both Action and Collapsible: true set. " +
+                        "A collapsible section's summary IS the click target; a clickable card " +
+                        "makes the whole section the click target. Pick one.");
+                }
+                // (b) Nested action-in-action — invalid.
+                if (section.Action is not null && outerClickable is not null)
+                {
+                    var innerHdr = string.IsNullOrEmpty(section.Heading) ? "(headingless)" : section.Heading;
+                    var outerHdr = string.IsNullOrEmpty(outerClickable.Heading) ? "(headingless)" : outerClickable.Heading;
+                    throw new InvalidOperationException(
+                        $"Nested SectionNode.Action: inner section '{innerHdr}' is inside clickable outer " +
+                        $"section '{outerHdr}'. Nested role='button' elements are an accessibility violation, " +
+                        "and click-ownership in the overlap is ambiguous. Use a styling-only inner section " +
+                        "(variant: 'card', no Action) with internal buttons instead.");
+                }
+                var nextOuter = section.Action is not null ? section : outerClickable;
+                foreach (var child in section.Children) WalkForSectionAction(child, nextOuter);
+                break;
+
+            case ListNode list:
+                foreach (var child in list.Children) WalkForSectionAction(child, outerClickable);
+                break;
+
+            case ListItemNode item:
+                foreach (var child in item.Children) WalkForSectionAction(child, outerClickable);
+                break;
+
+            case FormNode form:
+                foreach (var child in form.Children) WalkForSectionAction(child, outerClickable);
+                break;
+
+            case ModalNode modal:
+                foreach (var child in modal.Children) WalkForSectionAction(child, outerClickable);
+                if (modal.Footer is { } footer)
+                {
+                    foreach (var f in footer) WalkForSectionAction(f, outerClickable);
+                }
+                break;
+
+            // Leaf-like nodes (FieldNode, CheckboxNode, ButtonNode, TextNode,
+            // LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
+            // TableNode, CopyButtonNode) carry no SectionNode descendants. No
+            // recursion needed — TableNode rows hold strings + per-row controls,
+            // not sections, so a section can never sit inside a table row.
         }
     }
 
