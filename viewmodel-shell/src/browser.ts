@@ -325,12 +325,16 @@ export class BrowserAdapter implements Adapter {
       const actionName = n.action.name;
       el.tabIndex = 0;
       el.setAttribute("role", "button");
-      // aria-label derivation: heading > joined descendant text (capped) > "Card".
+      // aria-label derivation: heading > flattened descendant text (capped) > "Card".
+      // Whitespace runs (textContent collapses across child elements, so we
+      // get long runs of spaces / newlines from the DOM tree) are collapsed
+      // to a single space — preserving normal in-text spacing like
+      // "Choose plan" intact instead of mangling it to "Choose · plan".
       let ariaLabel = "";
       if (n.heading && n.heading.trim().length > 0) {
         ariaLabel = n.heading.trim();
       } else {
-        const text = (el.textContent ?? "").trim().replace(/\s+/g, " · ");
+        const text = (el.textContent ?? "").replace(/\s+/g, " ").trim();
         ariaLabel = text.length > 0 ? text.slice(0, 200) : "Card";
       }
       el.setAttribute("aria-label", ariaLabel);

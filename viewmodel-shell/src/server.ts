@@ -219,6 +219,110 @@ function recordAction(
   out.push({ name: action.name, enclosingForm });
 }
 
+// ─── SectionNode.action shape check (1.4.0 / 260614-9hq) ─────────────────────
+//
+// Two invalid combos a clickable-card primitive can produce at build time:
+//   (a) SectionNode.action set together with collapsible:true on the same
+//       section — a collapsible section's <summary> IS the click target; a
+//       clickable card makes the whole section the click target. Pick one.
+//   (b) A SectionNode with .action nested inside another SectionNode with
+//       .action — nested role="button" is an a11y violation, and
+//       click-ownership in the overlap is ambiguous.
+// A styling-only SectionNode { variant: "card" } (no .action) inside a
+// clickable card with internal buttons is VALID — only nested .action errors.
+//
+// Mirrors viewmodel-shell-dotnet/ViewModels.cs's
+// ViewTreeValidation.ValidateSectionAction. The createAction wrapper invokes
+// this alongside validateActionNames so a server-built tree that violates
+// either rule surfaces as a 500 with code "invalid_tree" before the response
+// leaves the wire.
+
+/**
+ * Walk a ViewNode tree and reject two invalid SectionNode.action combos:
+ * (a) action + collapsible:true on the same section, and (b) a clickable
+ * section nested inside another clickable section. Pure check — does not
+ * mutate the tree.
+ *
+ * @throws Error when either invalid combo is found. The message names the
+ *   offending section(s) by heading (or `(headingless)`).
+ */
+export function validateSectionAction(vm: ViewNode): void {
+  walkForSectionAction(vm, null);
+}
+
+function walkForSectionAction(
+  node: ViewNode,
+  outerClickable: SectionNode | null,
+): void {
+  switch (node.type) {
+    case "page": {
+      const page = node as PageNode;
+      for (const child of page.children) walkForSectionAction(child, outerClickable);
+      return;
+    }
+    case "section": {
+      const section = node as SectionNode;
+      // (a) action + collapsible:true — invalid.
+      if (section.action != null && section.collapsible === true) {
+        const hdr = section.heading && section.heading.length > 0
+          ? section.heading
+          : "(headingless)";
+        throw new Error(
+          `SectionNode '${hdr}' has both Action and Collapsible: true set. ` +
+          "A collapsible section's summary IS the click target; a clickable card " +
+          "makes the whole section the click target. Pick one.",
+        );
+      }
+      // (b) nested action-in-action — invalid.
+      if (section.action != null && outerClickable !== null) {
+        const innerHdr = section.heading && section.heading.length > 0
+          ? section.heading
+          : "(headingless)";
+        const outerHdr = outerClickable.heading && outerClickable.heading.length > 0
+          ? outerClickable.heading
+          : "(headingless)";
+        throw new Error(
+          `Nested SectionNode.Action: inner section '${innerHdr}' is inside clickable outer ` +
+          `section '${outerHdr}'. Nested role='button' elements are an accessibility violation, ` +
+          "and click-ownership in the overlap is ambiguous. Use a styling-only inner section " +
+          "(variant: 'card', no Action) with internal buttons instead.",
+        );
+      }
+      const nextOuter = section.action != null ? section : outerClickable;
+      for (const child of section.children) walkForSectionAction(child, nextOuter);
+      return;
+    }
+    case "list": {
+      const list = node as ListNode;
+      for (const child of list.children) walkForSectionAction(child, outerClickable);
+      return;
+    }
+    case "list-item": {
+      const li = node as ListItemNode;
+      for (const child of li.children) walkForSectionAction(child, outerClickable);
+      return;
+    }
+    case "form": {
+      const form = node as FormNode;
+      for (const child of form.children) walkForSectionAction(child, outerClickable);
+      return;
+    }
+    case "modal": {
+      const modal = node as ModalNode;
+      for (const child of modal.children) walkForSectionAction(child, outerClickable);
+      if (modal.footer) {
+        for (const child of modal.footer) walkForSectionAction(child, outerClickable);
+      }
+      return;
+    }
+    // Leaf-like nodes (field, checkbox, button, text, link, image, stat-bar,
+    // tabs, progress, table, copy-button) carry no SectionNode descendants —
+    // TableNode rows hold strings + per-row controls, not sections.
+    default:
+      return;
+  }
+}
+
 // ─── Action payload ──────────────────────────────────────────────────────────
 
 export interface ActionPayload<TState> {
@@ -488,6 +592,9 @@ export function createAction<TState>(
     if (result.vm) {
       try {
         validateActionNames(result.vm);
+        // 1.4.0 — SectionNode.action shape checks (action+collapsible,
+        // nested action-in-action). Same invalid_tree exit path.
+        validateSectionAction(result.vm);
       } catch (err) {
         return jsonResponse(
           errorEnvelope([{ message: (err as Error).message, code: ERR_CODES.INVALID_TREE }]),
