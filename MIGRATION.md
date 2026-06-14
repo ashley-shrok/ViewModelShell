@@ -6,6 +6,91 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to '1.4.0' / '1.3.0' (lockstep — npm @ashley-shrok/viewmodel-shell + NuGet AshleyShrok.ViewModelShell)
+
+1.4.0 / 1.3.0 adds `SectionNode.action` — a click-anywhere clickable-card primitive that mirrors `TableRow.action` (1.1.0) at the section level. Both packages move in lockstep because it is an additive wire field on both backends; the wire stays byte-identical when `action` is omitted, so a server upgraded ahead of its clients is fully back-compatible (and vice versa).
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `1.3.0` | **`1.4.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `1.2.0` | **`1.3.0`** |
+
+> NuGet catches up from being unchanged in CSS-only npm 1.3.0; this is the first lockstep MINOR for both since [1.2.0](#upgrading-to-120--npm--nuget).
+
+### What changed (one paragraph)
+
+A `SectionNode { variant: "card" }` is styling-only today — making the whole card clickable required an inner `ButtonNode` that split the affordance from the surface. `SectionNode.action` adds the missing primitive: set it and the BrowserAdapter makes the entire section clickable AND keyboard-activatable (Enter / Space; Tab does NOT dispatch) AND accessible (`role="button"`, `tabindex=0`, `aria-label` derived from heading or descendant text or fallback `"Card"`). Clicks on nested ButtonNode / CheckboxNode / LinkNode inside a clickable card stop propagation, so per-card "Close" buttons never double-fire the card action. Tree validation rejects two invalid combos at the server edge (with `code: "invalid_tree"`): (a) `action` + `collapsible: true` on the same section, and (b) a clickable section nested inside another clickable section.
+
+### Consumer action required: none.
+
+The field is additive and optional. A `SectionNode` without `action` renders byte-identical to 1.3.0 (no class drift, no extra attrs, no listeners; the wire stays absent via the existing `JsonIgnore(WhenWritingNull)` posture).
+
+### Not breaking
+
+- The JSON wire is unchanged for every existing section — `action` is omitted on serialization when null. Old clients talking to new servers (and vice versa) work byte-identically; cross-backend parity is green.
+- The TUI adapter has no equivalent for click-anywhere cards at this release; it ignores the new field gracefully (no error, no rendering difference).
+- Every existing demo's call sites compile unchanged on .NET — `Action` is a trailing positional param with default `null` so positional `new SectionNode(heading, children, Variant: "card")` keeps working.
+
+### New capability — minimal clickable card
+
+**TypeScript (any backend):**
+```typescript
+const tile: SectionNode = {
+  type: "section",
+  variant: "card",
+  heading: "Open ticket #42",
+  action: { name: "select-ticket-42" },
+  children: [
+    { type: "text", value: "Outlook crash · in progress", style: "muted" },
+  ],
+};
+```
+
+**C# (ASP.NET Core controller):**
+```csharp
+var tile = new SectionNode(
+    Heading: "Open ticket #42",
+    Children: new ViewNode[]
+    {
+        new TextNode("Outlook crash · in progress", "muted"),
+    },
+    Variant: "card",
+    Action: new ActionDescriptor("select-ticket-42"));
+```
+
+Identity per card is encoded in the action name (`select-ticket-42`), not a `context` field — consistent with the Phase-6 wire and identical to the `TableRow.action` idiom.
+
+### What the framework rejects (and how to fix)
+
+If you build a tree that violates either rule below, the framework throws at the server edge and the response carries `{ ok: false, errors: [{ code: "invalid_tree", message: "..." }] }` at HTTP 500. This is a hard failure by design — silent rendering of these patterns produces broken accessibility or ambiguous click ownership.
+
+1. **`action` + `collapsible: true` on the same section.** A collapsible section's `<summary>` IS the click target; a clickable card makes the whole section the click target. Pick one — drop either `action` or `collapsible: true`.
+2. **Nested `action` inside another `action`.** Nested `role="button"` elements are an a11y violation, and click-ownership in the overlap is ambiguous. Refactor the inner section to a styling-only `variant: "card"` (no `action`) with internal buttons — that case is explicitly VALID:
+
+```typescript
+// VALID — outer card is clickable; inner is styling-only with its own buttons.
+{
+  type: "section",
+  variant: "card",
+  action: { name: "select-outer" },
+  children: [
+    {
+      type: "section",
+      variant: "card",
+      children: [
+        { type: "button", label: "Close", action: { name: "close-outer" } },
+      ],
+    },
+  ],
+}
+```
+
+### Issue resolved
+
+- Closes the unfixed half of [#19](https://github.com/ashley-shrok/ViewModelShell/issues/19) via [#20](https://github.com/ashley-shrok/ViewModelShell/issues/20). 1.3.0 addressed the type-scale framing portion ("text feels small"); 1.4.0 / 1.3.0 addresses the structural-hierarchy half ("this card IS the action") by making `SectionNode { variant: "card" }` itself click-bearing, no inner button required.
+
+---
+
 ## Upgrading to '1.3.0' (npm @ashley-shrok/viewmodel-shell only)
 
 1.3.0 is a visible default shift in the shipped stylesheet — no wire/API change. The `--vms-text-*` token scale moves up one rung to align with modern web-density norms; `--vms-text-base` is now `0.875rem` (14px) instead of `0.8125rem` (13px). The NuGet package is NOT republished — this change has no .NET surface.
