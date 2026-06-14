@@ -6,6 +6,38 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 1.4.0 / 1.3.0 — SectionNode.action clickable cards (npm + NuGet)
+
+**npm:** `1.4.0` (MINOR — additive wire field; new TS optional field) · **NuGet:** `1.3.0` (MINOR — additive wire field, NuGet catches up from being unchanged in CSS-only npm 1.3.0)
+
+Closes the unfixed half of [issue #19](https://github.com/ashley-shrok/ViewModelShell/issues/19) (per-button presentational hierarchy) via [issue #20](https://github.com/ashley-shrok/ViewModelShell/issues/20). A `SectionNode { variant: "card" }` is styling-only today; making the whole card clickable required an inner `ButtonNode` that split the click affordance from the surface. `SectionNode.action` adds the missing primitive without inventing new node types — mirrors `TableRow.action` (1.1.0) at the section level.
+
+### Added
+
+- **`SectionNode.action: ActionEvent`** (TS) / **`SectionNode.Action: ActionDescriptor?`** (.NET). When set, the BrowserAdapter makes the whole section clickable AND keyboard-activatable (Enter dispatches; Space `preventDefault`s page scroll then dispatches; Tab does NOT dispatch) AND exposes accessibility (`role="button"`, `tabindex=0`, `aria-label` derived from `heading` when set, else from joined descendant text capped at 200 chars, else fallback `"Card"`). Clicks on nested `ButtonNode` / `CheckboxNode` / `LinkNode` and cell `linkLabel` anchors INSIDE a clickable card stop propagation, so they never double-fire the card action. Per-section identity is encoded in the action name (e.g. `select-card-1`) — no `context` field, consistent with the Phase-6 wire.
+- **`.vms-section--clickable` CSS class** with cursor + hover ring (`box-shadow: 0 0 0 1px var(--vms-accent-dim)` — the card already paints `--vms-surface` as its background, so a background swap would be invisible) + `:focus-visible` outline (`2px solid var(--vms-accent)` with positive `outline-offset: 2px` — the section is a box, the ring lives outside the edge). AA-contrast guard passes on the shipped default plus all 12 themes (the outline uses `--vms-accent`, the same token gated by the existing pair coverage).
+- **Tree validation — two rejections.** Both throw at the server edge with `code: "invalid_tree"` (500) so a server-built tree that violates either rule fails fast in dev rather than silently producing broken a11y or ambiguous click ownership:
+  - `action` + `collapsible: true` on the same section — the collapsible section's `<summary>` IS the click target; a clickable card makes the whole section the click target. Pick one.
+  - Nested `SectionNode.action` — a clickable section inside another clickable section. Nested `role="button"` elements are an a11y violation, and click-ownership in the overlap is ambiguous. Use a styling-only `variant: "card"` (no `action`) inner section with internal buttons instead — that case is explicitly VALID.
+- **`validateSectionAction` (TS) / `ViewTreeValidation.ValidateSectionAction` (.NET).** New exported tree walks; both are invoked alongside `validateActionNames` from the existing wire-edge validation seam (`createAction` in TS; `ShellResponse<TState>.Validate()` in .NET).
+
+### Demo migration
+
+- `demo/FeatureProbe/AspNetCore` and `demo/FeatureProbe-bun` gain a `Clickable Card` section that increments a `CardClickCount` counter on each click. Cross-backend parity confirms both backends emit byte-identical wire including the new `action` field on the SectionNode.
+
+### Tests
+
+- New `viewmodel-shell/test/section-action.test.ts` (12 jsdom cases) covers A click anywhere, B Enter, C Space + preventDefault, D Tab no-dispatch, E/F/G containment for nested Button/Checkbox/Link, H ARIA shape, I headingless aria-label derivation + empty fallback to `"Card"`, J backward-compat (a section without `action` has no class drift / no tabindex / no role / no aria-label — byte-identical to today's output), plus K + L validation rejections for `action` + `collapsible: true` and nested `action`-in-`action`.
+- `viewmodel-shell-dotnet/Tests/ViewTreeValidationTests.cs` gains six `[Fact]`s for the .NET twin: plain pass, action+collapsible throw, headingless label substitution, nested throw, styling-only inner card pass, and the `ShellResponse<TState>.Validate()` integration pin. The Tests project goes from 45 to 51 facts.
+
+### Consumers
+
+Additive — nothing to do. A `SectionNode` without `action` renders byte-identical to 1.3.0 (no `vms-section--clickable` class, no `tabindex`, no `role`, no `aria-label`, no listeners). The wire stays absent when `action` is omitted (JsonIgnore-on-null on the .NET nullable; optional field in TS).
+
+If you want to opt a card into clickability, set `action: { name: "..." }`. See `MIGRATION.md` § 1.4.0 / 1.3.0 for copy-pasteable TS + C# snippets.
+
+---
+
 ## 1.3.0 — Type-scale realignment to web-density norms (npm only)
 
 **npm:** `1.3.0` (MINOR — visible default shift, no wire/API change) · **NuGet:** unchanged (CSS-only change, no .NET surface)

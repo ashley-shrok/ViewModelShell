@@ -221,6 +221,19 @@ body {
   padding: var(--vms-space-md);
 }
 
+/* ── Section: clickable (1.4.0 — SectionNode.action click-anywhere primitive) ──
+   Mirrors the 1.1.0 .vms-table__row--clickable idiom one level up the tree.
+   Hover uses a 1px accent-dim ring (rather than a background swap — cards
+   already paint --vms-surface as their background, so a background change
+   would be invisible). :focus-visible outline lives OUTSIDE the box edge
+   (positive outline-offset) since a section is a box, not a table row. */
+.vms-section--clickable { cursor: pointer; }
+.vms-section--clickable:hover { box-shadow: 0 0 0 1px var(--vms-accent-dim); }
+.vms-section--clickable:focus-visible {
+  outline: 2px solid var(--vms-accent);
+  outline-offset: 2px;
+}
+
 /* ── Section: collapsible (1.2.0 — client-side disclosure via native <details>) ──
    Open/closed state is DOM-local; the BrowserAdapter snapshots and restores it
    across server-driven re-renders the same way it does for focus and scroll.

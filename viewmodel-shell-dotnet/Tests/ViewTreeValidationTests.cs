@@ -266,4 +266,89 @@ public class ViewTreeValidationTests
         var ex = Record.Exception(() => response.Validate());
         Assert.Null(ex);
     }
+
+    // ─── SectionNode.Action validation (issue #20 / 260614-9hq) ──────────────
+
+    private static SectionNode Card(string? heading, ActionDescriptor? action, params ViewNode[] children) =>
+        new(Heading: heading, Children: children, Action: action);
+
+    [Fact]
+    public void Validate_SectionAction_Plain_Passes()
+    {
+        var tree = Page(Card("Onboarding", new ActionDescriptor("select-card-1"),
+            new TextNode("Welcome", null)));
+        var ex = Record.Exception(() => ViewTreeValidation.ValidateSectionAction(tree));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Validate_SectionAction_PlusCollapsible_Throws()
+    {
+        var section = new SectionNode(
+            Heading: "Bad",
+            Children: Array.Empty<ViewNode>(),
+            Collapsible: true,
+            Action: new ActionDescriptor("select-bad"));
+        var tree = Page(section);
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ViewTreeValidation.ValidateSectionAction(tree));
+        Assert.Contains("both Action and Collapsible: true", ex.Message);
+        Assert.Contains("Bad", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_SectionAction_PlusCollapsible_HeadinglessLabel()
+    {
+        var section = new SectionNode(
+            Heading: null,
+            Children: Array.Empty<ViewNode>(),
+            Collapsible: true,
+            Action: new ActionDescriptor("select-bad"));
+        var tree = Page(section);
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ViewTreeValidation.ValidateSectionAction(tree));
+        Assert.Contains("(headingless)", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_SectionAction_Nested_Throws()
+    {
+        var inner = Card("Inner", new ActionDescriptor("select-inner"));
+        var outer = Card("Outer", new ActionDescriptor("select-outer"), inner);
+        var tree = Page(outer);
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ViewTreeValidation.ValidateSectionAction(tree));
+        Assert.Contains("Nested SectionNode.Action", ex.Message);
+        Assert.Contains("Outer", ex.Message);
+        Assert.Contains("Inner", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_SectionAction_StylingOnlyInnerCard_Passes()
+    {
+        // Outer clickable card contains a styling-only Variant:"card" section
+        // (no Action) with internal buttons. Locked decision: this is VALID.
+        var innerStyling = new SectionNode(
+            Heading: null,
+            Children: new ViewNode[] { Btn("close-outer", "Close") },
+            Variant: "card");
+        var outer = Card("Outer", new ActionDescriptor("select-outer"), innerStyling);
+        var tree = Page(outer);
+        var ex = Record.Exception(() => ViewTreeValidation.ValidateSectionAction(tree));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void ShellResponse_Validate_RunsSectionActionValidation()
+    {
+        // Confirm the ShellResponse<TState>.Validate() seam invokes
+        // ValidateSectionAction on the response's Vm — same pattern as the
+        // ValidateActionNames seam two facts above.
+        var inner = Card("Inner", new ActionDescriptor("select-inner"));
+        var outer = Card("Outer", new ActionDescriptor("select-outer"), inner);
+        var tree = Page(outer);
+        var response = new ShellResponse<TestState>(tree, new TestState("all"));
+        var ex = Assert.Throws<InvalidOperationException>(() => response.Validate());
+        Assert.Contains("Nested SectionNode.Action", ex.Message);
+    }
 }

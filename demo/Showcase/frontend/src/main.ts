@@ -389,22 +389,25 @@ function dashboardView(): ViewNode[] {
     { type: "text", value: "Operations dashboard", style: "heading" },
     { type: "text", value: "Last 30 days · benchmarked against the Bootstrap \"Dashboard\" example. Built from the cards preset + section variant:\"card\" tiles.", style: "muted" },
     { type: "section", layout: "cards", children: [
-      { type: "section", variant: "card", children: [
+      // 1.4.0 — the four stat tiles use SectionNode.action as click-anywhere
+      // clickable cards (drill-down affordance). Per-tile identity is encoded
+      // in the action name (`dashboard:focus-revenue`, etc.) — no context.
+      { type: "section", variant: "card", action: { name: "dashboard:focus-revenue" }, children: [
         { type: "text", value: "Revenue", style: "subheading" },
         { type: "text", value: "$128,400", style: "heading" },
         { type: "text", value: "+12.4% vs prior 30 days", style: "muted" },
       ]},
-      { type: "section", variant: "card", children: [
+      { type: "section", variant: "card", action: { name: "dashboard:focus-users" }, children: [
         { type: "text", value: "Active users", style: "subheading" },
         { type: "text", value: "8,932", style: "heading" },
         { type: "text", value: "+318 this week", style: "muted" },
       ]},
-      { type: "section", variant: "card", children: [
+      { type: "section", variant: "card", action: { name: "dashboard:focus-conversion" }, children: [
         { type: "text", value: "Conversion", style: "subheading" },
         { type: "text", value: "3.7%", style: "heading" },
         { type: "text", value: "-0.2 pts vs prior 30 days", style: "muted" },
       ]},
-      { type: "section", variant: "card", children: [
+      { type: "section", variant: "card", action: { name: "dashboard:focus-issues" }, children: [
         { type: "text", value: "Open issues", style: "subheading" },
         { type: "text", value: "14", style: "heading" },
         { type: "text", value: "3 high priority", style: "muted" },

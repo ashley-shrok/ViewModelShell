@@ -55,6 +55,10 @@
     { "id": "tbl-sort-status",   "method": "POST", "action": { "name": "table-sort-status" }, "stateMutations": [{ "path": "sortIntent.column", "value": "status" }, { "path": "sortIntent.direction", "value": "asc" }] },
     { "id": "tbl-filter-e",      "method": "POST", "action": { "name": "table-filter" },      "stateMutations": [{ "path": "tableFilters.name", "value": "e" }] },
     { "id": "tbl-page-2-filtered","method": "POST", "action": { "name": "table-page-next" },  "stateMutations": [{ "path": "tablePage", "value": 2 }] },
-    { "id": "tbl-filter-clear",  "method": "POST", "action": { "name": "table-filter" },      "stateMutations": [{ "path": "tableFilters.name", "value": "" }] }
+    { "id": "tbl-filter-clear",  "method": "POST", "action": { "name": "table-filter" },      "stateMutations": [{ "path": "tableFilters.name", "value": "" }] },
+
+    { "id": "fresh-card",        "method": "GET",  "freshState": true },
+    { "id": "card-click-1",      "method": "POST", "action": { "name": "select-card" } },
+    { "id": "card-click-2",      "method": "POST", "action": { "name": "select-card" } }
   ]
 }

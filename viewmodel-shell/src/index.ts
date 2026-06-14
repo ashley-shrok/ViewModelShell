@@ -134,6 +134,31 @@ export interface SectionNode {
   id?: string;
   /** When true, the section renders as a native `<details>`/`<summary>` disclosure widget (closed by default). Aesthetic, client-side primitive — the open/closed state is DOM-local and the server does NOT round-trip it (same conceptual model as draft text values in unsubmitted form inputs). The browser adapter snapshots `<details>.open` before each re-render and restores it after, keyed by `id ?? heading ?? "vms-section-anon"` (disambiguated by per-render ordinal); a re-key drops the preserved state (the documented escape hatch for rare server-driven expansion). The summary label is the section's `heading`; a headingless collapsible section uses the fallback string `"Show details"`. If a section needs to start open, do not mark it collapsible. Omitted/false = today's `<section>` rendering, byte-identical. */
   collapsible?: boolean;
+  /** Click-anywhere section dispatch primitive — mirrors `TableRow.action` (1.1.0)
+   *  at the section level. When set, the renderer makes the entire section
+   *  clickable AND keyboard-activatable (Enter / Space — Space preventDefaults
+   *  page scroll) AND exposes accessibility (role="button", tabindex=0,
+   *  aria-label derived from `heading` when set, else from joined text content
+   *  of descendants, else fallback `"Card"`). The per-section identity is
+   *  encoded in the action name (e.g. `select-card-1`) — no context field,
+   *  consistent with the Phase 6 wire. Clicks on nested ButtonNode / CheckboxNode /
+   *  LinkNode / cell `linkLabel` anchors INSIDE the section do NOT also fire
+   *  `action` (the renderer stops propagation on those targets).
+   *
+   *  Tree validation rejects two invalid combos at the server edge with
+   *  `invalid_tree`:
+   *    (a) `action` set together with `collapsible: true` on the same section
+   *        (a collapsible section's `<summary>` IS the click target; a clickable
+   *        card makes the whole section the click target — pick one).
+   *    (b) a SectionNode with `action` nested inside another SectionNode with
+   *        `action` (nested role="button" is an a11y violation; click-ownership
+   *        in the overlap is ambiguous). A styling-only `variant: "card"`
+   *        section (no `action`) with internal buttons inside a clickable card
+   *        is VALID — only nested `action` errors.
+   *
+   *  Omitted = today's section rendering, byte-identical (no class drift, no
+   *  extra attrs, no listeners). */
+  action?: ActionEvent;
   children: ViewNode[];
 }
 
