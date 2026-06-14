@@ -219,31 +219,42 @@ function recordAction(
   out.push({ name: action.name, enclosingForm });
 }
 
-// ─── SectionNode.action shape check (1.4.0 / 260614-9hq) ─────────────────────
+// ─── SectionNode.action / .link shape checks (1.4.0 / 1.5.0) ─────────────────
 //
-// Two invalid combos a clickable-card primitive can produce at build time:
+// Five invalid combos a clickable-card or linked-card primitive can produce at
+// build time:
 //   (a) SectionNode.action set together with collapsible:true on the same
 //       section — a collapsible section's <summary> IS the click target; a
 //       clickable card makes the whole section the click target. Pick one.
 //   (b) A SectionNode with .action nested inside another SectionNode with
-//       .action — nested role="button" is an a11y violation, and
-//       click-ownership in the overlap is ambiguous.
-// A styling-only SectionNode { variant: "card" } (no .action) inside a
-// clickable card with internal buttons is VALID — only nested .action errors.
+//       .action OR .link — nested role="button"/nested-<a> is an a11y/HTML5
+//       violation, and click-ownership in the overlap is ambiguous.
+//   (c) (1.5.0) SectionNode.action set together with SectionNode.link on the
+//       same section — a section is either a dispatcher (action) or a
+//       navigator (link); they create different user expectations of a click.
+//   (d) (1.5.0) SectionNode.link set together with collapsible:true — same
+//       rationale as (a).
+//   (e) (1.5.0) A SectionNode with .link nested inside another SectionNode
+//       with .link OR .action — HTML5 prohibits nested <a> elements; the
+//       mixed case is ambiguous click-ownership.
+// A styling-only SectionNode { variant: "card" } (no .action and no .link)
+// inside a clickable or linked card with internal buttons is VALID — only
+// nested .action / .link errors.
 //
 // Mirrors viewmodel-shell-dotnet/ViewModels.cs's
 // ViewTreeValidation.ValidateSectionAction. The createAction wrapper invokes
 // this alongside validateActionNames so a server-built tree that violates
-// either rule surfaces as a 500 with code "invalid_tree" before the response
+// any rule surfaces as a 500 with code "invalid_tree" before the response
 // leaves the wire.
 
 /**
- * Walk a ViewNode tree and reject two invalid SectionNode.action combos:
- * (a) action + collapsible:true on the same section, and (b) a clickable
- * section nested inside another clickable section. Pure check — does not
- * mutate the tree.
+ * Walk a ViewNode tree and reject five invalid SectionNode.action / .link
+ * combos: (a) action + collapsible:true; (b) nested action-in-action or
+ * action-in-link; (c) action + link on the same section; (d) link +
+ * collapsible:true; (e) nested link-in-link or link-in-action. Pure check —
+ * does not mutate the tree.
  *
- * @throws Error when either invalid combo is found. The message names the
+ * @throws Error when any invalid combo is found. The message names the
  *   offending section(s) by heading (or `(headingless)`).
  */
 export function validateSectionAction(vm: ViewNode): void {
@@ -252,66 +263,108 @@ export function validateSectionAction(vm: ViewNode): void {
 
 function walkForSectionAction(
   node: ViewNode,
-  outerClickable: SectionNode | null,
+  outerInteractive: SectionNode | null,
 ): void {
   switch (node.type) {
     case "page": {
       const page = node as PageNode;
-      for (const child of page.children) walkForSectionAction(child, outerClickable);
+      for (const child of page.children) walkForSectionAction(child, outerInteractive);
       return;
     }
     case "section": {
       const section = node as SectionNode;
-      // (a) action + collapsible:true — invalid.
+      const hdr = section.heading && section.heading.length > 0
+        ? section.heading
+        : "(headingless)";
+      // (c) action + link on the same section — invalid. Checked FIRST so
+      // the most actionable message wins when the consumer accidentally sets
+      // both (they get told "pick action OR link" instead of any nested or
+      // collapsible message that follows from a still-ambiguous tree).
+      if (section.action != null && section.link != null) {
+        throw new Error(
+          `SectionNode '${hdr}' has both Action and Link set. ` +
+          "A SectionNode is either a dispatcher (action) or a navigator (link) — " +
+          "they create different user expectations of what a click means. Pick one.",
+        );
+      }
+      // (d) link + collapsible:true — invalid.
+      if (section.link != null && section.collapsible === true) {
+        throw new Error(
+          `SectionNode '${hdr}' has both Link and Collapsible: true set. ` +
+          "A collapsible section's summary IS the click target; a linked card " +
+          "makes the whole section the click target. Pick one.",
+        );
+      }
+      // (a) action + collapsible:true — invalid (existing, unchanged).
       if (section.action != null && section.collapsible === true) {
-        const hdr = section.heading && section.heading.length > 0
-          ? section.heading
-          : "(headingless)";
         throw new Error(
           `SectionNode '${hdr}' has both Action and Collapsible: true set. ` +
           "A collapsible section's summary IS the click target; a clickable card " +
           "makes the whole section the click target. Pick one.",
         );
       }
-      // (b) nested action-in-action — invalid.
-      if (section.action != null && outerClickable !== null) {
-        const innerHdr = section.heading && section.heading.length > 0
-          ? section.heading
+      // (e) nested link-in-link / link-in-action — invalid.
+      if (section.link != null && outerInteractive !== null) {
+        const outerHdr = outerInteractive.heading && outerInteractive.heading.length > 0
+          ? outerInteractive.heading
           : "(headingless)";
-        const outerHdr = outerClickable.heading && outerClickable.heading.length > 0
-          ? outerClickable.heading
-          : "(headingless)";
-        throw new Error(
-          `Nested SectionNode.Action: inner section '${innerHdr}' is inside clickable outer ` +
-          `section '${outerHdr}'. Nested role='button' elements are an accessibility violation, ` +
-          "and click-ownership in the overlap is ambiguous. Use a styling-only inner section " +
-          "(variant: 'card', no Action) with internal buttons instead.",
-        );
+        if (outerInteractive.link != null) {
+          throw new Error(
+            `Nested SectionNode.Link: inner section '${hdr}' is inside linked outer ` +
+            `section '${outerHdr}'. HTML5 prohibits nested <a> elements.`,
+          );
+        } else {
+          throw new Error(
+            `SectionNode.Link inner section '${hdr}' is inside clickable outer ` +
+            `SectionNode.Action '${outerHdr}'. Click-ownership in the overlap is ambiguous — ` +
+            "a linked card inside a dispatcher card creates two competing primary interactions.",
+          );
+        }
       }
-      const nextOuter = section.action != null ? section : outerClickable;
+      // (b) nested action-in-action / action-in-link — invalid.
+      if (section.action != null && outerInteractive !== null) {
+        const outerHdr = outerInteractive.heading && outerInteractive.heading.length > 0
+          ? outerInteractive.heading
+          : "(headingless)";
+        if (outerInteractive.action != null) {
+          throw new Error(
+            `Nested SectionNode.Action: inner section '${hdr}' is inside clickable outer ` +
+            `section '${outerHdr}'. Nested role='button' elements are an accessibility violation, ` +
+            "and click-ownership in the overlap is ambiguous. Use a styling-only inner section " +
+            "(variant: 'card', no Action) with internal buttons instead.",
+          );
+        } else {
+          throw new Error(
+            `SectionNode.Action inner section '${hdr}' is inside linked outer ` +
+            `SectionNode.Link '${outerHdr}'. Click-ownership in the overlap is ambiguous — ` +
+            "a dispatcher card inside a linked card creates two competing primary interactions.",
+          );
+        }
+      }
+      const nextOuter = (section.action != null || section.link != null) ? section : outerInteractive;
       for (const child of section.children) walkForSectionAction(child, nextOuter);
       return;
     }
     case "list": {
       const list = node as ListNode;
-      for (const child of list.children) walkForSectionAction(child, outerClickable);
+      for (const child of list.children) walkForSectionAction(child, outerInteractive);
       return;
     }
     case "list-item": {
       const li = node as ListItemNode;
-      for (const child of li.children) walkForSectionAction(child, outerClickable);
+      for (const child of li.children) walkForSectionAction(child, outerInteractive);
       return;
     }
     case "form": {
       const form = node as FormNode;
-      for (const child of form.children) walkForSectionAction(child, outerClickable);
+      for (const child of form.children) walkForSectionAction(child, outerInteractive);
       return;
     }
     case "modal": {
       const modal = node as ModalNode;
-      for (const child of modal.children) walkForSectionAction(child, outerClickable);
+      for (const child of modal.children) walkForSectionAction(child, outerInteractive);
       if (modal.footer) {
-        for (const child of modal.footer) walkForSectionAction(child, outerClickable);
+        for (const child of modal.footer) walkForSectionAction(child, outerInteractive);
       }
       return;
     }
