@@ -53,15 +53,31 @@ For other backends, implement the same JSON shape: a `GET` returning `{ ok: true
 
 ## Agents
 
-Add one line to your page's `<head>` so agents reading the HTML know they can drive your app via the JSON wire instead of scraping the DOM. Visible to JS-less crawlers (`curl`, `WebFetch`):
+Two complementary signals let an agent drive your app from the HTML alone — no DOM scraping, no guessing the protocol.
+
+**1. The discoverability tag — *"this is a VMS app, and here are its endpoints."*** Add one line to your page's `<head>`; it's visible to JS-less crawlers (`curl`, `WebFetch`):
 
 ```html
 <!-- Agent discoverability — this is a ViewModel Shell app: agents can drive it via the JSON wire
      (GET endpoint → {vm, state}; POST actionEndpoint multipart {_action, _state}). Docs: https://github.com/ashley-shrok/ViewModelShell -->
-<meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/1.0","endpoint":"/api/tasks","actionEndpoint":"/api/tasks/action"}'>
+<meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/1.0","endpoint":"/api/tasks","actionEndpoint":"/api/tasks/action","skill":"/.well-known/vms-skill.md"}'>
 ```
 
-All shipped demos include this — it's the recommended convention for any VMS-driven page that mounts a shell.
+**2. The agent skill — *"here's how to drive the wire."*** The optional `skill` field points at a served markdown operating manual for the VMS wire protocol (action dispatch shape, state round-trip, response envelope vocabulary, side-effect verbs, polling, errors, file uploads). An agent that has never seen VMS can `GET` that URL and learn the whole protocol cold. Both backends ship a one-liner that serves the canonical manual at any URL you pick (recommended: `/.well-known/vms-skill.md`), with an optional app-specific preamble prepended under a `## App-specific notes` heading:
+
+```csharp
+// .NET — Program.cs
+app.MapVmsAgentSkill(appPreamble: "This is the Tasks app. Auth: Bearer JWT in Authorization.");
+```
+
+```ts
+// TypeScript (Bun / Deno / Hono / Workers / Node) — mount the (Request) => Response handler on your router
+import { createAgentSkillHandler } from "@ashley-shrok/viewmodel-shell/server";
+const skillHandler = createAgentSkillHandler({ appPreamble: "This is the Tasks app. Auth: Bearer JWT in Authorization." });
+// e.g.  if (url.pathname === "/.well-known/vms-skill.md") return skillHandler(req);
+```
+
+Both fields are backward-compatible: agents that don't know the `skill` field ignore it, and apps without it keep working. All shipped demos include the meta tag, and the HelpDesk demo also mounts the skill endpoint — the recommended convention for any VMS-driven page that mounts a shell. The canonical skill source (`viewmodel-shell/agent-skill.md`) and the parity gate that keeps the two backends byte-identical are documented in [AGENTS.md](https://github.com/ashley-shrok/ViewModelShell/blob/main/AGENTS.md).
 
 ## Themes
 
