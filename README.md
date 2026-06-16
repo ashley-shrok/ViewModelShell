@@ -10,17 +10,19 @@ The frontend is backend-agnostic: it speaks a small JSON contract over a single 
 
 The core (`src/index.ts`) references **zero platform globals** — no `window`, `document`, `localStorage`, `sessionStorage`, or `XMLHttpRequest`. This is **CI-enforced**: a guard fails the build if any of those leak into core, so the invariant can't quietly rot. The core is a pure wire-protocol transformer; all browser bindings live in `BrowserAdapter`.
 
-Platform side-effects are delegated to the `Adapter` interface through three optional verbs, exactly the way rendering already is:
+Platform side-effects are delegated to the `Adapter` interface through optional verbs, exactly the way rendering already is:
 
 - `navigate?(url)` — redirect navigation (browser: sets the page location)
 - `storage?(scope, key, value)` — `localStorage`/`sessionStorage` writes (write-only)
+- `saveFile?(blob, filename, contentType)` — authenticated-download handoff (browser: triggers Save-As)
 - `transport?(...)` — optional request-transport override (the core's `fetch` is the default)
+- `setPreventUnload?(active)` / `setBusy?(active)` — UX guards for long-running server actions (warn-before-leave; lock the UI)
 
-Implementing this one interface is all a new front-end target (mobile, terminal, a different framework) needs to become a complete target.
+Implementing this one interface is all a new front-end target (mobile, terminal, a different framework) needs to become a complete target — and the repo already ships a terminal one: `@ashley-shrok/viewmodel-shell/tui`, with the `vms-tui` CLI driving any backend from a terminal (experimental; see the [package README](./viewmodel-shell/README.md)).
 
-**This is non-breaking for existing consumers.** The wire format, all node types, side-effect behavior, and `ShellOptions.onRedirect` (still `(url: string) => void`) are unchanged. `BrowserAdapter` — which every consumer uses — implements all three verbs, so default behavior is byte-identical to before; the only change is *where* the browser bindings execute (adapter, not core). If you set `onRedirect`, it still takes precedence over the adapter's navigation, exactly as documented in [AGENTS.md](https://github.com/ashley-shrok/ViewModelShell/blob/main/AGENTS.md).
+**This is non-breaking for existing consumers.** The wire format, all node types, side-effect behavior, and `ShellOptions.onRedirect` (still `(url: string) => void`) are unchanged. `BrowserAdapter` — which every consumer uses — implements every verb, so default behavior is byte-identical to before; the only change is *where* the browser bindings execute (adapter, not core). If you set `onRedirect`, it still takes precedence over the adapter's navigation, exactly as documented in [AGENTS.md](https://github.com/ashley-shrok/ViewModelShell/blob/main/AGENTS.md).
 
-Upgrading? [CHANGELOG.md](./CHANGELOG.md) is the running per-version log of what changed and what (if anything) consumers must do. [MIGRATION.md](./MIGRATION.md) is the deep-dive for the 0.3.13 capability-seam change specifically. Per-release notes are also published on [GitHub Releases](https://github.com/ashley-shrok/ViewModelShell/releases).
+Upgrading? [CHANGELOG.md](./CHANGELOG.md) is the running per-version log of what changed and what (if anything) consumers must do. [MIGRATION.md](./MIGRATION.md) is the per-version migration guide, with deep-dives for the changes that need consumer action.
 
 ## Install
 
