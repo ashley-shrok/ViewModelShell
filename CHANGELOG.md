@@ -6,6 +6,29 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 1.7.0 — Per-row table checkboxes render in a leading column (npm)
+
+**npm:** `1.7.0` (MINOR — default rendering change, no API/wire change) · **NuGet:** unchanged at `1.5.0` (renderer-only change; the .NET package gained only a doc-comment touch-up that rides along for the next functional release).
+
+Per-row table controls (`TableRow.actions[]`, a mix of `ButtonNode` and `CheckboxNode`) used to all render into a single **trailing** cell on the right. Selection checkboxes therefore appeared on the far right — the opposite of the data-grid / Gmail convention where the selection checkbox leads the row. The BrowserAdapter now **partitions `actions[]` by type at render time**: `CheckboxNode` entries render in a dedicated **leading** column (left), `ButtonNode` entries stay in the **trailing** actions cell (right). Result: `| ☑ | Name | Status | [Edit] [Delete] |`.
+
+### Changed
+
+- **`BrowserAdapter` table renderer** — when any row carries a checkbox, every row gets a leading `vms-table__td--select` cell (empty for rows without one) and the header + filter rows get a matching leading `vms-table__th--select` so columns stay aligned. The trailing `vms-table__td--actions` cell now renders **buttons only**. Both cells keep the existing `stopPropagation` guard so toggling/clicking a control never also fires `row.action`.
+- Reuses the already-shipped `.vms-table__th--select` / `.vms-table__td--select` CSS (authored for exactly this); **no stylesheet change**.
+
+### Not changed
+
+- **No wire-format change.** Backends keep emitting `actions[]` as one mixed array — the partition is purely client-side rendering. The protocol token stays `viewmodel-shell/1.0`.
+- **No type change.** `TableRow.actions` is still `(ButtonNode | CheckboxNode)[]`; only its doc comment was updated (both TS and .NET sources).
+- Parity is wire-only and unaffected (full 15-backend suite + skill parity green).
+
+### Consumers
+
+Nothing required — existing apps re-render with checkboxes on the left automatically. This is a visual-layout change, not an API break.
+
+---
+
 ## 1.6.0 / 1.5.0 — Canonical agent skill + discoverability endpoint (npm + NuGet)
 
 **npm:** `1.6.0` (MINOR — additive surface, new helper export from the `/server` subpath, new shipped markdown file) · **NuGet:** `1.5.0` (MINOR — additive surface, new `MapVmsAgentSkill` extension on `IEndpointRouteBuilder`, embedded resource for the canonical skill).

@@ -6,6 +6,36 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `1.7.0` (npm @ashley-shrok/viewmodel-shell only)
+
+Per-row table checkboxes now render in a **leading** (left) column instead of the trailing actions cell. This is a client-side rendering change in the BrowserAdapter — there is no wire-format, type, or API change.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `1.6.0` | **`1.7.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `1.5.0` | unchanged (`1.5.0`) |
+
+### What changed (one paragraph)
+
+`TableRow.actions[]` is a mix of `ButtonNode` and `CheckboxNode`. Previously the renderer placed all of them in one trailing `vms-table__td--actions` cell, so selection checkboxes sat on the far right. The renderer now partitions by `entry.type`: `CheckboxNode`s render in a dedicated leading `vms-table__td--select` column (with a matching leading `vms-table__th--select` header so columns stay aligned), `ButtonNode`s stay in the trailing actions cell. This matches the data-grid / Gmail convention (selection leads the row).
+
+### Consumer action required: none.
+
+Existing apps re-render automatically — no code change. Backends keep emitting `actions[]` exactly as before; nothing on the wire changed.
+
+### Not breaking
+
+- No `ViewNode` field added or removed; no JSON wire shape change; protocol token stays `viewmodel-shell/1.0`.
+- No HTTP response envelope change.
+- No stylesheet change — the renderer reuses the already-shipped `.vms-table__th--select` / `.vms-table__td--select` classes.
+- The .NET package is unchanged at `1.5.0` (only a doc-comment was updated in the repo source, which ships with the next functional .NET release).
+
+### Heads-up (visual only)
+
+If you have screenshot/visual-regression baselines of tables with per-row checkboxes, regenerate them — the checkbox column moved from right to left. Functional/DOM-structure tests that select `.vms-table__td--select input[type=checkbox]` are correct; ones that assumed the checkbox lived under `.vms-table__td--actions` need updating.
+
+---
+
 ## Upgrading to `1.6.0` / `1.5.0` (lockstep — npm @ashley-shrok/viewmodel-shell + NuGet AshleyShrok.ViewModelShell)
 
 1.6.0 / 1.5.0 ships a canonical agent skill — a self-contained markdown operating manual for the VMS wire protocol that an external agent (curl, WebFetch, an LLM) can `GET` over HTTP to learn how to drive a VMS app without a browser. New helper APIs (`MapVmsAgentSkill` on .NET, `createAgentSkillHandler` on TS) make mounting the endpoint a one-liner. The existing `<meta name="viewmodel-shell">` discoverability tag gains an optional `skill` field pointing at the served URL. Both packages move in lockstep because the canonical markdown is shipped from both (npm `files` array; NuGet logical resource), kept byte-identical by a parity gate.

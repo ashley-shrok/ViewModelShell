@@ -837,7 +837,10 @@ export class BrowserAdapter implements Adapter {
    *  every keystroke writes, Enter dispatches filterAction; pagination
    *  prev/next write the target page to paginationBind then dispatch
    *  prevAction/nextAction. Per-row controls (row.actions[]) are a mix of
-   *  ButtonNode and CheckboxNode dispatched by entry.type. When row.action
+   *  ButtonNode and CheckboxNode; the renderer partitions them by entry.type —
+   *  CheckboxNodes render in a dedicated LEADING column (left, the data-grid
+   *  selection convention), ButtonNodes in the TRAILING actions cell (right).
+   *  When row.action
    *  is set, the entire <tr> becomes clickable + keyboard-activatable
    *  (Enter / Space — Space preventDefaults page scroll) and exposes
    *  role="button", tabindex=0, and an aria-label derived from cell text;
@@ -853,6 +856,20 @@ export class BrowserAdapter implements Adapter {
 
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
+
+    // Per-row checkboxes render in a dedicated LEADING column. If ANY row
+    // carries a checkbox, every row gets a leading select cell (empty when the
+    // row has none) and the header/filter rows get a matching leading <th>, so
+    // body cells stay column-aligned with their headers. (The trailing actions
+    // cell needs no header because it's the LAST column — a leading column does.)
+    const tableHasCheckboxes = n.rows.some(
+      r => r.actions?.some(e => e.type === "checkbox") ?? false,
+    );
+    if (tableHasCheckboxes) {
+      const selTh = document.createElement("th");
+      selTh.className = "vms-table__th vms-table__th--select";
+      headerRow.appendChild(selTh);
+    }
 
     const sortIntent = (n.sortBind != null ? this.sa.read(n.sortBind) : null) as
       | { column?: string; direction?: "asc" | "desc" }
@@ -897,6 +914,9 @@ export class BrowserAdapter implements Adapter {
       const filterAction = n.filterAction!;
       const filterRow = document.createElement("tr");
       filterRow.className = "vms-table__filter-row";
+      if (tableHasCheckboxes) {
+        filterRow.appendChild(document.createElement("th"));
+      }
       n.columns.forEach(col => {
         const th = document.createElement("th");
         if (col.filterable) {
@@ -959,6 +979,21 @@ export class BrowserAdapter implements Adapter {
           }
         });
       }
+      // Leading select cell — holds this row's checkbox controls (empty when
+      // the row has none). Rendered for every row whenever the table has any
+      // checkboxes, so columns line up with the leading <th> added above. When
+      // row.action is set, swallow clicks so toggling doesn't fire the row action.
+      if (tableHasCheckboxes) {
+        const selTd = document.createElement("td");
+        selTd.className = "vms-table__td vms-table__td--select";
+        for (const entry of row.actions ?? []) {
+          if (entry.type === "checkbox") this.checkbox(entry, selTd, on);
+        }
+        if (row.action) {
+          selTd.addEventListener("click", (e) => { e.stopPropagation(); });
+        }
+        tr.appendChild(selTd);
+      }
       n.columns.forEach(col => {
         const td = document.createElement("td");
         td.className = "vms-table__td";
@@ -981,19 +1016,16 @@ export class BrowserAdapter implements Adapter {
         }
         tr.appendChild(td);
       });
-      // Per-row interactive controls — dispatch by entry.type so a CheckboxNode
-      // renders as a real <input type="checkbox"> rather than silently as an
-      // empty button. When row.action is set, swallow clicks on the actions td
-      // so toggling a per-row control doesn't ALSO fire the row action.
-      if (row.actions && row.actions.length > 0) {
+      // Trailing actions cell — per-row ButtonNodes only (checkboxes render in
+      // the leading select cell above). When row.action is set, swallow clicks
+      // on the actions td so pressing a button doesn't ALSO fire the row action.
+      const buttonEntries = (row.actions ?? []).filter(
+        (e): e is ButtonNode => e.type === "button",
+      );
+      if (buttonEntries.length > 0) {
         const td = document.createElement("td");
         td.className = "vms-table__td vms-table__td--actions";
-        for (const entry of row.actions) {
-          if (entry.type === "button") this.button(entry, td, on);
-          else if (entry.type === "checkbox") this.checkbox(entry, td, on);
-          // forward-compatible: unknown entry types no-op (the closed TS union
-          // narrows; the runtime guard is for late-arriving wire shapes).
-        }
+        for (const entry of buttonEntries) this.button(entry, td, on);
         if (row.action) {
           td.addEventListener("click", (e) => { e.stopPropagation(); });
         }

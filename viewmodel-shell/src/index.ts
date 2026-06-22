@@ -375,11 +375,12 @@ export interface TableRow {
    *  per-row button, checkbox, or cell linkLabel anchor does NOT also fire
    *  `row.action` (the renderer stops propagation on those targets). */
   action?: ActionEvent;
-  /** Per-row interactive controls rendered in a trailing actions cell. Each
-   *  entry is either a ButtonNode (its own unique action name encodes per-row
-   *  identity, e.g. `delete-row-42`) or a CheckboxNode (its own `bind` path
-   *  per row). The renderer dispatches by `entry.type` so both types render
-   *  correctly — a previous version typed this as `ButtonNode[]` and called
+  /** Per-row interactive controls. Each entry is either a ButtonNode (its own
+   *  unique action name encodes per-row identity, e.g. `delete-row-42`) or a
+   *  CheckboxNode (its own `bind` path per row). The renderer partitions by
+   *  `entry.type`: CheckboxNodes render in a dedicated LEADING column (left —
+   *  the data-grid selection convention), ButtonNodes in the TRAILING actions
+   *  cell (right). A previous version typed this as `ButtonNode[]` and called
    *  the button renderer blindly, silently dropping non-button entries. */
   actions?: (ButtonNode | CheckboxNode)[];
   variant?: string;

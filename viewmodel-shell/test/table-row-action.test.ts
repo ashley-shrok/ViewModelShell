@@ -82,8 +82,11 @@ describe("TableRow.action — click-anywhere primitive (260613-qmh)", () => {
     const container = render(treeMixed(), onAction);
     const tr = container.querySelector('tr[data-id="r1"]') as HTMLTableRowElement;
     expect(tr).toBeTruthy();
-    // Click on a plain cell (not the link, not the actions td)
-    const titleTd = tr.querySelectorAll("td")[0]!;
+    // Click on a plain data cell (not the leading select cell, the link, or the
+    // actions td). td[0] is now the --select cell (which stopPropagations), so
+    // target the title cell — the first non-select data column.
+    const titleTd = tr.querySelector(".vms-table__td:not(.vms-table__td--select):not(.vms-table__td--actions)") as HTMLTableCellElement;
+    expect(titleTd.textContent).toBe("Outlook crash");
     titleTd.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(onAction).toHaveBeenCalledTimes(1);
     expect(onAction).toHaveBeenCalledWith({ name: "select-row-1" });
@@ -147,7 +150,7 @@ describe("TableRow.action — click-anywhere primitive (260613-qmh)", () => {
     const container = render(treeMixed(), onAction);
     const tr = container.querySelector('tr[data-id="r1"]') as HTMLTableRowElement;
     const checkbox = tr.querySelector(
-      ".vms-table__td--actions input[type='checkbox']",
+      ".vms-table__td--select input[type='checkbox']",
     ) as HTMLInputElement;
     expect(checkbox).toBeTruthy();
     checkbox.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -168,17 +171,31 @@ describe("TableRow.action — click-anywhere primitive (260613-qmh)", () => {
     expect(onAction).not.toHaveBeenCalledWith({ name: "select-row-1" });
   });
 
-  it("H. CheckboxNode in actions[] renders as <input type='checkbox'> (not an empty button)", () => {
+  it("H. CheckboxNode renders in the leading select cell; ButtonNode in the trailing actions cell", () => {
     const container = render(treeMixed(), () => {});
     const tr = container.querySelector('tr[data-id="r1"]') as HTMLTableRowElement;
+    // Checkbox lives in the leading --select cell (not the actions cell).
+    const selectTd = tr.querySelector(".vms-table__td--select") as HTMLTableCellElement;
+    expect(selectTd).toBeTruthy();
+    expect(selectTd.querySelector("input[type='checkbox']")).not.toBeNull();
+    // Button lives in the trailing --actions cell, which now holds no checkbox.
     const actionsTd = tr.querySelector(".vms-table__td--actions") as HTMLTableCellElement;
     expect(actionsTd).toBeTruthy();
-    const checkbox = actionsTd.querySelector("input[type='checkbox']");
-    expect(checkbox).not.toBeNull();
-    // And: the per-row button is also present (we still render both)
+    expect(actionsTd.querySelector("input[type='checkbox']")).toBeNull();
     const button = actionsTd.querySelector("button");
     expect(button).not.toBeNull();
     expect(button?.textContent).toBe("Close");
+  });
+
+  it("J. select cell is the FIRST <td> and actions cell is the LAST", () => {
+    const container = render(treeMixed(), () => {});
+    const tr = container.querySelector('tr[data-id="r1"]') as HTMLTableRowElement;
+    const tds = Array.from(tr.querySelectorAll("td"));
+    expect(tds[0]!.classList.contains("vms-table__td--select")).toBe(true);
+    expect(tds[tds.length - 1]!.classList.contains("vms-table__td--actions")).toBe(true);
+    // Header gets a matching leading --select <th> so columns stay aligned.
+    const headerSelectTh = container.querySelector("thead tr th");
+    expect(headerSelectTh!.classList.contains("vms-table__th--select")).toBe(true);
   });
 
   it("I. clickable rows expose role='button', tabindex=0, and a non-empty aria-label", () => {

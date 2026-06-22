@@ -408,13 +408,15 @@ public record TableColumn(
 public record TableRow(
     Dictionary<string, string> Cells,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id = null,
-    // Per-row interactive controls rendered in a trailing actions cell. Each
-    // entry is either a ButtonNode (with its own unique action name, e.g.
-    // delete-row-42) or a CheckboxNode (with its own per-row bind path).
+    // Per-row interactive controls. Each entry is either a ButtonNode (with its
+    // own unique action name, e.g. delete-row-42) or a CheckboxNode (with its
+    // own per-row bind path).
     // Typed as IReadOnlyList<ViewNode> (not the closed TS union) so
     // System.Text.Json emits the polymorphic "type":"button"|"checkbox"
     // discriminator on the wire — the same maintainer rule as FormNode.Buttons.
-    // The renderer dispatches by entry.type, so both types render correctly.
+    // The renderer partitions by entry.type: CheckboxNodes render in a dedicated
+    // LEADING column (left — the data-grid selection convention), ButtonNodes in
+    // the TRAILING actions cell (right).
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Actions = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant = null,
     // Click-anywhere row dispatch primitive. When set, the renderer makes the
