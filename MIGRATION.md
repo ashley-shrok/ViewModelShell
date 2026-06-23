@@ -6,6 +6,32 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `1.8.0` (npm @ashley-shrok/viewmodel-shell only)
+
+Input placeholders now render as a **faint hint** (theme text color at 50% opacity) instead of the higher-contrast `--vms-text-muted`. **Nothing to do** — it's an automatic stylesheet change with no wire, type, or API impact.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `1.7.0` | **`1.8.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `1.5.0` | unchanged (`1.5.0`) |
+
+### What changed (one paragraph)
+
+`.vms-field__input::placeholder` was `color: var(--vms-text-muted)` (≈5.1:1 on white — readable enough to be mistaken for real entered text in an empty field). It is now `color: var(--vms-text); opacity: 0.5` (≈3.5:1), matching the browser-default / Bootstrap convention so a placeholder reads as a hint, not committed content. Because it fades the theme's own text color rather than using a fixed gray, it adapts across all 12 themes automatically.
+
+### Do I need to do anything?
+
+No. If you *want* the old high-contrast placeholders back, override the single rule **after** importing the stylesheet:
+
+```css
+/* app-tokens.css — imported after viewmodel-shell styles/theme */
+.vms-field__input::placeholder { color: var(--vms-text-muted); opacity: 1; }
+```
+
+Note the trade-off you'd be re-opting into: high-contrast placeholders are more legible but read as real text. The framework's stance is that placeholders should never be the sole label — pair inputs with a `label`.
+
+---
+
 ## Upgrading to `1.7.0` (npm @ashley-shrok/viewmodel-shell only)
 
 Per-row table checkboxes now render in a **leading** (left) column instead of the trailing actions cell. This is a client-side rendering change in the BrowserAdapter — there is no wire-format, type, or API change.

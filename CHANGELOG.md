@@ -6,6 +6,26 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 1.8.0 — Input placeholders read as faint hints, not committed text (npm)
+
+**npm:** `1.8.0` (MINOR — default styling change, no API/wire change) · **NuGet:** unchanged at `1.5.0` (CSS-only; no .NET surface touched).
+
+Field placeholders were rendered with `--vms-text-muted` at full opacity (`#6c6c80` ≈ **5.1:1** on white in the default theme). That's high enough contrast that, in an empty field, the placeholder reads as real entered text — users reported mistaking empty inputs for filled ones, especially where an input has no visible label. Placeholders now derive from the theme's own text color at reduced strength (the browser-UA / Bootstrap mechanism), so they read as a faint hint and an empty field is unmistakable from a filled one.
+
+### Changed
+
+- **`.vms-field__input::placeholder`** now resolves to `color: var(--vms-text); opacity: 0.5` instead of `color: var(--vms-text-muted)`. Result ≈ **3.5:1** on light themes, and — because it's the theme text color faded by opacity rather than a fixed gray — it adapts correctly across all 12 light/dark themes with a single rule (themes override token values, not rules).
+- This **decouples** the placeholder from `--vms-text-muted`, which is shared by labels/captions/table-meta and must stay AA-contrast. Those are unaffected.
+
+### Trade-off (intentional)
+
+- Placeholder contrast is now **below WCAG AA 4.5:1 by design** — matching the de-facto industry standard (browser default ~0.54 opacity, Bootstrap `rgba(text,.5)`, Tailwind `gray-400` ≈ 2.6:1). The rationale: a placeholder must never be the sole carrier of meaning — pair inputs with a `label`. The rule carries an in-source comment documenting this so it isn't "fixed" back. Apps that want the old high-contrast behavior can override the one rule in a `:root`/app stylesheet.
+
+### Not changed
+
+- **No wire-format, type, or API change.** Protocol token stays `viewmodel-shell/1.0`. Parity suite + skill parity unaffected (this is a stylesheet-only change).
+- The 14 muted-text usages elsewhere (`--vms-text-muted`) keep their AA contrast.
+
 ## 1.7.0 — Per-row table checkboxes render in a leading column (npm)
 
 **npm:** `1.7.0` (MINOR — default rendering change, no API/wire change) · **NuGet:** unchanged at `1.5.0` (renderer-only change; the .NET package gained only a doc-comment touch-up that rides along for the next functional release).

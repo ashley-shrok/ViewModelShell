@@ -323,7 +323,16 @@ body {
      variable so themes can flip it. */
   color-scheme: var(--vms-color-scheme);
 }
-.vms-field__input::placeholder { color: var(--vms-text-muted); }
+/* Placeholder is derived from the theme text color at reduced strength
+   (the UA-default / Bootstrap mechanism, ~50%), NOT from --vms-text-muted.
+   Two reasons: (1) it reads as a faint hint rather than committed text, so an
+   empty field isn't mistaken for a filled one even with no visible label;
+   (2) it decouples from --vms-text-muted (shared by labels/captions/meta),
+   which must stay AA-contrast. Opacity (not a fixed gray) so it fades
+   correctly across every light/dark theme. This intentionally trades strict
+   placeholder AA contrast for clarity — placeholders should never be the sole
+   carrier of meaning; pair inputs with a label. */
+.vms-field__input::placeholder { color: var(--vms-text); opacity: 0.5; }
 .vms-field__input:focus {
   border-color: var(--vms-accent);
   box-shadow: 0 0 0 3px var(--vms-accent-glow);
