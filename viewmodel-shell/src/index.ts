@@ -237,6 +237,10 @@ export interface FormNode {
    *  button, same underlying state. A plain ButtonNode placed in `children`
    *  has identical dispatch semantics; the buttons[] slot is a layout hint. */
   buttons?: ButtonNode[];
+  /** Opt-in: bare Enter inside a descendant <textarea> dispatches submitAction
+   *  (chat-composer "Enter sends, Shift/Ctrl/Meta/Alt+Enter = newline"). No-op
+   *  when submitAction is absent or during IME composition. Default false. */
+  submitOnEnter?: boolean;
   children: ViewNode[];
 }
 

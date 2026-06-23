@@ -6,6 +6,35 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `1.9.0` / `1.6.0` (npm + NuGet)
+
+Two changes, both **non-breaking — nothing required**.
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `1.8.0` | **`1.9.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `1.5.0` | **`1.6.0`** |
+
+### What changed
+
+1. **New opt-in `FormNode.submitOnEnter`** (TS `submitOnEnter?: boolean` / .NET `bool? SubmitOnEnter`, appended as the last positional record param with a `null` default). Defaults to off, so existing forms are unaffected and existing `new FormNode(...)` positional call sites compile unchanged. Set it `true` on a form with a `submitAction` to make a bare `Enter` in a `<textarea>` submit (Shift/Ctrl/Meta/Alt+Enter and IME composition stay newlines).
+2. **Modal backdrop no longer animates on open.** The `vms-in` entry animation was removed from `.vms-modal-backdrop` because it replayed on every in-modal dispatch (the renderer rebuilds the DOM each action), making modals re-flash. Modals now appear instantly.
+
+### Do I need to do anything?
+
+No. Two optional notes:
+
+- To adopt Enter-to-send on a composer, set `submitOnEnter: true` on the form (it only acts when `submitAction` is present).
+- If you *want* the modal fade-in back, re-add the rule **after** importing the stylesheet:
+
+```css
+/* app-tokens.css — imported after viewmodel-shell styles/theme */
+@keyframes vms-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.vms-modal-backdrop { animation: vms-in 0.15s ease; }
+```
+
+---
+
 ## Upgrading to `1.8.0` (npm @ashley-shrok/viewmodel-shell only)
 
 Input placeholders now render as a **faint hint** (theme text color at 50% opacity) instead of the higher-contrast `--vms-text-muted`. **Nothing to do** — it's an automatic stylesheet change with no wire, type, or API impact.

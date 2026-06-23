@@ -333,7 +333,13 @@ public record FormNode(
     // emits the polymorphic "type":"button" discriminator (it's only written
     // when serializing through the ViewNode base) — without it the wire would
     // drift from the TS backend, which always includes type.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Buttons = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Buttons = null,
+    // Opt-in: bare Enter inside a descendant textarea dispatches SubmitAction
+    // (chat-composer "Enter sends, Shift/Ctrl/Meta/Alt+Enter = newline"). No-op
+    // when SubmitAction is null or during IME composition. Renderer-handled on
+    // the client; the action envelope is unchanged. Nullable so the wire stays
+    // absent when unset.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? SubmitOnEnter = null
 ) : ViewNode;
 
 public record FieldOption(string Value, string Label);

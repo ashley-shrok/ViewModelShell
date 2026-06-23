@@ -467,6 +467,24 @@ export class BrowserAdapter implements Adapter {
       form.addEventListener("submit", (e) => e.preventDefault());
     }
 
+    // Opt-in chat-composer affordance: bare Enter in a descendant textarea
+    // dispatches the submit (a textarea otherwise eats Enter as a newline and
+    // never submits). Modifier-Enter falls through to a normal newline, and an
+    // IME composition Enter (candidate confirmation) must NOT submit. No-op
+    // when submitAction is absent. Same dispatch path as the submit button.
+    if (n.submitOnEnter && n.submitAction) {
+      const submitAction = n.submitAction;
+      form.querySelectorAll<HTMLTextAreaElement>("textarea").forEach(ta => {
+        ta.addEventListener("keydown", (e) => {
+          if (e.key !== "Enter") return;
+          if (e.isComposing || e.keyCode === 229) return;             // IME candidate confirm — not a send
+          if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return; // newline / shortcut
+          e.preventDefault();
+          dispatchWithFiles(submitAction);
+        });
+      });
+    }
+
     if (n.buttons && n.buttons.length > 0) {
       const row = document.createElement("div");
       row.className = "vms-form__buttons";

@@ -6,6 +6,28 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 1.9.0 / 1.6.0 — Opt-in Enter-to-submit on textareas + modals no longer re-flash (npm + NuGet)
+
+**npm:** `1.9.0` (MINOR — additive wire field + a default styling change) · **NuGet:** `1.6.0` (MINOR — additive `FormNode.SubmitOnEnter` member on the .NET record).
+
+Two changes ship together. (1) A new opt-in `FormNode.submitOnEnter` lets chat-style composers express "Enter sends, Shift+Enter newline" — previously impossible, since a `<textarea>` eats Enter as a newline and never submits. (2) The modal backdrop's entry animation is removed, fixing a visible re-flash on every in-modal action.
+
+### Added
+
+- **`FormNode.submitOnEnter?: boolean`** (TS) / **`bool? SubmitOnEnter`** (.NET, appended as the last positional param with the standard null-omission attribute). When `true` **and** `submitAction` is set, a bare `Enter` keydown inside any descendant `<textarea>` dispatches `submitAction` via the exact submit-button path (harvest / files / pending-label semantics identical). **Modifier-Enter** (`Shift`/`Ctrl`/`Meta`/`Alt`) falls through to a normal newline, and an **IME-composition Enter** (`isComposing` / `keyCode === 229` — candidate confirmation) is never treated as a send, so CJK input is safe. **No-op** when `submitAction` is absent. Default (unset) is byte-identical to prior behavior. Form-level by design — it mirrors HTML's implicit-submit affordance; a form that also holds a code editor simply wouldn't set it.
+
+### Changed
+
+- **`.vms-modal-backdrop`** no longer carries `animation: vms-in 0.15s ease` (and the now-orphaned `@keyframes vms-in` is removed). The renderer rebuilds the whole tree on every dispatch (`innerHTML=""` + rebuild), so the backdrop was a fresh element each time and the entry animation **replayed on every in-modal action** — a dropdown/field change inside a modal made it visibly disappear and reappear. Removing the animation fixes the re-flash. **Trade-off:** modals no longer fade in on first open (they appear instantly). Apps that want the fade back can re-add the rule in an app stylesheet after importing the default CSS.
+
+### Not changed
+
+- **No wire-envelope, side-effect, error, or polling change.** The action envelope stays `{name}`-only — `submitOnEnter` is a renderer hint, not part of the dispatch payload. Protocol token stays `viewmodel-shell/1.0`; the agent skill is unchanged. Parity + skill-parity suites unaffected (the new field is additive and renderer-handled on the client).
+
+### Tests
+
+- New `viewmodel-shell/test/form-submit-on-enter.test.ts` (6 cases): bare Enter dispatches with the typed value in state; Shift/Ctrl/Meta/Alt+Enter do not; IME `isComposing` and `keyCode===229` do not; no-op without `submitAction`; default-unset stays inert.
+
 ## 1.8.0 — Input placeholders read as faint hints, not committed text (npm)
 
 **npm:** `1.8.0` (MINOR — default styling change, no API/wire change) · **NuGet:** unchanged at `1.5.0` (CSS-only; no .NET surface touched).

@@ -517,11 +517,6 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   background: var(--vms-accent-glow);
 }
 
-@keyframes vms-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
 /* ── Text ── */
 .vms-text { flex: 1; line-height: 1.4; word-break: break-word; }
 .vms-text--heading       { font-family: var(--vms-font-head); font-size: var(--vms-text-xl); }
@@ -569,7 +564,6 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   justify-content: center;
   padding: var(--vms-space-md);
   z-index: 1000;
-  animation: vms-in 0.15s ease;
 }
 .vms-modal {
   background: var(--vms-surface);
