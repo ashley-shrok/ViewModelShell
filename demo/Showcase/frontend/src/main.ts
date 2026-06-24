@@ -276,6 +276,48 @@ function componentsView(): ViewNode[] {
       ]),
     ]},
 
+    // 1.13.0 — Switcher (atomic row ↔ stack flip). The one completeness
+    // primitive a grid cannot express: ~4 equal cards sit in ONE row above the
+    // threshold and ALL stack below it — no intermediate 2-then-1 state (the
+    // distinction from `cards` auto-fit). Built only from ViewNodes; resize to
+    // see the atomic flip.
+    { type: "section", heading: "Switcher (atomic row ↔ stack flip)", children: [
+      { type: "text", value: "Resize the window: ~4 equal cards sit in one row above the threshold and ALL stack below it — no 2-then-1 state (the distinction from `cards` auto-fit). The threshold:\"sm\" variant flips at a narrower width.", style: "muted" },
+      { type: "section", layout: "switcher", children: [
+        ...(["One", "Two", "Three", "Four"] as const).map(label => (
+          { type: "section" as const, variant: "card" as const, children: [
+            { type: "text" as const, value: label, style: "heading" as const },
+          ]}
+        )),
+      ]},
+      { type: "text", value: "threshold: \"sm\" (flips at 20rem)", style: "muted" },
+      { type: "section", layout: "switcher", threshold: "sm", children: [
+        ...(["One", "Two", "Three", "Four"] as const).map(label => (
+          { type: "section" as const, variant: "card" as const, children: [
+            { type: "text" as const, value: label, style: "heading" as const },
+          ]}
+        )),
+      ]},
+    ]},
+
+    // 1.13.0 — Cards minItem (auto-fit min track width). The same cards grid
+    // with different declared minimum track widths: a smaller token packs more,
+    // narrower columns; a larger token yields fewer, wider ones. All still
+    // collapse to one column intrinsically as the container narrows.
+    { type: "section", heading: "Cards minItem (auto-fit min track width)", children: [
+      { type: "text", value: "The same auto-fit cards grid with different declared minItem values — smaller = more, narrower columns; larger = fewer, wider. All collapse to one column intrinsically when the container narrows.", style: "muted" },
+      ...(["sm", "md", "xl"] as const).flatMap(v => [
+        { type: "text" as const, value: `minItem: "${v}"`, style: "muted" as const },
+        { type: "section" as const, layout: "cards" as const, minItem: v, children: [
+          ...(["A", "B", "C", "D", "E", "F"] as const).map(label => (
+            { type: "section" as const, variant: "card" as const, children: [
+              { type: "text" as const, value: label, style: "heading" as const },
+            ]}
+          )),
+        ]},
+      ]),
+    ]},
+
     { type: "section", heading: "Image", layout: "split", children: [
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%237c5cff'/%3E%3C/svg%3E", alt: "Sample avatar", size: "small", shape: "circle" },
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90'%3E%3Crect width='160' height='90' fill='%2310b981'/%3E%3C/svg%3E", alt: "Sample banner", size: "large" },
