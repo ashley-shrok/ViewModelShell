@@ -267,6 +267,12 @@ public record PageNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Title,
     IReadOnlyList<ViewNode> Children,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Density = null,
+    // Layout preset arranging direct children — free-form string mirroring the
+    // TS closed union "stack"|"split"|"cards"|"sidebar"|"row"|"switcher" (1.13.0
+    // added "switcher": N equal items flipping all-row ↔ all-stack atomically
+    // at a content-width threshold — the negative-flex-basis primitive a grid
+    // cannot express). Omitted or "stack" = vertical flow (no modifier class);
+    // any other value emits .vms-page--{value}.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null,
     // Page-shell max-width override (issue #13). null = default cap (--vms-page-max,
     // 1080px). "wide" = --vms-page-max-wide (1440px default). "full" = uncapped.
@@ -286,7 +292,22 @@ public record PageNode(
     // "start"|"center"|"end"|"stretch"|"baseline" (Flutter CrossAxisAlignment;
     // ALIGN-02). Omitted = no class → row default (center) holds = byte-identical
     // to today; any value emits .vms-align--{value}.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Align = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Align = null,
+    // 1.13.0 — switcher flip width for layout:"switcher". Free-form string
+    // mirroring the TS closed union "sm"|"md"|"lg"|"xl" (closed union enforced
+    // on the TS side + validated by parity, matching the Layout field's
+    // pattern). The locked size scale → CSS rem (sm→20rem, md→30rem, lg→40rem,
+    // xl→48rem). Omitted = no class → the var(--vms-switch-threshold, 30rem) CSS
+    // default (30rem) holds; any value emits .vms-switch--{value} which sets
+    // --vms-switch-threshold. JsonIgnore-on-null per the file-header rule.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Threshold = null,
+    // 1.13.0 — switcher max-per-row count cap for layout:"switcher". int?
+    // mirroring the TS bounded numeric union 2..8 (bounded scalar, not raw CSS,
+    // per P2; the bound is enforced on the TS side + validated by parity). Once
+    // the child count exceeds Limit every child goes full-width regardless of
+    // container width. Omitted = no class → no count cap; any value emits
+    // .vms-switch-limit--{n}. JsonIgnore-on-null per the file-header rule.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Limit = null
 ) : ViewNode;
 
 // 1.4.0 — SectionNode.Link URL-wrapper variant of the clickable-card primitive
@@ -304,10 +325,12 @@ public record SectionNode(
     IReadOnlyList<ViewNode> Children,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant = null,
     // Layout preset arranging direct children — free-form string mirroring the
-    // TS closed union "stack"|"split"|"cards"|"sidebar"|"row" (1.11.0 added
-    // "row": a left-aligned wrapping horizontal row, items hug content). Omitted
-    // or "stack" = vertical flow (no modifier class); any other value emits
-    // .vms-section--{value}.
+    // TS closed union "stack"|"split"|"cards"|"sidebar"|"row"|"switcher" (1.11.0
+    // added "row": a left-aligned wrapping horizontal row, items hug content;
+    // 1.13.0 added "switcher": N equal items flipping all-row ↔ all-stack
+    // atomically at a content-width threshold — the negative-flex-basis primitive
+    // a grid cannot express). Omitted or "stack" = vertical flow (no modifier
+    // class); any other value emits .vms-section--{value}.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null,
     // 1.2.0 — client-side disclosure widget. true = renderer emits
     // <details>/<summary> (closed by default; open state DOM-local and
@@ -374,7 +397,22 @@ public record SectionNode(
     // "start"|"center"|"end"|"stretch"|"baseline" (Flutter CrossAxisAlignment;
     // ALIGN-02). Omitted = no class → row default (center) holds = byte-identical
     // to today; any value emits .vms-align--{value}.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Align = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Align = null,
+    // 1.13.0 — switcher flip width for layout:"switcher". Free-form string
+    // mirroring the TS closed union "sm"|"md"|"lg"|"xl" (closed union enforced
+    // on the TS side + validated by parity, matching the Layout field's
+    // pattern). The locked size scale → CSS rem (sm→20rem, md→30rem, lg→40rem,
+    // xl→48rem). Omitted = no class → the var(--vms-switch-threshold, 30rem) CSS
+    // default (30rem) holds; any value emits .vms-switch--{value} which sets
+    // --vms-switch-threshold. JsonIgnore-on-null per the file-header rule.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Threshold = null,
+    // 1.13.0 — switcher max-per-row count cap for layout:"switcher". int?
+    // mirroring the TS bounded numeric union 2..8 (bounded scalar, not raw CSS,
+    // per P2; the bound is enforced on the TS side + validated by parity). Once
+    // the child count exceeds Limit every child goes full-width regardless of
+    // container width. Omitted = no class → no count cap; any value emits
+    // .vms-switch-limit--{n}. JsonIgnore-on-null per the file-header rule.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Limit = null
 ) : ViewNode;
 
 public record ListNode(
