@@ -130,6 +130,10 @@ describe("LAYOUT-02/03 — page layout preset modifier emission (D-02 idiom)", (
     const el = renderPage({ type: "page", children: [], layout: "cards" });
     expect(el.classList.contains("vms-page--cards")).toBe(true);
   });
+  it('layout: "row" => root className contains vms-page--row (1.11.0)', () => {
+    const el = renderPage({ type: "page", children: [], layout: "row" });
+    expect(el.classList.contains("vms-page--row")).toBe(true);
+  });
   it('layout: "stack" => className === "vms-page" (NO modifier — byte-identical, LAYOUT-01)', () => {
     const el = renderPage({ type: "page", children: [], layout: "stack" });
     expect(el.className).toBe("vms-page");
@@ -149,6 +153,11 @@ describe("LAYOUT-02/03 — section layout preset modifier emission (D-02 idiom)"
   it('layout: "cards" => section className contains vms-section--cards', () => {
     const el = renderSection({ type: "section", children: [], layout: "cards" });
     expect(el.classList.contains("vms-section--cards")).toBe(true);
+  });
+  it('layout: "row" => section className contains vms-section--row (1.11.0)', () => {
+    const el = renderSection({ type: "section", children: [], layout: "row" });
+    expect(el.classList.contains("vms-section")).toBe(true);
+    expect(el.classList.contains("vms-section--row")).toBe(true);
   });
   it('layout: "stack" => className === "vms-section" (NO modifier — byte-identical, LAYOUT-01)', () => {
     const el = renderSection({ type: "section", children: [], layout: "stack" });
@@ -307,5 +316,19 @@ describe('#17 — layout="cards"/"split" computed display is actually grid (casc
   it('section with layout: "sidebar" still computes display: flex (intentional, untouched)', () => {
     const el = renderSection({ type: "section", children: [], layout: "sidebar" });
     expect(window.getComputedStyle(el).display).toBe("flex");
+  });
+
+  it('section with layout: "row" computes display: flex, flex-direction: row (1.11.0)', () => {
+    const el = renderSection({
+      type: "section",
+      children: [
+        { type: "text", value: "a" },
+        { type: "text", value: "b" },
+      ],
+      layout: "row",
+    });
+    const cs = window.getComputedStyle(el);
+    expect(cs.display).toBe("flex");
+    expect(cs.flexDirection).toBe("row");
   });
 });

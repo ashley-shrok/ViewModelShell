@@ -307,6 +307,32 @@ export class BrowserAdapter implements Adapter {
       return;
     }
 
+    // 1.11.0 — flyout:true overlay disclosure. The hover/focus sibling of
+    // collapsible's inline <details>: heading => focusable <button> trigger,
+    // children => an absolutely-positioned panel revealed on :hover /
+    // :focus-within (pure CSS — see default.css; no JS, no listeners, no
+    // round-tripped open state). Precedence: collapsible (checked above) wins,
+    // so reaching here means collapsible is not set; flyout in turn wins over
+    // link/action below. Omitted/false renders byte-identical to <section>.
+    if (n.flyout === true) {
+      const el = document.createElement("div");
+      el.className = `vms-section vms-section--flyout${
+        n.variant === "card" ? " vms-section--card" : ""}${
+        n.layout && n.layout !== "stack" ? ` vms-section--${n.layout}` : ""}`;
+      const trigger = document.createElement("button");
+      trigger.type = "button";
+      trigger.className = "vms-section__trigger";
+      // Headingless fallback label — mirrors collapsible's "Show details".
+      trigger.textContent = n.heading ?? "Menu";
+      el.appendChild(trigger);
+      const panel = document.createElement("div");
+      panel.className = "vms-section__panel";
+      this.kids(n.children, panel, on);
+      el.appendChild(panel);
+      parent.appendChild(el);
+      return;
+    }
+
     // 1.5.0 — SectionNode.link URL-wrapper variant (issue #21). When set,
     // emit a wrapping <a href> element instead of <section> so every native
     // browser link affordance works for free (middle-click / Ctrl/Cmd-click

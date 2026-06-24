@@ -277,8 +277,30 @@ public class FeatureProbeController : ControllerBase
             },
             Variant: "card",
             Link: new SectionLink("https://example.com/probe", External: true));
+        // 1.11.0 — row layout (parity coverage for layout:"row"). A left-aligned
+        // wrapping row of links — the horizontal-row primitive a navbar composes from.
+        var rowSection = new SectionNode(
+            Heading: "Row layout",
+            Children: new ViewNode[]
+            {
+                new LinkNode("Home", "/home"),
+                new LinkNode("Docs", "/docs"),
+                new LinkNode("About", "/about"),
+            },
+            Variant: "card",
+            Layout: "row");
+        // 1.11.0 — flyout overlay disclosure (parity coverage for SectionNode.Flyout).
+        // Heading=trigger, children=panel; the wire shape itself is the parity gate.
+        var flyoutSection = new SectionNode(
+            Heading: "Menu",
+            Children: new ViewNode[]
+            {
+                new LinkNode("Settings", "/settings"),
+                new LinkNode("Profile", "/profile"),
+            },
+            Flyout: true);
         return new PageNode("Feature Probe",
-            new List<ViewNode> { probeSection, clickableCardSection, linkedCardSection, BuildTableSection(state) },
+            new List<ViewNode> { probeSection, clickableCardSection, linkedCardSection, rowSection, flyoutSection, BuildTableSection(state) },
             Density: "compact", Layout: "cards");
     }
 

@@ -6,6 +6,48 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `1.11.0` / `1.9.0` (npm + NuGet)
+
+Additive — **nothing required.**
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `1.10.0` | **`1.11.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `1.8.0` | **`1.9.0`** |
+
+### What changed
+
+Two additive `SectionNode`/`PageNode` primitives, both opt-in:
+
+- **`layout: "row"`** — a new value in the layout closed union (Page + Section): a left-aligned wrapping horizontal row. Omitting it is byte-identical to before.
+- **`SectionNode.flyout?: boolean`** (.NET `Flyout`) — an overlay (hover/focus) disclosure, the sibling of the existing inline `collapsible`. Pure CSS, no JS. Omitting it is byte-identical to before.
+
+No wire-shape change; protocol token stays `viewmodel-shell/1.0`. Old agents/apps that don't use the new fields are unaffected.
+
+### Do I need to do anything?
+
+No. **To adopt them**, compose a navbar from primitives instead of hand-rolling one — a `row` section of links plus a `flyout` section for a menu:
+
+```ts
+// a simple top nav, zero app CSS
+{ type: "section", layout: "row", children: [
+    { type: "link", label: "Home", href: "/" },
+    { type: "link", label: "Invoices", href: "/invoices" },
+    // a hover/focus menu — overlays instead of pushing the bar open
+    { type: "section", flyout: true, heading: "Admin", children: [
+        { type: "link", label: "Users", href: "/admin/users" },
+        { type: "link", label: "Settings", href: "/admin/settings" },
+    ] },
+] }
+```
+
+Notes:
+- Reach for **`flyout`** (overlay) rather than **`collapsible`** (inline `<details>`) when the revealed content should float over siblings — e.g. a menu inside a `row` bar, where an inline disclosure would shove the bar open.
+- Section modes are mutually exclusive with a fixed precedence — **`collapsible` > `flyout` > `link` > `action`** — so don't set more than one; a lower-precedence mode is silently ignored if a higher one is also set.
+- **TUI:** `flyout` has no terminal overlay, so it degrades to a plain labeled section (children shown inline). `layout:"row"` lays children in a row.
+
+---
+
 ## Upgrading to NuGet `1.8.0` (NuGet only)
 
 Additive — **nothing required.**

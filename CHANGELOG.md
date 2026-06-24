@@ -6,6 +6,35 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 1.11.0 / 1.9.0 — Horizontal `row` layout + Section `flyout` (overlay disclosure) (npm + NuGet)
+
+**npm:** `1.11.0` (MINOR — additive layout value + `SectionNode.flyout`) · **NuGet:** `1.9.0` (MINOR — additive `SectionNode.Flyout`; `Layout` already free-form string).
+
+Requested by the PBMInvoices/Pantheon (AitherCloud2) maintainer for an information-architecture reorg — replacing a 10-link "junk drawer" with a persistent top nav, reusable across Cloud2 apps (Metis, AitherIntelligence, Hermes). The original ask was three things (`NavBarNode`, `DropdownMenuNode`, badges); scoping reduced it to the **two genuinely-missing general primitives**. A navbar is then *composed* from them — a `row` of links with a `flyout` for the Admin menu — rather than baked in as a bespoke composite node. `NavBarNode`, badges, `active`, and `sticky` were all dropped (composable / deferred follow-ups).
+
+### Added
+
+- **`layout: "row"`** on `PageNode` / `SectionNode` — a left-aligned wrapping horizontal row; children hug their content. The general horizontal-row primitive that was missing (every prior horizontal layout was special-cased: `--form--inline`, `--table__bulk-actions`, `--stat-bar`, `--sidebar` app-shell). Emits `.vms-page--row` / `.vms-section--row`. No renderer change (the existing generic `.vms-*--{layout}` emission handles it); **.NET `Layout` is already a free-form `string?`, so this is a TS-union + CSS + TUI-`layoutProps` addition only.**
+- **`SectionNode.flyout?: boolean`** (.NET `Flyout`) — an **overlay** disclosure, the hover/focus sibling of `collapsible`'s inline `<details>`. The `heading` becomes a focusable `<button class="vms-section__trigger">`; the `children` are wrapped in an absolutely-positioned `<div class="vms-section__panel">` revealed on `:hover` / `:focus-within`. **Pure CSS — no JavaScript, no state machine, no round-tripped open state.** Hover (desktop), tap-to-focus (touch), and Tab-to-trigger (keyboard a11y) all reveal it; it hides on blur / pointer-leave. Use it (rather than `collapsible`) when the revealed content should float over siblings instead of pushing them — e.g. a menu inside a `layout:"row"` bar. Headingless flyout uses the trigger label `"Menu"`.
+
+### Behavior / precedence
+
+- The section modes are mutually exclusive; the renderer resolves a fixed precedence and never combines them: **`collapsible` > `flyout` > `link` > `action`.** So `collapsible:true` wins if both are set, and a `flyout` section ignores `link`/`action`. This mirrors the existing parallel-optional-fields pattern on `SectionNode` (no new validation rule — invalid combos degrade deterministically rather than throwing).
+- **TUI:** `layout:"row"` maps to a row flex container; `flyout` has no terminal overlay, so it **degrades to a plain labeled section** (children render inline) — `SectionView` ignores the flag, which is the correct graceful degradation (the information is still surfaced).
+
+### Not changed
+
+- No wire-shape change; protocol token stays `viewmodel-shell/1.0` (additive optional field + a new closed-union value). `agent-skill.md` / `AgentSkill.md` untouched (the wire protocol / response envelope is unchanged; new ViewNode fields don't touch it).
+
+### Demo + tests
+
+- **FeatureProbe** twins (`FeatureProbe-bun/handler.ts` + `FeatureProbe/AspNetCore/FeatureProbeController.cs`) render a `layout:"row"` section and a `flyout:true` section (each with `LinkNode` children); the existing `feature-probe` GET steps capture them, so both backends emit byte-identical wire (cross-backend parity verified).
+- New `viewmodel-shell/test/section-flyout.test.ts` (trigger/panel structure, headingless fallback, class combination, collapsible-wins precedence, default-hidden computed style, reveal-rule presence) + `theme-modifiers.test.ts` row cases (class emission + computed `display:flex`/`flex-direction:row`) + a `conformance-fixtures.ts` row+flyout fixture (both adapters surface the items/trigger/panel children — proves the TUI degradation surfaces information).
+
+### Deferred follow-ups
+
+- A `justify` knob on `row` (brand-left / admin-right navbars), plus `LinkNode`/`ButtonNode` badges, `active` on `LinkNode`, and `sticky` on `SectionNode` — all clean additive follow-ups if the need is confirmed.
+
 ## NuGet 1.8.0 — `UseVmsShellStaticFiles()` so the SPA shell never gets browser-cached (NuGet)
 
 **NuGet:** `1.8.0` (MINOR — additive `IApplicationBuilder` host helper) · **npm:** unchanged at `1.10.0` (.NET-only; ASP.NET hosting helper with no TS/Bun analog).

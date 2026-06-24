@@ -219,4 +219,39 @@ export const FIXTURES: ConformanceFixture[] = [
     },
     expect: ["Uniform2", "Whiskey2", "Tango2"],
   },
+  {
+    // 1.11.0 — layout:"row" + flyout (overlay disclosure). Both adapters must
+    // surface the row's items AND the flyout's trigger label + panel children.
+    // Browser: the flyout panel is hidden via CSS (visibility:hidden) but stays
+    // in the DOM, so its text is still surfaced information. TUI: no overlay —
+    // the flyout degrades to a plain labeled section (children rendered inline),
+    // so the same information is present. Either way the INFORMATION is shared,
+    // which is the conformance contract (layout/visibility are presentation).
+    name: "row layout + flyout section (items + trigger + panel children surface on both)",
+    vm: {
+      type: "page",
+      title: "Yankee2",
+      children: [
+        {
+          type: "section",
+          heading: "Zulu2",
+          layout: "row",
+          children: [
+            { type: "link", label: "Alfa3", href: "/a", external: false },
+            { type: "link", label: "Bravo3", href: "/b", external: false },
+          ],
+        },
+        {
+          type: "section",
+          heading: "Charlie3",
+          flyout: true,
+          children: [
+            { type: "link", label: "Delta3", href: "/d", external: false },
+            { type: "link", label: "Echo3", href: "/e", external: false },
+          ],
+        },
+      ],
+    },
+    expect: ["Yankee2", "Zulu2", "Alfa3", "Bravo3", "Charlie3", "Delta3", "Echo3"],
+  },
 ];

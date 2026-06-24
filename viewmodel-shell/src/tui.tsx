@@ -1032,6 +1032,11 @@ function layoutProps(
       return { flexDirection: "row" as const, gap: 1, flexGrow: 1, flexShrink: 1 };
     case "cards":
       return { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 1 };
+    case "row":
+      // 1.11.0 — left-aligned wrapping horizontal row; items hug content.
+      // (Section flyout has no TUI overlay; it degrades to a plain labeled
+      // section — SectionView ignores the flag and renders children inline.)
+      return { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 1 };
     case "sidebar":
       return { flexDirection: "row" as const, gap: 1, flexGrow: 1, flexShrink: 1 };
     case "stack":

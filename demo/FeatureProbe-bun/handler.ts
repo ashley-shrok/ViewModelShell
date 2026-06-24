@@ -209,12 +209,37 @@ function buildVm(state: FeatureProbeState): ViewNode {
       { type: "text", value: "Renders as <a href> for native link affordances.", style: "muted" },
     ],
   };
+  // 1.11.0 — row layout (parity coverage for layout:"row"). A left-aligned
+  // wrapping row of links — the horizontal-row primitive a navbar composes from.
+  // external:false is explicit to match the .NET LinkNode non-nullable default.
+  const rowSection: ViewNode = {
+    type: "section",
+    heading: "Row layout",
+    variant: "card",
+    layout: "row",
+    children: [
+      { type: "link", label: "Home", href: "/home", external: false },
+      { type: "link", label: "Docs", href: "/docs", external: false },
+      { type: "link", label: "About", href: "/about", external: false },
+    ],
+  };
+  // 1.11.0 — flyout overlay disclosure (parity coverage for SectionNode.flyout).
+  // heading=trigger, children=panel; the wire shape itself is the parity gate.
+  const flyoutSection: ViewNode = {
+    type: "section",
+    heading: "Menu",
+    flyout: true,
+    children: [
+      { type: "link", label: "Settings", href: "/settings", external: false },
+      { type: "link", label: "Profile", href: "/profile", external: false },
+    ],
+  };
   return {
     type: "page",
     title: "Feature Probe",
     density: "compact",
     layout: "cards",
-    children: [probeSection, clickableCardSection, linkedCardSection, buildTableSection(state)],
+    children: [probeSection, clickableCardSection, linkedCardSection, rowSection, flyoutSection, buildTableSection(state)],
   };
 }
 
