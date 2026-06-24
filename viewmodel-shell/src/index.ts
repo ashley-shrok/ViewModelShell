@@ -109,7 +109,8 @@ export type ViewNode =
   | ProgressNode
   | ModalNode
   | TableNode
-  | CopyButtonNode;
+  | CopyButtonNode
+  | FitsNode;
 
 export interface PageNode {
   type: "page";
@@ -490,6 +491,43 @@ export interface CopyButtonNode {
    *  (TUI), so a copy-button can read distinctly from neighboring default
    *  buttons. Closed union; omitted = current behavior (no modifier). */
   variant?: "primary" | "secondary" | "danger";
+}
+
+/**
+ * The SwiftUI `ViewThatFits` port. The renderer picks the FIRST child whose
+ * intrinsic size FITS the available container (no axis overflow), else the next,
+ * else the LAST child as the guaranteed-fits fallback — container-relative
+ * responsive SELECTION decided CLIENT-SIDE at layout time via real measurement,
+ * with zero viewport breakpoints. Generalizes the `split`→`stack` collapse to
+ * arbitrary alternatives (e.g. a wide toolbar `row` first, a compact stacked
+ * `switcher` last).
+ *
+ * Children ordering convention (load-bearing): candidates are ordered
+ * preferred/widest FIRST → safe-fallback/narrowest LAST. Same direction as
+ * SwiftUI `ViewThatFits`.
+ *
+ * This is the ONE primitive that is NOT pure CSS — the selection requires real
+ * layout measurement (a `ResizeObserver` + DOM `scrollWidth`/`clientWidth`
+ * reads) and therefore lives ENTIRELY in `BrowserAdapter` (`browser.ts`), never
+ * in platform-agnostic core. In any no-layout context (TUI, SSR, jsdom,
+ * `container.clientWidth === 0`) it degrades to rendering the LAST
+ * (safe-fallback) child, since measurement is unavailable.
+ */
+export interface FitsNode {
+  type: "fits";
+  /** Axis on which the container's fit is tested. CLOSED union; OMITTED =
+   *  `"horizontal"` (the dominant case: pick the widest layout that fits the
+   *  available WIDTH). `"horizontal"` tests width overflow, `"vertical"` tests
+   *  height overflow, `"both"` tests EITHER axis. The renderer treats an absent
+   *  `axis` as `"horizontal"`. */
+  axis?: "horizontal" | "vertical" | "both";
+  /** Ordered candidate list. ORDERING CONVENTION (load-bearing — document
+   *  prominently): candidates are ordered **preferred/widest FIRST →
+   *  safe-fallback/narrowest LAST**, the same direction as SwiftUI
+   *  `ViewThatFits`. The renderer picks the FIRST candidate whose intrinsic
+   *  size fits the container on `axis` (no overflow); the LAST candidate is the
+   *  guaranteed-fits fallback rendered when none fit. */
+  children: ViewNode[];
 }
 
 // ─── Shell ────────────────────────────────────────────────────────────────────

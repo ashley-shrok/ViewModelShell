@@ -261,6 +261,7 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(LinkNode),       "link")]
 [JsonDerivedType(typeof(ImageNode),      "image")]
 [JsonDerivedType(typeof(CopyButtonNode), "copy-button")]
+[JsonDerivedType(typeof(FitsNode),       "fits")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -438,6 +439,19 @@ public record SectionNode(
 public record ListNode(
     IReadOnlyList<ViewNode> Children,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id = null
+) : ViewNode;
+
+// The SwiftUI `ViewThatFits` port (FITS-01/03). Children are ordered
+// preferred/widest FIRST → safe-fallback/narrowest LAST. `Axis` is free-form
+// `string?` mirroring the TS closed union `"horizontal"|"vertical"|"both"`
+// (closed union enforced TS-side + validated by parity, matching the
+// Layout/Arrange field pattern); omitted = absent on the wire → the renderer
+// treats it as `"horizontal"`. The SELECTION is client-only (real layout
+// measurement in BrowserAdapter) and NOT part of the wire — the wire only
+// carries the node shape. `JsonIgnore`-on-null per the file-header rule.
+public record FitsNode(
+    IReadOnlyList<ViewNode> Children,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Axis = null
 ) : ViewNode;
 
 public record ListItemNode(
