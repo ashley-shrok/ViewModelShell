@@ -159,6 +159,17 @@ body {
 .vms-section--cards > .vms-section__heading {
   grid-column: 1 / -1;
 }
+/* minItem tokens (GRID-01) — promote the CSS-only `--vms-card-min` (the D-05
+   seam) to declared server intent. Each sets the custom property the auto-fit
+   cards rule above reads unchanged (xs→10rem, sm→13rem, md→16rem [= the default],
+   lg→20rem, xl→24rem), so a smaller token yields more, narrower columns and a
+   larger token fewer, wider ones. An OMITTED minItem emits no class, so the
+   inherited 16rem default holds = byte-identical to today. */
+.vms-cards-min--xs { --vms-card-min: 10rem; }
+.vms-cards-min--sm { --vms-card-min: 13rem; }
+.vms-cards-min--md { --vms-card-min: 16rem; }
+.vms-cards-min--lg { --vms-card-min: 20rem; }
+.vms-cards-min--xl { --vms-card-min: 24rem; }
 
 /* ── Layout preset: split (LAYOUT-02, D-06/D-07) ──
    Capped exactly-2-then-1, equal-width (shared 1fr max), zero media queries.

@@ -268,7 +268,8 @@ export class BrowserAdapter implements Adapter {
       n.arrange ? ` vms-arrange--${n.arrange}` : ""}${
       n.align ? ` vms-align--${n.align}` : ""}${
       n.threshold ? ` vms-switch--${n.threshold}` : ""}${
-      n.limit ? ` vms-switch-limit--${n.limit}` : ""}`;
+      n.limit ? ` vms-switch-limit--${n.limit}` : ""}${
+      n.minItem ? ` vms-cards-min--${n.minItem}` : ""}`;
     if (n.title) {
       const h = document.createElement("h1");
       h.className = "vms-page__title";
@@ -297,7 +298,8 @@ export class BrowserAdapter implements Adapter {
         n.arrange ? ` vms-arrange--${n.arrange}` : ""}${
         n.align ? ` vms-align--${n.align}` : ""}${
         n.threshold ? ` vms-switch--${n.threshold}` : ""}${
-        n.limit ? ` vms-switch-limit--${n.limit}` : ""}`;
+        n.limit ? ` vms-switch-limit--${n.limit}` : ""}${
+        n.minItem ? ` vms-cards-min--${n.minItem}` : ""}`;
       el.dataset.sectionKey = finalKey;
       // Initial render is always closed — the post-render restore loop in
       // render() re-applies `open=true` for keys the user had open before.
@@ -330,7 +332,8 @@ export class BrowserAdapter implements Adapter {
         n.arrange ? ` vms-arrange--${n.arrange}` : ""}${
         n.align ? ` vms-align--${n.align}` : ""}${
         n.threshold ? ` vms-switch--${n.threshold}` : ""}${
-        n.limit ? ` vms-switch-limit--${n.limit}` : ""}`;
+        n.limit ? ` vms-switch-limit--${n.limit}` : ""}${
+        n.minItem ? ` vms-cards-min--${n.minItem}` : ""}`;
       const trigger = document.createElement("button");
       trigger.type = "button";
       trigger.className = "vms-section__trigger";
@@ -360,7 +363,8 @@ export class BrowserAdapter implements Adapter {
         n.arrange ? ` vms-arrange--${n.arrange}` : ""}${
         n.align ? ` vms-align--${n.align}` : ""}${
         n.threshold ? ` vms-switch--${n.threshold}` : ""}${
-        n.limit ? ` vms-switch-limit--${n.limit}` : ""}`;
+        n.limit ? ` vms-switch-limit--${n.limit}` : ""}${
+        n.minItem ? ` vms-cards-min--${n.minItem}` : ""}`;
       a.href = n.link.url;
       // Mirror LinkNode's external-attribute pattern (browser.ts ~line 666)
       // byte-for-byte: target=_blank + rel=noopener noreferrer when external.
@@ -411,6 +415,7 @@ export class BrowserAdapter implements Adapter {
       n.align ? ` vms-align--${n.align}` : ""}${
       n.threshold ? ` vms-switch--${n.threshold}` : ""}${
       n.limit ? ` vms-switch-limit--${n.limit}` : ""}${
+      n.minItem ? ` vms-cards-min--${n.minItem}` : ""}${
       n.action ? " vms-section--clickable" : ""}`;
     if (n.heading) {
       const h = document.createElement("h2");

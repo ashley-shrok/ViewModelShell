@@ -327,6 +327,60 @@ describe("SWITCH-01/02 — switcher threshold/limit modifier emission (1.13.0)",
   });
 });
 
+describe("GRID-01 — cards minItem modifier emission (1.13.0)", () => {
+  const minItemValues = ["xs", "sm", "md", "lg", "xl"] as const;
+
+  // page — minItem (every value)
+  for (const v of minItemValues) {
+    it(`page cards + minItem:"${v}" => root className contains vms-cards-min--${v}`, () => {
+      const el = renderPage({ type: "page", children: [], layout: "cards", minItem: v });
+      expect(el.classList.contains("vms-page--cards")).toBe(true);
+      expect(el.classList.contains(`vms-cards-min--${v}`)).toBe(true);
+    });
+  }
+  // section — minItem (every value)
+  for (const v of minItemValues) {
+    it(`section cards + minItem:"${v}" => section className contains vms-cards-min--${v}`, () => {
+      const el = renderSection({ type: "section", children: [], layout: "cards", minItem: v });
+      expect(el.classList.contains("vms-section--cards")).toBe(true);
+      expect(el.classList.contains(`vms-cards-min--${v}`)).toBe(true);
+    });
+  }
+
+  // byte-identical-when-omitted: a bare cards page/section (no minItem) emits
+  // EXACTLY the layout class — no vms-cards-min-- token.
+  it("bare cards page => className === 'vms-page vms-page--cards' (byte-identical)", () => {
+    const el = renderPage({ type: "page", children: [], layout: "cards" });
+    expect(el.className).toBe("vms-page vms-page--cards");
+  });
+  it("bare cards section => className === 'vms-section vms-section--cards' (byte-identical)", () => {
+    const el = renderSection({ type: "section", children: [], layout: "cards" });
+    expect(el.className).toBe("vms-section vms-section--cards");
+  });
+  it("bare cards page => no vms-cards-min-- class", () => {
+    const el = renderPage({ type: "page", children: [], layout: "cards" });
+    expect(el.className).not.toMatch(/vms-cards-min--/);
+  });
+
+  // emission present in non-base section branches (collapsible / flyout)
+  it("collapsible cards section with minItem still carries the modifier class", () => {
+    const el = renderSection({
+      type: "section", children: [], layout: "cards",
+      collapsible: true, minItem: "sm",
+    });
+    expect(el.classList.contains("vms-section--collapsible")).toBe(true);
+    expect(el.classList.contains("vms-cards-min--sm")).toBe(true);
+  });
+  it("flyout cards section with minItem still carries the modifier class", () => {
+    const el = renderSection({
+      type: "section", children: [], layout: "cards",
+      flyout: true, minItem: "xl",
+    });
+    expect(el.classList.contains("vms-section--flyout")).toBe(true);
+    expect(el.classList.contains("vms-cards-min--xl")).toBe(true);
+  });
+});
+
 describe('0.9.0 / #14 — CopyButtonNode.variant modifier emission (mirrors ButtonNode)', () => {
   it('variant: "primary" ⇒ className contains vms-button--primary', () => {
     const el = renderCopyButton({

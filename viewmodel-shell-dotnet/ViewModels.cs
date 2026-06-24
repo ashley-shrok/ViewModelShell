@@ -307,7 +307,17 @@ public record PageNode(
     // the child count exceeds Limit every child goes full-width regardless of
     // container width. Omitted = no class → no count cap; any value emits
     // .vms-switch-limit--{n}. JsonIgnore-on-null per the file-header rule.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Limit = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Limit = null,
+    // 1.13.0 — cards auto-fit min track width for layout:"cards". Free-form
+    // string mirroring the TS closed union "xs"|"sm"|"md"|"lg"|"xl" (closed
+    // union enforced on the TS side + validated by parity, matching the Layout
+    // field's pattern). The locked size scale → CSS rem (xs→10rem, sm→13rem,
+    // md→16rem [= today's default], lg→20rem, xl→24rem) overrides the fixed
+    // --vms-card-min the auto-fit cards rule reads. Omitted = no class → the
+    // inherited 16rem default holds = byte-identical to today; any value emits
+    // .vms-cards-min--{value} which sets --vms-card-min. JsonIgnore-on-null per
+    // the file-header rule.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MinItem = null
 ) : ViewNode;
 
 // 1.4.0 — SectionNode.Link URL-wrapper variant of the clickable-card primitive
@@ -412,7 +422,17 @@ public record SectionNode(
     // the child count exceeds Limit every child goes full-width regardless of
     // container width. Omitted = no class → no count cap; any value emits
     // .vms-switch-limit--{n}. JsonIgnore-on-null per the file-header rule.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Limit = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Limit = null,
+    // 1.13.0 — cards auto-fit min track width for layout:"cards". Free-form
+    // string mirroring the TS closed union "xs"|"sm"|"md"|"lg"|"xl" (closed
+    // union enforced on the TS side + validated by parity, matching the Layout
+    // field's pattern). The locked size scale → CSS rem (xs→10rem, sm→13rem,
+    // md→16rem [= today's default], lg→20rem, xl→24rem) overrides the fixed
+    // --vms-card-min the auto-fit cards rule reads. Omitted = no class → the
+    // inherited 16rem default holds = byte-identical to today; any value emits
+    // .vms-cards-min--{value} which sets --vms-card-min. JsonIgnore-on-null per
+    // the file-header rule.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MinItem = null
 ) : ViewNode;
 
 public record ListNode(

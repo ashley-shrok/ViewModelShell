@@ -128,6 +128,8 @@ export interface PageNode {
   threshold?: "sm" | "md" | "lg" | "xl";
   /** For `layout:"switcher"`: the OPTIONAL max-items-per-row count cap — once the child count exceeds `limit`, every child goes full-width regardless of container width. A bounded numeric union (2..8) per P2 (bounded scalar, not raw CSS). Emits .vms-switch-limit--{n}. Omitted = no class → no count cap, byte-identical to today. (SWITCH-02) */
   limit?: 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  /** For `layout:"cards"`: overrides the auto-fit minimum track width (today's fixed `--vms-card-min: 16rem`) — a CLOSED size scale (NOT raw CSS, per P2) mapping xs→10rem, sm→13rem, md→16rem (= today's default), lg→20rem, xl→24rem. Emits .vms-cards-min--{token} which sets `--vms-card-min` on that element (the existing `repeat(auto-fit, minmax(min(var(--vms-card-min),100%),1fr))` cards rule reads it). Omitted = no class → the inherited 16rem default holds = byte-identical to today. Intended for `cards`; harmless elsewhere (it only sets a variable the cards rule reads). (GRID-01) */
+  minItem?: "xs" | "sm" | "md" | "lg" | "xl";
   children: ViewNode[];
 }
 
@@ -146,6 +148,8 @@ export interface SectionNode {
   threshold?: "sm" | "md" | "lg" | "xl";
   /** For `layout:"switcher"`: the OPTIONAL max-items-per-row count cap — once the child count exceeds `limit`, every child goes full-width regardless of container width. A bounded numeric union (2..8) per P2 (bounded scalar, not raw CSS). Emits .vms-switch-limit--{n}. Omitted = no class → no count cap, byte-identical to today. (SWITCH-02) */
   limit?: 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  /** For `layout:"cards"`: overrides the auto-fit minimum track width (today's fixed `--vms-card-min: 16rem`) — a CLOSED size scale (NOT raw CSS, per P2) mapping xs→10rem, sm→13rem, md→16rem (= today's default), lg→20rem, xl→24rem. Emits .vms-cards-min--{token} which sets `--vms-card-min` on that element (the existing `repeat(auto-fit, minmax(min(var(--vms-card-min),100%),1fr))` cards rule reads it). Omitted = no class → the inherited 16rem default holds = byte-identical to today. Intended for `cards`; harmless elsewhere (it only sets a variable the cards rule reads). (GRID-01) */
+  minItem?: "xs" | "sm" | "md" | "lg" | "xl";
   /** Optional stable preservation key for the renderer's collapsible-section open-state snapshot. Used only when `collapsible: true`. Provide when `heading` isn't unique within a page or is absent — otherwise the renderer falls back to `heading ?? "vms-section-anon"`, disambiguated by per-render ordinal. Omitted = use the heading fallback. */
   id?: string;
   /** When true, the section renders as a native `<details>`/`<summary>` disclosure widget (closed by default). Aesthetic, client-side primitive — the open/closed state is DOM-local and the server does NOT round-trip it (same conceptual model as draft text values in unsubmitted form inputs). The browser adapter snapshots `<details>.open` before each re-render and restores it after, keyed by `id ?? heading ?? "vms-section-anon"` (disambiguated by per-render ordinal); a re-key drops the preserved state (the documented escape hatch for rare server-driven expansion). The summary label is the section's `heading`; a headingless collapsible section uses the fallback string `"Show details"`. If a section needs to start open, do not mark it collapsible. Omitted/false = today's `<section>` rendering, byte-identical. */

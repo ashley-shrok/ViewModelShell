@@ -395,6 +395,37 @@ public class FeatureProbeController : ControllerBase
             },
             Layout: "switcher",
             Limit: 4);
+        // 1.13.0 — cards minItem vocabulary (parity coverage for GRID-01/02).
+        // Static view-shape captured by every GET step (same precedent; no
+        // dedicated action arm). Byte-identical to the bun twin: same headings,
+        // link labels/hrefs, order, and minItem values — omitted minItem ABSENT
+        // on the wire, set ones present. A dedicated SECTION-level bare-cards
+        // section proves omitted = absent at the section level (the page root is
+        // already Layout:"cards").
+        //
+        // (a) bare cards section — NO MinItem => proves omitted = no class.
+        var bareCardsSection = new SectionNode(
+            Heading: "Bare cards",
+            Children: new ViewNode[]
+            {
+                new LinkNode("One", "/c1"),
+                new LinkNode("Two", "/c2"),
+                new LinkNode("Three", "/c3"),
+            },
+            Layout: "cards");
+        // (b) one cards section per minItem value (xs/sm/md/lg/xl).
+        var minItemValues = new[] { "xs", "sm", "md", "lg", "xl" };
+        var cardsMinItemSections = minItemValues.Select(v => new SectionNode(
+            Heading: $"cards minItem {v}",
+            Children: new ViewNode[]
+            {
+                new LinkNode("P", "/p"),
+                new LinkNode("Q", "/q"),
+                new LinkNode("R", "/r"),
+                new LinkNode("S", "/s"),
+            },
+            Layout: "cards",
+            MinItem: v)).ToList();
         var pageChildren = new List<ViewNode>
         {
             probeSection, clickableCardSection, linkedCardSection, rowSection, flyoutSection,
@@ -405,6 +436,8 @@ public class FeatureProbeController : ControllerBase
         pageChildren.Add(bareSwitcherSection);
         pageChildren.AddRange(switcherThresholdSections);
         pageChildren.Add(switcherLimitSection);
+        pageChildren.Add(bareCardsSection);
+        pageChildren.AddRange(cardsMinItemSections);
         pageChildren.Add(BuildTableSection(state));
         return new PageNode("Feature Probe", pageChildren,
             Density: "compact", Layout: "cards");

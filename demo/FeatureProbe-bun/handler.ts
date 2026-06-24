@@ -337,6 +337,39 @@ function buildVm(state: FeatureProbeState): ViewNode {
       { type: "link", label: "6", href: "/6", external: false },
     ],
   };
+
+  // 1.13.0 — cards minItem vocabulary (parity coverage for GRID-01/02). Static
+  // view-shape captured by every GET step (same precedent; no dedicated action
+  // arm). The .NET twins must serialize byte-identically — omitted minItem
+  // ABSENT on the wire, set ones present. NOTE: the page root is already
+  // layout:"cards", but a dedicated SECTION-level bare-cards section proves
+  // omitted = absent at the section level too.
+  //
+  // (a) bare cards section — NO minItem => proves omitted = no class.
+  const bareCardsSection: ViewNode = {
+    type: "section",
+    heading: "Bare cards",
+    layout: "cards",
+    children: [
+      { type: "link", label: "One", href: "/c1", external: false },
+      { type: "link", label: "Two", href: "/c2", external: false },
+      { type: "link", label: "Three", href: "/c3", external: false },
+    ],
+  };
+  // (b) one cards section per minItem value (xs/sm/md/lg/xl).
+  const minItemValues = ["xs", "sm", "md", "lg", "xl"] as const;
+  const cardsMinItemSections: ViewNode[] = minItemValues.map((v) => ({
+    type: "section",
+    heading: `cards minItem ${v}`,
+    layout: "cards",
+    minItem: v,
+    children: [
+      { type: "link", label: "P", href: "/p", external: false },
+      { type: "link", label: "Q", href: "/q", external: false },
+      { type: "link", label: "R", href: "/r", external: false },
+      { type: "link", label: "S", href: "/s", external: false },
+    ],
+  }));
   return {
     type: "page",
     title: "Feature Probe",
@@ -346,6 +379,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       probeSection, clickableCardSection, linkedCardSection, rowSection, flyoutSection,
       bareRowSection, headerBarSection, ...arrangeSections, ...alignSections,
       bareSwitcherSection, ...switcherThresholdSections, switcherLimitSection,
+      bareCardsSection, ...cardsMinItemSections,
       buildTableSection(state),
     ],
   };
