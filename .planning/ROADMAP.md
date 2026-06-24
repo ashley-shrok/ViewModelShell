@@ -89,8 +89,10 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
   1. A `fits` node renders the first child whose intrinsic size fits the available container width, else the next — selection is container-relative and decided client-side at layout time with zero viewport breakpoints; it carries an axis enum (`horizontal | vertical | both`) and an ordered children list (FITS-01).
   2. `fits` has a defined, sensible degradation on the TUI adapter (a documented fixed-rule child choice, since a terminal has no pixel fit) so it does not break the non-browser target (FITS-02).
   3. `fits` lands byte-identically in TS and .NET — a new node record with a `[JsonDerivedType]` discriminator and nullable fields carrying `[JsonIgnore(WhenWritingNull)]`; a parity fixture exercises it and `bun run parity/run.ts` is byte-identical green (FITS-03).
-  4. A lockstep npm + NuGet minor is published per AGENTS.md release rules (version bump + CHANGELOG + publish ritual + annotated tag + `main` advanced); the full release gate is green (RELEASE gate).
-**Plans**: TBD
+  4. A lockstep npm + NuGet minor is published per AGENTS.md release rules (version bump + CHANGELOG + publish ritual + annotated tag + `main` advanced); the full release gate is green (RELEASE gate). **[DEFERRED to Phase 11]** — per the Phase-10 CONTEXT decision, the release is batched at milestone close; Phase 10 accumulates under the existing `## Unreleased` CHANGELOG heading with no version bump/publish/tag.
+**Plans**: 2 plans
+- [ ] 10-01-PLAN.md — FitsNode wire type (both backends + [JsonDerivedType] discriminator) + the browser.ts measure-and-pick renderer + ResizeObserver lifecycle + .vms-fits CSS + jsdom structure/fallback/axis/observer tests (FITS-01, FITS-03)
+- [ ] 10-02-PLAN.md — TUI fits degradation (renders last child) + FeatureProbe parity (axis-omitted + axis:both) + Showcase fits demo + CHANGELOG Unreleased subsection (FITS-02, FITS-03)
 **UI hint**: yes
 
 ### Phase 11: Demo Verification Spread + Milestone Closeout
@@ -115,5 +117,5 @@ Phases execute in numeric order: 8 → 9 → 10 → 11
 |---|---|---|---|---|
 | 8. Alignment Enums + Layout Policy | v1.12 | 0/2 | Planned | - |
 | 9. Switcher + Cards minItem | v1.12 | 0/2 | Planned | - |
-| 10. Fits Node | v1.12 | 0/TBD | Not started | - |
+| 10. Fits Node | v1.12 | 0/2 | Planned | - |
 | 11. Demo Verification Spread + Closeout | v1.12 | 0/TBD | Not started | - |
