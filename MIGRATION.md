@@ -6,6 +6,34 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to NuGet `1.8.0` (NuGet only)
+
+Additive — **nothing required.**
+
+| Package | From | To |
+|---|---|---|
+| `AshleyShrok.ViewModelShell` (NuGet) | `1.7.0` | **`1.8.0`** |
+| `@ashley-shrok/viewmodel-shell` (npm) | `1.10.0` | unchanged (`1.10.0`) |
+
+### What changed
+
+New `IApplicationBuilder` extension **`app.UseVmsShellStaticFiles(options?, noCacheSuffixes?)`** — a drop-in replacement for `app.UseStaticFiles()` that adds `Cache-Control: no-cache` to SPA shell HTML (default suffix `.html`), so a deploy is never masked by a browser-cached shell pinning an old asset bundle. No wire/type/protocol change.
+
+### Do I need to do anything?
+
+No. **To adopt it**, swap one line in `Program.cs`:
+
+```csharp
+// before
+app.UseStaticFiles();
+// after — shell HTML revalidates every load; hashed assets keep default caching
+app.UseVmsShellStaticFiles();
+```
+
+Pass `noCacheSuffixes` (e.g. `["html", "sw.js", "config.json"]`) to cover other non-hashed, stable-URL files. A caller-supplied `StaticFileOptions.OnPrepareResponse` is preserved and runs first.
+
+---
+
 ## Upgrading to `1.10.0` / `1.7.0` (npm + NuGet)
 
 Additive — **nothing required.**

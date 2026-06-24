@@ -6,6 +6,27 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## NuGet 1.8.0 — `UseVmsShellStaticFiles()` so the SPA shell never gets browser-cached (NuGet)
+
+**NuGet:** `1.8.0` (MINOR — additive `IApplicationBuilder` host helper) · **npm:** unchanged at `1.10.0` (.NET-only; ASP.NET hosting helper with no TS/Bun analog).
+
+ASP.NET Core's `app.UseStaticFiles()` sets `ETag`/`Last-Modified` but no `Cache-Control`, so browsers apply heuristic freshness to a Vite-built SPA's **shell HTML**. Hashed asset bundles are content-addressed (a stale cached asset is harmless — the new build references a new filename), but the shell HTML keeps its URL across deploys, so a cached shell silently pins the *old* bundle: a deploy succeeds on the box yet the user still loads the previous build. Reported by the Pantheon/AitherIntelligence maintainer after exactly that — a shipped redirect change masked by a cached `index.html`.
+
+### Added
+
+- **`app.UseVmsShellStaticFiles(options?, noCacheSuffixes?)`** — a drop-in replacement for `app.UseStaticFiles()` that stamps **`Cache-Control: no-cache`** on served files whose name ends in one of `noCacheSuffixes` (default `[".html"]`). `no-cache` (not `no-store`): the shell is still cached but **revalidated every load** against the ETag `UseStaticFiles` already emits — a cheap `304` when unchanged, a full `200` right after a deploy. Hashed assets keep default caching. Composable (a caller's `OnPrepareResponse` runs first, then the no-cache rule) and configurable (pass e.g. `["html", "sw.js", "config.json"]` for other non-hashed, stable-URL files).
+- Lives alongside `MapVmsAgentSkill` as a host-side convenience; the package already references `Microsoft.AspNetCore.App`, so no new dependency.
+
+### Deliberately not done
+
+- **No `no-store`, `Pragma`, or `Expires`** — `no-store` discards the 304 for no benefit; `Pragma`/`Expires` are HTTP/1.0 cruft modern browsers ignore.
+- **No auto-`immutable` on hashed assets** — detecting a hash in a filename is fragile, and assets on default caching are already correct.
+- **NuGet-only.** The npm/Bun backends serve statics per-framework (Hono `serveStatic`, `Bun.serve`); no shared helper fits and there's no demand — to be revisited if a TS consumer hits the same wall.
+
+### Not changed
+
+- No wire-format / ViewNode / protocol change; protocol token stays `viewmodel-shell/1.0`. npm package untouched.
+
 ## 1.10.0 / 1.7.0 — First-class soft-validation rejection on ok:true (`rejected.violations[]`) (npm + NuGet)
 
 **npm:** `1.10.0` (MINOR — additive wire field + helpers) · **NuGet:** `1.7.0` (MINOR — additive `ShellResponse.Rejected` + `ShellRejection` + `WithRejection`).
