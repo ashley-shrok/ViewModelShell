@@ -318,6 +318,37 @@ function componentsView(): ViewNode[] {
       ]),
     ]},
 
+    // Phase 10 — Fits (SwiftUI `ViewThatFits` ported to the wire). The ONE
+    // layout primitive that is NOT pure CSS: the renderer measures the available
+    // container at layout time (a ResizeObserver-driven measure-and-pick in
+    // BrowserAdapter) and renders the FIRST candidate child that fits, else the
+    // next — zero @media, zero app code. Children are ordered preferred/widest
+    // FIRST → safe-fallback/narrowest LAST. Built only from ViewNodes; resize to
+    // see the wide-row toolbar switch to the compact stacked version.
+    { type: "section", heading: "Fits (responsive selection)", children: [
+      { type: "text", value: "Resize the window: the `fits` node renders the FIRST candidate that fits the available width and the LAST as the guaranteed-fits fallback. Here a wide horizontal `row` toolbar shows when there's room, and a compact stacked version shows when there isn't — no @media, no app code (selection is measured client-side).", style: "muted" },
+      { type: "fits", children: [
+        // preferred / widest FIRST — a wide horizontal toolbar row.
+        { type: "section", layout: "row", children: [
+          { type: "link", label: "New",     href: "#" },
+          { type: "link", label: "Open",    href: "#" },
+          { type: "link", label: "Save",    href: "#" },
+          { type: "link", label: "Export",  href: "#" },
+          { type: "link", label: "Share",   href: "#" },
+          { type: "link", label: "Settings", href: "#" },
+        ]},
+        // safe-fallback / narrowest LAST — the same actions, stacked.
+        { type: "section", layout: "stack", children: [
+          { type: "link", label: "New",     href: "#" },
+          { type: "link", label: "Open",    href: "#" },
+          { type: "link", label: "Save",    href: "#" },
+          { type: "link", label: "Export",  href: "#" },
+          { type: "link", label: "Share",   href: "#" },
+          { type: "link", label: "Settings", href: "#" },
+        ]},
+      ]},
+    ]},
+
     { type: "section", heading: "Image", layout: "split", children: [
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%237c5cff'/%3E%3C/svg%3E", alt: "Sample avatar", size: "small", shape: "circle" },
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90'%3E%3Crect width='160' height='90' fill='%2310b981'/%3E%3C/svg%3E", alt: "Sample banner", size: "large" },

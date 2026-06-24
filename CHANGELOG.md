@@ -62,6 +62,32 @@ The two layout-completeness primitives the survey identified a grid provably can
 
 - **None needed** — purely additive optional fields (+ one additive closed-union `layout` value). Existing trees, callers, and agents are unaffected.
 
+### Fits node — Phase 10 (on `main`, unpublished)
+
+The **`fits` node** — SwiftUI `ViewThatFits` ported to the wire. The one genuinely novel borrow this milestone, and the **ONLY non-pure-CSS layout primitive**: it renders the first child whose intrinsic size fits the available container, else the next, else the LAST (the guaranteed-fits fallback). Unlike every other layout primitive (all pure CSS), the choice is decided **CLIENT-SIDE at layout time via real measurement** — a `ResizeObserver`-driven measure-and-pick in `BrowserAdapter` — with **zero viewport breakpoints**. It generalizes the existing `split`→`stack` collapse to arbitrary alternatives: a wide toolbar row → a compact stacked version, a 3-column dashboard → a 1-column one, etc., switching live on container resize with no `@media` and no app code. It passes the governing **P1** test (intrinsic / zero-viewport-breakpoint — the selection is container-relative, not viewport-relative); **P2** (closed enum) applies to its `axis` field.
+
+### Added
+
+- **`FitsNode`** — a new `ViewNode` (`type:"fits"`, `axis?:"horizontal" | "vertical" | "both"` [omitted = `"horizontal"`, the dominant case], ordered `children`) in the TS `ViewNode` union, mirrored as a .NET `FitsNode` record + `[JsonDerivedType(typeof(FitsNode),"fits")]` discriminator (`Axis` free-form `string?` with `[JsonIgnore(WhenWritingNull)]`, `Children` required). **Children ordering convention: preferred/widest FIRST → safe-fallback/narrowest LAST** (same direction as SwiftUI `ViewThatFits`) — the renderer picks the first that fits; the last is the guaranteed-fits fallback.
+- **The `browser.ts` measure-and-pick renderer** — `BrowserAdapter.fits()`: a full-width `<div class="vms-fits">` whose observed width is parent-driven; for each candidate in order it renders, forces a synchronous reflow, and tests axis overflow (`scrollWidth/Height > clientWidth/Height + 1`; 1px tolerance avoids sub-pixel false positives; `both` = either axis), stopping at the first that fits (synchronous → the browser paints only the final choice, no flash). A `ResizeObserver` re-runs the pick when the container box changes; observers are tracked in a per-render `fitsObservers` array disconnected at the top of `render()` so they never leak.
+- **The no-layout fallback** — when `container.clientWidth === 0` (jsdom / SSR / detached / `display:none`), the renderer renders ONLY the LAST child (the safe fallback) and returns; measurement is unavailable.
+- **The minimal `.vms-fits { display: block; }`** structural rule (full-width block so the observed width is parent-driven; no visual styling — `fits` is a structural selector).
+- **The TUI degradation (FITS-02)** — `tui.tsx` renders a `fits` node as its **LAST child** via the existing node renderer (a terminal has no pixel fit, so the guaranteed-fits candidate is correct); the three container-aware walks (pane counting / focus targeting) treat a `fits` node as a transparent wrapper around its last child only, matching what is rendered. The TUI is `@experimental`; the requirement is only that `fits` doesn't break it and degrades sensibly.
+
+### Not changed
+
+- No wire-shape change; protocol token stays `viewmodel-shell/1.0` (a new optional-field-bearing ViewNode is additive). `agent-skill.md` / `AgentSkill.md` untouched (the wire protocol / response envelope is unchanged; a new ViewNode doesn't touch it). The core `index.ts` gains the **TYPE only** — all measurement (`ResizeObserver` + DOM reads) lives in `browser.ts`, so the `check:core-globals` guard stays green.
+
+### Demo + tests
+
+- **FeatureProbe** twins (`FeatureProbe-bun/handler.ts` + `FeatureProbe/AspNetCore/FeatureProbeController.cs`) render a `fits` with `axis` omitted (proving omitted = absent on the wire) and a `fits` with `axis:"both"` (present as `"both"`), each with preferred-first/fallback-last candidate children; the existing `feature-probe` GET steps capture them, so both backends emit byte-identical `{type:"fits", axis?, children}` wire (cross-backend parity verified). **The client-side measure-and-pick selection is browser-only and explicitly NOT part of parity** — parity proves only identical serialization.
+- `viewmodel-shell/test/fits.test.ts` covers structure (`.vms-fits` container), the no-layout last-child fallback, `axis` acceptance for all three values + omitted, and the `ResizeObserver` lifecycle (one observer registered per container; disconnected on the next render). It documents that the real measure-and-pick selection is **jsdom-untestable** (no layout engine) and is verified by the Phase 11 human review.
+- The **Showcase** (`demo/Showcase/frontend/src/main.ts`) gains a `fits` demo — a wide horizontal `row` toolbar (preferred) ↔ a compact stacked version (fallback), built only from ViewNodes (zero `<style>`).
+
+### Migration
+
+- **None needed** — a purely additive new node; existing trees, callers, and agents are unaffected (an agent that doesn't know `fits` simply ignores it; a non-browser adapter degrades to the last child). **Known v1 limitation:** a resize-triggered candidate switch rebuilds the `fits` subtree, so focus / caret / draft state inside a fits child may reset on a resize-switch (the framework's normal focus/scroll preservation still applies to server-driven re-renders; this is specifically the resize-switch path). Acceptable for v1.
+
 ## 1.11.0 / 1.9.0 — Horizontal `row` layout + Section `flyout` (overlay disclosure) (npm + NuGet)
 
 **npm:** `1.11.0` (MINOR — additive layout value + `SectionNode.flyout`) · **NuGet:** `1.9.0` (MINOR — additive `SectionNode.Flyout`; `Layout` already free-form string).
