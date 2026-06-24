@@ -120,6 +120,10 @@ export interface PageNode {
   layout?: "stack" | "split" | "cards" | "sidebar" | "row";
   /** Page-shell max-width override. Omitted = framework default cap (`--vms-page-max`, 1080px). "wide" = `--vms-page-max-wide` (1440px default), for data-heavy pages with wide tables. "full" = uncapped (max-width: none), for full-bleed dashboards. TUI ignores this (terminals fill naturally). Closed union (D-13 / issue #13). */
   width?: "wide" | "full";
+  /** Main-axis arrangement for `layout:"row"` (the cluster primitive) — maps to `justify-content`. Omitted = no class → the row default (`flex-start`, left-pack) holds = byte-identical to today. Closed union copied verbatim from Jetpack Compose `Arrangement` ∩ Flutter `MainAxisAlignment` (ALIGN-01). Emits .vms-arrange--{value}. */
+  arrange?: "start" | "center" | "end" | "space-between" | "space-around" | "space-evenly";
+  /** Cross-axis alignment for `layout:"row"` (the cluster primitive) — maps to `align-items`. Omitted = no class → the row default (`center`) holds = byte-identical to today. Closed union copied verbatim from Flutter `CrossAxisAlignment` (ALIGN-02). Emits .vms-align--{value}. */
+  align?: "start" | "center" | "end" | "stretch" | "baseline";
   children: ViewNode[];
 }
 
@@ -130,6 +134,10 @@ export interface SectionNode {
   variant?: "card";
   /** Layout preset arranging direct children. Omitted or "stack" = current vertical flow (no modifier class). "split" (equal 2-up), "cards" (uniform grid), "sidebar" (thin + wide app shell), "row" (left-aligned wrapping horizontal row; items hug content) emit .vms-section--{value}. Closed union (D-01/D-02; sidebar D-28; row D-30). */
   layout?: "stack" | "split" | "cards" | "sidebar" | "row";
+  /** Main-axis arrangement for `layout:"row"` (the cluster primitive) — maps to `justify-content`. Omitted = no class → the row default (`flex-start`, left-pack) holds = byte-identical to today. Closed union copied verbatim from Jetpack Compose `Arrangement` ∩ Flutter `MainAxisAlignment` (ALIGN-01). Emits .vms-arrange--{value}. */
+  arrange?: "start" | "center" | "end" | "space-between" | "space-around" | "space-evenly";
+  /** Cross-axis alignment for `layout:"row"` (the cluster primitive) — maps to `align-items`. Omitted = no class → the row default (`center`) holds = byte-identical to today. Closed union copied verbatim from Flutter `CrossAxisAlignment` (ALIGN-02). Emits .vms-align--{value}. */
+  align?: "start" | "center" | "end" | "stretch" | "baseline";
   /** Optional stable preservation key for the renderer's collapsible-section open-state snapshot. Used only when `collapsible: true`. Provide when `heading` isn't unique within a page or is absent — otherwise the renderer falls back to `heading ?? "vms-section-anon"`, disambiguated by per-render ordinal. Omitted = use the heading fallback. */
   id?: string;
   /** When true, the section renders as a native `<details>`/`<summary>` disclosure widget (closed by default). Aesthetic, client-side primitive — the open/closed state is DOM-local and the server does NOT round-trip it (same conceptual model as draft text values in unsubmitted form inputs). The browser adapter snapshots `<details>.open` before each re-render and restores it after, keyed by `id ?? heading ?? "vms-section-anon"` (disambiguated by per-render ordinal); a re-key drops the preserved state (the documented escape hatch for rare server-driven expansion). The summary label is the section's `heading`; a headingless collapsible section uses the fallback string `"Show details"`. If a section needs to start open, do not mark it collapsible. Omitted/false = today's `<section>` rendering, byte-identical. */

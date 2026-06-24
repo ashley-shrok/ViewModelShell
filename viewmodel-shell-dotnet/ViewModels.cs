@@ -271,7 +271,22 @@ public record PageNode(
     // Page-shell max-width override (issue #13). null = default cap (--vms-page-max,
     // 1080px). "wide" = --vms-page-max-wide (1440px default). "full" = uncapped.
     // TUI ignores this — width caps are a browser concern.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Width = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Width = null,
+    // 1.12.0 — main-axis arrangement for layout:"row" (the cluster primitive) —
+    // maps to justify-content. Free-form string mirroring the TS closed union
+    // "start"|"center"|"end"|"space-between"|"space-around"|"space-evenly"
+    // (Jetpack Compose Arrangement ∩ Flutter MainAxisAlignment; ALIGN-01). The
+    // closed union is enforced on the TS side and validated by parity, matching
+    // the Layout field's pattern. Omitted = no class → row default (flex-start,
+    // left-pack) holds = byte-identical to today; any value emits
+    // .vms-arrange--{value}. JsonIgnore-on-null per the file-header rule.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Arrange = null,
+    // 1.12.0 — cross-axis alignment for layout:"row" — maps to align-items.
+    // Free-form string mirroring the TS closed union
+    // "start"|"center"|"end"|"stretch"|"baseline" (Flutter CrossAxisAlignment;
+    // ALIGN-02). Omitted = no class → row default (center) holds = byte-identical
+    // to today; any value emits .vms-align--{value}.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Align = null
 ) : ViewNode;
 
 // 1.4.0 — SectionNode.Link URL-wrapper variant of the clickable-card primitive
@@ -344,7 +359,22 @@ public record SectionNode(
     // combines them: Collapsible > Flyout > Link > Action. Omitted/false =
     // today's <section> rendering, byte-identical. JsonIgnore-on-null per the
     // file-header rule.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Flyout = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Flyout = null,
+    // 1.12.0 — main-axis arrangement for layout:"row" (the cluster primitive) —
+    // maps to justify-content. Free-form string mirroring the TS closed union
+    // "start"|"center"|"end"|"space-between"|"space-around"|"space-evenly"
+    // (Jetpack Compose Arrangement ∩ Flutter MainAxisAlignment; ALIGN-01). The
+    // closed union is enforced on the TS side and validated by parity, matching
+    // the Layout field's pattern. Omitted = no class → row default (flex-start,
+    // left-pack) holds = byte-identical to today; any value emits
+    // .vms-arrange--{value}. JsonIgnore-on-null per the file-header rule.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Arrange = null,
+    // 1.12.0 — cross-axis alignment for layout:"row" — maps to align-items.
+    // Free-form string mirroring the TS closed union
+    // "start"|"center"|"end"|"stretch"|"baseline" (Flutter CrossAxisAlignment;
+    // ALIGN-02). Omitted = no class → row default (center) holds = byte-identical
+    // to today; any value emits .vms-align--{value}.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Align = null
 ) : ViewNode;
 
 public record ListNode(
