@@ -299,8 +299,69 @@ public class FeatureProbeController : ControllerBase
                 new LinkNode("Profile", "/profile"),
             },
             Flyout: true);
-        return new PageNode("Feature Probe",
-            new List<ViewNode> { probeSection, clickableCardSection, linkedCardSection, rowSection, flyoutSection, BuildTableSection(state) },
+        // 1.12.0 — arrange/align alignment vocabulary (parity coverage for
+        // ALIGN-01/02/03). Static view-shape captured by every GET step (mirrors the
+        // 1.11.0 row precedent; no dedicated action arm). Byte-identical to the bun
+        // twin: same headings, link labels/hrefs, order, and arrange/align values.
+        //
+        // (a) bare row — NEITHER Arrange nor Align => proves omitted = no class.
+        var bareRowSection = new SectionNode(
+            Heading: "Bare row",
+            Children: new ViewNode[]
+            {
+                new LinkNode("One", "/one"),
+                new LinkNode("Two", "/two"),
+            },
+            Layout: "row");
+        // (b) canonical header-bar (ALIGN-04): row + Arrange:"space-between", first
+        // child a heading TextNode, then a nested row section of nav links.
+        var headerBarSection = new SectionNode(
+            Heading: null,
+            Children: new ViewNode[]
+            {
+                new TextNode("Header", "heading"),
+                new SectionNode(
+                    Heading: null,
+                    Children: new ViewNode[]
+                    {
+                        new LinkNode("Home", "/home"),
+                        new LinkNode("Docs", "/docs"),
+                    },
+                    Layout: "row"),
+            },
+            Layout: "row",
+            Arrange: "space-between");
+        // (c) one row per remaining arrange value (space-between covered above).
+        var arrangeValues = new[] { "start", "center", "end", "space-around", "space-evenly" };
+        var arrangeSections = arrangeValues.Select(v => new SectionNode(
+            Heading: $"arrange {v}",
+            Children: new ViewNode[]
+            {
+                new LinkNode("A", "/a"),
+                new LinkNode("B", "/b"),
+            },
+            Layout: "row",
+            Arrange: v)).ToList();
+        // (d) one row per align value.
+        var alignValues = new[] { "start", "center", "end", "stretch", "baseline" };
+        var alignSections = alignValues.Select(v => new SectionNode(
+            Heading: $"align {v}",
+            Children: new ViewNode[]
+            {
+                new LinkNode("A", "/a"),
+                new LinkNode("B", "/b"),
+            },
+            Layout: "row",
+            Align: v)).ToList();
+        var pageChildren = new List<ViewNode>
+        {
+            probeSection, clickableCardSection, linkedCardSection, rowSection, flyoutSection,
+            bareRowSection, headerBarSection,
+        };
+        pageChildren.AddRange(arrangeSections);
+        pageChildren.AddRange(alignSections);
+        pageChildren.Add(BuildTableSection(state));
+        return new PageNode("Feature Probe", pageChildren,
             Density: "compact", Layout: "cards");
     }
 

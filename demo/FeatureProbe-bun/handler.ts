@@ -234,12 +234,73 @@ function buildVm(state: FeatureProbeState): ViewNode {
       { type: "link", label: "Profile", href: "/profile", external: false },
     ],
   };
+  // 1.12.0 — arrange/align alignment vocabulary (parity coverage for ALIGN-01/02/03).
+  // Static view-shape captured by every GET step (mirrors the 1.11.0 row precedent;
+  // no dedicated action arm). external:false explicit on every LinkNode to match the
+  // .NET non-nullable default. The .NET twins must serialize byte-identically.
+  //
+  // (a) bare row — NEITHER arrange nor align => proves omitted = no class on the wire.
+  const bareRowSection: ViewNode = {
+    type: "section",
+    heading: "Bare row",
+    layout: "row",
+    children: [
+      { type: "link", label: "One", href: "/one", external: false },
+      { type: "link", label: "Two", href: "/two", external: false },
+    ],
+  };
+  // (b) canonical header-bar (ALIGN-04): row + arrange:"space-between", first child a
+  // heading TextNode, then a nested row section of nav links — title-left / nav-right.
+  const headerBarSection: ViewNode = {
+    type: "section",
+    layout: "row",
+    arrange: "space-between",
+    children: [
+      { type: "text", value: "Header", style: "heading" },
+      {
+        type: "section",
+        layout: "row",
+        children: [
+          { type: "link", label: "Home", href: "/home", external: false },
+          { type: "link", label: "Docs", href: "/docs", external: false },
+        ],
+      },
+    ],
+  };
+  // (c) one row per remaining arrange value (space-between is covered by the header bar).
+  const arrangeValues = ["start", "center", "end", "space-around", "space-evenly"] as const;
+  const arrangeSections: ViewNode[] = arrangeValues.map((v) => ({
+    type: "section",
+    heading: `arrange ${v}`,
+    layout: "row",
+    arrange: v,
+    children: [
+      { type: "link", label: "A", href: "/a", external: false },
+      { type: "link", label: "B", href: "/b", external: false },
+    ],
+  }));
+  // (d) one row per align value.
+  const alignValues = ["start", "center", "end", "stretch", "baseline"] as const;
+  const alignSections: ViewNode[] = alignValues.map((v) => ({
+    type: "section",
+    heading: `align ${v}`,
+    layout: "row",
+    align: v,
+    children: [
+      { type: "link", label: "A", href: "/a", external: false },
+      { type: "link", label: "B", href: "/b", external: false },
+    ],
+  }));
   return {
     type: "page",
     title: "Feature Probe",
     density: "compact",
     layout: "cards",
-    children: [probeSection, clickableCardSection, linkedCardSection, rowSection, flyoutSection, buildTableSection(state)],
+    children: [
+      probeSection, clickableCardSection, linkedCardSection, rowSection, flyoutSection,
+      bareRowSection, headerBarSection, ...arrangeSections, ...alignSections,
+      buildTableSection(state),
+    ],
   };
 }
 
