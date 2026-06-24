@@ -255,6 +255,78 @@ describe("ALIGN-01/02/03 — arrange/align modifier emission (1.12.0)", () => {
   });
 });
 
+describe("SWITCH-01/02 — switcher threshold/limit modifier emission (1.13.0)", () => {
+  const thresholdValues = ["sm", "md", "lg", "xl"] as const;
+  const limitValues = [2, 4, 8] as const;
+
+  // page — threshold
+  for (const v of thresholdValues) {
+    it(`page switcher + threshold:"${v}" => root className contains vms-switch--${v}`, () => {
+      const el = renderPage({ type: "page", children: [], layout: "switcher", threshold: v });
+      expect(el.classList.contains("vms-page--switcher")).toBe(true);
+      expect(el.classList.contains(`vms-switch--${v}`)).toBe(true);
+    });
+  }
+  // section — threshold
+  for (const v of thresholdValues) {
+    it(`section switcher + threshold:"${v}" => section className contains vms-switch--${v}`, () => {
+      const el = renderSection({ type: "section", children: [], layout: "switcher", threshold: v });
+      expect(el.classList.contains("vms-section--switcher")).toBe(true);
+      expect(el.classList.contains(`vms-switch--${v}`)).toBe(true);
+    });
+  }
+  // page — limit
+  for (const v of limitValues) {
+    it(`page switcher + limit:${v} => root className contains vms-switch-limit--${v}`, () => {
+      const el = renderPage({ type: "page", children: [], layout: "switcher", limit: v });
+      expect(el.classList.contains(`vms-switch-limit--${v}`)).toBe(true);
+    });
+  }
+  // section — limit
+  for (const v of limitValues) {
+    it(`section switcher + limit:${v} => section className contains vms-switch-limit--${v}`, () => {
+      const el = renderSection({ type: "section", children: [], layout: "switcher", limit: v });
+      expect(el.classList.contains(`vms-switch-limit--${v}`)).toBe(true);
+    });
+  }
+
+  // byte-identical-when-omitted: a bare switcher (no threshold, no limit) emits
+  // EXACTLY the layout class — no vms-switch-- and no vms-switch-limit-- token.
+  it("bare switcher page => className === 'vms-page vms-page--switcher' (byte-identical)", () => {
+    const el = renderPage({ type: "page", children: [], layout: "switcher" });
+    expect(el.className).toBe("vms-page vms-page--switcher");
+  });
+  it("bare switcher section => className === 'vms-section vms-section--switcher' (byte-identical)", () => {
+    const el = renderSection({ type: "section", children: [], layout: "switcher" });
+    expect(el.className).toBe("vms-section vms-section--switcher");
+  });
+  it("bare switcher page => no vms-switch-- / vms-switch-limit-- class", () => {
+    const el = renderPage({ type: "page", children: [], layout: "switcher" });
+    expect(el.className).not.toMatch(/vms-switch--/);
+    expect(el.className).not.toMatch(/vms-switch-limit--/);
+  });
+
+  // emission present in non-base section branches (collapsible / flyout)
+  it("collapsible switcher section with threshold/limit still carries the modifier classes", () => {
+    const el = renderSection({
+      type: "section", children: [], layout: "switcher",
+      collapsible: true, threshold: "md", limit: 4,
+    });
+    expect(el.classList.contains("vms-section--collapsible")).toBe(true);
+    expect(el.classList.contains("vms-switch--md")).toBe(true);
+    expect(el.classList.contains("vms-switch-limit--4")).toBe(true);
+  });
+  it("flyout switcher section with threshold/limit still carries the modifier classes", () => {
+    const el = renderSection({
+      type: "section", children: [], layout: "switcher",
+      flyout: true, threshold: "xl", limit: 3,
+    });
+    expect(el.classList.contains("vms-section--flyout")).toBe(true);
+    expect(el.classList.contains("vms-switch--xl")).toBe(true);
+    expect(el.classList.contains("vms-switch-limit--3")).toBe(true);
+  });
+});
+
 describe('0.9.0 / #14 — CopyButtonNode.variant modifier emission (mirrors ButtonNode)', () => {
   it('variant: "primary" ⇒ className contains vms-button--primary', () => {
     const el = renderCopyButton({

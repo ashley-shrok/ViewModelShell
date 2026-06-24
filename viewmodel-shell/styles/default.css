@@ -248,6 +248,51 @@ body {
 .vms-align--stretch  { align-items: stretch; }
 .vms-align--baseline { align-items: baseline; }
 
+/* ── Layout preset: switcher (SWITCH-01/02 / 1.13.0) — the Every-Layout Switcher,
+   zero @media. N equal items flip all-row ↔ all-stack ATOMICALLY via a negative
+   `flex-basis`: above the threshold the basis `(threshold - 100%) * 999` goes
+   hugely negative → clamped to 0 → all children share one row; below it the
+   basis goes hugely positive → each child claims a full line → all stack. No
+   intermediate partial-wrap state — that's the distinction from `cards`
+   auto-fit (which passes through intermediate column counts). Title/heading
+   keeps its own full-width row like the other presets. gap inherited from
+   .vms-page/.vms-section — NOT redeclared. An OMITTED threshold/limit emits no
+   class, so the `var(--vms-switch-threshold, 30rem)` default (30rem) + no count
+   cap hold = byte-identical to having no token. ── */
+.vms-page--switcher,
+.vms-section--switcher {
+  display: flex;
+  flex-wrap: wrap;
+}
+.vms-page--switcher > *,
+.vms-section--switcher > * {
+  flex-grow: 1;
+  flex-basis: calc((var(--vms-switch-threshold, 30rem) - 100%) * 999);
+}
+.vms-page--switcher > .vms-page__title,
+.vms-section--switcher > .vms-section__heading { flex: 0 0 100%; }
+
+/* threshold tokens — each sets the custom property the basis calc reads
+   (sm→20rem, md→30rem, lg→40rem, xl→48rem; md == the 30rem default). */
+.vms-switch--sm { --vms-switch-threshold: 20rem; }
+.vms-switch--md { --vms-switch-threshold: 30rem; }
+.vms-switch--lg { --vms-switch-threshold: 40rem; }
+.vms-switch--xl { --vms-switch-threshold: 48rem; }
+
+/* limit (max-per-row count cap) — a quantity query per allowed n (2..8). The
+   `:nth-last-child(n+{n+1})` selector matches every child ONLY when there are
+   MORE than n of them (a switcher with exactly `limit` children stays on one
+   row; the cap engages on overflow). The matched children get
+   `flex-basis:100%`, overriding the negative-basis calc above to force each
+   onto its own full-width line regardless of container width. */
+.vms-switch-limit--2 > :nth-last-child(n+3),  .vms-switch-limit--2 > :nth-last-child(n+3) ~ * { flex-basis: 100%; }
+.vms-switch-limit--3 > :nth-last-child(n+4),  .vms-switch-limit--3 > :nth-last-child(n+4) ~ * { flex-basis: 100%; }
+.vms-switch-limit--4 > :nth-last-child(n+5),  .vms-switch-limit--4 > :nth-last-child(n+5) ~ * { flex-basis: 100%; }
+.vms-switch-limit--5 > :nth-last-child(n+6),  .vms-switch-limit--5 > :nth-last-child(n+6) ~ * { flex-basis: 100%; }
+.vms-switch-limit--6 > :nth-last-child(n+7),  .vms-switch-limit--6 > :nth-last-child(n+7) ~ * { flex-basis: 100%; }
+.vms-switch-limit--7 > :nth-last-child(n+8),  .vms-switch-limit--7 > :nth-last-child(n+8) ~ * { flex-basis: 100%; }
+.vms-switch-limit--8 > :nth-last-child(n+9),  .vms-switch-limit--8 > :nth-last-child(n+9) ~ * { flex-basis: 100%; }
+
 /* ── Section variant: card (THEME-04) — grouped surface, existing seam vars ── */
 .vms-section--card {
   background: var(--vms-surface);
