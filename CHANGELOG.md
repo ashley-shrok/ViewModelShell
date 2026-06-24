@@ -6,6 +6,36 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## Unreleased — Layout System Completeness (v1.12 milestone; batched release pending)
+
+> Versions are intentionally NOT bumped per-phase this milestone — changes accumulate here under **Unreleased** and ship in one consolidated bump+publish at milestone close (Phase 11), to avoid a bumped-but-unpublished drift window. Target on release: npm MINOR (likely `1.12.0`), NuGet MINOR (likely `1.10.0`).
+
+### Alignment enums (`arrange` / `align`) on the `row` layout — Phase 8 (on `main`, unpublished)
+
+Additive `arrange` (`start|center|end|space-between|space-around|space-evenly` → `justify-content`) and `align` (`start|center|end|stretch|baseline` → `align-items`) closed-union fields on `PageNode` / `SectionNode` (TS), mirrored as `Arrange`/`Align` nullable string fields on both .NET records (both carry `[JsonIgnore(WhenWritingNull)]`).
+
+The `arrange`/`align` follow-up flagged in 1.11.0's deferred list, now shipped — closing out the PBMInvoices/Pantheon header-bar request via the general primitive rather than a bespoke navbar node. The values are copied verbatim from the declarative-native toolkits (Jetpack Compose `Arrangement` ∩ Flutter `MainAxisAlignment` for `arrange`; Flutter `CrossAxisAlignment` for `align`), the framework families' point of exact agreement. This is the first field landed under the new **Layout policy** (AGENTS.md "### Layout policy" / `.planning/design/layout-system-research.md`): both pass the governing P1 (intrinsic, zero viewport breakpoints) + P2 (closed enum) test.
+
+### Added
+
+- **`arrange?`** on `PageNode` / `SectionNode` — closed union `"start" | "center" | "end" | "space-between" | "space-around" | "space-evenly"`, mapped to `justify-content` (main-axis distribution). Emits `.vms-arrange--{value}`.
+- **`align?`** on `PageNode` / `SectionNode` — closed union `"start" | "center" | "end" | "stretch" | "baseline"`, mapped to `align-items` (cross-axis alignment). Emits `.vms-align--{value}`.
+- Both are intended for `layout:"row"` (the cluster primitive). The canonical header-bar is `arrange:"space-between"` on a `row` with a heading **`TextNode`** as its first child (NOT `PageNode.title`/`SectionNode.heading`, which keeps its full-width rule) + a nested `row` nav cluster — title-left / nav-right with zero app CSS, no bespoke node. **.NET `Arrange`/`Align` are free-form `string?`** (closed union enforced TS-side + validated by parity), mirroring the existing `Layout`/`Width` pattern.
+
+### Not changed
+
+- No wire-shape change; protocol token stays `viewmodel-shell/1.0` (additive optional fields). `agent-skill.md` / `AgentSkill.md` untouched (the wire protocol / response envelope is unchanged; new ViewNode fields don't touch it). **Omitting `arrange`/`align` is byte-identical to today** — no class is emitted, so `justify-content` stays the row default (`flex-start`) and `align-items` stays the row default (`center`).
+
+### Demo + tests
+
+- **FeatureProbe** twins (`FeatureProbe-bun/handler.ts` + `FeatureProbe/AspNetCore/FeatureProbeController.cs`) render a bare `row` (neither field) + the canonical header-bar + one section per remaining `arrange` value and per `align` value; the existing `feature-probe` GET steps capture them, so both backends emit byte-identical wire (cross-backend parity verified).
+- `viewmodel-shell/test/theme-modifiers.test.ts` asserts class emission for every enum value on both page and section, the byte-identical-when-omitted property (bare `row` carries no `vms-arrange--`/`vms-align--`), and emission on the non-base section branches (collapsible/flyout/link).
+- The **Showcase** (`demo/Showcase/frontend/src/main.ts`) demonstrates the header-bar (`row` + `arrange:"space-between"` + heading TextNode first child + nav cluster) and an `align`-value matrix, built only from ViewNodes.
+
+### Migration
+
+- **None needed** — purely additive optional fields. Existing trees, callers, and agents are unaffected.
+
 ## 1.11.0 / 1.9.0 — Horizontal `row` layout + Section `flyout` (overlay disclosure) (npm + NuGet)
 
 **npm:** `1.11.0` (MINOR — additive layout value + `SectionNode.flyout`) · **NuGet:** `1.9.0` (MINOR — additive `SectionNode.Flyout`; `Layout` already free-form string).
