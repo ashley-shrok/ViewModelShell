@@ -426,6 +426,55 @@ public class FeatureProbeController : ControllerBase
             },
             Layout: "cards",
             MinItem: v)).ToList();
+        // 1.x (Phase 10) — fits node vocabulary (parity coverage for FITS-03).
+        // Static view-shape captured by every GET step (same precedent; no
+        // dedicated action arm). Byte-identical to the bun twin: same headings,
+        // candidate layouts, link labels/hrefs, order, and axis presence — the
+        // WIRE is {type:"fits", axis?, children}: omitted Axis ABSENT on the wire,
+        // Axis:"both" present as the JSON string "both". The CLIENT-SIDE
+        // measure-and-pick selection is browser-only and NOT part of parity.
+        // Candidates ordered preferred/widest FIRST → fallback LAST.
+        //
+        // (a) fits with Axis OMITTED — proves omitted = absent on the wire.
+        var fitsAxisOmittedSection = new SectionNode(
+            Heading: "fits (axis omitted)",
+            Children: new ViewNode[]
+            {
+                new FitsNode(Children: new ViewNode[]
+                {
+                    new SectionNode(Heading: null, Children: new ViewNode[]
+                    {
+                        new LinkNode("Wide A", "/wa"),
+                        new LinkNode("Wide B", "/wb"),
+                        new LinkNode("Wide C", "/wc"),
+                    }, Layout: "row"),
+                    new SectionNode(Heading: null, Children: new ViewNode[]
+                    {
+                        new LinkNode("Wide A", "/wa"),
+                        new LinkNode("Wide B", "/wb"),
+                        new LinkNode("Wide C", "/wc"),
+                    }, Layout: "stack"),
+                }),
+            });
+        // (b) fits with Axis:"both" — proves the axis field present on the wire.
+        var fitsAxisBothSection = new SectionNode(
+            Heading: "fits axis:both",
+            Children: new ViewNode[]
+            {
+                new FitsNode(Children: new ViewNode[]
+                {
+                    new SectionNode(Heading: null, Children: new ViewNode[]
+                    {
+                        new LinkNode("X", "/x"),
+                        new LinkNode("Y", "/y"),
+                    }, Layout: "row"),
+                    new SectionNode(Heading: null, Children: new ViewNode[]
+                    {
+                        new LinkNode("X", "/x"),
+                        new LinkNode("Y", "/y"),
+                    }, Layout: "stack"),
+                }, Axis: "both"),
+            });
         var pageChildren = new List<ViewNode>
         {
             probeSection, clickableCardSection, linkedCardSection, rowSection, flyoutSection,
@@ -438,6 +487,8 @@ public class FeatureProbeController : ControllerBase
         pageChildren.Add(switcherLimitSection);
         pageChildren.Add(bareCardsSection);
         pageChildren.AddRange(cardsMinItemSections);
+        pageChildren.Add(fitsAxisOmittedSection);
+        pageChildren.Add(fitsAxisBothSection);
         pageChildren.Add(BuildTableSection(state));
         return new PageNode("Feature Probe", pageChildren,
             Density: "compact", Layout: "cards");

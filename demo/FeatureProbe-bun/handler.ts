@@ -370,6 +370,75 @@ function buildVm(state: FeatureProbeState): ViewNode {
       { type: "link", label: "S", href: "/s", external: false },
     ],
   }));
+
+  // 1.x (Phase 10) — fits node vocabulary (parity coverage for FITS-03). Static
+  // view-shape captured by every GET step (same precedent; no dedicated action
+  // arm). The .NET twins must serialize byte-identically — the WIRE shape is
+  // {type:"fits", axis?, children}: omitted `axis` ABSENT on the wire, axis:"both"
+  // present as the JSON string "both". The CLIENT-SIDE measure-and-pick selection
+  // is browser-only and NOT part of parity; parity proves only identical
+  // serialization. Candidates are ordered preferred/widest FIRST → fallback LAST.
+  //
+  // (a) fits with axis OMITTED — proves omitted = absent on the wire.
+  const fitsAxisOmittedSection: ViewNode = {
+    type: "section",
+    heading: "fits (axis omitted)",
+    children: [
+      {
+        type: "fits",
+        children: [
+          {
+            type: "section",
+            layout: "row",
+            children: [
+              { type: "link", label: "Wide A", href: "/wa", external: false },
+              { type: "link", label: "Wide B", href: "/wb", external: false },
+              { type: "link", label: "Wide C", href: "/wc", external: false },
+            ],
+          },
+          {
+            type: "section",
+            layout: "stack",
+            children: [
+              { type: "link", label: "Wide A", href: "/wa", external: false },
+              { type: "link", label: "Wide B", href: "/wb", external: false },
+              { type: "link", label: "Wide C", href: "/wc", external: false },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  // (b) fits with axis:"both" — proves the axis field present on the wire.
+  const fitsAxisBothSection: ViewNode = {
+    type: "section",
+    heading: "fits axis:both",
+    children: [
+      {
+        type: "fits",
+        axis: "both",
+        children: [
+          {
+            type: "section",
+            layout: "row",
+            children: [
+              { type: "link", label: "X", href: "/x", external: false },
+              { type: "link", label: "Y", href: "/y", external: false },
+            ],
+          },
+          {
+            type: "section",
+            layout: "stack",
+            children: [
+              { type: "link", label: "X", href: "/x", external: false },
+              { type: "link", label: "Y", href: "/y", external: false },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
   return {
     type: "page",
     title: "Feature Probe",
@@ -380,6 +449,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       bareRowSection, headerBarSection, ...arrangeSections, ...alignSections,
       bareSwitcherSection, ...switcherThresholdSections, switcherLimitSection,
       bareCardsSection, ...cardsMinItemSections,
+      fitsAxisOmittedSection, fitsAxisBothSection,
       buildTableSection(state),
     ],
   };
