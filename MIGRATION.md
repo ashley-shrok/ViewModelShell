@@ -6,6 +6,28 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `1.10.0` / `1.7.0` (npm + NuGet)
+
+Additive — **nothing required.**
+
+| Package | From | To |
+|---|---|---|
+| `@ashley-shrok/viewmodel-shell` (npm) | `1.9.0` | **`1.10.0`** |
+| `AshleyShrok.ViewModelShell` (NuGet) | `1.6.0` | **`1.7.0`** |
+
+### What changed
+
+New optional **`rejected: { violations: [{ path?, message, code? }] }`** field on the `ok:true` response envelope — a soft/domain-validation rejection that still re-renders (vm/state preserved). It does **not** touch the `ok:false` / `errors[]` failure channel, so existing `onError` consumers are unaffected, and the browser shell ignores it harmlessly. Old agents that don't check `rejected` keep working. Protocol token stays `viewmodel-shell/1.0`.
+
+### Do I need to do anything?
+
+No. Two optional notes:
+
+- **To adopt it:** when an action is refused but you want to keep the user's input, attach a rejection to the normal re-render. npm: `return { vm, state, ...shellRejection([{ path: "field", message: "…" }]) };`. .NET: `new ShellResponse<T>(BuildVm(state), state).WithRejection([new ErrorEntry("…", Path: "field")])`. Omit `path` for a form/action-level rejection with no single field.
+- **If you drive a VMS app over the JSON wire as an agent:** on an `ok:true` response, also check for `rejected` — its presence means the action did **not** take effect (the violations tell you why; vm/state still hold the typed input).
+
+---
+
 ## Upgrading to `1.9.0` / `1.6.0` (npm + NuGet)
 
 Two changes, both **non-breaking — nothing required**.

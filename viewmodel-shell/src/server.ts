@@ -465,11 +465,33 @@ export interface ShellResponseBody<TState> {
    *  clear the state. Naturally paired with `preventUnload` for long-running
    *  server actions. */
   busy?: boolean;
+  /** A SOFT (domain/validation) rejection that rides on an ok:true render —
+   *  the action was refused but vm/state are still returned so the form keeps
+   *  the user's input. Distinct from the ok:false + errors[] channel (which
+   *  carries NO view): ok:false = "no view for you"; ok:true + rejected =
+   *  "here's your view back, but the action did not take". An agent driving the
+   *  wire checks `rejected` IN ADDITION to `ok`. Each violation reuses the
+   *  ErrorEntry {path?, message, code?} shape; `path` is OPTIONAL — a violation
+   *  with no path is a form/action-level rejection (vs field-bound when set). */
+  rejected?: ShellRejection;
+}
+
+/** Wrapper for a soft-validation rejection on an ok:true response. */
+export interface ShellRejection {
+  violations: ErrorEntry[];
 }
 
 /** Build a redirect response (Vm and State omitted; shell navigates the browser). */
 export function shellRedirect<TState = unknown>(url: string): ShellResponseBody<TState> {
   return { redirect: url };
+}
+
+/** Attach a soft-validation rejection to a normal re-render. Spread alongside
+ *  vm/state — unlike a redirect, a rejection KEEPS the view:
+ *    return { vm, state, ...shellRejection([{ path: "x", message: "…" }]) };
+ *  Mirrors the C# `ShellResponse<T>.WithRejection(...)` fluent helper. */
+export function shellRejection(violations: ErrorEntry[]): { rejected: ShellRejection } {
+  return { rejected: { violations } };
 }
 
 /** Side-effect factories matching the C# ShellSideEffect static methods. */

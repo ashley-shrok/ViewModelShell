@@ -62,6 +62,7 @@ Optional success-path fields, which may appear alone or alongside `vm`/`state`:
 | `nextPollIn` | Milliseconds. Schedule a `{"name": "poll"}` dispatch after this delay. |
 | `busy` | Boolean. While `true`, drop user-initiated dispatches. Polls bypass. The next response that omits or sets `false` clears the lock. |
 | `preventUnload` | Boolean. While `true`, treat the page as having unsaved work — warn before navigating away. |
+| `rejected` | A SOFT (domain/validation) rejection — see below. The action was refused, but `vm`/`state` are still returned. |
 
 **Failure:**
 
@@ -70,6 +71,17 @@ Optional success-path fields, which may appear alone or alongside `vm`/`state`:
 ```
 
 `errors[].path` and `errors[].code` are optional. HTTP status is 4xx or 5xx on failure. Check `ok` once at the response edge; do not branch on HTTP status.
+
+**Soft rejections (`rejected`) — important for wire-driving agents.** `ok:false` means the framework could not give you a view. A *domain/validation* rejection is different: the app refused the action (e.g. "targets must be non-negative", "can't remove the only person") but it is still a normal `ok:true` render that preserves the user's input. So `ok` alone does NOT tell you the action succeeded — **on an `ok:true` response, also check for `rejected`.** When present:
+
+```json
+{ "ok": true, "vm": { /* … */ }, "state": { /* … */ },
+  "rejected": { "violations": [ { "path": "targets.protein", "message": "must be non-negative" } ] } }
+```
+
+- The write **did not take effect.** Do not treat it as success. Surface the violation(s); `vm`/`state` still hold the input the user typed, so you can correct and re-dispatch.
+- Each violation reuses the `errors[]` entry shape (`{ path?, message, code? }`). **`path` is optional**: present → the violation is bound to that field; **absent → it's a form/action-level rejection** with no single field (like the "only person" case).
+- `rejected` only appears on `ok:true`. It never coexists with `ok:false` (that channel carries no view).
 
 ## Side-effect verbs
 

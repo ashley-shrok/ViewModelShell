@@ -6,6 +6,35 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 1.10.0 / 1.7.0 — First-class soft-validation rejection on ok:true (`rejected.violations[]`) (npm + NuGet)
+
+**npm:** `1.10.0` (MINOR — additive wire field + helpers) · **NuGet:** `1.7.0` (MINOR — additive `ShellResponse.Rejected` + `ShellRejection` + `WithRejection`).
+
+VMS had two error channels and nothing between them: soft/domain validation went in a state field and returned `ok:true` (renders for a human, preserves input), while hard failures returned `ok:false` + `errors[]` (machine-detectable, but no view). For an **agent driving the wire** the manual says "check `ok`; `ok:false` carries `errors[]`; stop on `ok:false`" — so a *rejected* write (`ok:true`, no `errors[]`) was **indistinguishable from success**. "Save failed: targets must be non-negative" read as a successful write. This adds a first-class, machine-detectable soft-rejection signal that still re-renders.
+
+### Added
+
+- **`rejected: { violations: [{ path?, message, code? }] }`** on the `ok:true` response envelope — the action was refused but `vm`/`state` are still returned, so the form keeps the user's input. Distinct from `errors[]` **by design**: `ok:false` = "no view for you"; `ok:true` + `rejected` = "here's your view back, but the action did not take." An agent checks `rejected` **in addition to** `ok`.
+  - Violations reuse the existing **`ErrorEntry`** `{ path?, message, code? }` shape — same vocabulary as `errors[]`. **`path` is optional**: present → field-bound; **absent → a form/action-level rejection** (e.g. "can't remove the only person").
+  - **npm:** `ShellRejection` interface + `rejected?` on `ShellResponseBody` + helper `shellRejection(violations)` (spread into a normal re-render: `return { vm, state, ...shellRejection([...]) }`).
+  - **NuGet:** `ShellRejection` record + `Rejected` (nullable, null-omitted) appended to `ShellResponse<TState>` + fluent `WithRejection(violations)` (`new ShellResponse<T>(vm, state).WithRejection([...])`).
+- Documented in the agent manual (`agent-skill.md`, byte-copied to the .NET embedded `AgentSkill.md`): a dedicated "Soft rejections" subsection in the Response envelope section.
+
+### Why / not changed
+
+- **Does NOT overload `errors[]`/`ok:false`.** That channel stays welded to failures (and to the shell's `VmsActionError` → `onError` path), so existing `onError` consumers never fire on routine validation.
+- **No shell behavior change.** The browser shell reads only the fields it knows and **ignores `rejected` harmlessly** — the human path already renders validation via the app's error TextNode; `rejected` is wire metadata for agents. Verified by a shell-side test (ok:true + rejected → normal render, `onError` not called).
+- **Protocol token stays `viewmodel-shell/1.0`** — additive, backward-compatible (old agents that ignore `rejected` keep working; existing apps unaffected).
+
+### Demo + tests
+
+- **HelpDesk** twins (`RequesterController.cs` + `HelpDesk-bun/server.ts`) now attach `rejected` on the empty-title `create-ticket` path, coexisting with the existing `validationError` state — the canonical worked example. The existing `req-validation-empty` parity step exercises it; both backends emit byte-identical `rejected` (cross-backend verified).
+- New `viewmodel-shell/test/rejected.test.ts` (emission present/absent, form-level no-path case, shell tolerance) + extended `RequesterControllerTests` (object-model + JSON null-omission).
+
+### Follow-ups (deferred, by consensus)
+
+- `FieldNode.error?: string` (first-class inline field errors) and an `onRejected` shell hook (typed-consumer parity + browser auto-populating field errors from `rejected.violations`). Additive; a later release.
+
 ## 1.9.0 / 1.6.0 — Opt-in Enter-to-submit on textareas + modals no longer re-flash (npm + NuGet)
 
 **npm:** `1.9.0` (MINOR — additive wire field + a default styling change) · **NuGet:** `1.6.0` (MINOR — additive `FormNode.SubmitOnEnter` member on the .NET record).

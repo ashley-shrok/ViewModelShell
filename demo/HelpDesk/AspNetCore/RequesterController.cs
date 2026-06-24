@@ -25,6 +25,12 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
         var state = payload.State;
         var name = payload.Name;
 
+        // Soft-validation rejection (rides on the ok:true re-render). Set by the
+        // create-ticket guard below; surfaced to wire-driving agents via
+        // .WithRejection() at the single return. The human path still sees the
+        // ValidationError TextNode — the two coexist by design.
+        List<ErrorEntry>? violations = null;
+
         if (name.StartsWith("filter-"))
         {
             // Filter is already in state via the TabsNode bind.
@@ -79,6 +85,7 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
             if (string.IsNullOrWhiteSpace(title))
             {
                 state = state with { ValidationError = "Title is required." };
+                violations = [new ErrorEntry("Title is required.", Path: "draftTitle")];
             }
             else
             {
@@ -101,7 +108,9 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
             throw new UnknownActionException(name);
         }
 
-        return new ShellResponse<RequesterState>(BuildVm(state), state).Validate();
+        var resp = new ShellResponse<RequesterState>(BuildVm(state), state);
+        if (violations is not null) resp = resp.WithRejection(violations);
+        return resp.Validate();
     }
 
     private ViewNode BuildVm(RequesterState state) => state.View switch

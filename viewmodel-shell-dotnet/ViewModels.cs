@@ -94,6 +94,19 @@ public record ErrorEntry(
 );
 
 /// <summary>
+/// A SOFT (domain/validation) rejection that rides on an <c>ok:true</c> render
+/// (see <see cref="ShellResponse{TState}.Rejected"/>). Distinct from the
+/// <c>ok:false</c> + <c>errors[]</c> failure channel, which carries NO view:
+/// <c>ok:false</c> = "no view for you"; <c>ok:true</c> + <c>rejected</c> =
+/// "here's your view back, but the action did not take." Each violation reuses
+/// the <see cref="ErrorEntry"/> shape; <c>Path</c> is optional — a violation
+/// with no path is a form/action-level rejection (vs field-bound when set).
+/// </summary>
+public record ShellRejection(
+    IReadOnlyList<ErrorEntry> Violations
+);
+
+/// <summary>
 /// Stable, framework-only error code vocabulary. Apps MUST NOT set these —
 /// the framework sets <c>code</c> on framework-detected failures only.
 /// D-03 lock: "small, stable, framework-only set." Mirrors the TS twin's
@@ -172,7 +185,13 @@ public record ShellResponse<TState>(
     // do NOT set this. Non-nullable with default true; deliberately does NOT carry
     // WhenWritingDefault so it serializes on EVERY response (per D-04: "uniform on
     // every response, no per-shape conditionals").
-    bool Ok = true
+    bool Ok = true,
+    // A soft (domain/validation) rejection that rides on an ok:true render — the
+    // action was refused but Vm/State are still returned so the form keeps the
+    // user's input. Distinct from the ok:false + errors[] channel (no view).
+    // App-driven (controllers set it via WithRejection); nullable so the wire
+    // stays absent when there's no rejection.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ShellRejection? Rejected = null
 )
 {
     public static ShellResponse<TState> RedirectTo(string url) =>
@@ -180,6 +199,14 @@ public record ShellResponse<TState>(
 
     public ShellResponse<TState> WithEffect(ShellSideEffect effect) =>
         this with { SideEffects = [.. (SideEffects ?? []), effect] };
+
+    /// <summary>
+    /// Attach a soft-validation rejection to this re-render. Unlike a redirect,
+    /// a rejection KEEPS Vm/State so the form retains the user's input. Mirrors
+    /// the TS `shellRejection(...)` helper.
+    /// </summary>
+    public ShellResponse<TState> WithRejection(IReadOnlyList<ErrorEntry> violations) =>
+        this with { Rejected = new ShellRejection(violations) };
 
     /// <summary>
     /// Phase 06 / WIRE-05 — assert the response's ViewNode tree satisfies the

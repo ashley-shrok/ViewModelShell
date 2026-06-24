@@ -24,7 +24,9 @@ import {
   UnknownActionError,
   createAction,
   createAgentSkillHandler,
+  shellRejection,
   validateActionNames,
+  type ErrorEntry,
   type ViewNode,
 } from "@ashley-shrok/viewmodel-shell/server";
 import { Database } from "bun:sqlite";
@@ -807,6 +809,12 @@ const requesterHandler = createAction<RequesterState>(async (payload) => {
   let state = payload.state;
   const name = payload.name;
 
+  // Soft-validation rejection (rides on the ok:true re-render). Set by the
+  // create-ticket guard; surfaced to wire-driving agents via shellRejection()
+  // at the return. The human path still sees the validationError TextNode —
+  // the two coexist by design.
+  let violations: ErrorEntry[] | null = null;
+
   if (name.startsWith("filter-")) {
     // filter is already in state via the TabsNode bind.
   } else if (name.startsWith("select-ticket-")) {
@@ -843,6 +851,7 @@ const requesterHandler = createAction<RequesterState>(async (payload) => {
     const title = (state.draftTitle ?? "").trim();
     if (!title) {
       state = { ...state, validationError: "Title is required." };
+      violations = [{ path: "draftTitle", message: "Title is required." }];
     } else {
       dbCreate({
         title,
@@ -861,7 +870,7 @@ const requesterHandler = createAction<RequesterState>(async (payload) => {
     throw new UnknownActionError(name);
   }
 
-  return { vm: requesterBuildVm(state), state };
+  return { vm: requesterBuildVm(state), state, ...(violations ? shellRejection(violations) : {}) };
 });
 
 // ─── HTTP server ─────────────────────────────────────────────────────────────

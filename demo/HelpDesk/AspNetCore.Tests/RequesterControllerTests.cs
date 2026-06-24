@@ -157,6 +157,53 @@ public class RequesterControllerTests : IDisposable
     }
 
     [Fact]
+    public void CreateTicket_EmptyTitle_SetsSoftRejection()
+    {
+        var ctrl = CreateController();
+        var step1 = Ok(Act(ctrl, RequesterState.Initial(), "start-create"));
+        var staged = step1.State! with { DraftTitle = "" };
+        var step2 = Ok(Act(ctrl, staged, "create-ticket"));
+
+        // Soft rejection rides on the ok:true render (vm/state preserved).
+        Assert.True(step2.Ok);
+        Assert.NotNull(step2.Vm);
+        Assert.NotNull(step2.Rejected);
+        var violation = Assert.Single(step2.Rejected!.Violations);
+        Assert.Equal("draftTitle", violation.Path);
+        Assert.Equal("Title is required.", violation.Message);
+    }
+
+    [Fact]
+    public void CreateTicket_ValidTitle_NoRejection()
+    {
+        var ctrl = CreateController();
+        var step1 = Ok(Act(ctrl, RequesterState.Initial(), "start-create"));
+        var staged = step1.State! with { DraftTitle = "A real title" };
+        var step2 = Ok(Act(ctrl, staged, "create-ticket"));
+        Assert.Null(step2.Rejected);
+    }
+
+    [Fact]
+    public void Rejection_SerializesAsRejected_OmittedWhenNull()
+    {
+        var web = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var ctrl = CreateController();
+        var step1 = Ok(Act(ctrl, RequesterState.Initial(), "start-create"));
+
+        // Rejecting path → "rejected" present on the wire with the violation.
+        var rejected = Ok(Act(ctrl, step1.State! with { DraftTitle = "" }, "create-ticket"));
+        var rejectedJson = JsonSerializer.Serialize(rejected, web);
+        Assert.Contains("\"rejected\"", rejectedJson);
+        Assert.Contains("\"violations\"", rejectedJson);
+        Assert.Contains("draftTitle", rejectedJson);
+
+        // Success path → "rejected" omitted entirely (WhenWritingNull).
+        var success = Ok(Act(ctrl, step1.State! with { DraftTitle = "Real" }, "create-ticket"));
+        var successJson = JsonSerializer.Serialize(success, web);
+        Assert.DoesNotContain("\"rejected\"", successJson);
+    }
+
+    [Fact]
     public void CreateTicket_Valid_ReturnsToListAndShowsTicket()
     {
         var ctrl = CreateController();
