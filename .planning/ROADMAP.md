@@ -75,8 +75,10 @@ Full detail: [milestones/0.3.13-ROADMAP.md](./milestones/0.3.13-ROADMAP.md)
   2. `switcher` accepts a bounded `threshold` token (the flip width) and an optional bounded `limit` (max items before forcing vertical regardless of width); both are closed/bounded, never raw CSS (SWITCH-02).
   3. A `cards` layout with `minItem` set to a bounded size value sets the auto-fit minimum track width; omitting `minItem` renders byte-identical to today's `--vms-card-min` default (GRID-01).
   4. `switcher` and `minItem` land byte-identically in TS and .NET (nullable params / fields with `[JsonIgnore(WhenWritingNull)]`); parity fixtures cover both and `bun run parity/run.ts` is byte-identical green (SWITCH-03, GRID-02).
-  5. A lockstep npm + NuGet minor is published per AGENTS.md release rules (version bump + CHANGELOG + publish ritual + annotated tag + `main` advanced); the full release gate is green (RELEASE gate).
-**Plans**: TBD
+  5. The Phase-9 changes accumulate under the CHANGELOG `## Unreleased` heading and AGENTS.md marks `switcher` shipped (the forward-reference caveat dropped); NO per-phase version bump/publish — the consolidated lockstep release is batched at Phase 11 (RELEASE deferred).
+**Plans**: 2 plans
+- [ ] 09-01-PLAN.md — switcher layout value + threshold/limit wire fields + negative-flex-basis CSS + browser emission + .NET parity + FeatureProbe fixture (SWITCH-01/02/03)
+- [ ] 09-02-PLAN.md — cards minItem wire field + CSS + parity (GRID-01/02) + Showcase switcher/minItem demos + AGENTS.md switcher-shipped + CHANGELOG Unreleased Phase-9 subsection
 **UI hint**: yes
 
 ### Phase 10: Fits Node
@@ -112,6 +114,6 @@ Phases execute in numeric order: 8 → 9 → 10 → 11
 | Phase | Milestone | Plans | Status | Completed |
 |---|---|---|---|---|
 | 8. Alignment Enums + Layout Policy | v1.12 | 0/2 | Planned | - |
-| 9. Switcher + Cards minItem | v1.12 | 0/TBD | Not started | - |
+| 9. Switcher + Cards minItem | v1.12 | 0/2 | Planned | - |
 | 10. Fits Node | v1.12 | 0/TBD | Not started | - |
 | 11. Demo Verification Spread + Closeout | v1.12 | 0/TBD | Not started | - |
