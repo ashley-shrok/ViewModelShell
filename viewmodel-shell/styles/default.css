@@ -228,6 +228,26 @@ body {
 .vms-page--row > .vms-page__title,
 .vms-section--row > .vms-section__heading { flex: 0 0 100%; }
 
+/* ── Alignment: arrange (main axis → justify-content) / align (cross axis →
+   align-items) (ALIGN-01/02/03 / 1.12.0). Intended for layout:"row" (the cluster
+   primitive) but these are generic box-alignment, so they're harmless on any flex
+   container. Closed enum sets copied from Jetpack Compose Arrangement ∩ Flutter
+   MainAxisAlignment (arrange) and Flutter CrossAxisAlignment (align). An OMITTED
+   field emits no class, so the row defaults (justify-content:flex-start /
+   align-items:center, both inherited from the .vms-*--row block above) hold =
+   byte-identical to today. ── */
+.vms-arrange--start         { justify-content: flex-start; }
+.vms-arrange--center        { justify-content: center; }
+.vms-arrange--end           { justify-content: flex-end; }
+.vms-arrange--space-between  { justify-content: space-between; }
+.vms-arrange--space-around   { justify-content: space-around; }
+.vms-arrange--space-evenly   { justify-content: space-evenly; }
+.vms-align--start    { align-items: flex-start; }
+.vms-align--center   { align-items: center; }
+.vms-align--end      { align-items: flex-end; }
+.vms-align--stretch  { align-items: stretch; }
+.vms-align--baseline { align-items: baseline; }
+
 /* ── Section variant: card (THEME-04) — grouped surface, existing seam vars ── */
 .vms-section--card {
   background: var(--vms-surface);

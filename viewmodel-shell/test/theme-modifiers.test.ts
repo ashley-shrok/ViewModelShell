@@ -169,6 +169,92 @@ describe("LAYOUT-02/03 — section layout preset modifier emission (D-02 idiom)"
   });
 });
 
+describe("ALIGN-01/02/03 — arrange/align modifier emission (1.12.0)", () => {
+  const arrangeValues = [
+    "start", "center", "end", "space-between", "space-around", "space-evenly",
+  ] as const;
+  const alignValues = ["start", "center", "end", "stretch", "baseline"] as const;
+
+  // page — arrange
+  for (const v of arrangeValues) {
+    it(`page arrange:"${v}" => root className contains vms-arrange--${v}`, () => {
+      const el = renderPage({ type: "page", children: [], layout: "row", arrange: v });
+      expect(el.classList.contains(`vms-arrange--${v}`)).toBe(true);
+    });
+  }
+  // page — align
+  for (const v of alignValues) {
+    it(`page align:"${v}" => root className contains vms-align--${v}`, () => {
+      const el = renderPage({ type: "page", children: [], layout: "row", align: v });
+      expect(el.classList.contains(`vms-align--${v}`)).toBe(true);
+    });
+  }
+  // section — arrange
+  for (const v of arrangeValues) {
+    it(`section arrange:"${v}" => section className contains vms-arrange--${v}`, () => {
+      const el = renderSection({ type: "section", children: [], layout: "row", arrange: v });
+      expect(el.classList.contains(`vms-arrange--${v}`)).toBe(true);
+    });
+  }
+  // section — align
+  for (const v of alignValues) {
+    it(`section align:"${v}" => section className contains vms-align--${v}`, () => {
+      const el = renderSection({ type: "section", children: [], layout: "row", align: v });
+      expect(el.classList.contains(`vms-align--${v}`)).toBe(true);
+    });
+  }
+
+  // byte-identical-when-omitted: neither field ⇒ no vms-arrange--/vms-align-- token
+  it("page with NEITHER arrange nor align => no vms-arrange-- / vms-align-- class", () => {
+    const el = renderPage({ type: "page", children: [], layout: "row" });
+    expect(el.className).not.toMatch(/vms-arrange--/);
+    expect(el.className).not.toMatch(/vms-align--/);
+  });
+  it("section with NEITHER arrange nor align => no vms-arrange-- / vms-align-- class", () => {
+    const el = renderSection({ type: "section", children: [], layout: "row" });
+    expect(el.className).not.toMatch(/vms-arrange--/);
+    expect(el.className).not.toMatch(/vms-align--/);
+  });
+  // a bare row (no arrange/align) is byte-identical to today's plain row class
+  it("bare row page => className === 'vms-page vms-page--row' (byte-identical to today)", () => {
+    const el = renderPage({ type: "page", children: [], layout: "row" });
+    expect(el.className).toBe("vms-page vms-page--row");
+  });
+  it("bare row section => className === 'vms-section vms-section--row' (byte-identical to today)", () => {
+    const el = renderSection({ type: "section", children: [], layout: "row" });
+    expect(el.className).toBe("vms-section vms-section--row");
+  });
+
+  // emission present in non-base section branches (collapsible / flyout / link)
+  it("collapsible section with arrange/align still carries the modifier classes", () => {
+    const el = renderSection({
+      type: "section", children: [], layout: "row",
+      collapsible: true, arrange: "space-between", align: "stretch",
+    });
+    expect(el.classList.contains("vms-section--collapsible")).toBe(true);
+    expect(el.classList.contains("vms-arrange--space-between")).toBe(true);
+    expect(el.classList.contains("vms-align--stretch")).toBe(true);
+  });
+  it("flyout section with arrange/align still carries the modifier classes", () => {
+    const el = renderSection({
+      type: "section", children: [], layout: "row",
+      flyout: true, arrange: "center", align: "baseline",
+    });
+    expect(el.classList.contains("vms-section--flyout")).toBe(true);
+    expect(el.classList.contains("vms-arrange--center")).toBe(true);
+    expect(el.classList.contains("vms-align--baseline")).toBe(true);
+  });
+  it("link section with arrange/align still carries the modifier classes", () => {
+    const el = renderSection({
+      type: "section", children: [], layout: "row",
+      link: { url: "/x" }, arrange: "end", align: "start",
+    });
+    expect(el.classList.contains("vms-section--linked")).toBe(true);
+    expect(el.classList.contains("vms-arrange--end")).toBe(true);
+    expect(el.classList.contains("vms-align--start")).toBe(true);
+  });
+});
+
 describe('0.9.0 / #14 — CopyButtonNode.variant modifier emission (mirrors ButtonNode)', () => {
   it('variant: "primary" ⇒ className contains vms-button--primary', () => {
     const el = renderCopyButton({
