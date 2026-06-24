@@ -592,6 +592,12 @@ function countPanes(vm: ViewNode): number {
       if (node.footer) for (const c of node.footer) visit(c, false);
     } else if (node.type === "form") {
       for (const c of node.children) visit(c, false);
+    } else if (node.type === "fits") {
+      // FITS-02 — the TUI renders only a fits node's LAST child, so treat it
+      // as a transparent wrapper around that child for pane counting (recurse
+      // into the last child only, isTopLevel=false like section).
+      const last = node.children[node.children.length - 1];
+      if (last) visit(last, false);
     }
   };
   // B4 focus trap: when a modal is in the tree, only count panes within the
@@ -666,6 +672,11 @@ function focusedPaneSummary(vm: ViewNode, index: number): PaneSummary | null {
       if (node.footer) for (const c of node.footer) if (visit(c, false)) return true;
     } else if (node.type === "form") {
       for (const c of node.children) if (visit(c, false)) return true;
+    } else if (node.type === "fits") {
+      // FITS-02 — only the LAST child renders in the TUI; mirror that here so
+      // focus targeting matches the rendered tree (recurse into last child only).
+      const last = node.children[node.children.length - 1];
+      if (last && visit(last, false)) return true;
     }
     return false;
   };
@@ -952,6 +963,16 @@ function renderNode(node: ViewNode, ctx: RCtx, key?: string | number): React.Rea
     case "copy-button":  return <CopyButtonView   key={key} node={node} ctx={ctx} />;
     case "form":         return <FormView         key={key} node={node} ctx={ctx} />;
     case "field":        return <FieldView        key={key} node={node} ctx={ctx} />;
+    case "fits": {
+      // FITS-02 — deliberate TUI degradation. A terminal has no pixel layout
+      // engine, so the `fits` node's measure-and-pick selection is meaningless
+      // here; we render its guaranteed-fits LAST candidate (the documented
+      // fallback — children are ordered preferred/widest FIRST → safe/narrowest
+      // LAST). The TUI is @experimental; the requirement is only that `fits`
+      // doesn't break it and degrades sensibly. Empty children → render nothing.
+      const last = node.children[node.children.length - 1];
+      return last ? renderNode(last, ctx, key) : null;
+    }
     default:
       return <UnsupportedView key={key} type={(node as { type: string }).type} />;
   }
