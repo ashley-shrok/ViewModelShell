@@ -16,7 +16,7 @@ import type {
   PageNode, SectionNode, ListNode, ListItemNode,
   FormNode, FieldNode, CheckboxNode, ButtonNode,
   TextNode, LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
-  ModalNode, TableNode, CopyButtonNode,
+  ModalNode, TableNode, CopyButtonNode, FitsNode,
 } from "./index.js";
 
 function legacyCopy(text: string): boolean {
@@ -60,6 +60,12 @@ export class BrowserAdapter implements Adapter {
   // collapsible:true so that multiple sections sharing the same base key
   // (anonymous, or duplicate heading) get distinct final keys.
   private sectionKeyCounter: Map<string, number> = new Map();
+  // Phase 10 (FITS-01) — per-render registry of the ResizeObservers created by
+  // fits() containers. ALL are disconnected and the array cleared at the TOP of
+  // every render() (before the innerHTML wipe) so observers from a prior tree
+  // never leak when the tree is rebuilt — the same per-render reset idiom as
+  // detailsOpenSnapshot / sectionKeyCounter above.
+  private fitsObservers: ResizeObserver[] = [];
 
   constructor(private container: HTMLElement) {}
 
@@ -100,6 +106,12 @@ export class BrowserAdapter implements Adapter {
     });
     this.detailsOpenSnapshot = openMap;
     this.sectionKeyCounter = new Map();
+
+    // Phase 10 (FITS-01) — disconnect every ResizeObserver registered by the
+    // prior render's fits() calls before the tree is rebuilt (leak prevention).
+    // Same per-render reset model as the focus/scroll/details snapshots above.
+    this.fitsObservers.forEach(o => o.disconnect());
+    this.fitsObservers = [];
 
     this.container.innerHTML = "";
     this.node(vm, this.container, onAction);
@@ -253,6 +265,7 @@ export class BrowserAdapter implements Adapter {
       case "modal":        return this.modal(n, parent, on);
       case "table":        return this.table(n, parent, on);
       case "copy-button":  return this.copyButton(n, parent);
+      case "fits":         return this.fits(n, parent, on);
     }
   }
 
@@ -278,6 +291,75 @@ export class BrowserAdapter implements Adapter {
     }
     this.kids(n.children, el, on);
     parent.appendChild(el);
+  }
+
+  /**
+   * Phase 10 (FITS-01) — the SwiftUI `ViewThatFits` measure-and-pick renderer.
+   * Renders each candidate in order and keeps the FIRST that does not overflow
+   * the container on `axis` (1px tolerance to avoid sub-pixel false positives),
+   * leaving the LAST candidate rendered as the guaranteed-fits fallback if none
+   * fit. `pick()` runs SYNCHRONOUSLY inside one frame, so the browser paints
+   * only the final choice — no flash of intermediate candidates.
+   *
+   * No-layout fallback: when `container.clientWidth === 0` (jsdom / SSR /
+   * detached / display:none) measurement is unavailable, so it renders ONLY the
+   * LAST (safe-fallback) child.
+   *
+   * The `.vms-fits` container is a full-width block (CSS), so its observed width
+   * is PARENT-driven — it reflects the available space, not the chosen child.
+   * That keeps measurement correct AND prevents a measure→resize feedback loop,
+   * making observing the container stable. A `ResizeObserver` re-runs `pick()`
+   * on a window/parent resize and is tracked in `fitsObservers` for the next
+   * render's disconnect-and-clear.
+   *
+   * Known v1 limitation (document, don't solve): a resize-triggered candidate
+   * switch rebuilds the fits subtree, so focus/caret/draft state INSIDE a fits
+   * child may reset on a resize-switch. The framework's normal focus/scroll
+   * preservation covers server-driven re-renders, not this resize-switch path.
+   */
+  private fits(n: FitsNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const container = document.createElement("div");
+    container.className = "vms-fits";
+    parent.appendChild(container);
+
+    const axis = n.axis ?? "horizontal";
+    const candidates = n.children;
+
+    const pick = (): void => {
+      // No-layout guard: measurement unavailable → render the safe fallback.
+      if (container.clientWidth === 0) {
+        container.innerHTML = "";
+        if (candidates.length > 0) {
+          this.node(candidates[candidates.length - 1], container, on);
+        }
+        return;
+      }
+      // Defensive: a fits with no children is a degenerate tree.
+      if (candidates.length === 0) return;
+
+      for (const candidate of candidates) {
+        container.innerHTML = "";
+        this.node(candidate, container, on);
+        // Force a synchronous reflow before reading overflow metrics.
+        void container.offsetWidth;
+        const overflows =
+          axis === "horizontal"
+            ? container.scrollWidth > container.clientWidth + 1
+            : axis === "vertical"
+              ? container.scrollHeight > container.clientHeight + 1
+              : container.scrollWidth > container.clientWidth + 1 ||
+                container.scrollHeight > container.clientHeight + 1;
+        // First candidate that fits wins → stop (it stays rendered). If none
+        // fit, the LAST candidate remains rendered after the loop (fallback).
+        if (!overflows) break;
+      }
+    };
+
+    pick();
+
+    const ro = new ResizeObserver(() => pick());
+    ro.observe(container);
+    this.fitsObservers.push(ro);
   }
 
   private section(n: SectionNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {

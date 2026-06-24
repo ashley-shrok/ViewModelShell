@@ -239,6 +239,13 @@ body {
 .vms-page--row > .vms-page__title,
 .vms-section--row > .vms-section__heading { flex: 0 0 100%; }
 
+/* ── Fits container (FITS-01 / Phase 10). STRUCTURAL selector (not visual
+   layout): a full-width block so its observed width reflects the available
+   space (parent-driven), which both (a) makes measurement correct and (b)
+   prevents a measure→resize feedback loop. The candidate SELECTION is done in
+   the renderer (browser.ts), not in CSS. ── */
+.vms-fits { display: block; }
+
 /* ── Alignment: arrange (main axis → justify-content) / align (cross axis →
    align-items) (ALIGN-01/02/03 / 1.12.0). Intended for layout:"row" (the cluster
    primitive) but these are generic box-alignment, so they're harmless on any flex
