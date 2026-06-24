@@ -353,6 +353,48 @@ public class FeatureProbeController : ControllerBase
             },
             Layout: "row",
             Align: v)).ToList();
+        // 1.13.0 — switcher vocabulary (parity coverage for SWITCH-01/02/03).
+        // Static view-shape captured by every GET step (mirrors the 1.12.0
+        // arrange/align precedent; no dedicated action arm). Byte-identical to the
+        // bun twin: same headings, link labels/hrefs, order, and threshold/limit
+        // values — omitted threshold/limit ABSENT on the wire, set ones present.
+        //
+        // (a) bare switcher — NEITHER Threshold nor Limit => proves omitted = no class.
+        var bareSwitcherSection = new SectionNode(
+            Heading: "Bare switcher",
+            Children: new ViewNode[]
+            {
+                new LinkNode("One", "/one"),
+                new LinkNode("Two", "/two"),
+                new LinkNode("Three", "/three"),
+            },
+            Layout: "switcher");
+        // (b) one switcher per threshold value (sm/md/lg/xl).
+        var thresholdValues = new[] { "sm", "md", "lg", "xl" };
+        var switcherThresholdSections = thresholdValues.Select(v => new SectionNode(
+            Heading: $"switcher {v}",
+            Children: new ViewNode[]
+            {
+                new LinkNode("A", "/a"),
+                new LinkNode("B", "/b"),
+                new LinkNode("C", "/c"),
+            },
+            Layout: "switcher",
+            Threshold: v)).ToList();
+        // (c) one switcher with Limit:4 and >4 children (6) — exercises the count cap.
+        var switcherLimitSection = new SectionNode(
+            Heading: "switcher limit",
+            Children: new ViewNode[]
+            {
+                new LinkNode("1", "/1"),
+                new LinkNode("2", "/2"),
+                new LinkNode("3", "/3"),
+                new LinkNode("4", "/4"),
+                new LinkNode("5", "/5"),
+                new LinkNode("6", "/6"),
+            },
+            Layout: "switcher",
+            Limit: 4);
         var pageChildren = new List<ViewNode>
         {
             probeSection, clickableCardSection, linkedCardSection, rowSection, flyoutSection,
@@ -360,6 +402,9 @@ public class FeatureProbeController : ControllerBase
         };
         pageChildren.AddRange(arrangeSections);
         pageChildren.AddRange(alignSections);
+        pageChildren.Add(bareSwitcherSection);
+        pageChildren.AddRange(switcherThresholdSections);
+        pageChildren.Add(switcherLimitSection);
         pageChildren.Add(BuildTableSection(state));
         return new PageNode("Feature Probe", pageChildren,
             Density: "compact", Layout: "cards");

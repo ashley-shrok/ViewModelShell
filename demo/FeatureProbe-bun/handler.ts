@@ -291,6 +291,52 @@ function buildVm(state: FeatureProbeState): ViewNode {
       { type: "link", label: "B", href: "/b", external: false },
     ],
   }));
+  // 1.13.0 — switcher vocabulary (parity coverage for SWITCH-01/02/03). Static
+  // view-shape captured by every GET step (mirrors the 1.12.0 arrange/align
+  // precedent; no dedicated action arm). external:false explicit on every
+  // LinkNode to match the .NET non-nullable default. The .NET twins must
+  // serialize byte-identically — omitted threshold/limit ABSENT on the wire,
+  // set ones present.
+  //
+  // (a) bare switcher — NEITHER threshold nor limit => proves omitted = no class.
+  const bareSwitcherSection: ViewNode = {
+    type: "section",
+    heading: "Bare switcher",
+    layout: "switcher",
+    children: [
+      { type: "link", label: "One", href: "/one", external: false },
+      { type: "link", label: "Two", href: "/two", external: false },
+      { type: "link", label: "Three", href: "/three", external: false },
+    ],
+  };
+  // (b) one switcher per threshold value (sm/md/lg/xl).
+  const thresholdValues = ["sm", "md", "lg", "xl"] as const;
+  const switcherThresholdSections: ViewNode[] = thresholdValues.map((v) => ({
+    type: "section",
+    heading: `switcher ${v}`,
+    layout: "switcher",
+    threshold: v,
+    children: [
+      { type: "link", label: "A", href: "/a", external: false },
+      { type: "link", label: "B", href: "/b", external: false },
+      { type: "link", label: "C", href: "/c", external: false },
+    ],
+  }));
+  // (c) one switcher with limit:4 and >4 children (6) — exercises the count cap.
+  const switcherLimitSection: ViewNode = {
+    type: "section",
+    heading: "switcher limit",
+    layout: "switcher",
+    limit: 4,
+    children: [
+      { type: "link", label: "1", href: "/1", external: false },
+      { type: "link", label: "2", href: "/2", external: false },
+      { type: "link", label: "3", href: "/3", external: false },
+      { type: "link", label: "4", href: "/4", external: false },
+      { type: "link", label: "5", href: "/5", external: false },
+      { type: "link", label: "6", href: "/6", external: false },
+    ],
+  };
   return {
     type: "page",
     title: "Feature Probe",
@@ -299,6 +345,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
     children: [
       probeSection, clickableCardSection, linkedCardSection, rowSection, flyoutSection,
       bareRowSection, headerBarSection, ...arrangeSections, ...alignSections,
+      bareSwitcherSection, ...switcherThresholdSections, switcherLimitSection,
       buildTableSection(state),
     ],
   };
