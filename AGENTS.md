@@ -154,6 +154,20 @@ Layout *arrangement* is server intent on the existing `page`/`section` nodes (ap
 - **`section variant:"card"`**: a grouped surface (background / border / padding / radius). Dashboard tiles, detail panes.
 - **`page width: "wide"`** (0.7.0): widens the page cap from `--vms-page-max` (1080px) to `--vms-page-max-wide` (1440px) for data-heavy views (wide tables, dense list+detail). `width: "full"` removes the cap entirely. Omit for the framework default. TUI ignores it (terminals fill naturally).
 
+### Layout policy
+
+**The governing test for every future layout change.** When a request would add a layout knob to the wire, do not debate it — run it against the two principles below. A field joins the layout vocabulary **iff it passes BOTH**; a field that fails either is rejected, no exceptions. These are the synthesis of four mature framework families (CSS-grid, component libraries, first-principles primitives, declarative-native UI); the rationale of record is `.planning/design/layout-system-research.md` (read it before proposing any layout addition).
+
+- **P1 — responsiveness must be intrinsic / container-relative, with ZERO viewport breakpoints.** Collapse and reflow come from the mechanisms that are placement-agnostic by construction: auto-fit `minmax(min(X,100%),1fr)` grid, flex-wrap + flex-basis, negative-flex-basis axis-flip (Switcher), the Holy-Albatross coupled wrap (Sidebar), `min`/`max`/`clamp` sizing, and — as the **only** escape hatch — **CSS container queries**. A viewport `@media` rule is **never** acceptable: the server doesn't know the viewport, where a node will sit, or how wide its slot is, so a breakpoint object (`{xs,md,lg}`) or a 12-column `colSpan` that re-places per tier structurally violates the contract. The framework owns responsiveness; the app emits zero breakpoints.
+
+- **P2 — every layout knob crossing the wire is a closed enum or bounded scalar, never raw CSS.** A layout field is a closed union (e.g. `arrange`/`align`'s value sets) or a bounded token (a spacing-scale rung, a `cards` min-item width), never a CSS value, span, track, area, or breakpoint map. Layout fields are allowed to be more mechanism-flavored than the rest of the tree *because they're ignorable* — but "ignorable" buys richer flow knobs, NOT raw CSS or mobile-breaking placement.
+
+`arrange:"space-between"` passes both (intrinsic main-axis distribution; closed union) — it is in. A 12-col `colSpan` fails both (needs breakpoints to re-place; an open-ish int against a placement grid) — it is out. Container-query reflow against a small framework-defined threshold set passes; a viewport `{xs,md,lg}` object fails P1.
+
+**Two layouts a grid provably cannot express** — the genuine flexbox idioms that earn their own node rather than folding into the auto-fit grid: **`sidebar`** (fixed-aside + fluid-main collapsing by content width, not viewport — the Holy Albatross) and **`switcher`** (N equal items flipping all-row ↔ all-stack atomically, never an awkward "2-then-1" — negative-flex-basis). VMS ships `sidebar`; `switcher` arrives in Phase 9 (the forward reference is intentional). Everything else surveyed is either a grid/flex configuration (foldable into the existing presets) or a different concern (overlay → `modal`, surface → `section variant:"card"`).
+
+Per the existing concern→source convention, the authoritative enum value sets for layout fields live in the type source (`viewmodel-shell/src/index.ts`, mirrored in `ViewModels.cs`) — this section states the *policy*, not a drift-prone catalog of values.
+
 ### The canonical worked example (single source of truth)
 
 The Showcase's three archetype views are the locked teaching mapping — point an agent at the live `demo/Showcase/frontend/src/main.ts`, do not re-invent snippets:

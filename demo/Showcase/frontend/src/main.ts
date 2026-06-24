@@ -237,6 +237,45 @@ function componentsView(): ViewNode[] {
       ]},
     ]},
 
+    // 1.12.0 — Alignment enums (arrange / align) on the row layout. Built only
+    // from ViewNodes (zero app CSS). (a) the canonical header-bar (ALIGN-04):
+    // a layout:"row" section with arrange:"space-between" whose FIRST child is a
+    // heading TextNode (NOT the section heading), followed by a nested row nav
+    // cluster — renders title-left / nav-right. (b) a small matrix of the align
+    // values + a couple of arrange values, each labeled with a muted TextNode.
+    { type: "section", heading: "Header bar (row + arrange:\"space-between\")", children: [
+      { type: "text", value: "A heading TextNode first child + a nav cluster; arrange pushes them apart with zero app CSS.", style: "muted" },
+      { type: "section", layout: "row", arrange: "space-between", align: "center", children: [
+        { type: "text", value: "Acme Console", style: "heading" },
+        { type: "section", layout: "row", children: [
+          { type: "link", label: "Dashboard", href: "#dashboard" },
+          { type: "link", label: "Reports",   href: "#reports" },
+          { type: "link", label: "Settings",  href: "#settings" },
+        ]},
+      ]},
+    ]},
+
+    { type: "section", heading: "Cross-axis alignment (align matrix)", children: [
+      ...(["start", "center", "end", "stretch", "baseline"] as const).flatMap(v => [
+        { type: "text" as const, value: `align: "${v}"`, style: "muted" as const },
+        { type: "section" as const, layout: "row" as const, align: v, children: [
+          { type: "text" as const, value: "Heading", style: "heading" as const },
+          { type: "link" as const, label: "nav link", href: "#" },
+        ]},
+      ]),
+    ]},
+
+    { type: "section", heading: "Main-axis arrangement (arrange)", children: [
+      ...(["center", "space-evenly"] as const).flatMap(v => [
+        { type: "text" as const, value: `arrange: "${v}"`, style: "muted" as const },
+        { type: "section" as const, layout: "row" as const, arrange: v, children: [
+          { type: "link" as const, label: "one",   href: "#" },
+          { type: "link" as const, label: "two",   href: "#" },
+          { type: "link" as const, label: "three", href: "#" },
+        ]},
+      ]),
+    ]},
+
     { type: "section", heading: "Image", layout: "split", children: [
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%237c5cff'/%3E%3C/svg%3E", alt: "Sample avatar", size: "small", shape: "circle" },
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90'%3E%3Crect width='160' height='90' fill='%2310b981'/%3E%3C/svg%3E", alt: "Sample banner", size: "large" },
