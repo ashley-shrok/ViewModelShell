@@ -149,10 +149,16 @@ Layout *arrangement* is server intent on the existing `page`/`section` nodes (ap
 
 - **`stack`** (default — omit the field): vertical flow. Forms, single-column content. Byte-identical to today's output.
 - **`split`**: two equal columns on wide, collapses to stacked on narrow with **zero app breakpoints**. List ↔ detail, content + aside.
-- **`cards`**: auto-fit grid from `--vms-card-min` (default 16rem), collapses to one column intrinsically. Dashboards, tile/summary grids.
+- **`cards`**: auto-fit grid (`repeat(auto-fit, minmax(min(var(--vms-card-min),100%),1fr))`, default min 16rem), collapses to one column intrinsically. Dashboards, tile/summary grids. **`minItem` field** (1.12.0): a closed size token (`xs|sm|md|lg|xl` → 10/13/16/20/24rem) overrides the auto-fit min track per node — smaller packs more/narrower columns, larger fewer/wider.
+- **`row`** (1.11.0): a left-aligned wrapping horizontal cluster; items hug content. The general horizontal primitive (a navbar/header composes from it). **`arrange` / `align` fields** (1.12.0) set main-axis distribution (`justify-content`) and cross-axis alignment (`align-items`) — closed unions from Compose/Flutter; the canonical header bar is `row` + `arrange:"space-between"` + a heading `TextNode` first child + a nested `row` nav cluster.
+- **`sidebar`** (0.x): fixed-aside + fluid-main app shell that collapses by content width (the Holy Albatross), zero breakpoints.
+- **`switcher`** (1.12.0): N equal items flip **all-row ↔ all-stack atomically** at a content-width `threshold` (`sm|md|lg|xl` → 20/30/40/48rem; default md), never a partial "2-then-1" — the distinction from `cards` auto-fit. Optional `limit` (`2..8`) caps items-per-row. Wizard steps, equal CTAs, evenly-split toolbars.
+- **`fits` node** (1.12.0): the responsive-*selection* primitive (SwiftUI `ViewThatFits`) — renders the first child whose **intrinsic** size fits the container, else the next, else the last. The ONE non-pure-CSS layout primitive (client-side measurement). Use it to pick between layouts of **bounded** intrinsic width (toolbar ↔ menu, compact ↔ full controls); NOT for text-heavy multi-column panes (use `split`/`sidebar`'s own collapse). See its TSDoc in `index.ts`.
 - **`density: "compact"`** on `page`: tightens the spacing rhythm tokens globally — no app CSS.
 - **`section variant:"card"`**: a grouped surface (background / border / padding / radius). Dashboard tiles, detail panes.
 - **`page width: "wide"`** (0.7.0): widens the page cap from `--vms-page-max` (1080px) to `--vms-page-max-wide` (1440px) for data-heavy views (wide tables, dense list+detail). `width: "full"` removes the cap entirely. Omit for the framework default. TUI ignores it (terminals fill naturally).
+
+The exact field/enum values live in the type source (`viewmodel-shell/src/index.ts`); the live **Showcase "Layouts" tab** (`demo/Showcase/`) is the visual reference for every preset above.
 
 ### Layout policy
 
