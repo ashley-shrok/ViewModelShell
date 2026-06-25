@@ -171,7 +171,8 @@ function buildVm(state: ExpensesState): ViewNode {
 
   const ledger: ViewNode = {
     type: "section",
-    heading: "Transactions",
+    // Heading omitted — the header-bar row above now carries the "Transactions"
+    // title, so repeating it on the ledger section would double up.
     children: [
       {
         type: "tabs",
@@ -192,13 +193,29 @@ function buildVm(state: ExpensesState): ViewNode {
     ],
   };
 
+  // 1.11.0/1.12.0 — the canonical header bar: a `layout:"row"` cluster with
+  // `arrange:"space-between"` pushing the page title hard-left and the primary
+  // action hard-right (a heading TextNode as the FIRST child + the action). No
+  // app CSS; the row wraps intrinsically on narrow viewports. This replaces the
+  // bare left-aligned "+ Add" button with a proper titled toolbar.
+  const header: ViewNode = {
+    type: "section",
+    layout: "row",
+    arrange: "space-between",
+    align: "center",
+    children: [
+      { type: "text", value: "Transactions", style: "heading" },
+      {
+        type: "button",
+        label: "+ Add Transaction",
+        action: { name: "show-add" },
+        variant: "primary",
+      },
+    ],
+  };
+
   const mainChildren: ViewNode[] = [
-    {
-      type: "button",
-      label: "+ Add Transaction",
-      action: { name: "show-add" },
-      variant: "primary",
-    },
+    header,
     ledger,
   ];
   if (state.adding) {

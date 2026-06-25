@@ -126,7 +126,9 @@ public class ExpensesController : ControllerBase
         }).ToList();
 
         var ledger = new SectionNode(
-            Heading: "Transactions",
+            // Heading omitted — the header-bar row below now carries the
+            // "Transactions" title, so repeating it here would double up.
+            Heading: null,
             Children:
             [
                 new TabsNode(
@@ -144,9 +146,25 @@ public class ExpensesController : ControllerBase
                     Rows: rows)
             ]);
 
+        // 1.11.0/1.12.0 — the canonical header bar: a layout:"row" cluster with
+        // Arrange:"space-between" pushing the page title hard-left and the primary
+        // action hard-right (a heading TextNode as the FIRST child + the action).
+        // No app CSS; the row wraps intrinsically on narrow viewports. Mirrors
+        // demo/ExpenseTracker-bun/server.ts byte-for-byte (parity-gated).
+        var header = new SectionNode(
+            Heading: null,
+            Children:
+            [
+                new TextNode("Transactions", "heading"),
+                new ButtonNode("+ Add Transaction", new ActionDescriptor("show-add"), Variant: "primary")
+            ],
+            Layout:  "row",
+            Arrange: "space-between",
+            Align:   "center");
+
         var mainChildren = new List<ViewNode>
         {
-            new ButtonNode("+ Add Transaction", new ActionDescriptor("show-add"), Variant: "primary"),
+            header,
             ledger
         };
         if (state.Adding)
