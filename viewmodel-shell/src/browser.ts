@@ -862,9 +862,10 @@ export class BrowserAdapter implements Adapter {
 
   private link(n: LinkNode, parent: HTMLElement): void {
     const a = document.createElement("a");
-    a.className = "vms-link";
+    a.className = n.active ? "vms-link vms-link--active" : "vms-link";
     a.href = n.href;
     a.textContent = n.label;
+    if (n.active) a.setAttribute("aria-current", "page");
     if (n.external) {
       a.target = "_blank";
       a.rel = "noopener noreferrer";

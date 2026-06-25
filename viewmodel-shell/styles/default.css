@@ -235,6 +235,11 @@ body {
   flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
+  /* Horizontal clusters (navbars, toolbars, header rows) need more breathing
+     room between siblings than the tight vertical --vms-space-sm rhythm. This
+     is the one place the row preset DOES redeclare gap (D-30 left it inherited;
+     nav links at 0.75rem read cramped). */
+  gap: var(--vms-space-lg);
 }
 .vms-page--row > .vms-page__title,
 .vms-section--row > .vms-section__heading { flex: 0 0 100%; }
@@ -642,6 +647,13 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   align-self: flex-start;
 }
 .vms-link:hover { border-bottom-color: var(--vms-accent); }
+/* Active / current nav item ("you are here"). Solid underline + stronger
+   weight so the current location reads at a glance; server-owned via
+   LinkNode.active (emits aria-current="page" too). */
+.vms-link--active {
+  border-bottom-color: var(--vms-accent);
+  font-weight: 600;
+}
 
 /* ── Image ── */
 .vms-image { max-width: 100%; height: auto; display: block; }

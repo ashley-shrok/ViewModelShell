@@ -314,7 +314,9 @@ public class FeatureProbeController : ControllerBase
                     Heading: null,
                     Children: new ViewNode[]
                     {
-                        new LinkNode("Home", "/home"),
+                        // 2.1.0 — LinkNode.Active parity coverage: the current
+                        // nav item ("you are here"). Byte-identical to the bun twin.
+                        new LinkNode("Home", "/home", Active: true),
                         new LinkNode("Docs", "/docs"),
                     },
                     Layout: "row"),

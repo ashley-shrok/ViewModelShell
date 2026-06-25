@@ -6,6 +6,14 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `2.1.0` / `2.1.0` (npm + NuGet) — additive, no action
+
+**Nothing to do.** This release adds **`LinkNode.active`** (`active?: boolean` in TS, `bool? Active` in .NET) — set it `true` on the nav link that represents the current page to get a "you are here" highlight (`.vms-link--active` + `aria-current="page"`). It's server-owned and optional; omitting it is byte-identical to 2.0.0.
+
+**One cosmetic change to be aware of:** the `row` layout preset now uses a larger inter-item gap (`--vms-space-lg` = 1.5rem, was the inherited 0.75rem) so navbars/toolbars aren't cramped. This is CSS-only and affects every `layout:"row"` section. If you specifically want the old tighter spacing back, set `--vms-space-lg` on that row through the `--vms-*` token seam (a tiny `:root`/scoped stylesheet — never an HTML `<style>` block).
+
+---
+
 ## Upgrading to `2.0.0` / `2.0.0` (npm + NuGet) — BREAKING: `flyout` removed
 
 **The only breaking change: `SectionNode.flyout` is gone.** If you never used it (the overwhelming common case — it was a one-release-old hover-overlay primitive), this upgrade is a no-op: bump and go, nothing else changed.

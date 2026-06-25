@@ -601,7 +601,11 @@ public record TableNode(
 public record LinkNode(
     string Label,
     string Href,
-    bool External = false
+    bool External = false,
+    /// <summary>true = current location ("you are here"): emits .vms-link--active
+    /// + aria-current="page". Server-owned. Nullable + omitted-when-null so the wire
+    /// matches the TS `active?: boolean` posture (absent = not active).</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Active = null
 ) : ViewNode;
 
 // Image / media (issue #5). Src is required; Alt/Size/Shape are nullable wire

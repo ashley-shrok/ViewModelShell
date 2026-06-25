@@ -250,7 +250,9 @@ function buildVm(state: FeatureProbeState): ViewNode {
         type: "section",
         layout: "row",
         children: [
-          { type: "link", label: "Home", href: "/home", external: false },
+          // 2.1.0 — LinkNode.active parity coverage: the current nav item
+          // ("you are here"). Byte-identical to the .NET twin.
+          { type: "link", label: "Home", href: "/home", external: false, active: true },
           { type: "link", label: "Docs", href: "/docs", external: false },
         ],
       },

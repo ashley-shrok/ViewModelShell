@@ -6,6 +6,19 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 2.1.0 / 2.1.0 — `LinkNode.active` (npm + NuGet)
+
+**npm:** `2.1.0` (MINOR) · **NuGet:** `2.1.0` (MINOR). One additive change: links can now mark themselves as the current location ("you are here") for navigation. Wire protocol token stays `viewmodel-shell/1.0` (one new optional node field; omitting it is byte-identical to before). **Migration: none** — purely additive.
+
+### Added
+- **`LinkNode.active?: boolean`** (TS) / **`Active` `bool?`** (.NET, `[JsonIgnore(WhenWritingNull)]`). When `true`, the renderer emits `.vms-link--active` (solid accent underline + 600 weight in the shipped CSS) and sets `aria-current="page"` for assistive tech. **Server-owned** — the backend decides which nav item is current from its own route/state; there is no client-side route matching (consistent with every other view decision). Absent/false = not active.
+- The canonical navbar examples in the Showcase ("Header bar" + the dashboard header) and the FeatureProbe parity twins now mark their current item active. The FeatureProbe coverage is static view-shape captured by the existing GET steps (mirrors the 1.11/1.12 row-addition precedent — no new fixture step), so the byte-identical cross-backend diff covers the new field.
+
+### Changed (CSS)
+- **The `row` layout preset now declares its own gap** (`--vms-space-lg` = 1.5rem, up from the inherited `--vms-space-sm` = 0.75rem). Horizontal clusters (navbars, toolbars, header rows) read cramped at the tight vertical rhythm; this is the one place `row` overrides the inherited section gap. Affects every `layout:"row"` section. No wire change; CSS-only. If you relied on the tighter spacing, override `--vms-space-lg` on the row via the `--vms-*` token seam.
+
+---
+
 ## 2.0.0 / 2.0.0 — Remove `SectionNode.flyout` (npm + NuGet) — BREAKING
 
 **npm:** `2.0.0` (MAJOR) · **NuGet:** `2.0.0` (MAJOR). A single breaking change: the `SectionNode.flyout` overlay-disclosure primitive is **removed entirely** (TS field, .NET `Flyout`, the renderer branch, the `.vms-section--flyout`/`__trigger`/`__panel` CSS, and the dedicated test).

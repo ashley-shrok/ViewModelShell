@@ -327,6 +327,11 @@ export interface LinkNode {
   href: string;
   /** true = open outside current app context (browser: new tab + noopener) */
   external?: boolean;
+  /** true = this link points at the current location (nav "you are here").
+   *  Emits `.vms-link--active` + `aria-current="page"`. Server-owned: the
+   *  backend decides which nav item is active from its route/state, exactly
+   *  like every other view decision — there is no client-side route matching. */
+  active?: boolean;
 }
 
 export interface ImageNode {

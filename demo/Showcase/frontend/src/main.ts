@@ -429,11 +429,11 @@ function layoutsView(): ViewNode[] {
 
     // ── header-bar (the canonical ALIGN-04 composition) ──────────────────
     { type: "section", heading: "Header bar (row + arrange:\"space-between\")", children: [
-      { type: "text", value: "The canonical app header: a layout:\"row\" with arrange:\"space-between\" whose FIRST child is a heading TextNode (NOT the section heading) and whose second child is a nested row nav cluster — title pinned left, nav pinned right, with zero app CSS.", style: "muted" },
+      { type: "text", value: "The canonical app header: a layout:\"row\" with arrange:\"space-between\" whose FIRST child is a heading TextNode (NOT the section heading) and whose second child is a nested row nav cluster — title pinned left, nav pinned right, with zero app CSS. The current page is marked with link.active (\"you are here\"): a solid underline + heavier weight, plus aria-current=\"page\" for screen readers. active is SERVER-owned — the backend decides which item is current from its route/state, there is no client-side route matching.", style: "muted" },
       { type: "section", layout: "row", arrange: "space-between", align: "center", children: [
         { type: "text", value: "Acme Console", style: "heading" },
         { type: "section", layout: "row", children: [
-          { type: "link", label: "Dashboard", href: "#dashboard" },
+          { type: "link", label: "Dashboard", href: "#dashboard", active: true },
           { type: "link", label: "Reports",   href: "#reports" },
           { type: "link", label: "Settings",  href: "#settings" },
         ]},
@@ -521,7 +521,7 @@ function dashboardView(): ViewNode[] {
     { type: "section", layout: "row", arrange: "space-between", align: "center", children: [
       { type: "text", value: "Operations dashboard", style: "heading" },
       { type: "section", layout: "row", children: [
-        { type: "link", label: "Overview", href: "#overview" },
+        { type: "link", label: "Overview", href: "#overview", active: true },
         { type: "link", label: "Reports",  href: "#reports" },
         { type: "link", label: "Settings", href: "#settings" },
       ]},
