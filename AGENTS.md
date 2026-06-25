@@ -16,6 +16,44 @@ The framework is actively developed. **If your app needs a node type, input type
 
 ---
 
+## Design philosophy
+
+The framework exists to make one thing true: **an agent can build, test, and operate a complete application end-to-end — with no human in the loop and no browser anywhere in sight.** That capability isn't bolted on; it falls out of a few deliberate choices about where state lives, what crosses the wire, and who is allowed to know about pixels. Everything here is the *why*. When a decision is unclear, decide by these — and by whether the choice keeps that one thing true.
+
+### What the philosophy buys
+
+Because the entire interface is structured data rather than code, three capabilities come for free — and they are the whole point:
+
+- **Agents build it blind.** An app is just a server that maps the current interface state and an action to the next state and a description of the screen. There is nothing to *look at* to get it right — the description is the truth — so an agent can author a complete, correct UI without ever rendering one.
+- **Agents test it through the interface, in-process, with no browser.** Every interaction is a plain function from input to output: hand the server a state and an action, assert on the view it returns. The very interface a user would click through is the one the tests drive — so *every* behavior the app has is verifiable through it, with ordinary unit tests and nothing else.
+- **Agents use it like an API.** A finished app is already a clean, self-describing wire protocol. The same structure that lets one agent build and test it lets a *different* agent drive it — read the screen, take an action, read the next screen — as if it were an API, because it is one.
+
+**The testing story is the quiet giant.** Most UI frameworks can only really verify behavior by driving a live browser — slow, flaky, and heavy enough that teams end up testing a fraction of what they ship. Here the interface *is* data, so exhaustively asserting every screen and every transition is just unit testing: it runs in milliseconds, in-process, on every single CI run, with no headless browser, no Playwright, no running server, no flake, and nothing to install. The full-coverage, test-everything-through-the-UI regime that's usually aspirational becomes the default — and it's a direct consequence of the structured-wire philosophy, not a separate test harness someone had to build.
+
+A human gets a serviceable, responsive app with zero design effort. An agent gets an app it can write, verify, and operate entirely on its own. Both come from the same fact: the interface is honest, structured data from end to end.
+
+### The ideas that make it true
+
+1. **The server remembers nothing between requests.** It takes the current interface state and an action and returns the next state and a fresh view; the entire interface state travels with every exchange. Because nothing is held per-client, the server restarts or scales without losing anything, and two windows of the same app are independent with no bookkeeping. Lasting, shared things — records, files — live on the server; only the moment-to-moment interface state rides along.
+
+2. **The structured description must always be enough on its own** — enough to build from, to test against, and to act on. Any behavior that only works through a real, running client, or any shortcut the data doesn't capture, quietly breaks the promise that makes the whole thing valuable. Guarding the sufficiency of the data is guarding the product.
+
+3. **The client is dumb on purpose, and universal.** It knows how to turn a view description into something on a screen, and nothing about any particular app — no app logic, no app-specific styling, no special cases. That is why a whole new kind of front-end (a terminal, a phone) becomes possible by teaching one small, well-defined seam how to draw and how to perform a handful of side effects — and why the heart of the framework knows nothing about any specific platform at all.
+
+4. **Apps describe; they don't decorate.** An app composes from the framework's vocabulary of view pieces and, at most, nudges a shared design token; it never writes its own styling and never reaches in to override the framework's. This cuts both ways: the framework is never edited to patch around an app's need, and the app is never bent to work around the framework's limits. A missing piece is a request *to* the framework — and until it arrives, the honest, slightly imperfect rendering is simply accepted.
+
+5. **The layout responds to the space it is in, not to a guess about the device.** The server never knows how wide the screen is, so it never tries to; making content reflow and collapse is the framework's job. An app expresses *intent* — "these are cards," "this is a header row" — from a closed set of choices, never raw style, and the framework makes that intent work at every size.
+
+6. **One description of a view, shared by both backends, with the code as its only authority.** Documentation points at that source rather than recopying it, because a second copy is just drift waiting to happen. The two server languages stay perfectly in step — the same app shape means the same data on the wire, or the build fails.
+
+7. **An option not set is simply absent** — never sent as an empty placeholder. "Missing" and "nothing" mean the same thing and are treated as equal, which is what keeps the two backends honest with each other and keeps strict consumers happy.
+
+8. **Nothing important fails quietly.** A capability invoked without the means to honor it raises a hard error rather than doing nothing — a dropped redirect or a swallowed credential write is a security failure, not a graceful degradation. The same instinct runs throughout: a broken test blocks a release, a mismatch fails the build, an unknown action answers with a clear error. Silence is the bug.
+
+9. **The framework grows by addition, and you ask before adding.** New capabilities are additive, so existing apps and agents keep working untouched; and when something can only be done by working *around* the framework, that is the signal a piece is missing — surface it, don't paper over it.
+
+---
+
 ## Critical gotchas (read first)
 
 These are the bugs that take hours to find:
