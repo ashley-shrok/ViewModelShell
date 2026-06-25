@@ -159,6 +159,11 @@ function buildVm(state: RetroState): ViewNode {
     type: "page",
     title: "Retro Board",
     layout: "cards",
+    // 1.13.0 — widen the auto-fit min track from the inherited 16rem default to
+    // "lg" (20rem) so the retro lanes read as roomy kanban columns. This is the
+    // canonical `minItem`-on-cards exemplar: one field, no app CSS, the grid
+    // still collapses to a single column intrinsically on narrow viewports.
+    minItem: "lg",
     children: [
       buildSectionNode("Went Well",      "went-well",     state.wentWell,    false, state.actionItems),
       buildSectionNode("Didn't Go Well", "didnt-go-well", state.didntGoWell, false, state.actionItems),

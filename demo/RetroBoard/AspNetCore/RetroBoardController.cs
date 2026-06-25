@@ -105,9 +105,15 @@ public class RetroBoardController : ControllerBase
 
     private static ViewNode BuildVm(RetroState state)
     {
+        // 1.13.0 — widen the auto-fit min track from the inherited 16rem default
+        // to "lg" (20rem) so the retro lanes read as roomy kanban columns. The
+        // canonical `minItem`-on-cards exemplar: one field, no app CSS, the grid
+        // still collapses to a single column intrinsically on narrow viewports.
+        // Mirrors demo/RetroBoard-bun/server.ts byte-for-byte (parity-gated).
         return new PageNode(
-            Title:  "Retro Board",
-            Layout: "cards",
+            Title:   "Retro Board",
+            Layout:  "cards",
+            MinItem: "lg",
             Children:
             [
                 BuildSectionNode("Went Well",      "went-well",     "drafts.wentWell",    state.WentWell,    state.ActionItems, isActionItems: false),
