@@ -8,12 +8,16 @@ using ExpenseTracker.Controllers;
 using ExpenseTracker.State;
 using ViewModelShell;
 
-// Asserts the 0.4.0 realistic-demo redesign tree under the Phase 6 wire shape:
+// Asserts the realistic-demo tree under the Phase 6 wire shape (header-bar form
+// since the v1.12 layout:"row" + arrange redesign — the "Transactions" title and
+// the Add button now live in a row cluster, so the ledger section is headingless):
 //   PageNode(Layout:"sidebar") children:
 //     [0] SectionNode("Overview", Variant:"card")  — left rail.
 //     [1] SectionNode(null) — main:
-//           ButtonNode("+ Add Transaction", show-add, "primary"),
-//           SectionNode("Transactions") {
+//           SectionNode(null, Layout:"row", Arrange:"space-between") — header bar {
+//             TextNode("Transactions", "heading"),
+//             ButtonNode("+ Add Transaction", show-add, "primary") },
+//           SectionNode(null) — ledger {
 //             TabsNode(bind:"filterCategory", per-tab actions filter-{id}),
 //             TableNode(read-only ledger) },
 //           ModalNode("Add Transaction", …, hide-add, "narrow") — when state.Adding
@@ -67,11 +71,18 @@ public class ExpensesControllerTests
         return main;
     }
 
-    private static ButtonNode AddButton(PageNode page) =>
-        Main(page).Children.OfType<ButtonNode>().Single();
+    // The header bar (v1.12 layout:"row" cluster): the headingless row section
+    // carrying the "Transactions" title TextNode + the Add button.
+    private static SectionNode Header(PageNode page) =>
+        Main(page).Children.OfType<SectionNode>().Single(s => s.Layout == "row");
 
+    private static ButtonNode AddButton(PageNode page) =>
+        Header(page).Children.OfType<ButtonNode>().Single();
+
+    // The ledger section is now headingless (title moved to the header bar), so
+    // identify it by its content: it's the section that holds the ledger table.
     private static SectionNode Ledger(PageNode page) =>
-        Main(page).Children.OfType<SectionNode>().Single(s => s.Heading == "Transactions");
+        Main(page).Children.OfType<SectionNode>().Single(s => s.Children.OfType<TableNode>().Any());
 
     private static TableNode LedgerTable(PageNode page) =>
         Ledger(page).Children.OfType<TableNode>().Single();
