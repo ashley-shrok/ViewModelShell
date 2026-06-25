@@ -26,7 +26,7 @@ import type { ViewNode, ActionEvent, StateAccess } from "@ashley-shrok/viewmodel
 // ── State ────────────────────────────────────────────────────────────────
 type Mode = "dark" | "light";
 type Accent = "purple" | "blue" | "green" | "rose" | "amber" | "teal";
-type View = "components" | "dashboard" | "form" | "list-detail";
+type View = "components" | "layouts" | "dashboard" | "form" | "list-detail";
 
 interface SortIntent {
   column: string;
@@ -237,118 +237,6 @@ function componentsView(): ViewNode[] {
       ]},
     ]},
 
-    // 1.12.0 — Alignment enums (arrange / align) on the row layout. Built only
-    // from ViewNodes (zero app CSS). (a) the canonical header-bar (ALIGN-04):
-    // a layout:"row" section with arrange:"space-between" whose FIRST child is a
-    // heading TextNode (NOT the section heading), followed by a nested row nav
-    // cluster — renders title-left / nav-right. (b) a small matrix of the align
-    // values + a couple of arrange values, each labeled with a muted TextNode.
-    { type: "section", heading: "Header bar (row + arrange:\"space-between\")", children: [
-      { type: "text", value: "A heading TextNode first child + a nav cluster; arrange pushes them apart with zero app CSS.", style: "muted" },
-      { type: "section", layout: "row", arrange: "space-between", align: "center", children: [
-        { type: "text", value: "Acme Console", style: "heading" },
-        { type: "section", layout: "row", children: [
-          { type: "link", label: "Dashboard", href: "#dashboard" },
-          { type: "link", label: "Reports",   href: "#reports" },
-          { type: "link", label: "Settings",  href: "#settings" },
-        ]},
-      ]},
-    ]},
-
-    { type: "section", heading: "Cross-axis alignment (align matrix)", children: [
-      ...(["start", "center", "end", "stretch", "baseline"] as const).flatMap(v => [
-        { type: "text" as const, value: `align: "${v}"`, style: "muted" as const },
-        { type: "section" as const, layout: "row" as const, align: v, children: [
-          { type: "text" as const, value: "Heading", style: "heading" as const },
-          { type: "link" as const, label: "nav link", href: "#" },
-        ]},
-      ]),
-    ]},
-
-    { type: "section", heading: "Main-axis arrangement (arrange)", children: [
-      ...(["center", "space-evenly"] as const).flatMap(v => [
-        { type: "text" as const, value: `arrange: "${v}"`, style: "muted" as const },
-        { type: "section" as const, layout: "row" as const, arrange: v, children: [
-          { type: "link" as const, label: "one",   href: "#" },
-          { type: "link" as const, label: "two",   href: "#" },
-          { type: "link" as const, label: "three", href: "#" },
-        ]},
-      ]),
-    ]},
-
-    // 1.13.0 — Switcher (atomic row ↔ stack flip). The one completeness
-    // primitive a grid cannot express: ~4 equal cards sit in ONE row above the
-    // threshold and ALL stack below it — no intermediate 2-then-1 state (the
-    // distinction from `cards` auto-fit). Built only from ViewNodes; resize to
-    // see the atomic flip.
-    { type: "section", heading: "Switcher (atomic row ↔ stack flip)", children: [
-      { type: "text", value: "Resize the window: ~4 equal cards sit in one row above the threshold and ALL stack below it — no 2-then-1 state (the distinction from `cards` auto-fit). The threshold:\"sm\" variant flips at a narrower width.", style: "muted" },
-      { type: "section", layout: "switcher", children: [
-        ...(["One", "Two", "Three", "Four"] as const).map(label => (
-          { type: "section" as const, variant: "card" as const, children: [
-            { type: "text" as const, value: label, style: "heading" as const },
-          ]}
-        )),
-      ]},
-      { type: "text", value: "threshold: \"sm\" (flips at 20rem)", style: "muted" },
-      { type: "section", layout: "switcher", threshold: "sm", children: [
-        ...(["One", "Two", "Three", "Four"] as const).map(label => (
-          { type: "section" as const, variant: "card" as const, children: [
-            { type: "text" as const, value: label, style: "heading" as const },
-          ]}
-        )),
-      ]},
-    ]},
-
-    // 1.13.0 — Cards minItem (auto-fit min track width). The same cards grid
-    // with different declared minimum track widths: a smaller token packs more,
-    // narrower columns; a larger token yields fewer, wider ones. All still
-    // collapse to one column intrinsically as the container narrows.
-    { type: "section", heading: "Cards minItem (auto-fit min track width)", children: [
-      { type: "text", value: "The same auto-fit cards grid with different declared minItem values — smaller = more, narrower columns; larger = fewer, wider. All collapse to one column intrinsically when the container narrows.", style: "muted" },
-      ...(["sm", "md", "xl"] as const).flatMap(v => [
-        { type: "text" as const, value: `minItem: "${v}"`, style: "muted" as const },
-        { type: "section" as const, layout: "cards" as const, minItem: v, children: [
-          ...(["A", "B", "C", "D", "E", "F"] as const).map(label => (
-            { type: "section" as const, variant: "card" as const, children: [
-              { type: "text" as const, value: label, style: "heading" as const },
-            ]}
-          )),
-        ]},
-      ]),
-    ]},
-
-    // Phase 10 — Fits (SwiftUI `ViewThatFits` ported to the wire). The ONE
-    // layout primitive that is NOT pure CSS: the renderer measures the available
-    // container at layout time (a ResizeObserver-driven measure-and-pick in
-    // BrowserAdapter) and renders the FIRST candidate child that fits, else the
-    // next — zero @media, zero app code. Children are ordered preferred/widest
-    // FIRST → safe-fallback/narrowest LAST. Built only from ViewNodes; resize to
-    // see the wide-row toolbar switch to the compact stacked version.
-    { type: "section", heading: "Fits (responsive selection)", children: [
-      { type: "text", value: "Resize the window: the `fits` node renders the FIRST candidate that fits the available width and the LAST as the guaranteed-fits fallback. Here a wide horizontal `row` toolbar shows when there's room, and a compact stacked version shows when there isn't — no @media, no app code (selection is measured client-side).", style: "muted" },
-      { type: "fits", children: [
-        // preferred / widest FIRST — a wide horizontal toolbar row.
-        { type: "section", layout: "row", children: [
-          { type: "link", label: "New",     href: "#" },
-          { type: "link", label: "Open",    href: "#" },
-          { type: "link", label: "Save",    href: "#" },
-          { type: "link", label: "Export",  href: "#" },
-          { type: "link", label: "Share",   href: "#" },
-          { type: "link", label: "Settings", href: "#" },
-        ]},
-        // safe-fallback / narrowest LAST — the same actions, stacked.
-        { type: "section", layout: "stack", children: [
-          { type: "link", label: "New",     href: "#" },
-          { type: "link", label: "Open",    href: "#" },
-          { type: "link", label: "Save",    href: "#" },
-          { type: "link", label: "Export",  href: "#" },
-          { type: "link", label: "Share",   href: "#" },
-          { type: "link", label: "Settings", href: "#" },
-        ]},
-      ]},
-    ]},
-
     { type: "section", heading: "Image", layout: "split", children: [
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%237c5cff'/%3E%3C/svg%3E", alt: "Sample avatar", size: "small", shape: "circle" },
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90'%3E%3Crect width='160' height='90' fill='%2310b981'/%3E%3C/svg%3E", alt: "Sample banner", size: "large" },
@@ -496,11 +384,143 @@ function componentsView(): ViewNode[] {
   ];
 }
 
+// ── Layouts review surface (DEMO-01) ─────────────────────────────────────
+// A dedicated, well-labeled review surface for EVERY layout primitive built
+// this milestone (arrange/align, the header-bar, switcher, cards minItem,
+// fits). Each primitive is on its own with a heading + a one-line muted
+// caption saying what to look for. Built ONLY from ViewNodes — zero app CSS.
+// The pre-existing presets (stack/split/cards/sidebar/row) are demonstrated in
+// their archetype views (Dashboard / List-detail) and not duplicated here.
+function layoutsView(): ViewNode[] {
+  return [
+    { type: "text", value: "Layout primitives", style: "heading" },
+    { type: "text", value: "Every layout primitive built this milestone, each on its own and labeled. A few are responsive — resize the browser window to exercise the flip/selection (noted per item). Built only from ViewNodes — zero app CSS.", style: "muted" },
+
+    // ── arrange (main-axis arrangement → justify-content) ────────────────
+    { type: "section", heading: "Main-axis arrangement (arrange)", children: [
+      { type: "text", value: "On a layout:\"row\", `arrange` distributes children along the main axis (maps to justify-content). One row per value below — watch where the three links pack.", style: "muted" },
+      ...(["start", "center", "end", "space-between", "space-around", "space-evenly"] as const).flatMap(v => [
+        { type: "text" as const, value: `arrange: "${v}"`, style: "muted" as const },
+        { type: "section" as const, layout: "row" as const, arrange: v, children: [
+          { type: "link" as const, label: "one",   href: "#" },
+          { type: "link" as const, label: "two",   href: "#" },
+          { type: "link" as const, label: "three", href: "#" },
+        ]},
+      ]),
+    ]},
+
+    // ── align (cross-axis alignment → align-items) ───────────────────────
+    { type: "section", heading: "Cross-axis alignment (align)", children: [
+      { type: "text", value: "On a layout:\"row\", `align` positions children across the main axis (maps to align-items). The children are deliberately different sizes (a large heading + a small link) so `baseline` (text baselines line up) and `stretch` (both grow to equal height) are visible.", style: "muted" },
+      ...(["start", "center", "end", "stretch", "baseline"] as const).flatMap(v => [
+        { type: "text" as const, value: `align: "${v}"`, style: "muted" as const },
+        { type: "section" as const, layout: "row" as const, align: v, children: [
+          { type: "text" as const, value: "Heading", style: "heading" as const },
+          { type: "link" as const, label: "small nav link", href: "#" },
+        ]},
+      ]),
+    ]},
+
+    // ── header-bar (the canonical ALIGN-04 composition) ──────────────────
+    { type: "section", heading: "Header bar (row + arrange:\"space-between\")", children: [
+      { type: "text", value: "The canonical app header: a layout:\"row\" with arrange:\"space-between\" whose FIRST child is a heading TextNode (NOT the section heading) and whose second child is a nested row nav cluster — title pinned left, nav pinned right, with zero app CSS.", style: "muted" },
+      { type: "section", layout: "row", arrange: "space-between", align: "center", children: [
+        { type: "text", value: "Acme Console", style: "heading" },
+        { type: "section", layout: "row", children: [
+          { type: "link", label: "Dashboard", href: "#dashboard" },
+          { type: "link", label: "Reports",   href: "#reports" },
+          { type: "link", label: "Settings",  href: "#settings" },
+        ]},
+      ]},
+    ]},
+
+    // ── switcher (atomic row ↔ stack flip) ───────────────────────────────
+    { type: "section", heading: "Switcher (atomic row ↔ stack flip)", children: [
+      { type: "text", value: "RESIZE THE WINDOW: ~4 equal cards sit in ONE row above the threshold and ALL stack below it — never a partial 2-then-1 intermediate state (that atomic flip is the distinction from `cards` auto-fit). Default threshold = 30rem.", style: "muted" },
+      { type: "section", layout: "switcher", children: [
+        ...(["One", "Two", "Three", "Four"] as const).map(label => (
+          { type: "section" as const, variant: "card" as const, children: [
+            { type: "text" as const, value: label, style: "heading" as const },
+          ]}
+        )),
+      ]},
+      { type: "text", value: "threshold: \"sm\" — flips at a NARROWER width (20rem) so the same 4 cards stay in a row longer as you shrink.", style: "muted" },
+      { type: "section", layout: "switcher", threshold: "sm", children: [
+        ...(["One", "Two", "Three", "Four"] as const).map(label => (
+          { type: "section" as const, variant: "card" as const, children: [
+            { type: "text" as const, value: label, style: "heading" as const },
+          ]}
+        )),
+      ]},
+      { type: "text", value: "limit: 3 — a count cap: with 5 children exceeding the limit, EVERY child goes full-width (all-stack) regardless of how wide the container is.", style: "muted" },
+      { type: "section", layout: "switcher", limit: 3, children: [
+        ...(["One", "Two", "Three", "Four", "Five"] as const).map(label => (
+          { type: "section" as const, variant: "card" as const, children: [
+            { type: "text" as const, value: label, style: "heading" as const },
+          ]}
+        )),
+      ]},
+    ]},
+
+    // ── cards minItem (auto-fit min track width) ─────────────────────────
+    { type: "section", heading: "Cards minItem (auto-fit min track width)", children: [
+      { type: "text", value: "The SAME auto-fit cards grid at three minItem tokens side by side — smaller = more, narrower columns; larger = fewer, wider. RESIZE THE WINDOW: each grid passes through intermediate column counts and collapses to one column intrinsically as the container narrows (the auto-fit behavior switcher does NOT have).", style: "muted" },
+      ...(["xs", "md", "xl"] as const).flatMap(v => [
+        { type: "text" as const, value: `minItem: "${v}"`, style: "muted" as const },
+        { type: "section" as const, layout: "cards" as const, minItem: v, children: [
+          ...(["A", "B", "C", "D", "E", "F"] as const).map(label => (
+            { type: "section" as const, variant: "card" as const, children: [
+              { type: "text" as const, value: label, style: "heading" as const },
+            ]}
+          )),
+        ]},
+      ]),
+    ]},
+
+    // ── fits (SwiftUI ViewThatFits — measured client-side selection) ─────
+    { type: "section", heading: "Fits (responsive selection)", children: [
+      { type: "text", value: "RESIZE THE WINDOW: the renderer MEASURES the available width and picks the FIRST candidate that fits, else the next, with the LAST as the guaranteed-fits fallback. Here a wide horizontal `row` toolbar shows when there's room and a compact stacked version shows when there isn't — no @media, no app code (the ONE layout primitive that is not pure CSS — selection is measured client-side).", style: "muted" },
+      { type: "fits", children: [
+        // preferred / widest FIRST — a wide horizontal toolbar row.
+        { type: "section", layout: "row", children: [
+          { type: "link", label: "New",      href: "#" },
+          { type: "link", label: "Open",     href: "#" },
+          { type: "link", label: "Save",     href: "#" },
+          { type: "link", label: "Export",   href: "#" },
+          { type: "link", label: "Share",    href: "#" },
+          { type: "link", label: "Settings", href: "#" },
+        ]},
+        // safe-fallback / narrowest LAST — the same actions, stacked.
+        { type: "section", layout: "stack", children: [
+          { type: "link", label: "New",      href: "#" },
+          { type: "link", label: "Open",     href: "#" },
+          { type: "link", label: "Save",     href: "#" },
+          { type: "link", label: "Export",   href: "#" },
+          { type: "link", label: "Share",    href: "#" },
+          { type: "link", label: "Settings", href: "#" },
+        ]},
+      ]},
+    ]},
+  ];
+}
+
 function dashboardView(): ViewNode[] {
   return [
-    { type: "text", value: "Operations dashboard", style: "heading" },
-    { type: "text", value: "Last 30 days · benchmarked against the Bootstrap \"Dashboard\" example. Built from the cards preset + section variant:\"card\" tiles.", style: "muted" },
-    { type: "section", layout: "cards", children: [
+    // DEMO-02 — header-bar composition: a layout:"row" with
+    // arrange:"space-between" pins the title left and a nav cluster right,
+    // proving the new arrange/align enums compose in a real app chrome.
+    { type: "section", layout: "row", arrange: "space-between", align: "center", children: [
+      { type: "text", value: "Operations dashboard", style: "heading" },
+      { type: "section", layout: "row", children: [
+        { type: "link", label: "Overview", href: "#overview" },
+        { type: "link", label: "Reports",  href: "#reports" },
+        { type: "link", label: "Settings", href: "#settings" },
+      ]},
+    ]},
+    { type: "text", value: "Last 30 days · benchmarked against the Bootstrap \"Dashboard\" example. Header-bar uses arrange:\"space-between\"; the stat grid is the cards preset with an explicit minItem:\"sm\" (denser auto-fit) over section variant:\"card\" tiles.", style: "muted" },
+    // DEMO-02 — stat grid: cards preset with an explicit minItem token so the
+    // auto-fit tracks are denser than the inherited 16rem default.
+    { type: "section", layout: "cards", minItem: "sm", children: [
       // 1.4.0 — the four stat tiles use SectionNode.action as click-anywhere
       // clickable cards (drill-down affordance). Per-tile identity is encoded
       // in the action name (`dashboard:focus-revenue`, etc.) — no context.
@@ -627,36 +647,49 @@ function formView(): ViewNode[] {
 
 function listDetailView(): ViewNode[] {
   const sel = selectedItem();
+
+  // The two panes, factored out so the wide (side-by-side) and narrow
+  // (stacked) candidates of the `fits` node share identical content.
+  const listPane: ViewNode = {
+    type: "section", heading: "Catalog", children: [
+      { type: "list", children: catalog.map(item => ({
+        type: "list-item" as const,
+        id: item.id,
+        variant: item.id === state.selectedItemId ? "info" : undefined,
+        children: [
+          { type: "text" as const, value: item.title, style: "subheading" as const },
+          { type: "text" as const, value: `${item.artist} · ${item.year} · ${item.price}`, style: "muted" as const },
+          // Per-row select — unique action name per item.
+          { type: "button" as const, label: "View details", action: { name: `list-detail:select-${item.id}` } },
+        ],
+      })) },
+    ],
+  };
+
+  const detailPane: ViewNode = {
+    type: "section", variant: "card", heading: "Details", children: [
+      { type: "text", value: sel.title, style: "heading" },
+      { type: "text", value: `${sel.artist} · ${sel.year}`, style: "subheading" },
+      { type: "stat-bar", stats: [
+        { label: "price",  value: sel.price },
+        { label: "format", value: "Vinyl LP" },
+        { label: "length", value: sel.tracks },
+      ]},
+      { type: "text", value: sel.blurb, style: "body" },
+      { type: "button", label: "Add to cart", action: { name: `list-detail:add-${sel.id}` }, variant: "primary" },
+    ],
+  };
+
   return [
     { type: "text", value: "Record catalog", style: "heading" },
-    { type: "text", value: "Benchmarked against the Bootstrap \"Album\" example for the list half; the detail pane is our own composition. The split preset collapses to one column on narrow with zero app breakpoints.", style: "muted" },
+    { type: "text", value: "Benchmarked against the Bootstrap \"Album\" example for the list half; the detail pane is our own composition. DEMO-02: a `fits` node chooses between a side-by-side `split` (when the width fits) and a single stacked column (when it doesn't) — the canonical fits use case generalizing the split→stack collapse, measured client-side. RESIZE THE WINDOW to see the selection flip.", style: "muted" },
 
-    { type: "section", layout: "split", children: [
-      { type: "section", heading: "Catalog", children: [
-        { type: "list", children: catalog.map(item => ({
-          type: "list-item" as const,
-          id: item.id,
-          variant: item.id === state.selectedItemId ? "info" : undefined,
-          children: [
-            { type: "text" as const, value: item.title, style: "subheading" as const },
-            { type: "text" as const, value: `${item.artist} · ${item.year} · ${item.price}`, style: "muted" as const },
-            // Per-row select — unique action name per item.
-            { type: "button" as const, label: "View details", action: { name: `list-detail:select-${item.id}` } },
-          ],
-        })) },
-      ]},
-
-      { type: "section", variant: "card", heading: "Details", children: [
-        { type: "text", value: sel.title, style: "heading" },
-        { type: "text", value: `${sel.artist} · ${sel.year}`, style: "subheading" },
-        { type: "stat-bar", stats: [
-          { label: "price",  value: sel.price },
-          { label: "format", value: "Vinyl LP" },
-          { label: "length", value: sel.tracks },
-        ]},
-        { type: "text", value: sel.blurb, style: "body" },
-        { type: "button", label: "Add to cart", action: { name: `list-detail:add-${sel.id}` }, variant: "primary" },
-      ]},
+    // DEMO-02 — fits selecting side-by-side (wide, preferred FIRST) vs.
+    // stacked (narrow, guaranteed-fits fallback LAST). Same two panes either
+    // way; only the arrangement differs.
+    { type: "fits", children: [
+      { type: "section", layout: "split", children: [listPane, detailPane] },
+      { type: "section", layout: "stack", children: [listPane, detailPane] },
     ]},
   ];
 }
@@ -664,6 +697,7 @@ function listDetailView(): ViewNode[] {
 // ── ViewModel construction ───────────────────────────────────────────────
 function viewChildren(): ViewNode[] {
   switch (state.view) {
+    case "layouts":     return layoutsView();
     case "dashboard":   return dashboardView();
     case "form":        return formView();
     case "list-detail": return listDetailView();
@@ -679,6 +713,7 @@ function buildVm(): ViewNode {
     children: [
       { type: "tabs", selected: state.view, bind: "view", tabs: [
         { value: "components",  label: "Components",    action: { name: "view:set:components"  } },
+        { value: "layouts",     label: "Layouts",       action: { name: "view:set:layouts"     } },
         { value: "dashboard",   label: "Dashboard",     action: { name: "view:set:dashboard"   } },
         { value: "form",        label: "Form",          action: { name: "view:set:form"        } },
         { value: "list-detail", label: "List / detail", action: { name: "view:set:list-detail" } },
