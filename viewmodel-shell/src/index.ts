@@ -507,11 +507,22 @@ export interface CopyButtonNode {
  * SwiftUI `ViewThatFits`.
  *
  * This is the ONE primitive that is NOT pure CSS — the selection requires real
- * layout measurement (a `ResizeObserver` + DOM `scrollWidth`/`clientWidth`
- * reads) and therefore lives ENTIRELY in `BrowserAdapter` (`browser.ts`), never
- * in platform-agnostic core. In any no-layout context (TUI, SSR, jsdom,
- * `container.clientWidth === 0`) it degrades to rendering the LAST
- * (safe-fallback) child, since measurement is unavailable.
+ * layout measurement and therefore lives ENTIRELY in `BrowserAdapter`
+ * (`browser.ts`), never in platform-agnostic core. The renderer measures each
+ * candidate's INTRINSIC (max-content / ideal, unwrapped) size in an off-screen
+ * probe and picks the first whose intrinsic size fits the container's available
+ * box — NOT its constrained rendered size, because a flex-wrap candidate shrinks
+ * to fit any width and would always appear to "fit". A `ResizeObserver` re-runs
+ * the selection on resize. In any no-layout context (TUI, SSR, jsdom,
+ * `clientWidth === 0`) it degrades to rendering the LAST (safe-fallback) child.
+ *
+ * ⚠️ SCOPE: `fits` is for selecting between layouts whose intrinsic width is
+ * BOUNDED and meaningful — a toolbar row vs. a stacked menu, icon-only vs.
+ * icon+label controls, a compact vs. full control cluster. It is NOT the tool
+ * for text-heavy multi-column page layouts: a paragraph's max-content width is
+ * "all text on one line" (effectively unbounded), so measuring it is not
+ * meaningful. For list/detail and similar text panes use `split` / `sidebar`,
+ * which collapse to a single column intrinsically on their own (zero @media).
  */
 export interface FitsNode {
   type: "fits";

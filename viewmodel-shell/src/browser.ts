@@ -326,33 +326,60 @@ export class BrowserAdapter implements Adapter {
     const candidates = n.children;
 
     const pick = (): void => {
-      // No-layout guard: measurement unavailable → render the safe fallback.
-      if (container.clientWidth === 0) {
-        container.innerHTML = "";
-        if (candidates.length > 0) {
-          this.node(candidates[candidates.length - 1], container, on);
-        }
-        return;
-      }
       // Defensive: a fits with no children is a degenerate tree.
       if (candidates.length === 0) return;
 
-      for (const candidate of candidates) {
+      const vertical = axis === "vertical";
+      // The available space is the container's REAL (constrained) box. The
+      // container is block / full-width so this is the slot the parent gave it,
+      // not the chosen child's size.
+      const available = vertical ? container.clientHeight : container.clientWidth;
+
+      // No-layout guard: measurement unavailable (jsdom / SSR / display:none /
+      // detached) → render the safe LAST child (guaranteed-fits fallback).
+      if (available === 0) {
         container.innerHTML = "";
-        this.node(candidate, container, on);
-        // Force a synchronous reflow before reading overflow metrics.
-        void container.offsetWidth;
-        const overflows =
-          axis === "horizontal"
-            ? container.scrollWidth > container.clientWidth + 1
-            : axis === "vertical"
-              ? container.scrollHeight > container.clientHeight + 1
-              : container.scrollWidth > container.clientWidth + 1 ||
-                container.scrollHeight > container.clientHeight + 1;
-        // First candidate that fits wins → stop (it stays rendered). If none
-        // fit, the LAST candidate remains rendered after the loop (fallback).
-        if (!overflows) break;
+        this.node(candidates[candidates.length - 1], container, on);
+        return;
       }
+
+      // Measure each candidate's INTRINSIC size in an off-screen probe, NOT its
+      // constrained rendered size. This is the crux of a correct ViewThatFits:
+      // a candidate like a flex-wrap `row` SHRINKS / WRAPS to fit any width, so
+      // its in-container scrollWidth never exceeds clientWidth — measuring that
+      // would make every candidate "fit" and the selection would never change
+      // (the bug this replaces). Measuring the probe at `width: max-content`
+      // lets the candidate lay out at its IDEAL width (one line, no wrap), which
+      // is what ViewThatFits compares against the proposed size. The probe is
+      // appended to `container` for correct style/font inheritance but kept
+      // off-screen + hidden, and it does NOT change the container's observed
+      // border-box, so the ResizeObserver below cannot feed back into itself.
+      const probe = document.createElement("div");
+      probe.setAttribute("aria-hidden", "true");
+      probe.style.cssText =
+        "position:absolute;left:-99999px;top:0;visibility:hidden;pointer-events:none;";
+      if (vertical) {
+        // Vertical fit: constrain width to the real available width and measure
+        // the resulting intrinsic height against the available height.
+        probe.style.width = `${available}px`;
+      } else {
+        probe.style.width = "max-content"; // intrinsic (ideal, unwrapped) width
+      }
+      container.appendChild(probe);
+
+      let chosen = candidates.length - 1; // fallback = last
+      for (let i = 0; i < candidates.length; i++) {
+        probe.innerHTML = "";
+        this.node(candidates[i], probe, on);
+        void probe.offsetWidth; // force a synchronous reflow before reading
+        const intrinsic = vertical ? probe.scrollHeight : probe.scrollWidth;
+        // First candidate whose intrinsic size fits the available space wins.
+        if (intrinsic <= available + 1) { chosen = i; break; }
+      }
+
+      probe.remove();
+      container.innerHTML = "";
+      this.node(candidates[chosen], container, on);
     };
 
     pick();

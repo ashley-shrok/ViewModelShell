@@ -411,12 +411,18 @@ function layoutsView(): ViewNode[] {
 
     // ── align (cross-axis alignment → align-items) ───────────────────────
     { type: "section", heading: "Cross-axis alignment (align)", children: [
-      { type: "text", value: "On a layout:\"row\", `align` positions children across the main axis (maps to align-items). The children are deliberately different sizes (a large heading + a small link) so `baseline` (text baselines line up) and `stretch` (both grow to equal height) are visible.", style: "muted" },
+      { type: "text", value: "On a layout:\"row\", `align` positions children across the CROSS axis (maps to align-items). Each row pairs a TALL card (heading + two body lines) with a SHORT card (one line) so the effect is obvious: start = short card pinned to the top, center = middle, end = bottom, stretch = short card grows to the tall card's height, baseline = the two headings' text baselines line up. The card borders make each position visible.", style: "muted" },
       ...(["start", "center", "end", "stretch", "baseline"] as const).flatMap(v => [
         { type: "text" as const, value: `align: "${v}"`, style: "muted" as const },
         { type: "section" as const, layout: "row" as const, align: v, children: [
-          { type: "text" as const, value: "Heading", style: "heading" as const },
-          { type: "link" as const, label: "small nav link", href: "#" },
+          { type: "section" as const, variant: "card" as const, children: [
+            { type: "text" as const, value: "Tall card", style: "heading" as const },
+            { type: "text" as const, value: "A second line of body text", style: "body" as const },
+            { type: "text" as const, value: "and a third line, making it tall", style: "body" as const },
+          ]},
+          { type: "section" as const, variant: "card" as const, children: [
+            { type: "text" as const, value: "Short card", style: "heading" as const },
+          ]},
         ]},
       ]),
     ]},
@@ -436,16 +442,16 @@ function layoutsView(): ViewNode[] {
 
     // ── switcher (atomic row ↔ stack flip) ───────────────────────────────
     { type: "section", heading: "Switcher (atomic row ↔ stack flip)", children: [
-      { type: "text", value: "RESIZE THE WINDOW: ~4 equal cards sit in ONE row above the threshold and ALL stack below it — never a partial 2-then-1 intermediate state (that atomic flip is the distinction from `cards` auto-fit). Default threshold = 30rem.", style: "muted" },
-      { type: "section", layout: "switcher", children: [
+      { type: "text", value: "RESIZE THE WINDOW past ~768px wide: these 4 equal cards sit in ONE row above the threshold and ALL stack below it — never a partial 2-then-1 intermediate state (that atomic flip is the distinction from `cards` auto-fit). This one uses threshold:\"xl\" (48rem ≈ 768px) so the flip happens at a comfortable desktop width — narrow the window past roughly half-screen to see it.", style: "muted" },
+      { type: "section", layout: "switcher", threshold: "xl", children: [
         ...(["One", "Two", "Three", "Four"] as const).map(label => (
           { type: "section" as const, variant: "card" as const, children: [
             { type: "text" as const, value: label, style: "heading" as const },
           ]}
         )),
       ]},
-      { type: "text", value: "threshold: \"sm\" — flips at a NARROWER width (20rem) so the same 4 cards stay in a row longer as you shrink.", style: "muted" },
-      { type: "section", layout: "switcher", threshold: "sm", children: [
+      { type: "text", value: "threshold: \"lg\" (40rem ≈ 640px) — the SAME 4 cards, flipping at a narrower width, so they stay in a row a bit longer as you shrink. (Tokens: sm 20rem / md 30rem[default] / lg 40rem / xl 48rem.)", style: "muted" },
+      { type: "section", layout: "switcher", threshold: "lg", children: [
         ...(["One", "Two", "Three", "Four"] as const).map(label => (
           { type: "section" as const, variant: "card" as const, children: [
             { type: "text" as const, value: label, style: "heading" as const },
@@ -479,25 +485,28 @@ function layoutsView(): ViewNode[] {
 
     // ── fits (SwiftUI ViewThatFits — measured client-side selection) ─────
     { type: "section", heading: "Fits (responsive selection)", children: [
-      { type: "text", value: "RESIZE THE WINDOW: the renderer MEASURES the available width and picks the FIRST candidate that fits, else the next, with the LAST as the guaranteed-fits fallback. Here a wide horizontal `row` toolbar shows when there's room and a compact stacked version shows when there isn't — no @media, no app code (the ONE layout primitive that is not pure CSS — selection is measured client-side).", style: "muted" },
+      { type: "text", value: "RESIZE THE WINDOW: the renderer MEASURES the toolbar's intrinsic width and picks the FIRST candidate that fits, else the next, with the LAST as the guaranteed-fits fallback. When there's room the full single-row toolbar shows; once it would no longer fit on one line, the whole thing switches to the compact stacked menu — no @media, no app code (the ONE layout primitive that is not pure CSS — selection is measured client-side). The toolbar is deliberately wide, so the switch happens at a comfortable desktop width.", style: "muted" },
       { type: "fits", children: [
-        // preferred / widest FIRST — a wide horizontal toolbar row.
+        // preferred / widest FIRST — a wide single-row toolbar (long enough
+        // that its intrinsic width exceeds a partial-width window).
         { type: "section", layout: "row", children: [
-          { type: "link", label: "New",      href: "#" },
-          { type: "link", label: "Open",     href: "#" },
-          { type: "link", label: "Save",     href: "#" },
-          { type: "link", label: "Export",   href: "#" },
-          { type: "link", label: "Share",    href: "#" },
-          { type: "link", label: "Settings", href: "#" },
+          { type: "link", label: "New Document",   href: "#" },
+          { type: "link", label: "Open Recent",    href: "#" },
+          { type: "link", label: "Save As…",       href: "#" },
+          { type: "link", label: "Export to PDF",  href: "#" },
+          { type: "link", label: "Share a Link",   href: "#" },
+          { type: "link", label: "Print Preview",  href: "#" },
+          { type: "link", label: "Preferences",    href: "#" },
         ]},
         // safe-fallback / narrowest LAST — the same actions, stacked.
         { type: "section", layout: "stack", children: [
-          { type: "link", label: "New",      href: "#" },
-          { type: "link", label: "Open",     href: "#" },
-          { type: "link", label: "Save",     href: "#" },
-          { type: "link", label: "Export",   href: "#" },
-          { type: "link", label: "Share",    href: "#" },
-          { type: "link", label: "Settings", href: "#" },
+          { type: "link", label: "New Document",   href: "#" },
+          { type: "link", label: "Open Recent",    href: "#" },
+          { type: "link", label: "Save As…",       href: "#" },
+          { type: "link", label: "Export to PDF",  href: "#" },
+          { type: "link", label: "Share a Link",   href: "#" },
+          { type: "link", label: "Print Preview",  href: "#" },
+          { type: "link", label: "Preferences",    href: "#" },
         ]},
       ]},
     ]},
@@ -682,15 +691,13 @@ function listDetailView(): ViewNode[] {
 
   return [
     { type: "text", value: "Record catalog", style: "heading" },
-    { type: "text", value: "Benchmarked against the Bootstrap \"Album\" example for the list half; the detail pane is our own composition. DEMO-02: a `fits` node chooses between a side-by-side `split` (when the width fits) and a single stacked column (when it doesn't) — the canonical fits use case generalizing the split→stack collapse, measured client-side. RESIZE THE WINDOW to see the selection flip.", style: "muted" },
+    { type: "text", value: "Benchmarked against the Bootstrap \"Album\" example for the list half; the detail pane is our own composition. DEMO-02: a `split` lays the catalog + detail side-by-side and collapses to a single stacked column ON ITS OWN as the width narrows (intrinsic, zero @media) — the right tool for a text-heavy two-pane layout. RESIZE THE WINDOW narrow (past ~512px) to watch the two panes stack. (`fits` is reserved for selecting between layouts with bounded intrinsic widths — e.g. the toolbar↔menu on the Layouts tab — not for text-heavy multi-column panes, whose max-content width is unbounded.)", style: "muted" },
 
-    // DEMO-02 — fits selecting side-by-side (wide, preferred FIRST) vs.
-    // stacked (narrow, guaranteed-fits fallback LAST). Same two panes either
-    // way; only the arrangement differs.
-    { type: "fits", children: [
-      { type: "section", layout: "split", children: [listPane, detailPane] },
-      { type: "section", layout: "stack", children: [listPane, detailPane] },
-    ]},
+    // DEMO-02 — a `split` two-pane shell that collapses to a single stacked
+    // column intrinsically as it narrows (its own auto-fit behavior; no fits
+    // needed — text panes have unbounded max-content width, which is exactly
+    // the case fits' intrinsic-width measurement is NOT suited to).
+    { type: "section", layout: "split", children: [listPane, detailPane] },
   ];
 }
 
