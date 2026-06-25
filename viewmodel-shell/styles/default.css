@@ -226,7 +226,7 @@ body {
 
 /* ── Layout preset: row (D-30 / 1.11.0) — left-aligned wrapping horizontal row;
    children hug their content (no forced grow), wrap to the next line on overflow.
-   The general horizontal-row primitive — a navbar composes from this + flyout.
+   The general horizontal-row primitive — a navbar composes from this.
    Title/heading takes its own full-width row, like the other presets. gap
    inherited from .vms-page/.vms-section — NOT redeclared. ── */
 .vms-page--row,
@@ -371,57 +371,6 @@ body {
 .vms-section__summary:focus-visible {
   outline: 2px solid var(--vms-accent);
   outline-offset: 2px;
-}
-
-/* ── Section: flyout (1.11.0 — overlay disclosure, the hover/focus sibling of
-   collapsible) ── The heading renders as a focusable .vms-section__trigger button;
-   the children are wrapped in an absolutely-positioned .vms-section__panel revealed
-   on :hover / :focus-within. Pure CSS — hover (desktop), tap-to-focus (touch), and
-   Tab-to-trigger (keyboard a11y) all reveal it; it hides on blur / pointer-leave.
-   No JS, no round-tripped open state. The panel overlays (out of flow) so a flyout
-   inside a .vms-section--row bar does not reflow its siblings. */
-.vms-section--flyout {
-  position: relative;
-  flex-direction: column;   /* trigger stacks above the (absolute) panel; wrapper hugs the trigger */
-  align-items: flex-start;
-}
-.vms-section__trigger {
-  font-size: var(--vms-text-xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--vms-text-muted);
-  cursor: pointer;
-  background: none;
-  border: none;
-  padding: 0;
-  font-family: inherit;
-}
-.vms-section__trigger:focus-visible {
-  outline: 2px solid var(--vms-accent);
-  outline-offset: 2px;
-}
-.vms-section__panel {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 50;
-  min-width: max-content;
-  display: flex;
-  flex-direction: column;
-  gap: var(--vms-space-sm);
-  margin-top: var(--vms-space-xs);
-  padding: var(--vms-space-sm);
-  background: var(--vms-surface);
-  border: 1px solid var(--vms-border);
-  border-radius: var(--vms-radius);
-  visibility: hidden;
-  opacity: 0;
-  transition: opacity var(--vms-t);
-}
-.vms-section--flyout:hover > .vms-section__panel,
-.vms-section--flyout:focus-within > .vms-section__panel {
-  visibility: visible;
-  opacity: 1;
 }
 
 /* ── Stat bar ── */

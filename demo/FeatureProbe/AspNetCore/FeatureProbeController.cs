@@ -289,16 +289,6 @@ public class FeatureProbeController : ControllerBase
             },
             Variant: "card",
             Layout: "row");
-        // 1.11.0 — flyout overlay disclosure (parity coverage for SectionNode.Flyout).
-        // Heading=trigger, children=panel; the wire shape itself is the parity gate.
-        var flyoutSection = new SectionNode(
-            Heading: "Menu",
-            Children: new ViewNode[]
-            {
-                new LinkNode("Settings", "/settings"),
-                new LinkNode("Profile", "/profile"),
-            },
-            Flyout: true);
         // 1.12.0 — arrange/align alignment vocabulary (parity coverage for
         // ALIGN-01/02/03). Static view-shape captured by every GET step (mirrors the
         // 1.11.0 row precedent; no dedicated action arm). Byte-identical to the bun
@@ -477,7 +467,7 @@ public class FeatureProbeController : ControllerBase
             });
         var pageChildren = new List<ViewNode>
         {
-            probeSection, clickableCardSection, linkedCardSection, rowSection, flyoutSection,
+            probeSection, clickableCardSection, linkedCardSection, rowSection,
             bareRowSection, headerBarSection,
         };
         pageChildren.AddRange(arrangeSections);

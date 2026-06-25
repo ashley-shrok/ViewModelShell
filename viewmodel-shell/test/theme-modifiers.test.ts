@@ -225,7 +225,7 @@ describe("ALIGN-01/02/03 — arrange/align modifier emission (1.12.0)", () => {
     expect(el.className).toBe("vms-section vms-section--row");
   });
 
-  // emission present in non-base section branches (collapsible / flyout / link)
+  // emission present in non-base section branches (collapsible / link)
   it("collapsible section with arrange/align still carries the modifier classes", () => {
     const el = renderSection({
       type: "section", children: [], layout: "row",
@@ -234,15 +234,6 @@ describe("ALIGN-01/02/03 — arrange/align modifier emission (1.12.0)", () => {
     expect(el.classList.contains("vms-section--collapsible")).toBe(true);
     expect(el.classList.contains("vms-arrange--space-between")).toBe(true);
     expect(el.classList.contains("vms-align--stretch")).toBe(true);
-  });
-  it("flyout section with arrange/align still carries the modifier classes", () => {
-    const el = renderSection({
-      type: "section", children: [], layout: "row",
-      flyout: true, arrange: "center", align: "baseline",
-    });
-    expect(el.classList.contains("vms-section--flyout")).toBe(true);
-    expect(el.classList.contains("vms-arrange--center")).toBe(true);
-    expect(el.classList.contains("vms-align--baseline")).toBe(true);
   });
   it("link section with arrange/align still carries the modifier classes", () => {
     const el = renderSection({
@@ -306,7 +297,7 @@ describe("SWITCH-01/02 — switcher threshold/limit modifier emission (1.13.0)",
     expect(el.className).not.toMatch(/vms-switch-limit--/);
   });
 
-  // emission present in non-base section branches (collapsible / flyout)
+  // emission present in non-base section branches (collapsible)
   it("collapsible switcher section with threshold/limit still carries the modifier classes", () => {
     const el = renderSection({
       type: "section", children: [], layout: "switcher",
@@ -315,15 +306,6 @@ describe("SWITCH-01/02 — switcher threshold/limit modifier emission (1.13.0)",
     expect(el.classList.contains("vms-section--collapsible")).toBe(true);
     expect(el.classList.contains("vms-switch--md")).toBe(true);
     expect(el.classList.contains("vms-switch-limit--4")).toBe(true);
-  });
-  it("flyout switcher section with threshold/limit still carries the modifier classes", () => {
-    const el = renderSection({
-      type: "section", children: [], layout: "switcher",
-      flyout: true, threshold: "xl", limit: 3,
-    });
-    expect(el.classList.contains("vms-section--flyout")).toBe(true);
-    expect(el.classList.contains("vms-switch--xl")).toBe(true);
-    expect(el.classList.contains("vms-switch-limit--3")).toBe(true);
   });
 });
 
@@ -362,7 +344,7 @@ describe("GRID-01 — cards minItem modifier emission (1.13.0)", () => {
     expect(el.className).not.toMatch(/vms-cards-min--/);
   });
 
-  // emission present in non-base section branches (collapsible / flyout)
+  // emission present in non-base section branches (collapsible)
   it("collapsible cards section with minItem still carries the modifier class", () => {
     const el = renderSection({
       type: "section", children: [], layout: "cards",
@@ -370,14 +352,6 @@ describe("GRID-01 — cards minItem modifier emission (1.13.0)", () => {
     });
     expect(el.classList.contains("vms-section--collapsible")).toBe(true);
     expect(el.classList.contains("vms-cards-min--sm")).toBe(true);
-  });
-  it("flyout cards section with minItem still carries the modifier class", () => {
-    const el = renderSection({
-      type: "section", children: [], layout: "cards",
-      flyout: true, minItem: "xl",
-    });
-    expect(el.classList.contains("vms-section--flyout")).toBe(true);
-    expect(el.classList.contains("vms-cards-min--xl")).toBe(true);
   });
 });
 

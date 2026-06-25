@@ -155,28 +155,6 @@ export interface SectionNode {
   id?: string;
   /** When true, the section renders as a native `<details>`/`<summary>` disclosure widget (closed by default). Aesthetic, client-side primitive — the open/closed state is DOM-local and the server does NOT round-trip it (same conceptual model as draft text values in unsubmitted form inputs). The browser adapter snapshots `<details>.open` before each re-render and restores it after, keyed by `id ?? heading ?? "vms-section-anon"` (disambiguated by per-render ordinal); a re-key drops the preserved state (the documented escape hatch for rare server-driven expansion). The summary label is the section's `heading`; a headingless collapsible section uses the fallback string `"Show details"`. If a section needs to start open, do not mark it collapsible. Omitted/false = today's `<section>` rendering, byte-identical. */
   collapsible?: boolean;
-  /** When true, the section renders as an OVERLAY disclosure ("flyout") — the
-   *  hover/focus sibling of `collapsible`'s inline `<details>` reveal. The
-   *  `heading` becomes a focusable `<button class="vms-section__trigger">`
-   *  trigger; the `children` are wrapped in a `<div class="vms-section__panel">`
-   *  that is absolutely positioned and revealed on `:hover` / `:focus-within`
-   *  (pure CSS — no JavaScript, no state machine). Hover (desktop), tap-to-focus
-   *  (touch), and keyboard Tab-to-trigger (a11y) all reveal it for free; it hides
-   *  on blur / pointer-leave. Unlike `collapsible`, the open state is EPHEMERAL
-   *  (driven by `:hover`/`:focus-within`), so it is NOT round-tripped and NOT
-   *  snapshotted across re-renders — there is nothing to preserve.
-   *
-   *  Use a flyout (overlay) rather than `collapsible` (inline) when the revealed
-   *  content should float over siblings instead of pushing them — e.g. a menu
-   *  inside a `layout:"row"` bar, where an inline disclosure would shove the bar
-   *  open. A headingless flyout uses the fallback trigger label `"Menu"`.
-   *
-   *  Mutually exclusive with the other section modes; the renderer resolves a
-   *  fixed precedence and never combines them: `collapsible` > `flyout` > `link`
-   *  > `action`. So `collapsible: true` wins if both are set, and a flyout
-   *  section ignores `link`/`action`. Omitted/false = today's `<section>`
-   *  rendering, byte-identical (no class drift, no extra elements). */
-  flyout?: boolean;
   /** Click-anywhere section dispatch primitive — mirrors `TableRow.action` (1.1.0)
    *  at the section level. When set, the renderer makes the entire section
    *  clickable AND keyboard-activatable (Enter / Space — Space preventDefaults

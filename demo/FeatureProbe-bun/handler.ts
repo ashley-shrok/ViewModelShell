@@ -223,17 +223,6 @@ function buildVm(state: FeatureProbeState): ViewNode {
       { type: "link", label: "About", href: "/about", external: false },
     ],
   };
-  // 1.11.0 — flyout overlay disclosure (parity coverage for SectionNode.flyout).
-  // heading=trigger, children=panel; the wire shape itself is the parity gate.
-  const flyoutSection: ViewNode = {
-    type: "section",
-    heading: "Menu",
-    flyout: true,
-    children: [
-      { type: "link", label: "Settings", href: "/settings", external: false },
-      { type: "link", label: "Profile", href: "/profile", external: false },
-    ],
-  };
   // 1.12.0 — arrange/align alignment vocabulary (parity coverage for ALIGN-01/02/03).
   // Static view-shape captured by every GET step (mirrors the 1.11.0 row precedent;
   // no dedicated action arm). external:false explicit on every LinkNode to match the
@@ -445,7 +434,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
     density: "compact",
     layout: "cards",
     children: [
-      probeSection, clickableCardSection, linkedCardSection, rowSection, flyoutSection,
+      probeSection, clickableCardSection, linkedCardSection, rowSection,
       bareRowSection, headerBarSection, ...arrangeSections, ...alignSections,
       bareSwitcherSection, ...switcherThresholdSections, switcherLimitSection,
       bareCardsSection, ...cardsMinItemSections,

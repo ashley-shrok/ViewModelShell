@@ -382,18 +382,6 @@ public record SectionNode(
     // link-in-link, and mixed link/action nesting (see the Action TSDoc above for
     // the full set of rejections). JsonIgnore-on-null per the file-header rule.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SectionLink? Link = null,
-    // 1.11.0 — overlay disclosure ("flyout"), the hover/focus sibling of
-    // Collapsible's inline <details> reveal. true = the BrowserAdapter emits a
-    // <div class="vms-section--flyout"> whose Heading becomes a focusable
-    // <button class="vms-section__trigger"> and whose Children are wrapped in an
-    // absolutely-positioned <div class="vms-section__panel"> revealed on
-    // :hover/:focus-within (pure CSS — no JS, no round-tripped open state).
-    // Headingless flyout uses the trigger label "Menu". Mutually exclusive with
-    // the other section modes; the renderer resolves a fixed precedence and never
-    // combines them: Collapsible > Flyout > Link > Action. Omitted/false =
-    // today's <section> rendering, byte-identical. JsonIgnore-on-null per the
-    // file-header rule.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Flyout = null,
     // 1.12.0 — main-axis arrangement for layout:"row" (the cluster primitive) —
     // maps to justify-content. Free-form string mirroring the TS closed union
     // "start"|"center"|"end"|"space-between"|"space-around"|"space-evenly"
