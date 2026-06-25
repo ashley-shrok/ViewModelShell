@@ -280,6 +280,10 @@ body {
 .vms-page--switcher,
 .vms-section--switcher {
   display: flex;
+  flex-direction: row;   /* override .vms-page/.vms-section base column — the
+                            negative-flex-basis flip operates on the MAIN axis,
+                            which MUST be horizontal or the children stack
+                            vertically forever (the trick never fires). */
   flex-wrap: wrap;
 }
 .vms-page--switcher > *,
