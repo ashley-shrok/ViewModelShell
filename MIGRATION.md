@@ -6,6 +6,22 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `2.0.0` / `2.0.0` (npm + NuGet) — BREAKING: `flyout` removed
+
+**The only breaking change: `SectionNode.flyout` is gone.** If you never used it (the overwhelming common case — it was a one-release-old hover-overlay primitive), this upgrade is a no-op: bump and go, nothing else changed.
+
+**If you DID set `flyout: true` on a section**, the TS type / .NET record no longer has the field (a compile error points you to each call site). Replace it with whichever fits:
+
+| You were using flyout for… | Use instead |
+|---|---|
+| An inline "show more" disclosure | **`collapsible: true`** — robust on touch + keyboard, open-state preserved across re-renders. |
+| Overlay content (dialog-ish) | A **`modal`** node. |
+| A navbar dropdown / submenu | A **`link`** (or `variant:"card"` link) to a **sub-page** — what the original consumer settled on after the flyout hover-gap bug. |
+
+**NOT breaking / unchanged:** the dispatch + state + response-envelope wire contract (protocol token stays `viewmodel-shell/1.0`); every other ViewNode and field; the entire 1.12 layout vocabulary (`arrange`/`align`, `switcher`, `cards minItem`, `fits`). An agent that only reads `{vm, state}` and drives actions is unaffected — `flyout` was a presentational section flag, not part of the driving contract.
+
+---
+
 ## Upgrading to `1.11.0` / `1.9.0` (npm + NuGet)
 
 Additive — **nothing required.**

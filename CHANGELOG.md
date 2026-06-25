@@ -6,6 +6,22 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 2.0.0 / 2.0.0 — Remove `SectionNode.flyout` (npm + NuGet) — BREAKING
+
+**npm:** `2.0.0` (MAJOR) · **NuGet:** `2.0.0` (MAJOR). A single breaking change: the `SectionNode.flyout` overlay-disclosure primitive is **removed entirely** (TS field, .NET `Flyout`, the renderer branch, the `.vms-section--flyout`/`__trigger`/`__panel` CSS, and the dedicated test).
+
+**Why:** `flyout` was a hover-reveal overlay added in 1.11.0 for navbar submenus, but its only consumer abandoned it over an unfixable CSS hover-gap bug (moving the pointer to the revealed panel across a gap closed it), and it overlapped awkwardly with the more robust `collapsible` (inline disclosure), `modal` (overlay content), and "navigate to a sub-page" patterns. It didn't earn its place next to the intentional, robust primitives the Layout policy now governs.
+
+### Removed
+- **`SectionNode.flyout?: boolean`** (TS) / **`Flyout`** (.NET) and all rendering, CSS, and tests for it.
+- The section disclosure-precedence is now **`collapsible > link > action`** (was `collapsible > flyout > link > action`).
+
+### Migration
+- If you used `flyout: true`: switch to **`collapsible: true`** (inline disclosure, robust on touch/keyboard), a **`modal`** (for overlay content), or — for a navbar submenu — a **`link`/card-link to a sub-page** (what the original consumer settled on). See MIGRATION.md.
+- Not changed: the wire-driving protocol token stays `viewmodel-shell/1.0` (dispatch/state/response envelope is unchanged — only one optional node field was removed; agents reading `{vm, state}` are unaffected). Every other node, field, and the entire 1.12 layout vocabulary is untouched.
+
+---
+
 ## 1.12.0 / 1.10.0 — Layout System Completeness (npm + NuGet)
 
 **npm:** `1.12.0` (MINOR) · **NuGet:** `1.10.0` (MINOR). One consolidated, additive release for the whole v1.12 "Layout System Completeness" milestone — alignment enums (`arrange`/`align`), the `switcher` primitive, the `cards` `minItem` field, and the `fits` node — grounded in a 4-framework research synthesis (`.planning/design/layout-system-research.md`) and governed by the new **Layout policy** (AGENTS.md). Wire protocol token stays `viewmodel-shell/1.0` (all additive optional fields/nodes; omitting any of them is byte-identical to before). The whole layout vocabulary was human-verified in a browser before release (see **Review fixes** below). **Migration: none** — purely additive.
