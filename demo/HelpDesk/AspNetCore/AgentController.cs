@@ -137,6 +137,13 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         var tickets = withinCap ? db.GetMatching(status, state.TitleFilter, Cap) : new List<Ticket>();
 
         // Bulk action toolbar — visible when there are matches within the cap.
+        // 1.13.0 — laid out with Layout:"switcher": three equal-weight actions
+        // that flip all-row ↔ all-stack ATOMICALLY at a content-width threshold
+        // (never passing through an awkward 2-up intermediate the way `cards`
+        // auto-fit would). Limit:3 caps the row at the three buttons, and
+        // Threshold:"md" (30rem) sets the flip width. The canonical
+        // equal-action-toolbar exemplar — no app CSS, no @media. Mirrors
+        // demo/HelpDesk-bun/server.ts byte-for-byte (parity-gated).
         if (withinCap && tickets.Count > 0)
         {
             children.Add(new SectionNode(null,
@@ -144,7 +151,10 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                 new ButtonNode("Mark In Progress", new ActionDescriptor("bulk-start"),   "secondary"),
                 new ButtonNode("Mark Resolved",    new ActionDescriptor("bulk-resolve"), "primary"),
                 new ButtonNode("Reopen",           new ActionDescriptor("bulk-reopen"),  "secondary"),
-            ]));
+            ],
+            Layout:    "switcher",
+            Threshold: "md",
+            Limit:     3));
         }
 
         var dbEmpty = open + inProgress + resolved == 0;

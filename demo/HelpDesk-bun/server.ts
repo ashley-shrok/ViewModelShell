@@ -413,9 +413,18 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
   ];
 
   // Bulk action toolbar — visible when there are matches within the cap.
+  // 1.13.0 — laid out with layout:"switcher": three equal-weight actions that
+  // flip all-row ↔ all-stack ATOMICALLY at a content-width threshold (never
+  // passing through an awkward 2-up intermediate the way `cards` auto-fit
+  // would). `limit: 3` caps the row at the three buttons, and `threshold: "md"`
+  // (30rem) sets the flip width. This is the canonical equal-action-toolbar
+  // exemplar — no app CSS, no @media.
   if (withinCap && rows.length > 0) {
     children.push({
       type: "section",
+      layout: "switcher",
+      threshold: "md",
+      limit: 3,
       children: [
         { type: "button", label: "Mark In Progress", action: { name: "bulk-start" },   variant: "secondary" },
         { type: "button", label: "Mark Resolved",    action: { name: "bulk-resolve" }, variant: "primary" },
