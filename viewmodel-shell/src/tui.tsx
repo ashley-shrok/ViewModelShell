@@ -961,6 +961,7 @@ function renderNode(node: ViewNode, ctx: RCtx, key?: string | number): React.Rea
     case "stat-bar":     return <StatBarView      key={key} node={node} />;
     case "modal":        return <ModalView        key={key} node={node} ctx={ctx} />;
     case "copy-button":  return <CopyButtonView   key={key} node={node} ctx={ctx} />;
+    case "divider":      return <text key={key} fg="#555555">{node.orientation === "vertical" ? "│" : "─".repeat(40)}</text>;
     case "form":         return <FormView         key={key} node={node} ctx={ctx} />;
     case "field":        return <FieldView        key={key} node={node} ctx={ctx} />;
     case "fits": {
@@ -1657,7 +1658,7 @@ function FormView({ node, ctx }: { node: FormNode; ctx: RCtx }) {
     ctx.onAction({ name: base.name });
   };
   // Enter-in-a-field submits the default action — only wired when present.
-  const submitAction = node.submitAction;
+  const submitAction = node.submitButton ? node.submitButton.action : node.submitAction;
   const childCtx: RCtx = {
     ...ctx,
     isTopLevel: false,
@@ -1674,7 +1675,7 @@ function FormView({ node, ctx }: { node: FormNode; ctx: RCtx }) {
     <box flexDirection={isInline ? "row" : "column"} gap={1}>
       {node.children.map((child, i) => renderNode(child, childCtx, i))}
       {submitAction != null ? (
-        <text attributes={1 /* BOLD */}>[ {node.submitLabel ?? "Submit"} ]</text>
+        <text attributes={1 /* BOLD */}>[ {node.submitButton ? node.submitButton.label : (node.submitLabel ?? "Submit")} ]</text>
       ) : null}
       {node.buttons && node.buttons.length > 0 ? (
         <box flexDirection="row" gap={2}>

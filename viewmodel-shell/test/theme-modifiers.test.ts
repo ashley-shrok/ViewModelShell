@@ -467,6 +467,55 @@ describe('3.0.0 — SectionNode tone modifier emission (status surfaces)', () =>
   });
 });
 
+describe('3.1.0 / #22 — button width, divider, form submitButton', () => {
+  function render(node: ViewNode): HTMLElement {
+    const c = freshContainer();
+    new BrowserAdapter(c).render(node, () => {});
+    return c;
+  }
+  it('button width:"full" ⇒ className contains vms-button--full', () => {
+    const c = render({ type: "button", label: "x", action: { name: "a" }, width: "full" });
+    expect(c.querySelector(".vms-button")!.classList.contains("vms-button--full")).toBe(true);
+  });
+  it('button width:"auto" (or omitted) ⇒ no vms-button--full', () => {
+    const c = render({ type: "button", label: "x", action: { name: "a" }, width: "auto" });
+    expect(c.querySelector(".vms-button")!.classList.contains("vms-button--full")).toBe(false);
+  });
+  it('divider (horizontal) ⇒ <hr class="vms-divider">', () => {
+    const c = render({ type: "divider" });
+    const hr = c.querySelector("hr.vms-divider");
+    expect(hr).not.toBeNull();
+  });
+  it('divider orientation:"vertical" ⇒ role=separator div with aria-orientation', () => {
+    const c = render({ type: "divider", orientation: "vertical" });
+    const el = c.querySelector(".vms-divider--vertical")!;
+    expect(el.getAttribute("role")).toBe("separator");
+    expect(el.getAttribute("aria-orientation")).toBe("vertical");
+  });
+  it('form submitButton ⇒ a type=submit button carrying the button\'s axis classes', () => {
+    const c = render({
+      type: "form",
+      children: [{ type: "field", name: "q", inputType: "text", bind: "q", label: "Q" }],
+      submitButton: { type: "button", label: "Search", action: { name: "search" }, emphasis: "primary", width: "full" },
+    });
+    const submit = c.querySelector("button[type=submit]")!;
+    expect(submit.textContent).toBe("Search");
+    expect(submit.classList.contains("vms-button--primary")).toBe(true);
+    expect(submit.classList.contains("vms-button--full")).toBe(true);
+  });
+  it('form submitButton dispatches its action on submit', () => {
+    const c = freshContainer();
+    let fired: string | null = null;
+    new BrowserAdapter(c).render({
+      type: "form",
+      children: [{ type: "field", name: "q", inputType: "text", bind: "q", label: "Q" }],
+      submitButton: { type: "button", label: "Go", action: { name: "did-submit" } },
+    }, (a) => { fired = a.name; });
+    c.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    expect(fired).toBe("did-submit");
+  });
+});
+
 describe('0.11.0 / #5 — ImageNode rendering', () => {
   it('renders <img class="vms-image"> carrying src + alt', () => {
     const el = renderImage({ type: "image", src: "/logo.png", alt: "Acme logo" });

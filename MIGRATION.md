@@ -6,6 +6,12 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `3.1.0` / `3.1.0` (npm + NuGet) — additive, no action
+
+**Nothing to do.** Three additive features (#22): `ButtonNode.width?: "auto" | "full"` (the standard full-width button — `"full"` stretches to fill its container), the new `DividerNode { orientation? }` (a thematic-break/separator → `<hr class="vms-divider">` or a vertical `role="separator"` div), and `FormNode.submitButton?: ButtonNode` (provide your own submit button — e.g. `width:"full"` — instead of the auto-generated one; when set, it takes precedence over `submitLabel`/`submitAction`). Omitting all three is byte-identical to 3.0.x.
+
+---
+
 ## Upgrading to `3.0.0` / `3.0.0` (npm + NuGet) — BREAKING: unified appearance axes
 
 The overloaded `variant` field is split into orthogonal axes so no field does two jobs. If your app never set `variant`/`style` beyond defaults, this is a bump-and-go. Otherwise, rename per this table — the TypeScript compiler and `tsc` flag every call site, and the .NET records no longer have the old members (compile errors point you to each one):

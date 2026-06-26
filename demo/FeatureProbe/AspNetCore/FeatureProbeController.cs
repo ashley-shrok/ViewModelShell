@@ -505,10 +505,29 @@ public class FeatureProbeController : ControllerBase
                     }),
             },
             Variant: "card");
+        // 3.1.0 (#22) — button width, divider, form submitButton. Static view-shape
+        // captured by the GET steps; byte-identical to the bun twin.
+        var admin22Section = new SectionNode(
+            Heading: "Admin primitives (#22)",
+            Children: new ViewNode[]
+            {
+                new ButtonNode("Full width", new ActionDescriptor("axes-noop-10"), Emphasis: "primary", Width: "full"),
+                new DividerNode(),
+                new DividerNode(Orientation: "vertical"),
+                new FormNode(
+                    SubmitAction: null,
+                    SubmitLabel: null,
+                    Children: new ViewNode[]
+                    {
+                        new FieldNode("q", "text", "axesQuery", "Query", null),
+                    },
+                    SubmitButton: new ButtonNode("Search", new ActionDescriptor("axes-search"), Emphasis: "primary", Width: "full")),
+            },
+            Variant: "card");
         var pageChildren = new List<ViewNode>
         {
             probeSection, clickableCardSection, linkedCardSection, rowSection,
-            bareRowSection, headerBarSection, axesSection,
+            bareRowSection, headerBarSection, axesSection, admin22Section,
         };
         pageChildren.AddRange(arrangeSections);
         pageChildren.AddRange(alignSections);

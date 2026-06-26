@@ -16,7 +16,7 @@ import type {
   PageNode, SectionNode, ListNode, ListItemNode,
   FormNode, FieldNode, CheckboxNode, ButtonNode,
   TextNode, LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
-  ModalNode, TableNode, CopyButtonNode, FitsNode,
+  ModalNode, TableNode, CopyButtonNode, DividerNode, FitsNode,
 } from "./index.js";
 
 function legacyCopy(text: string): boolean {
@@ -269,6 +269,7 @@ export class BrowserAdapter implements Adapter {
       case "modal":        return this.modal(n, parent, on);
       case "table":        return this.table(n, parent, on);
       case "copy-button":  return this.copyButton(n, parent);
+      case "divider":      return this.divider(n, parent);
       case "fits":         return this.fits(n, parent, on);
     }
   }
@@ -587,7 +588,25 @@ export class BrowserAdapter implements Adapter {
       on(ev);
     };
 
-    if (n.submitAction) {
+    // #22 — submitButton takes precedence: the form renders the consumer's own
+    // button (its label + emphasis/tone/size/width) as the submit and fires its
+    // action; submitLabel/submitAction for the implicit button are then ignored.
+    const sb = n.submitButton;
+    const effectiveSubmit = sb ? sb.action : n.submitAction;
+    if (sb) {
+      const submitAction = sb.action;
+      const submit = document.createElement("button");
+      submit.type = "submit";
+      submit.className = `vms-button${sb.emphasis ? ` vms-button--${sb.emphasis}` : ""}${
+        sb.tone ? ` vms-button--${sb.tone}` : ""}${sb.size ? ` vms-button--${sb.size}` : ""}${
+        sb.width === "full" ? " vms-button--full" : ""}`;
+      submit.textContent = sb.label;
+      form.appendChild(submit);
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        dispatchWithFiles(submitAction);
+      });
+    } else if (n.submitAction) {
       const submitAction = n.submitAction;
       const submit = document.createElement("button");
       submit.type = "submit";
@@ -609,8 +628,8 @@ export class BrowserAdapter implements Adapter {
     // never submits). Modifier-Enter falls through to a normal newline, and an
     // IME composition Enter (candidate confirmation) must NOT submit. No-op
     // when submitAction is absent. Same dispatch path as the submit button.
-    if (n.submitOnEnter && n.submitAction) {
-      const submitAction = n.submitAction;
+    if (n.submitOnEnter && effectiveSubmit) {
+      const submitAction = effectiveSubmit;
       form.querySelectorAll<HTMLTextAreaElement>("textarea").forEach(ta => {
         ta.addEventListener("keydown", (e) => {
           if (e.key !== "Enter") return;
@@ -846,7 +865,8 @@ export class BrowserAdapter implements Adapter {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `vms-button${n.emphasis ? ` vms-button--${n.emphasis}` : ""}${
-      n.tone ? ` vms-button--${n.tone}` : ""}${n.size ? ` vms-button--${n.size}` : ""}`;
+      n.tone ? ` vms-button--${n.tone}` : ""}${n.size ? ` vms-button--${n.size}` : ""}${
+      n.width === "full" ? " vms-button--full" : ""}`;
     btn.textContent = n.label;
     btn.addEventListener("click", () => {
       // pendingLabel: instant client-side feedback. Swap text + add
@@ -880,6 +900,21 @@ export class BrowserAdapter implements Adapter {
       a.rel = "noopener noreferrer";
     }
     parent.appendChild(a);
+  }
+
+  private divider(n: DividerNode, parent: HTMLElement): void {
+    if (n.orientation === "vertical") {
+      // <hr> is semantically horizontal; a vertical rule is a separator div.
+      const el = document.createElement("div");
+      el.className = "vms-divider vms-divider--vertical";
+      el.setAttribute("role", "separator");
+      el.setAttribute("aria-orientation", "vertical");
+      parent.appendChild(el);
+      return;
+    }
+    const hr = document.createElement("hr"); // implicit role="separator"
+    hr.className = "vms-divider";
+    parent.appendChild(hr);
   }
 
   private statBar(n: StatBarNode, parent: HTMLElement): void {
@@ -1244,7 +1279,8 @@ export class BrowserAdapter implements Adapter {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `vms-button${n.emphasis ? ` vms-button--${n.emphasis}` : ""}${
-      n.tone ? ` vms-button--${n.tone}` : ""}${n.size ? ` vms-button--${n.size}` : ""}`;
+      n.tone ? ` vms-button--${n.tone}` : ""}${n.size ? ` vms-button--${n.size}` : ""}${
+      n.width === "full" ? " vms-button--full" : ""}`;
     btn.textContent = n.label ?? "Copy";
     btn.addEventListener("click", () => {
       const write = navigator.clipboard?.writeText(n.text);

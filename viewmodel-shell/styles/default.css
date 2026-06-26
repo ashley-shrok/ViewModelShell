@@ -569,6 +569,15 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
    control line lives on the base rule + --vms-control-line). */
 .vms-button--sm { padding: var(--vms-space-2xs) var(--vms-space-sm); font-size: var(--vms-text-sm); line-height: 1.125rem; }
 .vms-button--lg { padding: var(--vms-space-sm) var(--vms-space-lg); font-size: var(--vms-text-lg); line-height: 1.75rem; }
+/* width — the standard full-width / "block" button (#22). Stretches to fill the
+   container's cross axis (overriding the base align-self:flex-start), so a form
+   submit lines up with a column of width:100% inputs. */
+.vms-button--full { align-self: stretch; width: 100%; }
+
+/* ── Divider / separator (#22) — the standard thematic break. Horizontal is an
+   <hr>; vertical is a role="separator" div for row layouts. ── */
+.vms-divider { border: none; border-top: 1px solid var(--vms-border); width: 100%; margin-block: var(--vms-space-sm); }
+.vms-divider--vertical { border-top: none; border-left: 1px solid var(--vms-border); width: 0; align-self: stretch; margin: 0 var(--vms-space-sm); }
 
 /* ── Pending state (0.8.0 / issue #11) ──
    Applied by BrowserAdapter when a ButtonNode with `pendingLabel` is clicked.

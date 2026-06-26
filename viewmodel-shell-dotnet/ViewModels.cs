@@ -261,6 +261,7 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(LinkNode),       "link")]
 [JsonDerivedType(typeof(ImageNode),      "image")]
 [JsonDerivedType(typeof(CopyButtonNode), "copy-button")]
+[JsonDerivedType(typeof(DividerNode),    "divider")]
 [JsonDerivedType(typeof(FitsNode),       "fits")]
 public abstract record ViewNode;
 
@@ -441,6 +442,12 @@ public record ListNode(
 // treats it as `"horizontal"`. The SELECTION is client-only (real layout
 // measurement in BrowserAdapter) and NOT part of the wire — the wire only
 // carries the node shape. `JsonIgnore`-on-null per the file-header rule.
+// Thematic break / separator (#22). Horizontal (default) → <hr role="separator">;
+// vertical → a role="separator" div for row layouts. No content.
+public record DividerNode(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Orientation = null
+) : ViewNode;
+
 public record FitsNode(
     IReadOnlyList<ViewNode> Children,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Axis = null
@@ -483,7 +490,14 @@ public record FormNode(
     // when SubmitAction is null or during IME composition. Renderer-handled on
     // the client; the action envelope is unchanged. Nullable so the wire stays
     // absent when unset.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? SubmitOnEnter = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? SubmitOnEnter = null,
+    // Full control of the submit button (#22). When set, the form renders THIS
+    // button (its label + emphasis/tone/size/width/pendingLabel) as the submit,
+    // and fires its action on click + native/textarea Enter — instead of
+    // synthesizing one from SubmitLabel. Takes precedence over SubmitLabel/
+    // SubmitAction. Typed ViewNode? (not ButtonNode) so STJ emits the
+    // "type":"button" discriminator on the wire, matching the TS backend.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? SubmitButton = null
 ) : ViewNode;
 
 public record FieldOption(string Value, string Label);
@@ -522,6 +536,9 @@ public record ButtonNode(
     // Box geometry ("sm"|"lg"; omit = md) — orthogonal to color/emphasis.
     // Emits .vms-button--{size}.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Size = null,
+    // Width axis ("full" = stretch to fill the container's cross axis — the
+    // standard full-width/block button). Emits .vms-button--full. Omit/"auto" = hug.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Width = null,
     // Transient label shown from click until dispatch resolves (issue #11).
     // Adapter additionally adds `.vms-button--pending` while pending so the
     // button visibly disables. Null = instant-click behavior (pre-0.8.0).
@@ -657,7 +674,9 @@ public record CopyButtonNode(
     // Semantic intent/severity — mirrors ButtonNode.Tone. Emits .vms-button--{tone}.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null,
     // Box geometry — mirrors ButtonNode.Size ("sm"|"lg"; omit = md).
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Size = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Size = null,
+    // Width axis — mirrors ButtonNode.Width ("full" = stretch). Emits .vms-button--full.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Width = null
 ) : ViewNode;
 
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────

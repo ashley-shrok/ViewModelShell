@@ -6,6 +6,20 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 3.1.0 / 3.1.0 — Admin-shell primitives: button width, divider, form submitButton (npm + NuGet)
+
+**npm:** `3.1.0` (MINOR) · **NuGet:** `3.1.0` (MINOR). Three additive features (issue #22). Wire protocol token stays `viewmodel-shell/1.0` (additive node fields + one new node type; old agents/apps unaffected). **Migration: none.**
+
+### Added
+- **`ButtonNode.width?: "auto" | "full"`** (+ `CopyButtonNode.width`) — the standard full-width / "block" button (MUI `fullWidth`, Ant `block`, Chakra `width="full"`). `"full"` emits `.vms-button--full { align-self: stretch; width: 100% }`, so a form submit lines up with a column of `width:100%` inputs. Orthogonal to `emphasis`/`tone`/`size`.
+- **`DividerNode { type:"divider", orientation?: "horizontal" | "vertical" }`** — the standard separator (MUI/Ant `<Divider>`, Radix `<Separator>`). Horizontal → `<hr class="vms-divider">` (implicit `role="separator"`); vertical → a `role="separator"` div with `aria-orientation="vertical"` for row layouts.
+- **`FormNode.submitButton?: ButtonNode`** — full control of the submit button (its `label` + `emphasis`/`tone`/`size`/`width`/`pendingLabel`) instead of synthesizing one from `submitLabel`. The form fires `submitButton.action` on click, native Enter-submit, and textarea Enter. Mirrors the universal "write your own submit button" pattern (so a full-width submit is `submitButton:{ …, width:"full" }`). **Precedence:** when set, `submitLabel`/`submitAction` for the implicit button are ignored.
+
+### Resolved
+- **#21** (clickable URL cards) was already delivered by `SectionNode.link` (1.5.0); closed.
+
+---
+
 ## 3.0.2 — Standardized form-control height (npm only)
 
 **npm:** `3.0.2` (PATCH) · **NuGet:** unchanged at `3.0.0` (CSS-only; no API/wire change). **Visual change to control heights across all apps.**

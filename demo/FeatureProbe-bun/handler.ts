@@ -467,6 +467,21 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // 3.1.0 (#22) — byte-identical to the .NET twin (FeatureProbeController.cs admin22Section).
+  const admin22Section: ViewNode = {
+    type: "section",
+    heading: "Admin primitives (#22)",
+    variant: "card",
+    children: [
+      { type: "button", label: "Full width", action: { name: "axes-noop-10" }, emphasis: "primary", width: "full" },
+      { type: "divider" },
+      { type: "divider", orientation: "vertical" },
+      { type: "form", children: [
+        { type: "field", name: "q", inputType: "text", bind: "axesQuery", label: "Query", required: false },
+      ], submitButton: { type: "button", label: "Search", action: { name: "axes-search" }, emphasis: "primary", width: "full" } },
+    ],
+  };
+
   return {
     type: "page",
     title: "Feature Probe",
@@ -474,7 +489,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
     layout: "cards",
     children: [
       probeSection, clickableCardSection, linkedCardSection, rowSection,
-      bareRowSection, headerBarSection, axesSection, ...arrangeSections, ...alignSections,
+      bareRowSection, headerBarSection, axesSection, admin22Section, ...arrangeSections, ...alignSections,
       bareSwitcherSection, ...switcherThresholdSections, switcherLimitSection,
       bareCardsSection, ...cardsMinItemSections,
       fitsAxisOmittedSection, fitsAxisBothSection,

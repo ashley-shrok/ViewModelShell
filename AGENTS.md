@@ -178,11 +178,14 @@ A node's appearance is expressed through **orthogonal, composable axes** — eac
 | **tone** | `tone` | semantic intent / severity (the universal status color) | Button, CopyButton, Section, TextNode, ListItem, TableRow |
 | **emphasis** | `emphasis` | visual weight — filled vs outline | Button, CopyButton |
 | **size** | `size` | box geometry (padding/font); the ONLY axis that changes metrics | Button, CopyButton |
+| **width** | `width` | `"full"` = stretch to fill the container (the standard full-width/"block" button) | Button, CopyButton |
 | **variant** | `variant` | a section's structural surface kind (`card`) | Section |
 | **style** | `style` | text typography (heading/body/muted/…) | TextNode |
 | **state** | `state` | a row/item's lifecycle or selection (active/done/running/…); freeform, app-extensible | ListItem, TableRow |
 
 They compose: a prominent destructive action is `emphasis:"primary" + tone:"danger"` (a filled red button); a status tile is `variant:"card" + tone:"warning"`; a row can be `state:"active"` and `tone:"danger"` at once. **The word "variant" means exactly one thing** (a section's surface kind) — it is NOT a place to put status or emphasis. When you reach for a "variant" on a button or row, you want `emphasis`/`tone`/`size` or `state`/`tone` instead. If a needed appearance can't be expressed by these axes, that's a gap to surface (see "Conventions for evolving the framework"), not a reason to overload one.
+
+Two more standard primitives live alongside these (3.1.0, #22): **`DividerNode { orientation? }`** (a thematic-break/separator → `<hr>` or a vertical `role="separator"` div) and **`FormNode.submitButton?: ButtonNode`** (provide your own submit button — fully styled, e.g. `width:"full"` — instead of the auto-generated one; takes precedence over `submitLabel`/`submitAction`).
 
 ### The `--vms-*` override seam — override the token, don't hand-roll
 

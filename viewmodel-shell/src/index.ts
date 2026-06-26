@@ -110,6 +110,7 @@ export type ViewNode =
   | ModalNode
   | TableNode
   | CopyButtonNode
+  | DividerNode
   | FitsNode;
 
 export interface PageNode {
@@ -252,6 +253,15 @@ export interface FormNode {
    *  FieldNode.action still fires per-field). */
   submitAction?: ActionEvent;
   submitLabel?: string;
+  /** Full control of the submit button (#22). When set, the form renders THIS
+   *  button as its submit — carrying its own `label` + `emphasis`/`tone`/`size`/
+   *  `width`/`pendingLabel` — instead of synthesizing a plain one from
+   *  `submitLabel`. The form fires `submitButton.action` on click, on native
+   *  submit (Enter in a text field), and on textarea Enter (`submitOnEnter`).
+   *  Mirrors the universal "write your own submit button" pattern (e.g. a
+   *  full-width submit: `width:"full"`). Takes precedence over
+   *  `submitLabel`/`submitAction`, which are ignored for the button when set. */
+  submitButton?: ButtonNode;
   /** Layout preset for the form's controls. Omitted or "stack" = fields stacked (current, no modifier class). "inline" = field row + submit on one line (add/search bar) — emits .vms-form--inline. Closed union (D-29). */
   layout?: "stack" | "inline";
   /** Multi-action submit buttons (#15). Each is a full ButtonNode (so
@@ -315,6 +325,11 @@ export interface ButtonNode {
   tone?: "danger" | "warning" | "success" | "info";
   /** Box geometry (padding + font), orthogonal to color/emphasis — the one axis no design system bakes into variant. Emits .vms-button--{size}. Omitted = the default (md) size. Closed union. */
   size?: "sm" | "lg";
+  /** Width axis — `"full"` stretches the button to fill its container's cross
+   *  axis (the standard full-width / "block" button: MUI `fullWidth`, Ant
+   *  `block`, Chakra `width="full"`). Emits `.vms-button--full`. Omitted/`"auto"`
+   *  = content-width (the default hug). Orthogonal to emphasis/tone/size. */
+  width?: "auto" | "full";
   /** Transient label shown from click until the dispatch resolves (response
    *  arrives or dispatch errors). Mirrors `CopyButtonNode.copiedLabel`'s
    *  lifecycle pattern at a different beat: shown DURING the round-trip
@@ -490,6 +505,11 @@ export interface CopyButtonNode {
   tone?: "danger" | "warning" | "success" | "info";
   /** Box geometry — mirrors ButtonNode.size. Emits .vms-button--{size}. Omitted = md. Closed union. */
   size?: "sm" | "lg";
+  /** Width axis — `"full"` stretches the button to fill its container's cross
+   *  axis (the standard full-width / "block" button: MUI `fullWidth`, Ant
+   *  `block`, Chakra `width="full"`). Emits `.vms-button--full`. Omitted/`"auto"`
+   *  = content-width (the default hug). Orthogonal to emphasis/tone/size. */
+  width?: "auto" | "full";
 }
 
 /**
@@ -523,6 +543,15 @@ export interface CopyButtonNode {
  * meaningful. For list/detail and similar text panes use `split` / `sidebar`,
  * which collapse to a single column intrinsically on their own (zero @media).
  */
+/** A thematic break / separator (#22) — the standard divider primitive (MUI/Ant
+ *  `<Divider>`, Radix `<Separator>`). Horizontal (default) renders an `<hr>` with
+ *  its implicit `role="separator"`; vertical renders a `role="separator"` div with
+ *  `aria-orientation="vertical"` for row layouts. No content. */
+export interface DividerNode {
+  type: "divider";
+  orientation?: "horizontal" | "vertical";
+}
+
 export interface FitsNode {
   type: "fits";
   /** Axis on which the container's fit is tested. CLOSED union; OMITTED =
