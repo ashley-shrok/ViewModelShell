@@ -6,7 +6,11 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
-## 3.0.1 — Quieter jsdom test output (npm only)
+## 3.0.2 — Standardized form-control height (npm only)
+
+**npm:** `3.0.2` (PATCH) · **NuGet:** unchanged at `3.0.0` (CSS-only; no API/wire change). **Visual change to control heights across all apps.**
+
+Inputs/selects and buttons placed in a row (the filter-bar / toolbar pattern) didn't line up: `.vms-field__input` uses `--vms-text-md` (1rem) and `.vms-button` uses `--vms-text-base` (0.875rem) with the same padding, so with the browsers' `normal` line-height a button computed ~2–3px shorter than the input next to it. Now both default-size controls share an **absolute** `line-height` (new `--vms-control-line: 1.5rem` token), so — with their already-matching padding + border — an input and a button compute to the **same height** and align pixel-for-pixel in a row. The token is on the `--vms-*` override seam (retune control height in one place). The `--sm`/`--lg` button sizes and the compact inline list-item delete-X set their own line-height so they stay proportionate (not control-height). No markup or wire change; purely the shipped `default.css`.
 
 **npm:** `3.0.1` (PATCH) · **NuGet:** unchanged at `3.0.0` (frontend-only — the .NET backend types and the wire are untouched). No API change.
 

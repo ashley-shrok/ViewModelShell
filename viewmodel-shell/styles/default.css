@@ -61,6 +61,13 @@
   --vms-text-lg:    1.125rem;
   --vms-text-xl:    1.5rem;
   --vms-text-2xl:   2.25rem;
+  /* Shared line-box height for the default-size form controls + buttons. An
+     ABSOLUTE value (not a font-relative ratio) so an input (--vms-text-md) and a
+     button (--vms-text-base) — which intentionally differ in font size — compute
+     to the SAME height when their padding + border match, and therefore line up
+     pixel-for-pixel in a filter/toolbar row. Size variants (.vms-button--sm/lg)
+     and compact icon buttons set their own line-height. */
+  --vms-control-line: 1.5rem;
   /* Page shell (D-12) — additive override seam (issue #13); host/theme-retunable
      via a single :root{} override imported after the theme. The two width
      ratchets — --vms-page-max-wide (1440px default) and --vms-page-max-full
@@ -434,6 +441,7 @@ body {
   color: var(--vms-text);
   font-family: var(--vms-font-body);
   font-size: var(--vms-text-md);
+  line-height: var(--vms-control-line);
   padding: var(--vms-space-sm) var(--vms-space-md);
   outline: none;
   transition: border-color var(--vms-t), box-shadow var(--vms-t);
@@ -526,6 +534,7 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   cursor: pointer;
   font-family: var(--vms-font-body);
   font-size: var(--vms-text-base);
+  line-height: var(--vms-control-line);
   padding: var(--vms-space-sm) var(--vms-space-md);
   align-self: flex-start;
   transition: background var(--vms-t), border-color var(--vms-t), transform var(--vms-t);
@@ -555,9 +564,11 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 }
 .vms-button--secondary:hover { background: var(--vms-accent-glow); }
 
-/* size — the ONLY axis that touches box metrics (md = base, no class). */
-.vms-button--sm { padding: var(--vms-space-2xs) var(--vms-space-sm); font-size: var(--vms-text-sm); }
-.vms-button--lg { padding: var(--vms-space-sm) var(--vms-space-lg); font-size: var(--vms-text-lg); }
+/* size — the ONLY axis that touches box metrics (md = base, no class). Each size
+   sets its own line-box so sm stays compact and lg reads larger (the default-size
+   control line lives on the base rule + --vms-control-line). */
+.vms-button--sm { padding: var(--vms-space-2xs) var(--vms-space-sm); font-size: var(--vms-text-sm); line-height: 1.125rem; }
+.vms-button--lg { padding: var(--vms-space-sm) var(--vms-space-lg); font-size: var(--vms-text-lg); line-height: 1.75rem; }
 
 /* ── Pending state (0.8.0 / issue #11) ──
    Applied by BrowserAdapter when a ButtonNode with `pendingLabel` is clicked.
@@ -578,6 +589,9 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   color: var(--vms-text-muted);
   opacity: 0;
   padding: var(--vms-space-2xs) var(--vms-space-xs);
+  /* compact inline icon affordance — opt out of the standardized control line so
+     the row's delete-X stays small, not control-height. */
+  line-height: 1.25rem;
   border-radius: var(--vms-radius-sm);
   transition: opacity var(--vms-t), color var(--vms-t), background var(--vms-t);
 }
