@@ -158,7 +158,7 @@ public class ContactsController : ControllerBase
                 new ButtonNode(
                     Label:   "+ Add Contact",
                     Action:  new ActionDescriptor("navigate-to-add"),
-                    Variant: "primary"),
+                    Emphasis: "primary"),
 
                 new ListNode(
                     Id: "contact-list",
@@ -168,7 +168,7 @@ public class ContactsController : ControllerBase
                             Id:      c.Id,
                             // D-27: the shipped .vms-list-item--active default marks
                             // the current master-detail selection.
-                            Variant: c.Id == state.SelectedId ? "active" : null,
+                            State:   c.Id == state.SelectedId ? "active" : null,
                             Children:
                             [
                                 new TextNode(c.Name,  null),
@@ -176,8 +176,7 @@ public class ContactsController : ControllerBase
                                 // Per-row "Open" — unique action name per contact.
                                 new ButtonNode(
                                     Label:   "Open",
-                                    Action:  new ActionDescriptor($"navigate-to-detail-{c.Id}"),
-                                    Variant: null)
+                                    Action:  new ActionDescriptor($"navigate-to-detail-{c.Id}"))
                             ]))
                         .ToList())
             ]);
@@ -203,7 +202,7 @@ public class ContactsController : ControllerBase
                             new FieldNode("phone", "text",     "draftForm.phone", "Phone", "555-0100"),
                             new FieldNode("notes", "textarea", "draftForm.notes", "Notes", "Any notes…")
                         ]),
-                    new ButtonNode("Cancel", new ActionDescriptor("navigate-to-list"), Variant: null)
+                    new ButtonNode("Cancel", new ActionDescriptor("navigate-to-list"))
                 ]);
         }
 
@@ -237,7 +236,7 @@ public class ContactsController : ControllerBase
                         new FieldNode("phone", "text",     "draftForm.phone", "Phone", null),
                         new FieldNode("notes", "textarea", "draftForm.notes", "Notes", null)
                     ]),
-                new ButtonNode("Delete", new ActionDescriptor($"delete-contact-{contact.Id}"), Variant: "danger")
+                new ButtonNode("Delete", new ActionDescriptor($"delete-contact-{contact.Id}"), Tone: "danger")
             ]);
     }
 }

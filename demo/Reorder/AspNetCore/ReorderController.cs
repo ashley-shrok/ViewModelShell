@@ -125,7 +125,7 @@ public class ReorderController : ControllerBase
                 listItems.Add(new ListItemNode(item.Id, "moving",
                 [
                     new TextNode(item.Label, "subheading"),
-                    new ButtonNode("Cancel", new ActionDescriptor("move-cancel"), "secondary"),
+                    new ButtonNode("Cancel", new ActionDescriptor("move-cancel"), Emphasis: "secondary"),
                 ]));
             }
             else if (state.MovingId != null)
@@ -154,7 +154,7 @@ public class ReorderController : ControllerBase
 
         if (state.MovingId != null)
             children.Add(new ButtonNode("Place at end",
-                new ActionDescriptor("move-to-end"), "primary"));
+                new ActionDescriptor("move-to-end"), Emphasis: "primary"));
 
         return new PageNode("Reorder", children);
     }

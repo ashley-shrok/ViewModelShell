@@ -95,13 +95,13 @@ function buildCardItem(
     type: "button",
     label: "✕",
     action: { name: `delete-card-${card.id}` },
-    variant: "danger",
+    tone: "danger",
   });
 
   return {
     type: "list-item",
     id: card.id,
-    variant: card.resolved ? "done" : undefined,
+    state: card.resolved ? "done" : undefined,
     children,
   };
 }

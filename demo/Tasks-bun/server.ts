@@ -78,7 +78,7 @@ export function buildVm(state: TasksState): ViewNode {
   const navItem = (id: string, label: string, count: number): ViewNode => ({
     type: "list-item",
     id,
-    variant: state.filter === id ? "active" : undefined,
+    state: state.filter === id ? "active" : undefined,
     children: [
       {
         type: "button",
@@ -123,7 +123,7 @@ export function buildVm(state: TasksState): ViewNode {
       return {
         type: "list-item",
         id: t.id,
-        variant: t.completed ? "done" : undefined,
+        state: t.completed ? "done" : undefined,
         children: [
           {
             type: "checkbox",
@@ -140,7 +140,7 @@ export function buildVm(state: TasksState): ViewNode {
             type: "button",
             label: "✕",
             action: { name: `delete-row-${t.id}` },
-            variant: "danger",
+            tone: "danger",
           },
         ],
       };

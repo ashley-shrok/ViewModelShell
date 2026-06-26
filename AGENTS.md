@@ -169,6 +169,21 @@ import "@ashley-shrok/viewmodel-shell/themes/dark-purple.css"; // optional — p
 
 The shipped themes are the files under `viewmodel-shell/styles/themes/` — one file = one import; that directory **is** the current, authoritative set (this doc doesn't list them, so it can't go stale as themes are added). The shipped **default** (no theme import) is the light value set; the prior dark default is preserved byte-for-byte as `themes/dark-purple.css`, one import away (`import "@ashley-shrok/viewmodel-shell/themes/dark-purple.css";`). A theme is one static import in your entrypoint (see `demo/ContactManager/frontend/src/main.ts`); multi-role apps import a distinct theme per role through the same seam (see `demo/HelpDesk/frontend/src/agent.ts` vs `requester.ts`).
 
+### Appearance axes — one job per field (3.0.0)
+
+A node's appearance is expressed through **orthogonal, composable axes** — each field carries exactly one concept, and they combine rather than multiplying into a grab-bag of named variants. This is the synthesis of how mature design systems (MUI, Chakra, Ant) model component appearance, and the rule that even the "fused" systems honor: *size is never baked into color or emphasis.* The authoritative value sets live in the type source (`viewmodel-shell/src/index.ts`, mirrored in `ViewModels.cs`); this is the *concept map*, not a drift-prone catalog.
+
+| Axis | Field | Means | On |
+|---|---|---|---|
+| **tone** | `tone` | semantic intent / severity (the universal status color) | Button, CopyButton, Section, TextNode, ListItem, TableRow |
+| **emphasis** | `emphasis` | visual weight — filled vs outline | Button, CopyButton |
+| **size** | `size` | box geometry (padding/font); the ONLY axis that changes metrics | Button, CopyButton |
+| **variant** | `variant` | a section's structural surface kind (`card`) | Section |
+| **style** | `style` | text typography (heading/body/muted/…) | TextNode |
+| **state** | `state` | a row/item's lifecycle or selection (active/done/running/…); freeform, app-extensible | ListItem, TableRow |
+
+They compose: a prominent destructive action is `emphasis:"primary" + tone:"danger"` (a filled red button); a status tile is `variant:"card" + tone:"warning"`; a row can be `state:"active"` and `tone:"danger"` at once. **The word "variant" means exactly one thing** (a section's surface kind) — it is NOT a place to put status or emphasis. When you reach for a "variant" on a button or row, you want `emphasis`/`tone`/`size` or `state`/`tone` instead. If a needed appearance can't be expressed by these axes, that's a gap to surface (see "Conventions for evolving the framework"), not a reason to overload one.
+
 ### The `--vms-*` override seam — override the token, don't hand-roll
 
 The **only** sanctioned per-app deviation: a tiny per-app stylesheet with a single `:root{}` setting `--vms-*` tokens, imported in your entrypoint **after** the theme — **never** an HTML `<style>` block. Use it for a width retune (`--vms-page-max` — *global* default; `--vms-page-max-wide` — what `.vms-page--wide` expands to), branded fonts (`--vms-font-body` / `--vms-font-head` / `--vms-font-mono`), or any `--vms-*` color var for a full reskin. **For per-page width opt-in, prefer the `PageNode.width: "wide" | "full"` wire field** (added in 0.7.0) over a `:root` retune — the wire field expresses page-level intent without changing the global default. The theme files under `viewmodel-shell/styles/themes/` are the reskin reference; this seam is additive — never remove or rename a `--vms-*` var.

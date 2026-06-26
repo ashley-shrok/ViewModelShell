@@ -149,7 +149,7 @@ public class AgentController(HelpDeskDb db) : ControllerBase
             children.Add(new SectionNode(null,
             [
                 new ButtonNode("Mark In Progress", new ActionDescriptor("bulk-start"),   "secondary"),
-                new ButtonNode("Mark Resolved",    new ActionDescriptor("bulk-resolve"), "primary"),
+                new ButtonNode("Mark Resolved",    new ActionDescriptor("bulk-resolve"), Emphasis: "primary"),
                 new ButtonNode("Reopen",           new ActionDescriptor("bulk-reopen"),  "secondary"),
             ],
             Layout:    "switcher",
@@ -203,7 +203,8 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                     },
                     Id:      t.Id.ToString(),
                     Actions: rowActions,
-                    Variant: TicketVariant(t),
+                    State:   TicketState(t),
+                    Tone:    TicketTone(t),
                     // Click-anywhere row navigation — same target as the old
                     // "Open" button, just on the whole row (keyboard + ARIA
                     // automatic via the renderer; see TableRow.Action XML doc).
@@ -311,16 +312,16 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         return children;
     }
 
-    private static string? TicketVariant(Ticket t) => t.Status switch
+    // Status splits across the two orthogonal axes: State (lifecycle: done/high)
+    // and Tone (severity: critical → danger).
+    private static string? TicketState(Ticket t) => t.Status switch
     {
         "resolved" => "done",
-        _ => t.Priority switch
-        {
-            "critical" => "critical",
-            "high"     => "high",
-            _          => null,
-        }
+        _          => t.Priority == "high" ? "high" : null,
     };
+
+    private static string? TicketTone(Ticket t) =>
+        t.Status != "resolved" && t.Priority == "critical" ? "danger" : null;
 
     private static string TypeLabel(string type) => type switch
     {

@@ -6,6 +6,32 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `3.0.0` / `3.0.0` (npm + NuGet) — BREAKING: unified appearance axes
+
+The overloaded `variant` field is split into orthogonal axes so no field does two jobs. If your app never set `variant`/`style` beyond defaults, this is a bump-and-go. Otherwise, rename per this table — the TypeScript compiler and `tsc` flag every call site, and the .NET records no longer have the old members (compile errors point you to each one):
+
+| Old | New |
+|---|---|
+| Button/CopyButton `variant:"primary"` / `"secondary"` | `emphasis:"primary"` / `"secondary"` |
+| Button/CopyButton `variant:"danger"` | `tone:"danger"` |
+| (new) make a button smaller/larger | `size:"sm"` / `"lg"` (omit = the default md size) |
+| TextNode `style:"error"` | `tone:"danger"` (keep `style` for typography) |
+| TextNode `style:"warning"` | `tone:"warning"` |
+| ListItem/TableRow `variant:"active"/"done"/"moving"/"running"/"disabled"/"high"` | `state:"…"` |
+| ListItem/TableRow `variant:"critical"` | `tone:"danger"` |
+| ListItem/TableRow `variant:"warning"/"success"` | `tone:"warning"/"success"` |
+| Section `variant:"card"` | **unchanged** (and now also accepts `tone`) |
+
+The axes compose, which the old single field couldn't express: a prominent destructive button is `emphasis:"primary" + tone:"danger"` (filled red), and a status card is `variant:"card" + tone:"warning"`.
+
+**Custom CSS callers:** `.vms-text--error` is renamed to `.vms-text--danger`; the `.vms-table__row--critical` alias is gone (use `--danger`). New classes: `.vms-button--{sm,lg}`, `.vms-button--{danger,warning,success,info}`, `.vms-section--{danger,warning,success,info}`. Per the framework's design system you shouldn't be authoring these in app CSS — but if you targeted `.vms-text--error` in an override, update it.
+
+**Visual change to expect:** buttons are now uniformly sized within a size tier (the old `--primary`/`--secondary` size drift is gone — emphasis only changes fill/color), and all buttons hug-left consistently (base `align-self: flex-start`, which only `--primary` had before). Re-check any layout that relied on a secondary/danger button stretching full-width.
+
+**NOT breaking / unchanged:** the dispatch + state + response-envelope wire contract (protocol token stays `viewmodel-shell/1.0`); `LinkNode.active`; the entire layout vocabulary; every other node and field. An agent that only reads `{vm, state}` and dispatches actions keeps working — these are presentational node fields, not the driving contract.
+
+---
+
 ## Upgrading to `2.1.0` / `2.1.0` (npm + NuGet) — additive, no action
 
 **Nothing to do.** This release adds **`LinkNode.active`** (`active?: boolean` in TS, `bool? Active` in .NET) — set it `true` on the nav link that represents the current page to get a "you are here" highlight (`.vms-link--active` + `aria-current="page"`). It's server-owned and optional; omitting it is byte-identical to 2.0.0.

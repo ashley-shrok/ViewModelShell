@@ -1127,17 +1127,25 @@ const STYLE_ATTRS: Record<NonNullable<TextNodeType["style"]>, { attributes?: num
   body:          {},
   muted:         { fg: "#888888" },
   strikethrough: { attributes: 16 /* STRIKETHROUGH */, fg: "#888888" },
-  error:         { fg: "#ff5555" },
-  warning:       { fg: "#e0a823" },
   pre:           { fg: "#cccccc" },
+};
+
+// Universal semantic-tone → foreground color, shared by text / buttons / list items.
+const TONE_FG: Record<"danger" | "warning" | "success" | "info", string> = {
+  danger:  "#ff5555",
+  warning: "#e0a823",
+  success: "#5fd75f",
+  info:    "#5fafff",
 };
 
 function TextView({ node }: { node: TextNodeType }) {
   const style = node.style ?? "body";
   const attrs = STYLE_ATTRS[style];
+  // tone color wins over the style's fg (mirrors the browser source-order rule).
+  const fg = node.tone ? TONE_FG[node.tone] : attrs.fg;
   return (
     <text {...(attrs.attributes != null ? { attributes: attrs.attributes } : {})}
-          {...(attrs.fg != null ? { fg: attrs.fg } : {})}>
+          {...(fg != null ? { fg } : {})}>
       {node.value}
     </text>
   );
@@ -1186,14 +1194,17 @@ function ImageView({ node }: { node: ImageNode }) {
 
 // ── list / list-item ──────────────────────────────────────────────────────
 // A top-level `list` (direct child of page) is a pane on its own; nested
-// lists scroll as part of their containing section. list-item variants
-// ("done", "active", …) are mapped to text colors.
+// lists scroll as part of their containing section. list-item `state`
+// ("done", "active", …) maps to a text color; semantic `tone` (danger/…)
+// uses the shared TONE_FG and wins over state.
 
 const LIST_ITEM_FG: Record<string, string> = {
-  done:   "#88cc88",
-  active: "#88aaff",
-  error:  "#ff5555",
-  muted:  "#888888",
+  done:     "#88cc88",
+  active:   "#88aaff",
+  running:  "#88aaff",
+  moving:   "#88aaff",
+  disabled: "#888888",
+  high:     "#d76410",
 };
 
 function ListView({ node, ctx }: { node: ListNode; ctx: RCtx }) {
@@ -1234,9 +1245,9 @@ function ListView({ node, ctx }: { node: ListNode; ctx: RCtx }) {
 }
 
 function ListItemView({ node, ctx }: { node: ListItemNode; ctx: RCtx }) {
-  const fg = node.variant ? LIST_ITEM_FG[node.variant] : undefined;
+  const fg = node.tone ? TONE_FG[node.tone] : node.state ? LIST_ITEM_FG[node.state] : undefined;
   const childCtx: RCtx = { ...ctx, isTopLevel: false };
-  // The variant tint applies to text children inside this item via inherited
+  // The tint applies to text children inside this item via inherited
   // color (OpenTUI <text fg> wins per-element, so this only affects items
   // whose children don't override). For B2 we just thread the children
   // through unchanged; full per-variant styling lands in B3 (with the focus +
@@ -1429,8 +1440,8 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
 // Same as B1 — text only, no interactivity. Full widgets land in B3/B4.
 
 function ButtonView({ node, ctx }: { node: ButtonNode; ctx: RCtx }) {
-  const fg = node.variant === "danger" ? "#ff5555"
-           : node.variant === "primary" ? "#88aaff"
+  const fg = node.tone ? TONE_FG[node.tone]
+           : node.emphasis === "primary" ? "#88aaff"
            : undefined;
   // 0.8.0 (#11) — pendingLabel: when set + this button's key matches the
   // adapter's pendingButtonKey, render the pending label instead of the
@@ -1620,8 +1631,8 @@ function CopyButtonView({ node, ctx }: { node: CopyButtonNode; ctx: RCtx }) {
   // 0.9.0 (#14): variant coloring — mirrors ButtonView's fg derivation
   // verbatim. Adapter-medium-adaptation parity: the browser uses CSS
   // classes; the TUI uses ANSI fg colors. Same semantic mapping.
-  const fg = node.variant === "danger" ? "#ff5555"
-           : node.variant === "primary" ? "#88aaff"
+  const fg = node.tone ? TONE_FG[node.tone]
+           : node.emphasis === "primary" ? "#88aaff"
            : undefined;
   return (
     <text {...(fg != null ? { fg } : {})} onMouseDown={() => ctx.copy(node.text)}>

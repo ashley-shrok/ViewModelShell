@@ -403,6 +403,7 @@ export class BrowserAdapter implements Adapter {
       const el = document.createElement("details");
       el.className = `vms-section vms-section--collapsible${
         n.variant === "card" ? " vms-section--card" : ""}${
+        n.tone ? ` vms-section--${n.tone}` : ""}${
         n.layout && n.layout !== "stack" ? ` vms-section--${n.layout}` : ""}${
         n.arrange ? ` vms-arrange--${n.arrange}` : ""}${
         n.align ? ` vms-align--${n.align}` : ""}${
@@ -437,6 +438,7 @@ export class BrowserAdapter implements Adapter {
       const a = document.createElement("a");
       a.className = `vms-section vms-section--linked${
         n.variant === "card" ? " vms-section--card" : ""}${
+        n.tone ? ` vms-section--${n.tone}` : ""}${
         n.layout && n.layout !== "stack" ? ` vms-section--${n.layout}` : ""}${
         n.arrange ? ` vms-arrange--${n.arrange}` : ""}${
         n.align ? ` vms-align--${n.align}` : ""}${
@@ -488,6 +490,7 @@ export class BrowserAdapter implements Adapter {
 
     const el = document.createElement("section");
     el.className = `vms-section${n.variant === "card" ? " vms-section--card" : ""}${
+      n.tone ? ` vms-section--${n.tone}` : ""}${
       n.layout && n.layout !== "stack" ? ` vms-section--${n.layout}` : ""}${
       n.arrange ? ` vms-arrange--${n.arrange}` : ""}${
       n.align ? ` vms-align--${n.align}` : ""}${
@@ -554,7 +557,8 @@ export class BrowserAdapter implements Adapter {
 
   private listItem(n: ListItemNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const li = document.createElement("li");
-    li.className = `vms-list-item${n.variant ? ` vms-list-item--${n.variant}` : ""}`;
+    li.className = `vms-list-item${n.state ? ` vms-list-item--${n.state}` : ""}${
+      n.tone ? ` vms-list-item--${n.tone}` : ""}`;
     if (n.id) li.dataset.id = n.id;
     this.kids(n.children, li, on);
     parent.appendChild(li);
@@ -837,7 +841,8 @@ export class BrowserAdapter implements Adapter {
   private button(n: ButtonNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = `vms-button${n.variant ? ` vms-button--${n.variant}` : ""}`;
+    btn.className = `vms-button${n.emphasis ? ` vms-button--${n.emphasis}` : ""}${
+      n.tone ? ` vms-button--${n.tone}` : ""}${n.size ? ` vms-button--${n.size}` : ""}`;
     btn.textContent = n.label;
     btn.addEventListener("click", () => {
       // pendingLabel: instant client-side feedback. Swap text + add
@@ -855,7 +860,7 @@ export class BrowserAdapter implements Adapter {
 
   private text(n: TextNode, parent: HTMLElement): void {
     const el = document.createElement(n.style === "pre" ? "pre" : "span");
-    el.className = `vms-text${n.style ? ` vms-text--${n.style}` : ""}`;
+    el.className = `vms-text${n.style ? ` vms-text--${n.style}` : ""}${n.tone ? ` vms-text--${n.tone}` : ""}`;
     el.textContent = n.value;
     parent.appendChild(el);
   }
@@ -1100,7 +1105,8 @@ export class BrowserAdapter implements Adapter {
     n.rows.forEach(row => {
       const tr = document.createElement("tr");
       let rowClass = "vms-table__row";
-      if (row.variant) rowClass += ` vms-table__row--${row.variant}`;
+      if (row.state) rowClass += ` vms-table__row--${row.state}`;
+      if (row.tone) rowClass += ` vms-table__row--${row.tone}`;
       if (row.action) rowClass += " vms-table__row--clickable";
       tr.className = rowClass;
       if (row.id) tr.dataset.id = row.id;
@@ -1233,7 +1239,8 @@ export class BrowserAdapter implements Adapter {
   private copyButton(n: CopyButtonNode, parent: HTMLElement): void {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = `vms-button${n.variant ? ` vms-button--${n.variant}` : ""}`;
+    btn.className = `vms-button${n.emphasis ? ` vms-button--${n.emphasis}` : ""}${
+      n.tone ? ` vms-button--${n.tone}` : ""}${n.size ? ` vms-button--${n.size}` : ""}`;
     btn.textContent = n.label ?? "Copy";
     btn.addEventListener("click", () => {
       const write = navigator.clipboard?.writeText(n.text);

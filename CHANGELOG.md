@@ -6,6 +6,36 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 3.0.0 / 3.0.0 — Unified appearance axes (npm + NuGet) — BREAKING
+
+**npm:** `3.0.0` (MAJOR) · **NuGet:** `3.0.0` (MAJOR). The overloaded `variant` field — which was doing four unrelated jobs across the node tree — is split into orthogonal, composable axes so **no field carries two concepts**. Wire protocol token stays `viewmodel-shell/1.0` (the dispatch/state/response envelope is unchanged; only node field *shapes* change — an agent that reads `{vm, state}` and dispatches actions is structurally unaffected, though code that hardcoded the old field names must update).
+
+**Why:** `ButtonNode`/`CopyButtonNode` `variant: "primary"|"secondary"|"danger"` fused **emphasis** (how loud) with **intent** (what it means), and the CSS silently leaked **size** into it (`--primary` had wider padding, `--secondary` a smaller font) — so a primary and a danger button rendered at *different sizes*. `ListItem`/`TableRow` freeform `variant` mixed **severity** (`critical`/`warning`/`success`) with row **state** (`active`/`done`/`moving`/`running`/`disabled`/`high`). `TextNode` `style` fused **typography** with **intent color** (`error`/`warning`). Every mature design system (MUI, Chakra, Ant) keeps these as separate composable axes; the universal rule even the "fused" systems honor is that *size is never baked into the color/variant*.
+
+### The unified model (one job per field)
+| Axis | Field | Values | Lives on |
+|---|---|---|---|
+| Intent/severity | `tone` | `danger \| warning \| success \| info` | Button, CopyButton, Section, TextNode, ListItem, TableRow |
+| Emphasis | `emphasis` | `primary \| secondary` | Button, CopyButton |
+| Size | `size` | `sm \| lg` (omit = md) | Button, CopyButton |
+| Surface kind | `variant` | `card` | Section (now the single meaning of "variant") |
+| Typography | `style` | `heading \| subheading \| body \| muted \| strikethrough \| pre` | TextNode |
+| Row/item state | `state` | freeform (framework-styled: `active`/`done`/`disabled`/`high`/`running`/`moving`) | ListItem, TableRow |
+
+`tone` reuses the existing AA-cleared tokens (`--vms-error`/`-warning`/`-success`/`-info`); `critical` everywhere maps to `danger`. Axes compose: `emphasis:"primary" + tone:"danger"` is a filled red button; `variant:"card" + tone:"warning"` is a warning-tinted status card; a row can be `state:"active"` and `tone:"danger"` at once.
+
+### Removed / renamed (BREAKING)
+- **Button/CopyButton `variant`** → `emphasis` (primary/secondary) + `tone` (danger) + new `size`. The CSS is normalized so emphasis/tone never change box metrics — only `size` does.
+- **ListItem/TableRow `variant`** → `state` (lifecycle) + `tone` (severity). `critical` → `tone:"danger"`.
+- **TextNode `style:"error"`/`"warning"`** → `tone:"danger"`/`"warning"`; `style` keeps typography only.
+- **Section** gains `tone` (additive); `variant:"card"` unchanged.
+- CSS: `.vms-text--error` renamed to `.vms-text--danger`; new `.vms-button--{sm,lg}` size classes, `.vms-section--{tone}` and `.vms-button--{tone}` classes; the `.vms-table__row--critical` alias dropped (use `--danger`).
+
+### Migration
+See MIGRATION.md for the full old→new map. Mechanical: rename the field per the table above (the compiler / `tsc` flags every call site). Apps that never set these fields are unaffected.
+
+---
+
 ## 2.1.0 / 2.1.0 — `LinkNode.active` (npm + NuGet)
 
 **npm:** `2.1.0` (MINOR) · **NuGet:** `2.1.0` (MINOR). One additive change: links can now mark themselves as the current location ("you are here") for navigation. Wire protocol token stays `viewmodel-shell/1.0` (one new optional node field; omitting it is byte-identical to before). **Migration: none** — purely additive.

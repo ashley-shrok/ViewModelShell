@@ -127,7 +127,8 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
 
         var items = tickets.Select(t => (ViewNode)new ListItemNode(
             Id:       t.Id.ToString(),
-            Variant:  TicketVariant(t),
+            State:    TicketState(t),
+            Tone:     TicketTone(t),
             Children:
             [
                 new TextNode(t.Title, "subheading"),
@@ -163,7 +164,7 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
                 ]
             ),
             new ListNode(items),
-            new ButtonNode("New Ticket", new ActionDescriptor("start-create"), "primary"),
+            new ButtonNode("New Ticket", new ActionDescriptor("start-create"), Emphasis: "primary"),
         ]);
     }
 
@@ -172,7 +173,7 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
         var formChildren = new List<ViewNode>();
 
         if (state.ValidationError != null)
-            formChildren.Add(new TextNode(state.ValidationError, "error"));
+            formChildren.Add(new TextNode(state.ValidationError, Tone: "danger"));
 
         formChildren.Add(new FieldNode("title", "text", "draftTitle", "Title",
             "Brief description of the issue", Required: true));
@@ -295,16 +296,16 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
         ]);
     }
 
-    private static string? TicketVariant(Ticket t) => t.Status switch
+    // Status splits across the two orthogonal axes: State (lifecycle: done/high)
+    // and Tone (severity: critical → danger).
+    private static string? TicketState(Ticket t) => t.Status switch
     {
         "resolved" => "done",
-        _ => t.Priority switch
-        {
-            "critical" => "critical",
-            "high"     => "high",
-            _          => null,
-        }
+        _          => t.Priority == "high" ? "high" : null,
     };
+
+    private static string? TicketTone(Ticket t) =>
+        t.Status != "resolved" && t.Priority == "critical" ? "danger" : null;
 
     private static string TypeLabel(string type) => type switch
     {

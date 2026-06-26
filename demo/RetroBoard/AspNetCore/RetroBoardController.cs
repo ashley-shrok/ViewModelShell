@@ -179,18 +179,17 @@ public class RetroBoardController : ControllerBase
         children.Add(new TextNode(card.Text, card.Resolved ? "strikethrough" : null));
         children.Add(new ButtonNode(
             Label:   $"▲ {card.Votes}",
-            Action:  new ActionDescriptor($"upvote-card-{card.Id}"),
-            Variant: null
+            Action:  new ActionDescriptor($"upvote-card-{card.Id}")
         ));
         children.Add(new ButtonNode(
             Label:   "✕",
             Action:  new ActionDescriptor($"delete-card-{card.Id}"),
-            Variant: "danger"
+            Tone: "danger"
         ));
 
         return new ListItemNode(
             Id:       card.Id,
-            Variant:  card.Resolved ? "done" : null,
+            State:    card.Resolved ? "done" : null,
             Children: children
         );
     }

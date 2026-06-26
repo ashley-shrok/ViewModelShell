@@ -58,10 +58,10 @@ function buildVm(state: ReorderState): ViewNode {
       return {
         type: "list-item",
         id: item.id,
-        variant: "moving",
+        state: "moving",
         children: [
           { type: "text", value: item.label, style: "subheading" },
-          { type: "button", label: "Cancel", action: { name: "move-cancel" }, variant: "secondary" },
+          { type: "button", label: "Cancel", action: { name: "move-cancel" }, emphasis: "secondary" },
         ],
       };
     }
@@ -75,7 +75,7 @@ function buildVm(state: ReorderState): ViewNode {
             type: "button",
             label: "Place here",
             action: { name: `move-before-${item.id}` },
-            variant: "primary",
+            emphasis: "primary",
           },
         ],
       };
@@ -89,7 +89,7 @@ function buildVm(state: ReorderState): ViewNode {
           type: "button",
           label: "Move",
           action: { name: `move-start-${item.id}` },
-          variant: "secondary",
+          emphasis: "secondary",
         },
       ],
     };
@@ -102,7 +102,7 @@ function buildVm(state: ReorderState): ViewNode {
       type: "button",
       label: "Place at end",
       action: { name: "move-to-end" },
-      variant: "primary",
+      emphasis: "primary",
     });
   }
 

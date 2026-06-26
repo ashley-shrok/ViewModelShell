@@ -50,8 +50,8 @@ export const FIXTURES: ConformanceFixture[] = [
           children: [
             { type: "text", value: "Charlie", style: "heading" },
             { type: "text", value: "Delta", style: "muted" },
-            { type: "text", value: "Echo", style: "error" },
-            { type: "text", value: "Whiskey", style: "warning" },
+            { type: "text", value: "Echo", tone: "danger" },
+            { type: "text", value: "Whiskey", tone: "warning" },
             { type: "text", value: "Foxtrot", style: "strikethrough" },
             { type: "text", value: "Golf", style: "pre" },
           ],
@@ -89,8 +89,8 @@ export const FIXTURES: ConformanceFixture[] = [
       type: "list",
       children: [
         { type: "list-item", children: [{ type: "text", value: "Hotel" }] },
-        { type: "list-item", variant: "done", children: [{ type: "text", value: "India" }] },
-        { type: "list-item", variant: "active", children: [{ type: "text", value: "Juliet" }] },
+        { type: "list-item", state: "done", children: [{ type: "text", value: "India" }] },
+        { type: "list-item", state: "active", children: [{ type: "text", value: "Juliet" }] },
       ],
     },
     expect: ["Hotel", "India", "Juliet"],
@@ -101,8 +101,8 @@ export const FIXTURES: ConformanceFixture[] = [
       type: "section",
       children: [
         { type: "button", label: "Kilo", action: { name: "a" } },
-        { type: "button", label: "Lima", action: { name: "b" }, variant: "primary" },
-        { type: "button", label: "Mike", action: { name: "c" }, variant: "danger" },
+        { type: "button", label: "Lima", action: { name: "b" }, emphasis: "primary" },
+        { type: "button", label: "Mike", action: { name: "c" }, tone: "danger" },
       ],
     },
     expect: ["Kilo", "Lima", "Mike"],

@@ -122,7 +122,7 @@ public class TasksController : ControllerBase
                             new ActionDescriptor($"toggle-row-{t.Id}")),
                         new TextNode(t.Title, t.Completed ? "strikethrough" : null),
                         new ButtonNode("✕",
-                            new ActionDescriptor($"delete-row-{t.Id}"), "danger"),
+                            new ActionDescriptor($"delete-row-{t.Id}"), Tone: "danger"),
                     ]);
             })
             .ToList();

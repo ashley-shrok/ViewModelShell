@@ -92,7 +92,7 @@ public class ExpensesController : ControllerBase
             var pct   = c.Budget == 0 ? 0 : (int)Math.Min(100, Math.Round(100m * spent / c.Budget));
             var over  = spent > c.Budget;
             railChildren.Add(new TextNode(c.Name, "subheading"));
-            railChildren.Add(new TextNode($"${spent:F2} / ${c.Budget:F2}", over ? "error" : "muted"));
+            railChildren.Add(new TextNode($"${spent:F2} / ${c.Budget:F2}", over ? null : "muted", over ? "danger" : null));
             railChildren.Add(new ProgressNode(pct));
         }
         var rail = new SectionNode("Overview", railChildren, Variant: "card");
@@ -156,7 +156,7 @@ public class ExpensesController : ControllerBase
             Children:
             [
                 new TextNode("Transactions", "heading"),
-                new ButtonNode("+ Add Transaction", new ActionDescriptor("show-add"), Variant: "primary")
+                new ButtonNode("+ Add Transaction", new ActionDescriptor("show-add"), Emphasis: "primary")
             ],
             Layout:  "row",
             Arrange: "space-between",

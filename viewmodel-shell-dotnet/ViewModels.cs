@@ -421,7 +421,11 @@ public record SectionNode(
     // inherited 16rem default holds = byte-identical to today; any value emits
     // .vms-cards-min--{value} which sets --vms-card-min. JsonIgnore-on-null per
     // the file-header rule.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MinItem = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MinItem = null,
+    // Semantic intent/severity tone — the universal status color axis, orthogonal
+    // to Variant (a section can be a card AND tone:"warning"). Emits .vms-section--{tone}
+    // (tinted surface + colored border). "danger"|"warning"|"success"|"info".
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null
 ) : ViewNode;
 
 public record ListNode(
@@ -444,8 +448,14 @@ public record FitsNode(
 
 public record ListItemNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant,
-    IReadOnlyList<ViewNode> Children
+    // Row lifecycle/selection STATE (NOT severity — that's Tone). Freeform,
+    // app-extensible; framework-styled set: active/done/disabled/high/running/moving.
+    // Emits .vms-list-item--{state}. Orthogonal to Tone.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? State,
+    IReadOnlyList<ViewNode> Children,
+    // Semantic intent/severity — universal tone axis ("danger"|"warning"|"success"|"info").
+    // Emits .vms-list-item--{tone} (colored accent border). JsonIgnore-on-null per the file header.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null
 ) : ViewNode;
 
 public record FormNode(
@@ -502,7 +512,16 @@ public record CheckboxNode(
 public record ButtonNode(
     string Label,
     ActionDescriptor Action,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant,
+    // Visual emphasis (how loud): "primary" (filled) | "secondary" (outline).
+    // Orthogonal to Tone and Size. Emits .vms-button--{emphasis}.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Emphasis = null,
+    // Semantic intent/severity ("danger"|"warning"|"success"|"info") — the
+    // universal status color axis, orthogonal to Emphasis. A destructive primary
+    // button is Emphasis:"primary" + Tone:"danger". Emits .vms-button--{tone}.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null,
+    // Box geometry ("sm"|"lg"; omit = md) — orthogonal to color/emphasis.
+    // Emits .vms-button--{size}.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Size = null,
     // Transient label shown from click until dispatch resolves (issue #11).
     // Adapter additionally adds `.vms-button--pending` while pending so the
     // button visibly disables. Null = instant-click behavior (pre-0.8.0).
@@ -511,7 +530,12 @@ public record ButtonNode(
 
 public record TextNode(
     string Value,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Style
+    // Typography role only (NOT color) — emits .vms-text--{style}. Semantic color
+    // moved to Tone (old "error"/"warning" style values are now Tone "danger"/"warning").
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Style = null,
+    // Semantic intent/severity color — universal tone axis, orthogonal to Style.
+    // Emits .vms-text--{tone}; wins over a Style color via source order.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null
 ) : ViewNode;
 
 public record StatItem(string Label, string Value);
@@ -558,7 +582,12 @@ public record TableRow(
     // LEADING column (left — the data-grid selection convention), ButtonNodes in
     // the TRAILING actions cell (right).
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Actions = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant = null,
+    // Row lifecycle STATE (NOT severity — that's Tone). Freeform, app-extensible;
+    // framework-styled set: done/disabled/running. Emits .vms-table__row--{state}.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? State = null,
+    // Semantic intent/severity — universal tone axis ("danger"|"warning"|"success"|"info").
+    // Emits .vms-table__row--{tone} (subtle tinted row background).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null,
     // Click-anywhere row dispatch primitive. When set, the renderer makes the
     // entire row clickable AND keyboard-activatable (Enter / Space — Space
     // preventDefaults page scroll) AND exposes accessibility (role="button",
@@ -623,10 +652,12 @@ public record CopyButtonNode(
     string Text,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? CopiedLabel = null,
-    // Visual variant (issue #14) — mirrors ButtonNode.Variant. Null = current
-    // no-modifier behavior; "primary"/"secondary"/"danger" emit the same
-    // .vms-button--{variant} class ButtonNode does.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant = null
+    // Visual emphasis — mirrors ButtonNode.Emphasis ("primary"|"secondary").
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Emphasis = null,
+    // Semantic intent/severity — mirrors ButtonNode.Tone. Emits .vms-button--{tone}.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null,
+    // Box geometry — mirrors ButtonNode.Size ("sm"|"lg"; omit = md).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Size = null
 ) : ViewNode;
 
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────

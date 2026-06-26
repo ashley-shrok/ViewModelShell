@@ -355,29 +355,37 @@ describe("GRID-01 — cards minItem modifier emission (1.13.0)", () => {
   });
 });
 
-describe('0.9.0 / #14 — CopyButtonNode.variant modifier emission (mirrors ButtonNode)', () => {
-  it('variant: "primary" ⇒ className contains vms-button--primary', () => {
+describe('3.0.0 — CopyButtonNode emphasis/tone modifier emission (mirrors ButtonNode)', () => {
+  it('emphasis: "primary" ⇒ className contains vms-button--primary', () => {
     const el = renderCopyButton({
-      type: "copy-button", text: "x", variant: "primary",
+      type: "copy-button", text: "x", emphasis: "primary",
     });
     expect(el.classList.contains("vms-button")).toBe(true);
     expect(el.classList.contains("vms-button--primary")).toBe(true);
   });
-  it('variant: "secondary" ⇒ className contains vms-button--secondary', () => {
+  it('emphasis: "secondary" ⇒ className contains vms-button--secondary', () => {
     const el = renderCopyButton({
-      type: "copy-button", text: "x", variant: "secondary",
+      type: "copy-button", text: "x", emphasis: "secondary",
     });
     expect(el.classList.contains("vms-button--secondary")).toBe(true);
   });
-  it('variant: "danger" ⇒ className contains vms-button--danger', () => {
+  it('tone: "danger" ⇒ className contains vms-button--danger', () => {
     const el = renderCopyButton({
-      type: "copy-button", text: "x", variant: "danger",
+      type: "copy-button", text: "x", tone: "danger",
     });
     expect(el.classList.contains("vms-button--danger")).toBe(true);
   });
-  it('variant omitted ⇒ className === "vms-button" (byte-identical to pre-0.9.0)', () => {
+  it('all axes omitted ⇒ className === "vms-button"', () => {
     const el = renderCopyButton({ type: "copy-button", text: "x" });
     expect(el.className).toBe("vms-button");
+  });
+  it('emphasis × tone × size compose into three independent modifier classes', () => {
+    const el = renderCopyButton({
+      type: "copy-button", text: "x", emphasis: "primary", tone: "danger", size: "sm",
+    });
+    expect(el.classList.contains("vms-button--primary")).toBe(true);
+    expect(el.classList.contains("vms-button--danger")).toBe(true);
+    expect(el.classList.contains("vms-button--sm")).toBe(true);
   });
 });
 
@@ -409,19 +417,53 @@ describe('0.7.0 / #13 — PageNode.width modifier emission', () => {
   });
 });
 
-describe('0.11.0 / #8 — TextNode "warning" style emission (symmetric with "error")', () => {
-  it('style: "warning" ⇒ className contains vms-text--warning', () => {
-    const el = renderText({ type: "text", value: "w", style: "warning" });
+describe('3.0.0 — TextNode tone modifier emission (was style:"error"/"warning")', () => {
+  it('tone: "warning" ⇒ className contains vms-text--warning', () => {
+    const el = renderText({ type: "text", value: "w", tone: "warning" });
     expect(el.classList.contains("vms-text")).toBe(true);
     expect(el.classList.contains("vms-text--warning")).toBe(true);
   });
-  it('style: "error" still emits vms-text--error (unregressed)', () => {
-    const el = renderText({ type: "text", value: "e", style: "error" });
-    expect(el.classList.contains("vms-text--error")).toBe(true);
+  it('tone: "danger" ⇒ className contains vms-text--danger (renamed from vms-text--error)', () => {
+    const el = renderText({ type: "text", value: "e", tone: "danger" });
+    expect(el.classList.contains("vms-text--danger")).toBe(true);
+  });
+  it('style (typography) and tone (color) compose on one text node', () => {
+    const el = renderText({ type: "text", value: "h", style: "heading", tone: "danger" });
+    expect(el.classList.contains("vms-text--heading")).toBe(true);
+    expect(el.classList.contains("vms-text--danger")).toBe(true);
   });
   it('style omitted ⇒ className === "vms-text" (byte-identical to pre-0.11.0)', () => {
     const el = renderText({ type: "text", value: "x" });
     expect(el.className).toBe("vms-text");
+  });
+});
+
+describe('3.0.0 — SectionNode tone modifier emission (status surfaces)', () => {
+  // Regression guard: a renderer-only bug once shipped the tone class on the
+  // collapsible/linked section paths but NOT the plain <section> path (the
+  // common one), so card+tone rendered as a plain gray card. Parity can't catch
+  // this — it diffs the backend WIRE, not the emitted DOM classes — so it is
+  // unit-tested here. Cover all three section render paths.
+  it('plain section: tone "warning" ⇒ className contains vms-section--warning', () => {
+    const el = renderSection({ type: "section", tone: "warning", children: [] });
+    expect(el.classList.contains("vms-section--warning")).toBe(true);
+  });
+  it('card + tone compose: both vms-section--card and vms-section--danger present', () => {
+    const el = renderSection({ type: "section", variant: "card", tone: "danger", children: [] });
+    expect(el.classList.contains("vms-section--card")).toBe(true);
+    expect(el.classList.contains("vms-section--danger")).toBe(true);
+  });
+  it('collapsible section path emits the tone class', () => {
+    const el = renderSection({ type: "section", collapsible: true, tone: "success", children: [] });
+    expect(el.classList.contains("vms-section--success")).toBe(true);
+  });
+  it('linked section path emits the tone class', () => {
+    const el = renderSection({ type: "section", link: { url: "/x" }, tone: "info", children: [] });
+    expect(el.classList.contains("vms-section--info")).toBe(true);
+  });
+  it('no tone ⇒ no tone modifier class', () => {
+    const el = renderSection({ type: "section", variant: "card", children: [] });
+    expect(el.className).toBe("vms-section vms-section--card");
   });
 });
 

@@ -334,10 +334,12 @@ const statusLabel = (s: string) =>
   s === "in-progress" ? "In Progress" :
   s === "resolved"    ? "Resolved"    : s;
 
-const ticketVariant = (t: Ticket): string | undefined =>
-  t.status === "resolved" ? "done" :
-  t.priority === "critical" ? "critical" :
-  t.priority === "high"     ? "high"     : undefined;
+// Status splits across the two orthogonal axes: `state` (lifecycle: done/high)
+// and `tone` (severity: critical → danger).
+const ticketStatus = (t: Ticket): { state?: string; tone?: "danger" | "warning" | "success" | "info" } =>
+  t.status === "resolved" ? { state: "done" } :
+  t.priority === "critical" ? { tone: "danger" } :
+  t.priority === "high"     ? { state: "high" } : {};
 
 function formatDate(iso: string): string {
   const dt = new Date(iso);
@@ -357,7 +359,7 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
   const tickets = withinCap ? dbGetMatching(status, state.titleFilter, AGENT_CAP) : [];
 
   const rows = tickets.map(t => {
-    const variant = ticketVariant(t);
+    const status = ticketStatus(t);
     const rowActions: ViewNode[] = [
       // Per-row selection checkbox bound to `selectedIds.${id}` (renderer
       // writes true/false directly to that slot on click; no dispatch needed).
@@ -373,7 +375,8 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
       cells: Record<string, string>;
       id?: string;
       actions?: ViewNode[];
-      variant?: string;
+      state?: string;
+      tone?: "danger" | "warning" | "success" | "info";
       action?: { name: string };
     } = {
       cells: {
@@ -389,7 +392,8 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
       // just on the whole row (keyboard + ARIA emitted by the renderer).
       action: { name: `select-ticket-${t.id}` },
     };
-    if (variant !== undefined) row.variant = variant;
+    if (status.state) row.state = status.state;
+    if (status.tone) row.tone = status.tone;
     return row;
   });
 
@@ -426,9 +430,9 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
       threshold: "md",
       limit: 3,
       children: [
-        { type: "button", label: "Mark In Progress", action: { name: "bulk-start" },   variant: "secondary" },
-        { type: "button", label: "Mark Resolved",    action: { name: "bulk-resolve" }, variant: "primary" },
-        { type: "button", label: "Reopen",           action: { name: "bulk-reopen" },  variant: "secondary" },
+        { type: "button", label: "Mark In Progress", action: { name: "bulk-start" },   emphasis: "secondary" },
+        { type: "button", label: "Mark Resolved",    action: { name: "bulk-resolve" }, emphasis: "primary" },
+        { type: "button", label: "Reopen",           action: { name: "bulk-reopen" },  emphasis: "secondary" },
       ],
     });
   }
@@ -440,7 +444,7 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
     children.push({
       type: "text",
       value: `${matching} tickets match — refine the filter (max ${AGENT_CAP} shown).`,
-      style: "warning",
+      tone: "warning",
     });
   } else if (rows.length === 0 && !dbEmpty) {
     // Filter narrowed to zero matches against a non-empty DB. The table still
@@ -504,7 +508,7 @@ function agentBuildTicketPage(ticket: Ticket, state: AgentState): ViewNode {
       actionChildren.push({
         type: "button", label: "Mark In Progress",
         action: { name: "start-ticket" },
-        variant: "primary",
+        emphasis: "primary",
         pendingLabel: "Marking…",
       });
       break;
@@ -512,7 +516,7 @@ function agentBuildTicketPage(ticket: Ticket, state: AgentState): ViewNode {
       actionChildren.push({
         type: "button", label: "Mark Resolved",
         action: { name: "resolve-ticket" },
-        variant: "primary",
+        emphasis: "primary",
         pendingLabel: "Resolving…",
       });
       break;
@@ -520,7 +524,7 @@ function agentBuildTicketPage(ticket: Ticket, state: AgentState): ViewNode {
       actionChildren.push({
         type: "button", label: "Reopen",
         action: { name: "reopen-ticket" },
-        variant: "secondary",
+        emphasis: "secondary",
         pendingLabel: "Reopening…",
       });
       if (ticket.resolvedAt) {
@@ -634,7 +638,7 @@ function requesterBuildListView(state: RequesterState): ViewNode {
   const items: ViewNode[] = tickets.map<ViewNode>(t => ({
     type: "list-item",
     id: String(t.id),
-    variant: ticketVariant(t),
+    ...ticketStatus(t),
     children: [
       { type: "text", value: t.title, style: "subheading" },
       { type: "text", value: `${typeLabel(t.type)} · ${priorityLabel(t.priority)}`, style: "muted" },
@@ -642,7 +646,7 @@ function requesterBuildListView(state: RequesterState): ViewNode {
       {
         type: "button", label: "View",
         action: { name: `select-ticket-${t.id}` },
-        variant: "secondary",
+        emphasis: "secondary",
       },
     ],
   }));
@@ -675,7 +679,7 @@ function requesterBuildListView(state: RequesterState): ViewNode {
         ],
       },
       { type: "list", children: items },
-      { type: "button", label: "New Ticket", action: { name: "start-create" }, variant: "primary" },
+      { type: "button", label: "New Ticket", action: { name: "start-create" }, emphasis: "primary" },
     ],
   };
 }
@@ -683,7 +687,7 @@ function requesterBuildListView(state: RequesterState): ViewNode {
 function requesterBuildCreateView(state: RequesterState): ViewNode {
   const formChildren: ViewNode[] = [];
   if (state.validationError) {
-    formChildren.push({ type: "text", value: state.validationError, style: "error" });
+    formChildren.push({ type: "text", value: state.validationError, tone: "danger" });
   }
   formChildren.push({
     type: "field", name: "title", inputType: "text",

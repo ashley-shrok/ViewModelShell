@@ -127,7 +127,7 @@ public class ContactsControllerTests
         var addBtn = AddButton(Page(CreateController().Get().Vm));
         Assert.Equal("+ Add Contact", addBtn.Label);
         Assert.Equal("navigate-to-add", addBtn.Action.Name);
-        Assert.Equal("primary", addBtn.Variant);
+        Assert.Equal("primary", addBtn.Emphasis);
     }
 
     [Fact]
@@ -178,7 +178,7 @@ public class ContactsControllerTests
     public void Get_Master_NoRowHasActiveVariant_WhenNoSelection()
     {
         var list = ContactList(Page(CreateController().Get().Vm));
-        Assert.All(list.Children.Cast<ListItemNode>(), i => Assert.Null(i.Variant));
+        Assert.All(list.Children.Cast<ListItemNode>(), i => Assert.Null(i.State));
     }
 
     [Fact]
@@ -252,11 +252,11 @@ public class ContactsControllerTests
         var ctrl = CreateController();
         var resp = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-detail-c1"));
         var list = ContactList(Page(resp.Vm));
-        var active = list.Children.Cast<ListItemNode>().Where(i => i.Variant == "active").ToList();
+        var active = list.Children.Cast<ListItemNode>().Where(i => i.State == "active").ToList();
         Assert.Single(active);
         Assert.Equal("c1", active[0].Id);
         Assert.All(list.Children.Cast<ListItemNode>().Where(i => i.Id != "c1"),
-            i => Assert.Null(i.Variant));
+            i => Assert.Null(i.State));
     }
 
     [Fact]
@@ -265,7 +265,7 @@ public class ContactsControllerTests
         var ctrl = CreateController();
         var resp = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-detail-c1"));
         var del = Detail(Page(resp.Vm)).Children.OfType<ButtonNode>()
-            .Single(b => b.Variant == "danger");
+            .Single(b => b.Tone == "danger");
         Assert.Equal("Delete", del.Label);
         Assert.Equal("delete-contact-c1", del.Action.Name);
     }
@@ -316,7 +316,7 @@ public class ContactsControllerTests
         var cancel = Detail(Page(resp.Vm)).Children.OfType<ButtonNode>().Single();
         Assert.Equal("Cancel", cancel.Label);
         Assert.Equal("navigate-to-list", cancel.Action.Name);
-        Assert.Null(cancel.Variant);
+        Assert.Null(cancel.Emphasis);
     }
 
     [Fact]

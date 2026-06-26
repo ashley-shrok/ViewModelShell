@@ -280,7 +280,7 @@ public class AgentControllerTests : IDisposable
         Assert.NotNull(detail.State);
         Ok(Act(ctrl, detail.State!, "resolve-ticket"));
         var row = QueueTable(Page(ctrl.Get().Vm)).Rows.Single();
-        Assert.Equal("done", row.Variant);
+        Assert.Equal("done", row.State);
     }
 
     [Fact]
@@ -288,7 +288,7 @@ public class AgentControllerTests : IDisposable
     {
         SeedTicket(priority: "high");
         var row = QueueTable(Page(CreateAgent().Get().Vm)).Rows.Single();
-        Assert.Equal("high", row.Variant);
+        Assert.Equal("high", row.State);
     }
 
     // ── reopen-ticket ─────────────────────────────────────────────────────────

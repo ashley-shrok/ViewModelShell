@@ -137,8 +137,10 @@ export interface PageNode {
 export interface SectionNode {
   type: "section";
   heading?: string;
-  /** Section surface variant. Omitted = current behavior (no modifier class). "card" emits .vms-section--card. Closed union (D-03). */
+  /** Section surface variant — the structural KIND of the section's surface (the single meaning of "variant" framework-wide). Omitted = current behavior (no modifier class). "card" emits .vms-section--card. Closed union (D-03). */
   variant?: "card";
+  /** Semantic intent/severity tone — the universal status color axis (orthogonal to `variant`; a section can be a `card` AND `tone:"warning"`). Emits .vms-section--{tone} (subtle tinted surface + colored border, reusing the --vms-error/-warning/-success/-info tokens). Omitted = neutral. Closed union. */
+  tone?: "danger" | "warning" | "success" | "info";
   /** Layout preset arranging direct children. Omitted or "stack" = current vertical flow (no modifier class). "split" (equal 2-up), "cards" (uniform grid), "sidebar" (thin + wide app shell), "row" (left-aligned wrapping horizontal row; items hug content), "switcher" (N equal items flipping all-row ↔ all-stack atomically at a content-width `threshold` — the negative-flex-basis primitive a grid cannot express; distinct from `cards` auto-fit which passes through intermediate column counts) emit .vms-section--{value}. Closed union (D-01/D-02; sidebar D-28; row D-30; switcher SWITCH-01). */
   layout?: "stack" | "split" | "cards" | "sidebar" | "row" | "switcher";
   /** Main-axis arrangement for `layout:"row"` (the cluster primitive) — maps to `justify-content`. Omitted = no class → the row default (`flex-start`, left-pack) holds = byte-identical to today. Closed union copied verbatim from Jetpack Compose `Arrangement` ∩ Flutter `MainAxisAlignment` (ALIGN-01). Emits .vms-arrange--{value}. */
@@ -234,8 +236,10 @@ export interface ListNode {
 export interface ListItemNode {
   type: "list-item";
   id?: string;
-  /** Appended as a BEM modifier: vms-list-item--{variant} */
-  variant?: string;
+  /** Row lifecycle/selection STATE (NOT severity — that's `tone`). A freeform, app-extensible token; the framework ships styling for `active` (selected), `done`, `disabled`, `high` (priority), `running`, `moving`. Appended as a BEM modifier: vms-list-item--{state}. Orthogonal to `tone` (a row can be `state:"active"` AND `tone:"danger"`). */
+  state?: string;
+  /** Semantic intent/severity — the universal status tone axis (closed). Emits .vms-list-item--{tone} (colored accent border, reusing the shared tokens). Omitted = neutral. */
+  tone?: "danger" | "warning" | "success" | "info";
   children: ViewNode[];
 }
 
@@ -305,7 +309,12 @@ export interface ButtonNode {
   type: "button";
   label: string;
   action: ActionEvent;
-  variant?: "primary" | "secondary" | "danger";
+  /** Visual emphasis (how loud) — `primary` = filled, `secondary` = outline. Orthogonal to `tone` and `size`. Emits .vms-button--{emphasis}. Omitted = the neutral default button. Closed union. */
+  emphasis?: "primary" | "secondary";
+  /** Semantic intent/severity (what it means) — the universal status color axis, orthogonal to `emphasis`. A destructive primary button is `emphasis:"primary"` + `tone:"danger"`. Emits .vms-button--{tone}. Omitted = neutral. Closed union. */
+  tone?: "danger" | "warning" | "success" | "info";
+  /** Box geometry (padding + font), orthogonal to color/emphasis — the one axis no design system bakes into variant. Emits .vms-button--{size}. Omitted = the default (md) size. Closed union. */
+  size?: "sm" | "lg";
   /** Transient label shown from click until the dispatch resolves (response
    *  arrives or dispatch errors). Mirrors `CopyButtonNode.copiedLabel`'s
    *  lifecycle pattern at a different beat: shown DURING the round-trip
@@ -318,7 +327,10 @@ export interface ButtonNode {
 export interface TextNode {
   type: "text";
   value: string;
-  style?: "heading" | "subheading" | "body" | "muted" | "strikethrough" | "error" | "warning" | "pre";
+  /** Typography role only (NOT color) — emits .vms-text--{style}. Semantic color moved to `tone` (the old `error`/`warning` style values are now `tone:"danger"`/`tone:"warning"`). Closed union. */
+  style?: "heading" | "subheading" | "body" | "muted" | "strikethrough" | "pre";
+  /** Semantic intent/severity color — the universal status tone axis, orthogonal to `style` (a heading can be `tone:"danger"`). Emits .vms-text--{tone}; the tone color wins over a `style` color via source order. Omitted = default text color. Closed union. */
+  tone?: "danger" | "warning" | "success" | "info";
 }
 
 export interface LinkNode {
@@ -413,7 +425,10 @@ export interface TableRow {
    *  cell (right). A previous version typed this as `ButtonNode[]` and called
    *  the button renderer blindly, silently dropping non-button entries. */
   actions?: (ButtonNode | CheckboxNode)[];
-  variant?: string;
+  /** Row lifecycle STATE (NOT severity — that's `tone`). A freeform, app-extensible token; the framework ships styling for `done`, `disabled`, `running`. Emits .vms-table__row--{state}. Orthogonal to `tone`. */
+  state?: string;
+  /** Semantic intent/severity — the universal status tone axis (closed). Emits .vms-table__row--{tone} (subtle tinted row background, reusing the shared tokens). Omitted = neutral. */
+  tone?: "danger" | "warning" | "success" | "info";
 }
 
 export interface TablePagination {
@@ -469,11 +484,12 @@ export interface CopyButtonNode {
   label?: string;
   /** Ephemeral label shown after a successful copy, reverts after ~1.5 s. Adapter default: "Copied!". */
   copiedLabel?: string;
-  /** Visual variant — mirrors ButtonNode.variant (issue #14). Adapter emits
-   *  `vms-button vms-button--{variant}` (browser) / variant-tinted text
-   *  (TUI), so a copy-button can read distinctly from neighboring default
-   *  buttons. Closed union; omitted = current behavior (no modifier). */
-  variant?: "primary" | "secondary" | "danger";
+  /** Visual emphasis — mirrors ButtonNode.emphasis. `primary` = filled, `secondary` = outline. Emits .vms-button--{emphasis}. Closed union. */
+  emphasis?: "primary" | "secondary";
+  /** Semantic intent/severity — mirrors ButtonNode.tone. Emits .vms-button--{tone}. Closed union. */
+  tone?: "danger" | "warning" | "success" | "info";
+  /** Box geometry — mirrors ButtonNode.size. Emits .vms-button--{size}. Omitted = md. Closed union. */
+  size?: "sm" | "lg";
 }
 
 /**

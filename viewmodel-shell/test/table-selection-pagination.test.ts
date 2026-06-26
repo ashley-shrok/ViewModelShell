@@ -142,14 +142,14 @@ describe("Phase 6 — per-row buttons via TableRow.actions[]", () => {
             id: "1",
             cells: { name: "Apple" },
             actions: [
-              { type: "button", label: "Delete", action: { name: "delete-row-1" }, variant: "danger" },
+              { type: "button", label: "Delete", action: { name: "delete-row-1" }, tone: "danger" },
             ],
           },
           {
             id: "2",
             cells: { name: "Banana" },
             actions: [
-              { type: "button", label: "Delete", action: { name: "delete-row-2" }, variant: "danger" },
+              { type: "button", label: "Delete", action: { name: "delete-row-2" }, tone: "danger" },
             ],
           },
         ],

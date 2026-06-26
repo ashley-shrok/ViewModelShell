@@ -155,14 +155,14 @@ function buildVm(state: FeatureProbeState): ViewNode {
     });
   }
   children.push(
-    { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!", variant: "secondary" } as ViewNode,
+    { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!", emphasis: "secondary" } as ViewNode,
   );
   children.push({ type: "image", src: "/logo.png", alt: "ViewModel Shell logo", size: "small", shape: "circle" } as ViewNode);
   if (state.lastSubmit != null) {
     children.push({ type: "text", value: `Last submit: ${state.lastSubmit}`, style: "muted" });
   }
   children.push({ type: "button", label: "Start long action",
-    action: { name: "start-long-action" }, variant: "primary" });
+    action: { name: "start-long-action" }, emphasis: "primary" });
   if (state.longActionPolls > 0) {
     children.push({
       type: "text",
@@ -176,8 +176,8 @@ function buildVm(state: FeatureProbeState): ViewNode {
     type: "form",
     children: [{ type: "field", name: "note", inputType: "text", bind: "note", label: "Note", placeholder: "Type a note…", required: false }],
     buttons: [
-      { type: "button", label: "Save Draft", action: { name: "save-draft" }, variant: "secondary" },
-      { type: "button", label: "Publish", action: { name: "publish" }, variant: "primary" },
+      { type: "button", label: "Save Draft", action: { name: "save-draft" }, emphasis: "secondary" },
+      { type: "button", label: "Publish", action: { name: "publish" }, emphasis: "primary" },
     ],
   } as ViewNode);
   const probeSection: ViewNode = {
@@ -430,6 +430,43 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // 3.0.0 — appearance axes (parity coverage for the unified vocabulary).
+  // Byte-identical to the .NET twin (FeatureProbeController.cs axesSection).
+  const axesSection: ViewNode = {
+    type: "section",
+    heading: "Appearance axes",
+    variant: "card",
+    children: [
+      { type: "button", label: "E-primary",   action: { name: "axes-noop-1" }, emphasis: "primary" },
+      { type: "button", label: "E-secondary", action: { name: "axes-noop-2" }, emphasis: "secondary" },
+      { type: "button", label: "T-danger",    action: { name: "axes-noop-3" }, tone: "danger" },
+      { type: "button", label: "T-warning",   action: { name: "axes-noop-4" }, tone: "warning" },
+      { type: "button", label: "T-success",   action: { name: "axes-noop-5" }, tone: "success" },
+      { type: "button", label: "T-info",      action: { name: "axes-noop-6" }, tone: "info" },
+      { type: "button", label: "S-sm",        action: { name: "axes-noop-7" }, size: "sm" },
+      { type: "button", label: "S-lg",        action: { name: "axes-noop-8" }, size: "lg" },
+      { type: "button", label: "combo",       action: { name: "axes-noop-9" }, emphasis: "primary", tone: "danger", size: "lg" },
+      { type: "copy-button", text: "axes-clip", label: "Copy", emphasis: "secondary", tone: "info", size: "sm" },
+      { type: "text", value: "tone text", tone: "warning" },
+      { type: "text", value: "heading + tone", style: "heading", tone: "danger" },
+      { type: "section", heading: "Warning card", variant: "card", tone: "warning", children: [{ type: "text", value: "tinted card surface" }] },
+      { type: "section", heading: "Danger band", tone: "danger", children: [{ type: "text", value: "bare tinted section" }] },
+      { type: "list", children: [
+        { type: "list-item", id: "axes-li-1", state: "active", children: [{ type: "text", value: "active state" }] },
+        { type: "list-item", id: "axes-li-2", tone: "danger", children: [{ type: "text", value: "danger tone" }] },
+        { type: "list-item", id: "axes-li-3", state: "done", tone: "success", children: [{ type: "text", value: "done + success" }] },
+      ]},
+      { type: "table",
+        columns: [{ key: "k", label: "K", sortable: false, filterable: false, linkExternal: false }],
+        rows: [
+          { cells: { k: "running" }, state: "running" },
+          { cells: { k: "danger" }, tone: "danger" },
+          { cells: { k: "done+warn" }, state: "done", tone: "warning" },
+        ],
+      },
+    ],
+  };
+
   return {
     type: "page",
     title: "Feature Probe",
@@ -437,7 +474,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
     layout: "cards",
     children: [
       probeSection, clickableCardSection, linkedCardSection, rowSection,
-      bareRowSection, headerBarSection, ...arrangeSections, ...alignSections,
+      bareRowSection, headerBarSection, axesSection, ...arrangeSections, ...alignSections,
       bareSwitcherSection, ...switcherThresholdSections, switcherLimitSection,
       bareCardsSection, ...cardsMinItemSections,
       fitsAxisOmittedSection, fitsAxisBothSection,

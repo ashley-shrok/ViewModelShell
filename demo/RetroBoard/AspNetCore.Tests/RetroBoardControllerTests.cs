@@ -57,10 +57,10 @@ public class RetroBoardControllerTests
             .Sum();
 
     private static int OpenActionItems(PageNode page) =>
-        Cards(Sections(page)[2]).Count(c => c.Variant != "done");
+        Cards(Sections(page)[2]).Count(c => c.State != "done");
 
     private static int ResolvedActionItems(PageNode page) =>
-        Cards(Sections(page)[2]).Count(c => c.Variant == "done");
+        Cards(Sections(page)[2]).Count(c => c.State == "done");
 
     // ── GET ─────────────────────────────────────────────────────────────────────
 
@@ -202,7 +202,7 @@ public class RetroBoardControllerTests
                 var deleteBtn = node.Children.OfType<ButtonNode>()
                     .Single(b => b.Action.Name.StartsWith("delete-card-"));
                 Assert.Equal("✕", deleteBtn.Label);
-                Assert.Equal("danger", deleteBtn.Variant);
+                Assert.Equal("danger", deleteBtn.Tone);
             }
         }
     }
@@ -211,7 +211,7 @@ public class RetroBoardControllerTests
     public void Get_UpvoteButton_HasNoVariant()
     {
         var card = Cards(Sections(Page(CreateController().Get().Vm))[0]).First();
-        Assert.Null(UpvoteButton(card).Variant);
+        Assert.Null(UpvoteButton(card).Emphasis);
     }
 
     [Fact]
@@ -225,7 +225,7 @@ public class RetroBoardControllerTests
     public void Get_SeedCard_HasNoDoneVariantAndNoStrikethrough()
     {
         var card = Cards(Sections(Page(CreateController().Get().Vm))[2]).First();
-        Assert.Null(card.Variant);
+        Assert.Null(card.State);
         Assert.DoesNotContain(card.Children.OfType<TextNode>(), t => t.Style == "strikethrough");
     }
 
@@ -356,7 +356,7 @@ public class RetroBoardControllerTests
         };
         var resp = Ok(Act(ctrl, staged, $"resolve-card-{actionId}"));
         var item = Cards(Sections(Page(resp.Vm))[2]).First();
-        Assert.Equal("done", item.Variant);
+        Assert.Equal("done", item.State);
     }
 
     [Fact]
@@ -410,7 +410,7 @@ public class RetroBoardControllerTests
         };
         var resp = Ok(Act(ctrl, unresolved, $"resolve-card-{actionId}"));
         var item = Cards(Sections(Page(resp.Vm))[2]).First();
-        Assert.Null(item.Variant);
+        Assert.Null(item.State);
     }
 
     // ── unknown action ──────────────────────────────────────────────────────────

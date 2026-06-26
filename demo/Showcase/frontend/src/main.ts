@@ -147,11 +147,14 @@ function applyTheme() {
 }
 
 // ── Source data for the table (filtered/sorted on render) ────────────────
-const allRows = [
-  { id: "1", name: "Alpha",   status: "open",        url: "https://example.com/1", variant: undefined as string | undefined },
-  { id: "2", name: "Bravo",   status: "in-progress", url: "https://example.com/2", variant: "warning" },
-  { id: "3", name: "Charlie", status: "resolved",    url: "https://example.com/3", variant: "done" },
-  { id: "4", name: "Delta",   status: "blocked",     url: "https://example.com/4", variant: "critical" },
+const allRows: Array<{
+  id: string; name: string; status: string; url: string;
+  state?: string; tone?: "danger" | "warning" | "success" | "info";
+}> = [
+  { id: "1", name: "Alpha",   status: "open",        url: "https://example.com/1" },
+  { id: "2", name: "Bravo",   status: "in-progress", url: "https://example.com/2", tone: "warning" },
+  { id: "3", name: "Charlie", status: "resolved",    url: "https://example.com/3", state: "done" },
+  { id: "4", name: "Delta",   status: "blocked",     url: "https://example.com/4", tone: "danger" },
 ];
 
 function visibleRows() {
@@ -224,8 +227,8 @@ function componentsView(): ViewNode[] {
       { type: "text", value: "Body line one\nBody line two with longer prose to demonstrate line height.", style: "body" },
       { type: "text", value: "Muted secondary information",  style: "muted" },
       { type: "text", value: "Strikethrough completed item", style: "strikethrough" },
-      { type: "text", value: "Error message text",           style: "error" },
-      { type: "text", value: "Warning advisory text",         style: "warning" },
+      { type: "text", value: "Error message text",           tone: "danger" },
+      { type: "text", value: "Warning advisory text",         tone: "warning" },
       { type: "text", value: "$ vms render --verbose\n  ok page\n  ok section\n  ok list (3 items)\n  ok button x2", style: "pre" },
     ]},
 
@@ -242,11 +245,55 @@ function componentsView(): ViewNode[] {
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90'%3E%3Crect width='160' height='90' fill='%2310b981'/%3E%3C/svg%3E", alt: "Sample banner", size: "large" },
     ]},
 
-    { type: "section", heading: "Buttons", children: [
-      { type: "button", label: "Default",   action: { name: "noop-default"   } },
-      { type: "button", label: "Primary",   action: { name: "noop-primary"   }, variant: "primary" },
-      { type: "button", label: "Secondary", action: { name: "noop-secondary" }, variant: "secondary" },
-      { type: "button", label: "Danger",    action: { name: "noop-danger"    }, variant: "danger" },
+    { type: "section", heading: "Buttons — three orthogonal axes", children: [
+      { type: "text", value: "emphasis (how loud) × tone (what it means) × size (geometry). They compose: a destructive primary CTA is emphasis:\"primary\" + tone:\"danger\". Crucially, tone and emphasis NEVER change size — only the size axis does, so a Default and a Danger button below are exactly the same size.", style: "muted" },
+      { type: "text", value: "emphasis", style: "subheading" },
+      { type: "section", layout: "row", children: [
+        { type: "button", label: "Default",   action: { name: "noop-default"   } },
+        { type: "button", label: "Primary",   action: { name: "noop-primary"   }, emphasis: "primary" },
+        { type: "button", label: "Secondary", action: { name: "noop-secondary" }, emphasis: "secondary" },
+      ]},
+      { type: "text", value: "tone (neutral emphasis)", style: "subheading" },
+      { type: "section", layout: "row", children: [
+        { type: "button", label: "Danger",  action: { name: "noop-t-danger"  }, tone: "danger" },
+        { type: "button", label: "Warning", action: { name: "noop-t-warning" }, tone: "warning" },
+        { type: "button", label: "Success", action: { name: "noop-t-success" }, tone: "success" },
+        { type: "button", label: "Info",    action: { name: "noop-t-info"    }, tone: "info" },
+      ]},
+      { type: "text", value: "emphasis × tone (filled / outlined in the tone color)", style: "subheading" },
+      { type: "section", layout: "row", children: [
+        { type: "button", label: "Primary · Danger",   action: { name: "noop-pd" }, emphasis: "primary",   tone: "danger" },
+        { type: "button", label: "Secondary · Danger", action: { name: "noop-sd" }, emphasis: "secondary", tone: "danger" },
+        { type: "button", label: "Primary · Success",  action: { name: "noop-ps" }, emphasis: "primary",   tone: "success" },
+      ]},
+      { type: "text", value: "size (sm / md=default / lg) — the ONLY axis that changes box metrics", style: "subheading" },
+      { type: "section", layout: "row", children: [
+        { type: "button", label: "Small",   action: { name: "noop-sm" }, emphasis: "primary", size: "sm" },
+        { type: "button", label: "Medium",  action: { name: "noop-md" }, emphasis: "primary" },
+        { type: "button", label: "Large",   action: { name: "noop-lg" }, emphasis: "primary", size: "lg" },
+      ]},
+    ]},
+
+    { type: "section", heading: "Status surfaces (section tone)", children: [
+      { type: "text", value: "A section's `tone` tints the whole surface (orthogonal to variant:\"card\") — for status dashboards where an unhealthy tile should read at a glance, not via one small line of text. Composes with the cards layout.", style: "muted" },
+      { type: "section", layout: "cards", minItem: "sm", children: [
+        { type: "section", variant: "card", children: [
+          { type: "text", value: "Sentinel A", style: "subheading" },
+          { type: "text", value: "all checks passing", style: "muted" },
+        ]},
+        { type: "section", variant: "card", tone: "success", children: [
+          { type: "text", value: "Sentinel B", style: "subheading" },
+          { type: "text", value: "healthy", style: "muted" },
+        ]},
+        { type: "section", variant: "card", tone: "warning", children: [
+          { type: "text", value: "Sentinel C", style: "subheading" },
+          { type: "text", value: "latency elevated", style: "muted" },
+        ]},
+        { type: "section", variant: "card", tone: "danger", children: [
+          { type: "text", value: "Sentinel D", style: "subheading" },
+          { type: "text", value: "DOWN — 3 failed probes", style: "muted" },
+        ]},
+      ]},
     ]},
 
     { type: "section", heading: "Copy button (clipboard, no dispatch)", children: [
@@ -310,29 +357,29 @@ function componentsView(): ViewNode[] {
         { type: "list-item", children: [
           { type: "text", value: "Default item",       style: "subheading" },
           { type: "text", value: "no variant set",     style: "muted" },
-          { type: "button", label: "Delete", action: { name: "noop-list-delete-default" }, variant: "danger" },
+          { type: "button", label: "Delete", action: { name: "noop-list-delete-default" }, tone: "danger" },
         ]},
-        { type: "list-item", variant: "critical", children: [
+        { type: "list-item", tone: "danger", children: [
           { type: "text", value: "Critical item",      style: "subheading" },
           { type: "text", value: "list-item--critical · red",    style: "muted" },
         ]},
-        { type: "list-item", variant: "high", children: [
+        { type: "list-item", state: "high", children: [
           { type: "text", value: "High-priority item", style: "subheading" },
           { type: "text", value: "list-item--high · orange",     style: "muted" },
         ]},
-        { type: "list-item", variant: "warning", children: [
+        { type: "list-item", tone: "warning", children: [
           { type: "text", value: "Warning item",       style: "subheading" },
           { type: "text", value: "list-item--warning · yellow",  style: "muted" },
         ]},
-        { type: "list-item", variant: "success", children: [
+        { type: "list-item", tone: "success", children: [
           { type: "text", value: "Success item",       style: "subheading" },
           { type: "text", value: "list-item--success · green",   style: "muted" },
         ]},
-        { type: "list-item", variant: "info", children: [
+        { type: "list-item", tone: "info", children: [
           { type: "text", value: "Info item",          style: "subheading" },
           { type: "text", value: "list-item--info · blue",       style: "muted" },
         ]},
-        { type: "list-item", variant: "done", children: [
+        { type: "list-item", state: "done", children: [
           { type: "text", value: "Completed item",     style: "subheading" },
           { type: "text", value: "list-item--done",    style: "muted" },
         ]},
@@ -351,7 +398,8 @@ function componentsView(): ViewNode[] {
         rows: visibleRows().map(r => ({
           id: r.id,
           cells: { id: r.id, name: r.name, status: r.status, url: r.url },
-          variant: r.variant,
+          state: r.state,
+          tone: r.tone,
         })),
         sortBind: "sortIntent",
         filterBinds: { name: "filters.name", status: "filters.status" },
@@ -366,7 +414,7 @@ function componentsView(): ViewNode[] {
 
     { type: "section", heading: "Modal", children: [
       { type: "text", value: "Cancel/Delete forever/the X all dismiss it. Use the button below to reopen.", style: "muted" },
-      { type: "button", label: "Open modal", action: { name: "modal:open" }, variant: "primary" },
+      { type: "button", label: "Open modal", action: { name: "modal:open" }, emphasis: "primary" },
     ]},
 
     ...(state.modalShown ? [{
@@ -378,7 +426,7 @@ function componentsView(): ViewNode[] {
       ],
       footer: [
         { type: "button" as const, label: "Cancel",         action: { name: "modal:dismiss:cancel" } },
-        { type: "button" as const, label: "Delete forever", action: { name: "modal:dismiss:confirm" }, variant: "danger" as const },
+        { type: "button" as const, label: "Delete forever", action: { name: "modal:dismiss:confirm" }, tone: "danger" as const },
       ],
     }] : []),
   ];
@@ -572,10 +620,10 @@ function dashboardView(): ViewNode[] {
         ],
         rows: [
           { id: "a1", cells: { when: "2 min ago",  event: "Order placed",   actor: "j.okafor@example.com",  amount: "$248.00" } },
-          { id: "a2", cells: { when: "18 min ago", event: "Refund issued",  actor: "support",                amount: "-$32.00" }, variant: "warning" },
+          { id: "a2", cells: { when: "18 min ago", event: "Refund issued",  actor: "support",                amount: "-$32.00" }, tone: "warning" },
           { id: "a3", cells: { when: "41 min ago", event: "Order placed",   actor: "m.haddad@example.com",   amount: "$94.50"  } },
           { id: "a4", cells: { when: "1 hr ago",   event: "Subscription",   actor: "r.tanaka@example.com",   amount: "$19.00"  } },
-          { id: "a5", cells: { when: "2 hr ago",   event: "Chargeback",     actor: "risk",                   amount: "-$140.00" }, variant: "critical" },
+          { id: "a5", cells: { when: "2 hr ago",   event: "Chargeback",     actor: "risk",                   amount: "-$140.00" }, tone: "danger" },
         ],
       },
     ]},
@@ -598,7 +646,7 @@ function dashboardView(): ViewNode[] {
       ]},
     ]},
     { type: "section", children: [
-      { type: "button", label: "New report", action: { name: "dashboard:new-report" }, variant: "primary" },
+      { type: "button", label: "New report", action: { name: "dashboard:new-report" }, emphasis: "primary" },
     ]},
   ];
 }
@@ -664,7 +712,7 @@ function listDetailView(): ViewNode[] {
       { type: "list", children: catalog.map(item => ({
         type: "list-item" as const,
         id: item.id,
-        variant: item.id === state.selectedItemId ? "info" : undefined,
+        state: item.id === state.selectedItemId ? "active" : undefined,
         children: [
           { type: "text" as const, value: item.title, style: "subheading" as const },
           { type: "text" as const, value: `${item.artist} · ${item.year} · ${item.price}`, style: "muted" as const },
@@ -685,7 +733,7 @@ function listDetailView(): ViewNode[] {
         { label: "length", value: sel.tracks },
       ]},
       { type: "text", value: sel.blurb, style: "body" },
-      { type: "button", label: "Add to cart", action: { name: `list-detail:add-${sel.id}` }, variant: "primary" },
+      { type: "button", label: "Add to cart", action: { name: `list-detail:add-${sel.id}` }, emphasis: "primary" },
     ],
   };
 

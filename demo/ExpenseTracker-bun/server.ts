@@ -126,7 +126,8 @@ function buildVm(state: ExpensesState): ViewNode {
     railChildren.push({
       type: "text",
       value: `$${f2(spent)} / $${f2(c.budget)}`,
-      style: over ? "error" : "muted",
+      style: over ? undefined : "muted",
+      tone: over ? "danger" : undefined,
     });
     railChildren.push({ type: "progress", value: pct });
   }
@@ -209,7 +210,7 @@ function buildVm(state: ExpensesState): ViewNode {
         type: "button",
         label: "+ Add Transaction",
         action: { name: "show-add" },
-        variant: "primary",
+        emphasis: "primary",
       },
     ],
   };

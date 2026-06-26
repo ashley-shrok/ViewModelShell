@@ -228,7 +228,7 @@ public class FeatureProbeController : ControllerBase
             "npx @ashley-shrok/viewmodel-shell",
             "Copy install command",
             "Copied!",
-            Variant: "secondary"));
+            Emphasis: "secondary"));
 
         children.Add(new ImageNode("/logo.png", Alt: "ViewModel Shell logo", Size: "small", Shape: "circle"));
 
@@ -236,7 +236,7 @@ public class FeatureProbeController : ControllerBase
             children.Add(new TextNode($"Last submit: {state.LastSubmit}", "muted"));
 
         children.Add(new ButtonNode("Start long action",
-            new ActionDescriptor("start-long-action"), "primary"));
+            new ActionDescriptor("start-long-action"), Emphasis: "primary"));
         if (state.LongActionPolls > 0)
             children.Add(new TextNode(
                 $"Long action in progress · {state.LongActionPolls} tick{(state.LongActionPolls == 1 ? "" : "s")} remaining",
@@ -250,7 +250,7 @@ public class FeatureProbeController : ControllerBase
             Children: [new FieldNode("note", "text", "note", "Note", "Type a note…")],
             Buttons:
             [
-                new ButtonNode("Save Draft", new ActionDescriptor("save-draft"), "secondary"),
+                new ButtonNode("Save Draft", new ActionDescriptor("save-draft"), Emphasis: "secondary"),
                 new ButtonNode("Publish",    new ActionDescriptor("publish"),    "primary")
             ]));
 
@@ -467,10 +467,48 @@ public class FeatureProbeController : ControllerBase
                     }, Layout: "stack"),
                 }, Axis: "both"),
             });
+        // 3.0.0 — appearance axes (parity coverage for the unified vocabulary:
+        // button emphasis × tone × size, section tone, text tone, list-item/row
+        // state + tone). Static view-shape captured by the existing GET steps;
+        // byte-identical to the bun twin (demo/FeatureProbe-bun/handler.ts).
+        var axesSection = new SectionNode(
+            Heading: "Appearance axes",
+            Children: new ViewNode[]
+            {
+                new ButtonNode("E-primary",   new ActionDescriptor("axes-noop-1"), Emphasis: "primary"),
+                new ButtonNode("E-secondary", new ActionDescriptor("axes-noop-2"), Emphasis: "secondary"),
+                new ButtonNode("T-danger",    new ActionDescriptor("axes-noop-3"), Tone: "danger"),
+                new ButtonNode("T-warning",   new ActionDescriptor("axes-noop-4"), Tone: "warning"),
+                new ButtonNode("T-success",   new ActionDescriptor("axes-noop-5"), Tone: "success"),
+                new ButtonNode("T-info",      new ActionDescriptor("axes-noop-6"), Tone: "info"),
+                new ButtonNode("S-sm",        new ActionDescriptor("axes-noop-7"), Size: "sm"),
+                new ButtonNode("S-lg",        new ActionDescriptor("axes-noop-8"), Size: "lg"),
+                new ButtonNode("combo",       new ActionDescriptor("axes-noop-9"), Emphasis: "primary", Tone: "danger", Size: "lg"),
+                new CopyButtonNode("axes-clip", Label: "Copy", Emphasis: "secondary", Tone: "info", Size: "sm"),
+                new TextNode("tone text", Tone: "warning"),
+                new TextNode("heading + tone", "heading", "danger"),
+                new SectionNode("Warning card", new ViewNode[] { new TextNode("tinted card surface", null) }, Variant: "card", Tone: "warning"),
+                new SectionNode("Danger band", new ViewNode[] { new TextNode("bare tinted section", null) }, Tone: "danger"),
+                new ListNode(new ViewNode[]
+                {
+                    new ListItemNode("axes-li-1", "active", new ViewNode[] { new TextNode("active state", null) }),
+                    new ListItemNode("axes-li-2", null,     new ViewNode[] { new TextNode("danger tone", null) }, Tone: "danger"),
+                    new ListItemNode("axes-li-3", "done",   new ViewNode[] { new TextNode("done + success", null) }, Tone: "success"),
+                }),
+                new TableNode(
+                    new TableColumn[] { new TableColumn("k", "K") },
+                    new TableRow[]
+                    {
+                        new TableRow(new Dictionary<string, string> { ["k"] = "running" }, State: "running"),
+                        new TableRow(new Dictionary<string, string> { ["k"] = "danger" }, Tone: "danger"),
+                        new TableRow(new Dictionary<string, string> { ["k"] = "done+warn" }, State: "done", Tone: "warning"),
+                    }),
+            },
+            Variant: "card");
         var pageChildren = new List<ViewNode>
         {
             probeSection, clickableCardSection, linkedCardSection, rowSection,
-            bareRowSection, headerBarSection,
+            bareRowSection, headerBarSection, axesSection,
         };
         pageChildren.AddRange(arrangeSections);
         pageChildren.AddRange(alignSections);

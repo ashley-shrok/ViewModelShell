@@ -117,7 +117,7 @@ function buildMaster(state: ContactsState): ViewNode {
         type: "button",
         label: "+ Add Contact",
         action: { name: "navigate-to-add" },
-        variant: "primary",
+        emphasis: "primary",
       },
       {
         type: "list",
@@ -130,7 +130,7 @@ function buildMaster(state: ContactsState): ViewNode {
             id: c.id,
             // D-27: the shipped .vms-list-item--active default marks the
             // current master-detail selection.
-            ...(c.id === state.selectedId ? { variant: "active" } : {}),
+            ...(c.id === state.selectedId ? { state: "active" } : {}),
             children: [
               { type: "text", value: c.name },
               { type: "text", value: c.email, style: "muted" },
@@ -205,7 +205,7 @@ function buildDetail(state: ContactsState): ViewNode {
         type: "button",
         label: "Delete",
         action: { name: `delete-contact-${contact.id}` },
-        variant: "danger",
+        tone: "danger",
       },
     ],
   };

@@ -129,7 +129,7 @@ public class TasksControllerTests
         // uniqueness check would fire if these collided.
         var btn = Assert.IsType<ButtonNode>(NavItem(page, "active").Children.Single());
         Assert.Equal("filter-active", btn.Action.Name);
-        Assert.Null(btn.Variant);
+        Assert.Null(btn.Emphasis);
         Assert.Equal("filter-all",
             Assert.IsType<ButtonNode>(NavItem(page, "all").Children.Single()).Action.Name);
         Assert.Equal("filter-completed",
@@ -141,9 +141,9 @@ public class TasksControllerTests
     {
         var page = Page(CreateController().Get().Vm);
         // Default filter = "all" → only the "all" nav item is active.
-        Assert.Equal("active", NavItem(page, "all").Variant);
-        Assert.Null(NavItem(page, "active").Variant);
-        Assert.Null(NavItem(page, "completed").Variant);
+        Assert.Equal("active", NavItem(page, "all").State);
+        Assert.Null(NavItem(page, "active").State);
+        Assert.Null(NavItem(page, "completed").State);
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public class TasksControllerTests
 
             var del = Assert.Single(row.Children.OfType<ButtonNode>());
             Assert.Equal("✕", del.Label);
-            Assert.Equal("danger", del.Variant);
+            Assert.Equal("danger", del.Tone);
             Assert.Equal($"delete-row-{row.Id}", del.Action.Name);
         }
     }
@@ -297,7 +297,7 @@ public class TasksControllerTests
 
         var resp = Ok(Act(ctrl, state, $"toggle-row-{activeId}"));
 
-        var doneCount = TaskRows(Page(resp.Vm)).Count(i => i.Variant == "done");
+        var doneCount = TaskRows(Page(resp.Vm)).Count(i => i.State == "done");
         Assert.Equal(2, doneCount);
     }
 
@@ -315,7 +315,7 @@ public class TasksControllerTests
         var resp = Ok(Act(ctrl, state, $"toggle-row-{activeId}"));
 
         var row = TaskRows(Page(resp.Vm)).Single(i => i.Id == activeId);
-        Assert.Equal("done", row.Variant);
+        Assert.Equal("done", row.State);
         Assert.Equal("strikethrough", row.Children.OfType<TextNode>().Single().Style);
     }
 
@@ -332,7 +332,7 @@ public class TasksControllerTests
 
         var resp = Ok(Act(ctrl, state, $"toggle-row-{doneId}"));
 
-        var doneCount = TaskRows(Page(resp.Vm)).Count(i => i.Variant == "done");
+        var doneCount = TaskRows(Page(resp.Vm)).Count(i => i.State == "done");
         Assert.Equal(0, doneCount);
     }
 
@@ -409,8 +409,8 @@ public class TasksControllerTests
         var resp = Ok(Act(ctrl, TasksState.Initial(), "filter-active"));
         Assert.NotNull(resp.State);
         var page = Page(resp.Vm);
-        Assert.Equal("active", NavItem(page, "active").Variant);
-        Assert.Null(NavItem(page, "all").Variant);
+        Assert.Equal("active", NavItem(page, "active").State);
+        Assert.Null(NavItem(page, "all").State);
         Assert.Equal("active", resp.State!.Filter);
     }
 
@@ -421,7 +421,7 @@ public class TasksControllerTests
         var resp = Ok(Act(ctrl, TasksState.Initial(), "filter-active"));
         var rows = TaskRows(Page(resp.Vm));
         Assert.Equal(2, rows.Count);
-        Assert.All(rows, i => Assert.Null(i.Variant));
+        Assert.All(rows, i => Assert.Null(i.State));
     }
 
     [Fact]
@@ -431,7 +431,7 @@ public class TasksControllerTests
         var resp = Ok(Act(ctrl, TasksState.Initial(), "filter-completed"));
         var rows = TaskRows(Page(resp.Vm));
         Assert.Single(rows);
-        Assert.Equal("done", rows[0].Variant);
+        Assert.Equal("done", rows[0].State);
     }
 
     [Fact]

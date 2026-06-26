@@ -60,7 +60,7 @@ const urlForm = (extra: Partial<Record<string, unknown>> = {}): ViewNode => ({
   ],
   buttons: [
     { type: "button", label: "✨ Fetch & fill", action: { name: "fetch-meta" }, pendingLabel: "Fetching…" },
-    { type: "button", label: "Save", action: { name: "add-item" }, variant: "primary" },
+    { type: "button", label: "Save", action: { name: "add-item" }, emphasis: "primary" },
   ],
   ...extra,
 }) as ViewNode;

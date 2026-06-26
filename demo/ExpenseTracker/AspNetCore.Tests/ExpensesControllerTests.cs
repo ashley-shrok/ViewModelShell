@@ -163,7 +163,7 @@ public class ExpensesControllerTests
         var billsIdx = texts.FindIndex(t => t.Value == "Bills");
         Assert.True(billsIdx >= 0);
         // the amount line immediately follows the category name; Bills is over budget (850/800)
-        Assert.Equal("error", texts[billsIdx + 1].Style);
+        Assert.Equal("danger", texts[billsIdx + 1].Tone);
     }
 
     [Fact]
@@ -182,7 +182,7 @@ public class ExpensesControllerTests
         var btn = AddButton(Page(CreateController().Get().Vm));
         Assert.Equal("+ Add Transaction", btn.Label);
         Assert.Equal("show-add", btn.Action.Name);
-        Assert.Equal("primary", btn.Variant);
+        Assert.Equal("primary", btn.Emphasis);
     }
 
     [Fact]

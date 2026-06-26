@@ -328,6 +328,19 @@ body {
   padding: var(--vms-space-md);
 }
 
+/* ── Section tone — universal status axis (orthogonal to variant:card): a tinted
+   surface + solid tone-colored border, reusing the shared semantic tokens.
+   The tint is mixed into the OPAQUE surface (not transparent) so it reads on
+   dark themes too — a translucent layer over a dark surface is invisible, which
+   is why this must mix with var(--vms-surface). Composes with --card (a card
+   reads as warning/danger/etc; border-radius + padding come from --card) and
+   also tints a bare section. The solid tone border is the always-visible signal
+   on any background. ── */
+.vms-section--danger  { background: color-mix(in srgb, var(--vms-error) 14%, var(--vms-surface));   border: 1px solid var(--vms-error); }
+.vms-section--warning { background: color-mix(in srgb, var(--vms-warning) 14%, var(--vms-surface)); border: 1px solid var(--vms-warning); }
+.vms-section--success { background: color-mix(in srgb, var(--vms-success) 14%, var(--vms-surface)); border: 1px solid var(--vms-success); }
+.vms-section--info    { background: color-mix(in srgb, var(--vms-info) 14%, var(--vms-surface));    border: 1px solid var(--vms-info); }
+
 /* ── Section: clickable (1.4.0 — SectionNode.action click-anywhere primitive) ──
    Mirrors the 1.1.0 .vms-table__row--clickable idiom one level up the tree.
    Hover uses a 1px accent-dim ring (rather than a background swap — cards
@@ -497,8 +510,15 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 }
 .vms-checkbox__label { margin-left: var(--vms-space-xs); font-size: var(--vms-text-base); }
 
-/* ── Buttons ── */
+/* ── Buttons — three orthogonal axes: emphasis (fill) × tone (color) × size
+   (geometry). `--_btn-tone` carries the semantic color: it defaults to accent
+   and the tone classes override it, so an emphasis fills/outlines in whatever
+   tone is set (emphasis:primary + tone:danger = a filled RED button). Box
+   metrics (padding/font) live ONLY on the base (= md) and the size classes —
+   never on emphasis or tone — so a primary and a danger button are the SAME
+   size. ── */
 .vms-button {
+  --_btn-tone: var(--vms-accent);
   background: var(--vms-surface-2);
   border: 1px solid var(--vms-border);
   border-radius: var(--vms-radius);
@@ -507,32 +527,37 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   font-family: var(--vms-font-body);
   font-size: var(--vms-text-base);
   padding: var(--vms-space-sm) var(--vms-space-md);
+  align-self: flex-start;
   transition: background var(--vms-t), border-color var(--vms-t), transform var(--vms-t);
 }
 .vms-button:hover { border-color: var(--vms-accent-dim); }
 .vms-button:active { transform: scale(0.98); }
+
+/* tone — semantic color. Standalone (no emphasis) = colored text + border on the
+   neutral surface; combined with an emphasis it recolors the fill/outline. */
+.vms-button--danger  { --_btn-tone: var(--vms-error);   color: var(--vms-error);   border-color: var(--vms-error); }
+.vms-button--warning { --_btn-tone: var(--vms-warning); color: var(--vms-warning); border-color: var(--vms-warning); }
+.vms-button--success { --_btn-tone: var(--vms-success); color: var(--vms-success); border-color: var(--vms-success); }
+.vms-button--info    { --_btn-tone: var(--vms-info);    color: var(--vms-info);    border-color: var(--vms-info); }
+
+/* emphasis — fill treatment, colored by --_btn-tone (declared AFTER tone so the
+   filled text color / outline color wins on combination). */
 .vms-button--primary {
-  background: var(--vms-accent);
-  border-color: var(--vms-accent);
+  background: var(--_btn-tone);
+  border-color: var(--_btn-tone);
   color: #fff;
-  padding: var(--vms-space-sm) var(--vms-space-lg);
-  align-self: flex-start;
 }
 .vms-button--primary:hover { filter: brightness(1.1); }
 .vms-button--secondary {
   background: transparent;
-  border-color: var(--vms-accent-dim);
-  color: var(--vms-accent);
-  font-size: var(--vms-text-sm);
-  padding: var(--vms-space-2xs) var(--vms-space-sm);
+  border-color: var(--_btn-tone);
+  color: var(--_btn-tone);
 }
-.vms-button--secondary:hover { border-color: var(--vms-accent); background: var(--vms-accent-glow); }
-.vms-button--danger {
-  background: transparent;
-  border: 1px solid var(--vms-border);
-  color: var(--vms-error);
-}
-.vms-button--danger:hover { background: var(--vms-error-glow); border-color: var(--vms-error); }
+.vms-button--secondary:hover { background: var(--vms-accent-glow); }
+
+/* size — the ONLY axis that touches box metrics (md = base, no class). */
+.vms-button--sm { padding: var(--vms-space-2xs) var(--vms-space-sm); font-size: var(--vms-text-sm); }
+.vms-button--lg { padding: var(--vms-space-sm) var(--vms-space-lg); font-size: var(--vms-text-lg); }
 
 /* ── Pending state (0.8.0 / issue #11) ──
    Applied by BrowserAdapter when a ButtonNode with `pendingLabel` is clicked.
@@ -599,20 +624,23 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 }
 .vms-list-item:hover { border-color: var(--vms-accent-dim); }
 
-/* Common variants — apps can add more by writing .vms-list-item--{name} rules.
-   Variant accents go on border-left and are preserved through hover. */
+/* State (lifecycle) — done/high are framework-styled; apps can add more
+   .vms-list-item--{state} rules. The `high` priority accent goes on border-left. */
 .vms-list-item--done     { background: var(--vms-done-bg); border-color: transparent; opacity: 0.75; }
-.vms-list-item--critical { border-left: 3px solid var(--vms-error);         background: rgba(224, 90, 90, 0.04); }
+.vms-list-item--disabled { opacity: 0.55; }
 .vms-list-item--high     { border-left: 3px solid var(--vms-priority-high); }
+.vms-list-item--high:hover     { border-left-color: var(--vms-priority-high); }
+
+/* Tone (severity) — the universal status axis (was the old critical/warning/...
+   variants; critical → danger). Colored left accent, preserved through hover. */
+.vms-list-item--danger   { border-left: 3px solid var(--vms-error);   background: color-mix(in srgb, var(--vms-error) 4%, transparent); }
 .vms-list-item--warning  { border-left: 3px solid var(--vms-warning); }
 .vms-list-item--success  { border-left: 3px solid var(--vms-success); }
 .vms-list-item--info     { border-left: 3px solid var(--vms-info); }
-
-.vms-list-item--critical:hover { border-left-color: var(--vms-error); }
-.vms-list-item--high:hover     { border-left-color: var(--vms-priority-high); }
-.vms-list-item--warning:hover  { border-left-color: var(--vms-warning); }
-.vms-list-item--success:hover  { border-left-color: var(--vms-success); }
-.vms-list-item--info:hover     { border-left-color: var(--vms-info); }
+.vms-list-item--danger:hover  { border-left-color: var(--vms-error); }
+.vms-list-item--warning:hover { border-left-color: var(--vms-warning); }
+.vms-list-item--success:hover { border-left-color: var(--vms-success); }
+.vms-list-item--info:hover    { border-left-color: var(--vms-info); }
 
 /* Selection state for master-detail / list-detail patterns (D-27). The
    currently-selected row. Stronger than the semantic hints (selection is
@@ -631,9 +659,13 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-text--body          { line-height: 1.6; }
 .vms-text--muted         { color: var(--vms-text-muted); font-size: var(--vms-text-sm); }
 .vms-text--strikethrough { color: var(--vms-done-text); text-decoration: line-through; }
-.vms-text--error         { color: var(--vms-error); font-size: var(--vms-text-base); }
-.vms-text--warning       { color: var(--vms-warning); font-size: var(--vms-text-base); }
 .vms-text--pre           { font-family: var(--vms-font-mono); white-space: pre; }
+/* tone — semantic color axis (was the old style:"error"/"warning"). Placed after
+   the typography classes so a tone color wins over a style color (e.g. muted). */
+.vms-text--danger        { color: var(--vms-error); }
+.vms-text--warning       { color: var(--vms-warning); }
+.vms-text--success       { color: var(--vms-success); }
+.vms-text--info          { color: var(--vms-info); }
 
 /* ── Link ── */
 .vms-link {
@@ -731,9 +763,9 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   padding: var(--vms-space-sm) var(--vms-space-lg);
   border-top: 1px solid var(--vms-border);
 }
-/* Buttons inside the footer ignore the framework's default align-self so
-   they sit naturally on the footer row. */
-.vms-modal__footer .vms-button--primary { align-self: auto; padding: var(--vms-space-sm) var(--vms-space-md); }
+/* Buttons inside the footer ignore the base align-self:flex-start so they sit
+   naturally on the right-aligned footer row (all emphasis/tone variants). */
+.vms-modal__footer .vms-button { align-self: auto; }
 
 /* ── Table ── */
 .vms-table-wrapper {
@@ -780,16 +812,18 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   outline: 2px solid var(--vms-accent);
   outline-offset: -2px;
 }
-/* Row status variants — tints derive from theme vars (color-mix), so a
-   custom :root theme recolors them automatically; no app CSS, no literals. */
+/* Row STATE (lifecycle) — done/disabled/running framework-styled; apps can add
+   more .vms-table__row--{state} rules. */
 .vms-table__row--done     { opacity: 0.6; }
 .vms-table__row--disabled { opacity: 0.55; color: var(--vms-text-muted); }
 .vms-table__row--disabled.vms-table__row--clickable { cursor: default; }
 .vms-table__row--disabled.vms-table__row--clickable:hover { background: transparent; }
-.vms-table__row--success  { background: color-mix(in srgb, var(--vms-success) 8%, transparent); }
 .vms-table__row--running  { background: color-mix(in srgb, var(--vms-accent) 8%, transparent); }
+/* Row TONE (severity) — the universal status axis (was the old critical/danger;
+   critical → danger). Tints derive from theme vars (color-mix), so a custom
+   :root theme recolors them automatically; no app CSS, no literals. */
+.vms-table__row--success  { background: color-mix(in srgb, var(--vms-success) 8%, transparent); }
 .vms-table__row--warning  { background: color-mix(in srgb, var(--vms-warning) 9%, transparent); }
-.vms-table__row--critical,
 .vms-table__row--danger   { background: color-mix(in srgb, var(--vms-error) 9%, transparent); }
 .vms-table__td { padding: var(--vms-space-sm) var(--vms-space-md); vertical-align: middle; }
 .vms-table__link { color: var(--vms-accent); text-decoration: none; }
