@@ -133,7 +133,11 @@ export class BrowserAdapter implements Adapter {
       if (el) { el.scrollTop = top; el.scrollLeft = left; }
     });
 
-    window.scrollTo(winScrollX, winScrollY);
+    // Only restore window scroll when the page was actually scrolled — restoring
+    // to (0,0) is a no-op, and skipping it avoids jsdom's noisy "Not implemented:
+    // window.scrollTo" virtual-console log in unit tests (jsdom never scrolls, so
+    // the captured offsets are 0). Mirrors the `el.scrollTop !== 0` guard above.
+    if (winScrollX !== 0 || winScrollY !== 0) window.scrollTo(winScrollX, winScrollY);
 
     // 1.2.0 — restore collapsible-section open state after node() rebuild +
     // after focus/scroll restore. Keys absent from the new tree are

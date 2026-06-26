@@ -6,6 +6,14 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 3.0.1 — Quieter jsdom test output (npm only)
+
+**npm:** `3.0.1` (PATCH) · **NuGet:** unchanged at `3.0.0` (frontend-only — the .NET backend types and the wire are untouched). No API change.
+
+`BrowserAdapter.render` restored window scroll with an unconditional `window.scrollTo(x, y)`. Under jsdom (vitest) that triggers a noisy `Not implemented: window.scrollTo` virtual-console log on every render — harmless (it doesn't throw; tests pass) but it pollutes test output. The call is now guarded to run only when the page was actually scrolled (`winScrollX !== 0 || winScrollY !== 0`) — restoring to (0,0) is a no-op anyway, and jsdom never scrolls, so the log is gone. Mirrors the existing `el.scrollTop !== 0` element-scroll guard. (Note: a `typeof window.scrollTo === "function"` guard would NOT have worked — jsdom defines `scrollTo` as a function that logs not-implemented.)
+
+---
+
 ## 3.0.0 / 3.0.0 — Unified appearance axes (npm + NuGet) — BREAKING
 
 **npm:** `3.0.0` (MAJOR) · **NuGet:** `3.0.0` (MAJOR). The overloaded `variant` field — which was doing four unrelated jobs across the node tree — is split into orthogonal, composable axes so **no field carries two concepts**. Wire protocol token stays `viewmodel-shell/1.0` (the dispatch/state/response envelope is unchanged; only node field *shapes* change — an agent that reads `{vm, state}` and dispatches actions is structurally unaffected, though code that hardcoded the old field names must update).
