@@ -1,8 +1,12 @@
 # @ashley-shrok/viewmodel-shell
 
-A server-driven UI framework where the wire format is structured enough that agents can build full-stack apps without ever opening a browser and all UI tests are pure unit tests with no browser runtime.
+A server-driven UI framework built around one promise: **an agent can build, test, and operate a complete app end-to-end — with no human in the loop and no browser anywhere in sight.** That falls out of a single idea: the interface is structured data, not code.
 
-The server returns a JSON tree of typed nodes; a thin TypeScript adapter renders it to the DOM (or, with the same wire, a terminal). The browser never owns application state — every interaction dispatches a semantic action to a single POST endpoint and the server returns the next state plus a fresh view.
+The server is a pure transformer — current UI state + an action → next state + a fresh view tree (a JSON tree of typed nodes). A thin adapter renders it to the DOM (or, with the same wire, a terminal) with zero app-specific code; the browser never owns application state. Because the whole interface is data, three things come for free:
+
+- **Build it blind** — there's nothing to *look at* to get it right; the view description is the truth.
+- **Test it without a browser** — every interaction is a plain function from input → output, so the entire UI is exercised with ordinary in-process unit tests (no headless browser, no Playwright, no flake) on every CI run. The quiet giant: the full-coverage, test-everything-through-the-UI regime that's usually aspirational is the *default* here.
+- **Use it like an API** — a finished app is already a clean, self-describing wire protocol, so a *different* agent can drive it (read the screen → act → read the next) as if it were an API, because it is one.
 
 The frontend is backend-agnostic: it speaks a small JSON contract over a single POST endpoint that takes `multipart/form-data` (with `_action` and `_state` fields). A .NET reference backend ships in the repo, but any language can produce the same contract.
 
