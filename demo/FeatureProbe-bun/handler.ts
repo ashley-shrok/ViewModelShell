@@ -108,7 +108,7 @@ function tableWindow(s: FeatureProbeState): { page: TableItem[]; total: number; 
 function buildTableSection(state: FeatureProbeState): ViewNode {
   const { page, total, clampedPage } = tableWindow(state);
   const nameCol: Record<string, unknown> = {
-    key: "name", label: "Name", sortable: true, filterable: true, linkExternal: false,
+    key: "name", label: "Name", sortable: true, filterable: true,
   };
   if (state.tableFilters.name.length > 0) nameCol.filterValue = state.tableFilters.name;
 
@@ -116,7 +116,7 @@ function buildTableSection(state: FeatureProbeState): ViewNode {
     type: "table",
     columns: [
       nameCol,
-      { key: "status", label: "Status", sortable: true, filterable: false, linkExternal: false },
+      { key: "status", label: "Status", sortable: true },
     ],
     rows: page.map((i) => ({ cells: { name: i.name, status: i.status }, id: i.id })),
     sortBind: "sortIntent",
@@ -174,7 +174,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
   // each dispatching a unique-named action (save-draft / publish).
   children.push({
     type: "form",
-    children: [{ type: "field", name: "note", inputType: "text", bind: "note", label: "Note", placeholder: "Type a note…", required: false }],
+    children: [{ type: "field", name: "note", inputType: "text", bind: "note", label: "Note", placeholder: "Type a note…" }],
     buttons: [
       { type: "button", label: "Save Draft", action: { name: "save-draft" }, emphasis: "secondary" },
       { type: "button", label: "Publish", action: { name: "publish" }, emphasis: "primary" },
@@ -211,22 +211,23 @@ function buildVm(state: FeatureProbeState): ViewNode {
   };
   // 1.11.0 — row layout (parity coverage for layout:"row"). A left-aligned
   // wrapping row of links — the horizontal-row primitive a navbar composes from.
-  // external:false is explicit to match the .NET LinkNode non-nullable default.
+  // LinkNode.external is omitted (absent) when false — both backends drop the
+  // default since 3.3.0 (F2), so a non-external link carries no `external` key.
   const rowSection: ViewNode = {
     type: "section",
     heading: "Row layout",
     variant: "card",
     layout: "row",
     children: [
-      { type: "link", label: "Home", href: "/home", external: false },
-      { type: "link", label: "Docs", href: "/docs", external: false },
-      { type: "link", label: "About", href: "/about", external: false },
+      { type: "link", label: "Home", href: "/home" },
+      { type: "link", label: "Docs", href: "/docs" },
+      { type: "link", label: "About", href: "/about" },
     ],
   };
   // 1.12.0 — arrange/align alignment vocabulary (parity coverage for ALIGN-01/02/03).
   // Static view-shape captured by every GET step (mirrors the 1.11.0 row precedent;
-  // no dedicated action arm). external:false explicit on every LinkNode to match the
-  // .NET non-nullable default. The .NET twins must serialize byte-identically.
+  // no dedicated action arm). LinkNode.external is absent when false (both backends
+  // drop the default since 3.3.0, F2). The .NET twins must serialize byte-identically.
   //
   // (a) bare row — NEITHER arrange nor align => proves omitted = no class on the wire.
   const bareRowSection: ViewNode = {
@@ -234,8 +235,8 @@ function buildVm(state: FeatureProbeState): ViewNode {
     heading: "Bare row",
     layout: "row",
     children: [
-      { type: "link", label: "One", href: "/one", external: false },
-      { type: "link", label: "Two", href: "/two", external: false },
+      { type: "link", label: "One", href: "/one" },
+      { type: "link", label: "Two", href: "/two" },
     ],
   };
   // (b) canonical header-bar (ALIGN-04): row + arrange:"space-between", first child a
@@ -252,8 +253,8 @@ function buildVm(state: FeatureProbeState): ViewNode {
         children: [
           // 2.1.0 — LinkNode.active parity coverage: the current nav item
           // ("you are here"). Byte-identical to the .NET twin.
-          { type: "link", label: "Home", href: "/home", external: false, active: true },
-          { type: "link", label: "Docs", href: "/docs", external: false },
+          { type: "link", label: "Home", href: "/home", active: true },
+          { type: "link", label: "Docs", href: "/docs" },
         ],
       },
     ],
@@ -266,8 +267,8 @@ function buildVm(state: FeatureProbeState): ViewNode {
     layout: "row",
     arrange: v,
     children: [
-      { type: "link", label: "A", href: "/a", external: false },
-      { type: "link", label: "B", href: "/b", external: false },
+      { type: "link", label: "A", href: "/a" },
+      { type: "link", label: "B", href: "/b" },
     ],
   }));
   // (d) one row per align value.
@@ -278,14 +279,14 @@ function buildVm(state: FeatureProbeState): ViewNode {
     layout: "row",
     align: v,
     children: [
-      { type: "link", label: "A", href: "/a", external: false },
-      { type: "link", label: "B", href: "/b", external: false },
+      { type: "link", label: "A", href: "/a" },
+      { type: "link", label: "B", href: "/b" },
     ],
   }));
-  // 1.13.0 — switcher vocabulary (parity coverage for SWITCH-01/02/03). Static
+  // npm 1.12.0 — switcher vocabulary (parity coverage for SWITCH-01/02/03). Static
   // view-shape captured by every GET step (mirrors the 1.12.0 arrange/align
-  // precedent; no dedicated action arm). external:false explicit on every
-  // LinkNode to match the .NET non-nullable default. The .NET twins must
+  // precedent; no dedicated action arm). LinkNode.external is absent when false
+  // (both backends drop the default since 3.3.0, F2). The .NET twins must
   // serialize byte-identically — omitted threshold/limit ABSENT on the wire,
   // set ones present.
   //
@@ -295,9 +296,9 @@ function buildVm(state: FeatureProbeState): ViewNode {
     heading: "Bare switcher",
     layout: "switcher",
     children: [
-      { type: "link", label: "One", href: "/one", external: false },
-      { type: "link", label: "Two", href: "/two", external: false },
-      { type: "link", label: "Three", href: "/three", external: false },
+      { type: "link", label: "One", href: "/one" },
+      { type: "link", label: "Two", href: "/two" },
+      { type: "link", label: "Three", href: "/three" },
     ],
   };
   // (b) one switcher per threshold value (sm/md/lg/xl).
@@ -308,9 +309,9 @@ function buildVm(state: FeatureProbeState): ViewNode {
     layout: "switcher",
     threshold: v,
     children: [
-      { type: "link", label: "A", href: "/a", external: false },
-      { type: "link", label: "B", href: "/b", external: false },
-      { type: "link", label: "C", href: "/c", external: false },
+      { type: "link", label: "A", href: "/a" },
+      { type: "link", label: "B", href: "/b" },
+      { type: "link", label: "C", href: "/c" },
     ],
   }));
   // (c) one switcher with limit:4 and >4 children (6) — exercises the count cap.
@@ -320,12 +321,12 @@ function buildVm(state: FeatureProbeState): ViewNode {
     layout: "switcher",
     limit: 4,
     children: [
-      { type: "link", label: "1", href: "/1", external: false },
-      { type: "link", label: "2", href: "/2", external: false },
-      { type: "link", label: "3", href: "/3", external: false },
-      { type: "link", label: "4", href: "/4", external: false },
-      { type: "link", label: "5", href: "/5", external: false },
-      { type: "link", label: "6", href: "/6", external: false },
+      { type: "link", label: "1", href: "/1" },
+      { type: "link", label: "2", href: "/2" },
+      { type: "link", label: "3", href: "/3" },
+      { type: "link", label: "4", href: "/4" },
+      { type: "link", label: "5", href: "/5" },
+      { type: "link", label: "6", href: "/6" },
     ],
   };
 
@@ -342,9 +343,9 @@ function buildVm(state: FeatureProbeState): ViewNode {
     heading: "Bare cards",
     layout: "cards",
     children: [
-      { type: "link", label: "One", href: "/c1", external: false },
-      { type: "link", label: "Two", href: "/c2", external: false },
-      { type: "link", label: "Three", href: "/c3", external: false },
+      { type: "link", label: "One", href: "/c1" },
+      { type: "link", label: "Two", href: "/c2" },
+      { type: "link", label: "Three", href: "/c3" },
     ],
   };
   // (b) one cards section per minItem value (xs/sm/md/lg/xl).
@@ -355,10 +356,10 @@ function buildVm(state: FeatureProbeState): ViewNode {
     layout: "cards",
     minItem: v,
     children: [
-      { type: "link", label: "P", href: "/p", external: false },
-      { type: "link", label: "Q", href: "/q", external: false },
-      { type: "link", label: "R", href: "/r", external: false },
-      { type: "link", label: "S", href: "/s", external: false },
+      { type: "link", label: "P", href: "/p" },
+      { type: "link", label: "Q", href: "/q" },
+      { type: "link", label: "R", href: "/r" },
+      { type: "link", label: "S", href: "/s" },
     ],
   }));
 
@@ -382,18 +383,18 @@ function buildVm(state: FeatureProbeState): ViewNode {
             type: "section",
             layout: "row",
             children: [
-              { type: "link", label: "Wide A", href: "/wa", external: false },
-              { type: "link", label: "Wide B", href: "/wb", external: false },
-              { type: "link", label: "Wide C", href: "/wc", external: false },
+              { type: "link", label: "Wide A", href: "/wa" },
+              { type: "link", label: "Wide B", href: "/wb" },
+              { type: "link", label: "Wide C", href: "/wc" },
             ],
           },
           {
             type: "section",
             layout: "stack",
             children: [
-              { type: "link", label: "Wide A", href: "/wa", external: false },
-              { type: "link", label: "Wide B", href: "/wb", external: false },
-              { type: "link", label: "Wide C", href: "/wc", external: false },
+              { type: "link", label: "Wide A", href: "/wa" },
+              { type: "link", label: "Wide B", href: "/wb" },
+              { type: "link", label: "Wide C", href: "/wc" },
             ],
           },
         ],
@@ -413,16 +414,16 @@ function buildVm(state: FeatureProbeState): ViewNode {
             type: "section",
             layout: "row",
             children: [
-              { type: "link", label: "X", href: "/x", external: false },
-              { type: "link", label: "Y", href: "/y", external: false },
+              { type: "link", label: "X", href: "/x" },
+              { type: "link", label: "Y", href: "/y" },
             ],
           },
           {
             type: "section",
             layout: "stack",
             children: [
-              { type: "link", label: "X", href: "/x", external: false },
-              { type: "link", label: "Y", href: "/y", external: false },
+              { type: "link", label: "X", href: "/x" },
+              { type: "link", label: "Y", href: "/y" },
             ],
           },
         ],
@@ -457,7 +458,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
         { type: "list-item", id: "axes-li-3", state: "done", tone: "success", children: [{ type: "text", value: "done + success" }] },
       ]},
       { type: "table",
-        columns: [{ key: "k", label: "K", sortable: false, filterable: false, linkExternal: false }],
+        columns: [{ key: "k", label: "K" }],
         rows: [
           { cells: { k: "running" }, state: "running" },
           { cells: { k: "danger" }, tone: "danger" },
@@ -477,7 +478,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       { type: "divider" },
       { type: "divider", orientation: "vertical" },
       { type: "form", children: [
-        { type: "field", name: "q", inputType: "text", bind: "axesQuery", label: "Query", required: false },
+        { type: "field", name: "q", inputType: "text", bind: "axesQuery", label: "Query" },
       ], submitButton: { type: "button", label: "Search", action: { name: "axes-search" }, emphasis: "primary", width: "full" } },
     ],
   };
@@ -505,6 +506,20 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // 3.3.0 (F3) — a STATIC ModalNode rendered on every GET so the parity suite
+  // byte-diffs the full modal wire shape (title/children/footer/dismissAction/
+  // size) across all backends. Previously ModalNode appeared only in
+  // ExpenseTracker gated behind state.adding, which no fixture ever opened, so
+  // the modal wire shape had zero cross-backend coverage.
+  const probeModal: ViewNode = {
+    type: "modal",
+    title: "Probe modal",
+    size: "small",
+    dismissAction: { name: "modal-dismiss" },
+    children: [{ type: "text", value: "Modal body for parity coverage." }],
+    footer: [{ type: "button", label: "OK", action: { name: "modal-ok" } }],
+  };
+
   return {
     type: "page",
     title: "Feature Probe",
@@ -518,6 +533,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       fitsAxisOmittedSection, fitsAxisBothSection,
       childModifiersSection,
       buildTableSection(state),
+      probeModal,
     ],
   };
 }
@@ -610,6 +626,22 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
     // "deliberate test failure", code:"uncaught_exception"}]} envelopes.
     // Dev/parity use only; this demo is never deployed to production (T-07-09).
     throw new Error("deliberate test failure");
+  } else if (name === "make-invalid-tree") {
+    // 3.3.0 (F4) — return a tree with a DUPLICATE action name (two top-level
+    // buttons, NOT in a form) so createAction's validateActionNames throws →
+    // {ok:false, errors:[{message, code:"invalid_tree"}]} at 500. Parity-covers
+    // the invalid_tree wire shape across all backends (previously only
+    // parse_error/unknown_action/uncaught_exception were covered).
+    return {
+      vm: {
+        type: "page",
+        children: [
+          { type: "button", label: "A", action: { name: "dup" } },
+          { type: "button", label: "B", action: { name: "dup" } },
+        ],
+      },
+      state,
+    };
   } else {
     throw new UnknownActionError(name);
   }

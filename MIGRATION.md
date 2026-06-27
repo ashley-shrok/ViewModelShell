@@ -6,6 +6,14 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `3.3.0` / `3.3.0` (npm + NuGet) — no action for apps
+
+**Nothing to do** for normal app code — same node types, same wire token (`viewmodel-shell/1.0`), same public API. It's a correctness/a11y/parity hardening release (see CHANGELOG 3.3.0): the `fits` validation blind spot is closed, focus/caret survives re-render on table-filter/tab/checkbox controls, a `vm`-less non-redirect response no longer blanks the page, a `state`-less JSON action returns a clean 400 `parse_error` instead of a 500, and `ProgressNode`/`ImageNode`/unknown-node handling got a11y + fail-loud fixes.
+
+**One non-breaking wire normalization (.NET only), relevant ONLY if you parse the raw .NET JSON:** the optional booleans `LinkNode.External`, `SectionLink.External`, `FieldNode.Required`, and `TableColumn.Sortable`/`Filterable`/`LinkExternal` now drop their `false` default — they are **absent on the wire when false** instead of `"field": false`, matching the TypeScript backend and the framework's "unset optional = absent" rule. Absent and `false` are semantically identical for these fields, and the `@ashley-shrok/viewmodel-shell` browser client + the TUI already treat them so — **no code change needed** unless you string-matched a literal `"external": false` (etc.) in the raw .NET response. The `*-bun` demos that previously hand-wrote `external: false`/`required: false` to mirror the old .NET output had those compensations removed.
+
+---
+
 ## Upgrading to `3.1.0` / `3.1.0` (npm + NuGet) — additive, no action
 
 **Nothing to do.** Three additive features (#22): `ButtonNode.width?: "auto" | "full"` (the standard full-width button — `"full"` stretches to fill its container), the new `DividerNode { orientation? }` (a thematic-break/separator → `<hr class="vms-divider">` or a vertical `role="separator"` div), and `FormNode.submitButton?: ButtonNode` (provide your own submit button — e.g. `width:"full"` — instead of the auto-generated one; when set, it takes precedence over `submitLabel`/`submitAction`). Omitting all three is byte-identical to 3.0.x.

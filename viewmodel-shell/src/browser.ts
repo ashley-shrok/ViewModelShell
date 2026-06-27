@@ -271,6 +271,20 @@ export class BrowserAdapter implements Adapter {
       case "copy-button":  return this.copyButton(n, parent);
       case "divider":      return this.divider(n, parent);
       case "fits":         return this.fits(n, parent, on);
+      default: {
+        // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
+        // Runtime trees are server-controlled JSON, so an unknown/forward-version
+        // node type CAN reach here at runtime even though the union is
+        // exhaustive at compile time. We keep rendering the rest of the tree
+        // (forward-compatible, like unknown sideEffect types) but warn so the
+        // node doesn't just vanish without a trace.
+        const unknownType = (n as { type?: unknown }).type;
+        console.warn(
+          `[viewmodel-shell] Unknown node type ${JSON.stringify(unknownType)} — ` +
+          `rendering nothing for it. The client may be older than the server's tree.`,
+        );
+        return;
+      }
     }
   }
 
@@ -849,6 +863,11 @@ export class BrowserAdapter implements Adapter {
     inp.type = "checkbox";
     inp.className = "vms-checkbox__input";
     inp.name = n.name;
+    // Stable id so keyboard focus survives a re-render (poll or action). The
+    // wrapping <label> gives the click/label association; the id is purely for
+    // focus restore. Namespaced distinctly from field() ids (vms-${name}) to
+    // avoid an id collision when a field and a standalone checkbox share a name.
+    inp.id = `vms-checkbox-${n.name}`;
     inp.checked = Boolean(this.sa.read(n.bind));
     const mark = document.createElement("span");
     mark.className = "vms-checkbox__mark";
@@ -952,6 +971,9 @@ export class BrowserAdapter implements Adapter {
       const btn = document.createElement("button");
       btn.className = `vms-tabs__tab${tab.value === n.selected ? " vms-tabs__tab--active" : ""}`;
       btn.textContent = tab.label;
+      // Stable id so focus survives the re-render a tab click triggers (and any
+      // poll re-render) — render()'s restore keys off id.
+      btn.id = `vms-tab-${n.bind}-${tab.value}`;
       btn.setAttribute("role", "tab");
       btn.setAttribute("aria-selected", String(tab.value === n.selected));
       btn.addEventListener("click", () => {
@@ -970,15 +992,25 @@ export class BrowserAdapter implements Adapter {
     if (n.shape) cls += ` vms-image--${n.shape}`;
     img.className = cls;
     img.src = n.src;
-    if (n.alt != null) img.alt = n.alt;
+    // Always set alt: a present alt for meaningful images, an explicit empty
+    // string for decorative ones (alt="" tells assistive tech to skip it,
+    // whereas a missing alt may make it announce the src/URL).
+    img.alt = n.alt ?? "";
     parent.appendChild(img);
   }
   private progress(n: ProgressNode, parent: HTMLElement): void {
     const track = document.createElement("div");
     track.className = "vms-progress";
+    // Clamp to 0–100 (the documented range): an out-of-range value would
+    // otherwise overflow the track or render a negative-width bar.
+    const value = Math.max(0, Math.min(100, n.value));
+    track.setAttribute("role", "progressbar");
+    track.setAttribute("aria-valuemin", "0");
+    track.setAttribute("aria-valuemax", "100");
+    track.setAttribute("aria-valuenow", String(value));
     const bar = document.createElement("div");
     bar.className = "vms-progress__bar";
-    bar.style.width = `${n.value}%`;
+    bar.style.width = `${value}%`;
     track.appendChild(bar);
     parent.appendChild(track);
   }
@@ -1122,6 +1154,12 @@ export class BrowserAdapter implements Adapter {
           inp.type = "text";
           inp.className = "vms-table__filter-input";
           inp.dataset.col = col.key;
+          // Stable id so render()'s focus+caret restore can re-find this input
+          // after a re-render — critical because a silent poll can fire mid-
+          // keystroke while the user is typing a filter (the canonical
+          // workflow-table pattern). Without an id the value survives (it's
+          // bound state) but focus/caret are lost on every poll tick.
+          inp.id = `vms-tablefilter-${col.key}`;
           const bindPath = n.filterBinds?.[col.key];
           const bound = bindPath != null ? this.sa.read(bindPath) : undefined;
           inp.value = bound != null

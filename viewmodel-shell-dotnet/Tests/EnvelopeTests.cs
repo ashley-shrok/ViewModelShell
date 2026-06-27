@@ -263,4 +263,49 @@ public class EnvelopeTests
         // The message itself should appear
         Assert.Contains("param cannot be null", json);
     }
+
+    // ─── ActionPayload.ParseJson — malformed payloads throw JsonException ──────
+    // (C4, 3.3.0) JsonException is what the ShellExceptionFilter maps to
+    // parse_error (400) — the actionable class for a caller, vs the 500
+    // uncaught_exception a null state used to cause. Mirrors the TS twin.
+
+    private record PjState(string Filter);
+
+    [Fact]
+    public void ParseJson_Valid_ReturnsNameAndState()
+    {
+        var payload = ActionPayload<PjState>.ParseJson("{\"name\":\"go\",\"state\":{\"filter\":\"all\"}}");
+        Assert.Equal("go", payload.Name);
+        Assert.Equal("all", payload.State.Filter);
+    }
+
+    [Fact]
+    public void ParseJson_MissingName_ThrowsJsonException()
+    {
+        Assert.Throws<JsonException>(
+            () => ActionPayload<PjState>.ParseJson("{\"state\":{\"filter\":\"all\"}}"));
+    }
+
+    [Fact]
+    public void ParseJson_MissingState_ThrowsJsonException()
+    {
+        Assert.Throws<JsonException>(
+            () => ActionPayload<PjState>.ParseJson("{\"name\":\"go\"}"));
+    }
+
+    [Fact]
+    public void ParseJson_NullState_ThrowsJsonException()
+    {
+        Assert.Throws<JsonException>(
+            () => ActionPayload<PjState>.ParseJson("{\"name\":\"go\",\"state\":null}"));
+    }
+
+    [Fact]
+    public void ParseJson_EmptyObjectState_IsValid()
+    {
+        // {} is a legitimate state; only absent/null is rejected.
+        var payload = ActionPayload<Dictionary<string, object>>.ParseJson("{\"name\":\"go\",\"state\":{}}");
+        Assert.Equal("go", payload.Name);
+        Assert.NotNull(payload.State);
+    }
 }

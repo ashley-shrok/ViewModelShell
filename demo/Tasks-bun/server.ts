@@ -166,9 +166,7 @@ export function buildVm(state: TasksState): ViewNode {
             inputType: "text",
             bind: "draftTitle",
             placeholder: "Add a task…",
-            // FieldNode.Label is null → omitted.
-            // FieldNode.Required is non-nullable bool → MUST emit required:false.
-            required: false,
+            // FieldNode.Label is null → omitted; required defaults false → absent.
           },
         ],
         layout: "inline",

@@ -591,11 +591,14 @@ describe('0.11.0 / #5 — ImageNode rendering', () => {
     const el = renderImage({ type: "image", src: "/a.png", shape: "circle" });
     expect(el.classList.contains("vms-image--circle")).toBe(true);
   });
-  it('size + shape compose; alt omitted ⇒ no alt attribute', () => {
+  it('size + shape compose; alt omitted ⇒ explicit empty alt="" (a11y: decorative)', () => {
     const el = renderImage({ type: "image", src: "/a.png", size: "small", shape: "circle" });
     expect(el.classList.contains("vms-image--small")).toBe(true);
     expect(el.classList.contains("vms-image--circle")).toBe(true);
-    expect(el.hasAttribute("alt")).toBe(false);
+    // alt is ALWAYS set: empty string for a decorative image (assistive tech
+    // skips alt="" rather than announcing the src for a missing alt).
+    expect(el.hasAttribute("alt")).toBe(true);
+    expect(el.getAttribute("alt")).toBe("");
   });
   it('size/shape omitted ⇒ className === "vms-image" (byte-identical baseline)', () => {
     const el = renderImage({ type: "image", src: "/a.png" });

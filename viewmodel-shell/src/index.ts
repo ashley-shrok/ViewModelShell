@@ -241,7 +241,7 @@ export interface ListNode {
 export interface ListItemNode {
   type: "list-item";
   id?: string;
-  /** Row lifecycle/selection STATE (NOT severity — that's `tone`). A freeform, app-extensible token; the framework ships styling for `active` (selected), `done`, `disabled`, `high` (priority), `running`, `moving`. Appended as a BEM modifier: vms-list-item--{state}. Orthogonal to `tone` (a row can be `state:"active"` AND `tone:"danger"`). */
+  /** Row lifecycle/selection STATE (NOT severity — that's `tone`). A freeform, app-extensible token; the framework ships list-item styling for `active` (selected), `done`, `disabled`, and `high` (priority). Appended as a BEM modifier: vms-list-item--{state}. An unrecognized state renders an unstyled class (it still round-trips; just no shipped rule). Orthogonal to `tone` (a row can be `state:"active"` AND `tone:"danger"`). (TableRow additionally ships a `running` style; ListItem does not yet.) */
   state?: string;
   /** Semantic intent/severity — the universal status tone axis (closed). Emits .vms-list-item--{tone} (colored accent border, reusing the shared tokens). Omitted = neutral. */
   tone?: "danger" | "warning" | "success" | "info";
@@ -972,9 +972,19 @@ export class ViewModelShell {
       }
       return;
     }
-    this.currentVm = body.vm!;
-    this.currentState = body.state;
-    this.options.adapter.render(body.vm!, (a) => this.dispatch(a), this.stateAccessForAdapter());
+    // C2 (3.3.0) — a non-redirect response MAY legitimately omit `vm` (e.g. a
+    // side-effects-only or poll-keepalive response: "persist to storage and
+    // keep polling, but don't rebuild the view"). Do NOT blank the screen by
+    // rendering `undefined` — keep the current view, update state only if the
+    // server sent fresh state, and still schedule the next poll. Render only
+    // when a fresh tree actually arrived.
+    if (body.vm != null) {
+      this.currentVm = body.vm;
+      if (body.state !== undefined) this.currentState = body.state;
+      this.options.adapter.render(body.vm, (a) => this.dispatch(a), this.stateAccessForAdapter());
+    } else if (body.state !== undefined) {
+      this.currentState = body.state;
+    }
     this.schedulePoll(body.nextPollIn);
   }
 

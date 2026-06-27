@@ -129,7 +129,6 @@ function buildSectionNode(
             inputType: "text",
             bind: `drafts.${SECTION_TO_DRAFT[sectionId]}`,
             placeholder: `Add to ${label}…`,
-            required: false,
           },
         ],
       },

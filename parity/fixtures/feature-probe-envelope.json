@@ -2,7 +2,7 @@
   "name": "feature-probe-envelope",
   "endpoint": "/api/probe",
   "actionEndpoint": "/api/probe/action",
-  "$comment": "Phase 7 envelope cases. Three POST steps exercise (1) malformed body -> 400 + code:parse_error, (2) unknown action -> 400 + code:unknown_action, (3) uncaught throw -> 500 + code:uncaught_exception. All three share the {ok:false, errors:[...]} shape; only status + code differ. Hosted on FeatureProbe because the dispatch already covers every framework feature and now adds a `boom` action throwing a generic Error. The parse-error step's errors[0].message legitimately differs between .NET System.Text.Json and JS JSON.parse — compareIgnoreFields skips that one field on that one step rather than retroactively rewriting Plan 01's OfParseError factory (D-18: shipped code is locked).",
+  "$comment": "Phase 7 envelope cases. Four POST steps exercise (1) malformed body -> 400 + code:parse_error, (2) unknown action -> 400 + code:unknown_action, (3) uncaught throw -> 500 + code:uncaught_exception, (4) invalid tree (duplicate action name) -> 500 + code:invalid_tree (added 3.3.0, F4). All share the {ok:false, errors:[...]} shape; only status + code differ. Hosted on FeatureProbe because the dispatch already covers every framework feature and adds `boom` (generic Error) + `make-invalid-tree` (returns a duplicate-action-name tree that .Validate() rejects). The invalid_tree message is asserted byte-identical across backends (no compareIgnoreFields) — that IS the proof the two hand-mirrored validators agree. The parse-error step's errors[0].message legitimately differs between .NET System.Text.Json and JS JSON.parse — compareIgnoreFields skips that one field on that one step rather than retroactively rewriting Plan 01's OfParseError factory (D-18: shipped code is locked).",
   "steps": [
     {
       "id": "initial-load",
@@ -25,6 +25,12 @@
       "id": "uncaught-throw",
       "method": "POST",
       "action": { "name": "boom" },
+      "expectStatus": 500
+    },
+    {
+      "id": "invalid-tree",
+      "method": "POST",
+      "action": { "name": "make-invalid-tree" },
       "expectStatus": 500
     }
   ]

@@ -312,4 +312,34 @@ describe("SectionNode.action — click-anywhere clickable-card primitive (260614
     };
     expect(() => validateSectionAction(fine)).not.toThrow();
   });
+
+  it("M. nested action-in-action is caught THROUGH a FitsNode wrapper (fits blind spot)", () => {
+    // A clickable inner card nested (via a fits candidate) inside a clickable
+    // outer card is the same ambiguity case L rejects — the walker must descend
+    // into fits children, not stop at the fits node.
+    const nestedViaFits: ViewNode = {
+      type: "page",
+      children: [
+        {
+          type: "section",
+          heading: "Outer",
+          action: { name: "select-outer" },
+          children: [
+            {
+              type: "fits",
+              children: [
+                {
+                  type: "section",
+                  heading: "Inner",
+                  action: { name: "select-inner" },
+                  children: [],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    expect(() => validateSectionAction(nestedViaFits)).toThrow(/Nested SectionNode\.Action/);
+  });
 });

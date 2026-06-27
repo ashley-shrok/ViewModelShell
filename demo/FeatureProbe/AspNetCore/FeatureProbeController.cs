@@ -207,6 +207,21 @@ public class FeatureProbeController : ControllerBase
             // this demo is never deployed to production (T-07-09 accept disposition).
             throw new Exception("deliberate test failure");
         }
+        else if (name == "make-invalid-tree")
+        {
+            // 3.3.0 (F4) — return a tree with a DUPLICATE action name (two
+            // top-level buttons, NOT in a form) so .Validate() (ValidateActionNames)
+            // throws → {ok:false, errors:[{message, code:"invalid_tree"}]} at 500.
+            // Parity-covers the invalid_tree wire shape across all backends.
+            var invalidTree = new PageNode(
+                Title: null,
+                Children: new ViewNode[]
+                {
+                    new ButtonNode("A", new ActionDescriptor("dup")),
+                    new ButtonNode("B", new ActionDescriptor("dup")),
+                });
+            return new ShellResponse<FeatureProbeState>(invalidTree, state).Validate();
+        }
         else
         {
             throw new UnknownActionException(name);
@@ -345,7 +360,7 @@ public class FeatureProbeController : ControllerBase
             },
             Layout: "row",
             Align: v)).ToList();
-        // 1.13.0 — switcher vocabulary (parity coverage for SWITCH-01/02/03).
+        // npm 1.12.0 — switcher vocabulary (parity coverage for SWITCH-01/02/03).
         // Static view-shape captured by every GET step (mirrors the 1.12.0
         // arrange/align precedent; no dedicated action arm). Byte-identical to the
         // bun twin: same headings, link labels/hrefs, order, and threshold/limit
@@ -559,6 +574,17 @@ public class FeatureProbeController : ControllerBase
         pageChildren.Add(fitsAxisBothSection);
         pageChildren.Add(childModifiersSection);
         pageChildren.Add(BuildTableSection(state));
+        // 3.3.0 (F3) — a STATIC ModalNode on every GET so the parity suite
+        // byte-diffs the full modal wire shape (Title/Children/Footer/
+        // DismissAction/Size) across all backends. Previously ModalNode appeared
+        // only in ExpenseTracker gated behind state.Adding, which no fixture
+        // opened, so the modal wire shape had zero cross-backend coverage.
+        pageChildren.Add(new ModalNode(
+            Title: "Probe modal",
+            Children: new ViewNode[] { new TextNode("Modal body for parity coverage.", null) },
+            Footer: new ViewNode[] { new ButtonNode("OK", new ActionDescriptor("modal-ok")) },
+            DismissAction: new ActionDescriptor("modal-dismiss"),
+            Size: "small"));
         return new PageNode("Feature Probe", pageChildren,
             Density: "compact", Layout: "cards");
     }

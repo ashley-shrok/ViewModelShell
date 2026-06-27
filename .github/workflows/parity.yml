@@ -68,6 +68,11 @@ jobs:
 
       - name: Run .NET tests
         run: |
+          # Framework's OWN test project FIRST (ViewTreeValidation, envelope,
+          # exception-filter) — builds itself via its ProjectReference to the
+          # NuGet source project. Omitting it here is how it silently rotted
+          # (uncompilable from 3.0.0's ButtonNode.Variant removal until 3.3.0).
+          dotnet test viewmodel-shell-dotnet/Tests
           dotnet test demo/Tasks/AspNetCore.Tests --no-build
           dotnet test demo/ContactManager/AspNetCore.Tests --no-build
           dotnet test demo/ExpenseTracker/AspNetCore.Tests --no-build

@@ -108,7 +108,6 @@ function buildMaster(state: ContactsState): ViewNode {
             inputType: "text",
             bind: "searchQuery",
             placeholder: "Search by name or email…",
-            required: false,
             action: { name: "search" },
           },
         ],
@@ -160,9 +159,9 @@ function buildDetail(state: ContactsState): ViewNode {
           submitLabel: "Create Contact",
           children: [
             { type: "field", name: "name",  inputType: "text",     bind: "draftForm.name",  label: "Name",  placeholder: "Full name",          required: true  },
-            { type: "field", name: "email", inputType: "email",    bind: "draftForm.email", label: "Email", placeholder: "email@example.com",  required: false },
-            { type: "field", name: "phone", inputType: "text",     bind: "draftForm.phone", label: "Phone", placeholder: "555-0100",           required: false },
-            { type: "field", name: "notes", inputType: "textarea", bind: "draftForm.notes", label: "Notes", placeholder: "Any notes…",         required: false },
+            { type: "field", name: "email", inputType: "email",    bind: "draftForm.email", label: "Email", placeholder: "email@example.com" },
+            { type: "field", name: "phone", inputType: "text",     bind: "draftForm.phone", label: "Phone", placeholder: "555-0100" },
+            { type: "field", name: "notes", inputType: "textarea", bind: "draftForm.notes", label: "Notes", placeholder: "Any notes…" },
           ],
         },
         { type: "button", label: "Cancel", action: { name: "navigate-to-list" } },
@@ -196,9 +195,9 @@ function buildDetail(state: ContactsState): ViewNode {
         submitLabel: "Save",
         children: [
           { type: "field", name: "name",  inputType: "text",     bind: "draftForm.name",  label: "Name",  required: true  },
-          { type: "field", name: "email", inputType: "email",    bind: "draftForm.email", label: "Email", required: false },
-          { type: "field", name: "phone", inputType: "text",     bind: "draftForm.phone", label: "Phone", required: false },
-          { type: "field", name: "notes", inputType: "textarea", bind: "draftForm.notes", label: "Notes", required: false },
+          { type: "field", name: "email", inputType: "email",    bind: "draftForm.email", label: "Email" },
+          { type: "field", name: "phone", inputType: "text",     bind: "draftForm.phone", label: "Phone" },
+          { type: "field", name: "notes", inputType: "textarea", bind: "draftForm.notes", label: "Notes" },
         ],
       },
       {

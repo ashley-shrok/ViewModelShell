@@ -459,7 +459,7 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
     children.push({ type: "text", value: "No tickets in queue.", style: "muted" });
   } else {
     const titleCol: Record<string, unknown> = {
-      key: "title", label: "Title", sortable: false, filterable: true, linkExternal: false,
+      key: "title", label: "Title", filterable: true,
     };
     if (state.titleFilter.length > 0) titleCol.filterValue = state.titleFilter;
 
@@ -467,10 +467,10 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
       type: "table",
       columns: [
         titleCol,
-        { key: "type",     label: "Type",     sortable: false, filterable: false, linkExternal: false },
-        { key: "priority", label: "Priority", sortable: false, filterable: false, linkExternal: false },
-        { key: "status",   label: "Status",   sortable: false, filterable: false, linkExternal: false },
-        { key: "due",      label: "Due",      sortable: false, filterable: false, linkExternal: false },
+        { key: "type",     label: "Type" },
+        { key: "priority", label: "Priority" },
+        { key: "status",   label: "Status" },
+        { key: "due",      label: "Due" },
       ],
       rows,
       filterBinds: { title: "titleFilter" },
@@ -538,7 +538,7 @@ function agentBuildTicketPage(ticket: Ticket, state: AgentState): ViewNode {
   const notesField: ViewNode = {
     type: "field", name: "agent_notes", inputType: "textarea",
     bind: "agentNotes",
-    placeholder: "Add notes…", required: false,
+    placeholder: "Add notes…",
   };
   const notesChildren: ViewNode[] = [notesField];
   if (state.notesSaved) {
@@ -698,30 +698,30 @@ function requesterBuildCreateView(state: RequesterState): ViewNode {
     formChildren.push({
       type: "field", name: "device_model", inputType: "text",
       bind: "draftDeviceModel",
-      label: "Device / Model", placeholder: "e.g. Dell XPS 15, iPhone 15", required: false,
+      label: "Device / Model", placeholder: "e.g. Dell XPS 15, iPhone 15",
     });
   } else if (state.createType === "software") {
     formChildren.push({
       type: "field", name: "application", inputType: "text",
       bind: "draftApplication",
-      label: "Application", placeholder: "e.g. Microsoft Excel, Slack", required: false,
+      label: "Application", placeholder: "e.g. Microsoft Excel, Slack",
     });
   } else if (state.createType === "access") {
     formChildren.push({
       type: "field", name: "system_name", inputType: "text",
       bind: "draftSystemName",
-      label: "System / Resource", placeholder: "e.g. VPN, GitHub, Salesforce", required: false,
+      label: "System / Resource", placeholder: "e.g. VPN, GitHub, Salesforce",
     });
   }
   formChildren.push({
     type: "field", name: "description", inputType: "textarea",
     bind: "draftDescription",
-    label: "Description", placeholder: "Provide additional details…", required: false,
+    label: "Description", placeholder: "Provide additional details…",
   });
   formChildren.push({
     type: "field", name: "due_date", inputType: "date",
     bind: "draftDueDate",
-    label: "Due By", required: false,
+    label: "Due By",
   });
 
   const pageChildren: ViewNode[] = [

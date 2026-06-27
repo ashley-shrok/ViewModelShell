@@ -184,10 +184,10 @@ function buildVm(state: ExpensesState): ViewNode {
       {
         type: "table",
         columns: [
-          { key: "date",     label: "Date",     sortable: false, filterable: false, linkExternal: false },
-          { key: "category", label: "Category", sortable: false, filterable: false, linkExternal: false },
-          { key: "note",     label: "Note",     sortable: false, filterable: false, linkExternal: false },
-          { key: "amount",   label: "Amount",   sortable: false, filterable: false, linkExternal: false },
+          { key: "date",     label: "Date" },
+          { key: "category", label: "Category" },
+          { key: "note",     label: "Note" },
+          { key: "amount",   label: "Amount" },
         ],
         rows,
       },
@@ -255,7 +255,6 @@ function buildVm(state: ExpensesState): ViewNode {
               bind: "draftNote",
               label: "Note",
               placeholder: "Coffee, lunch…",
-              required: false,
             },
           ],
         },

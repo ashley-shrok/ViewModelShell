@@ -230,6 +230,34 @@ describe("createAction — parse error", () => {
     expect(body.ok).toBe(false);
     expect((body.errors as Array<Record<string, unknown>>)[0].code).toBe("parse_error");
   });
+
+  it("JSON body missing state field returns 400 with parse_error (C4, 3.3.0)", async () => {
+    // A {name}-only body used to run the handler with undefined state and crash
+    // as a 500 uncaught_exception; it now surfaces as an actionable 400.
+    const handler = createAction<TestState>(async () => ({ vm: makeVm(), state: VALID_STATE }));
+    const req = new Request("http://localhost/action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "do-thing" }), // missing "state"
+    });
+    const res = await handler(req);
+    expect(res.status).toBe(400);
+    const body = await parseBody(res) as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+    expect((body.errors as Array<Record<string, unknown>>)[0].code).toBe("parse_error");
+  });
+
+  it("JSON body with an EMPTY object state is valid (not a parse error)", async () => {
+    // {} is a legitimate state — only absent/null state is rejected.
+    const handler = createAction<Record<string, never>>(async () => ({ vm: makeVm(), state: {} }));
+    const req = new Request("http://localhost/action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "do-thing", state: {} }),
+    });
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+  });
 });
 
 // ─── createAction — BadRequestError ──────────────────────────────────────────

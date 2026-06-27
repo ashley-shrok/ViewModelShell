@@ -6,6 +6,39 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 3.3.0 / 3.3.0 — Correctness, a11y & cross-backend parity hardening (npm + NuGet)
+
+**npm:** `3.3.0` (MINOR) · **NuGet:** `3.3.0` (MINOR). A consolidated correctness/robustness pass — renderer + shell-loop bug fixes, accessibility fixes, a closed validation blind spot, a wire-normalization that removes a long-standing TS↔.NET asymmetry, and new parity coverage. Wire protocol token stays `viewmodel-shell/1.0` (all changes are additive or absent-vs-false normalizations; old agents/apps keep working). **Migration: effectively none** — one .NET raw-wire normalization noted below.
+
+### Fixed
+- **`fits` subtree was skipped by both tree validators** (`validateActionNames` / `validateSectionAction`, both backends). A `FitsNode` renders one candidate at runtime but ships every candidate on the wire, so two candidates sharing an action name — or a nested clickable `SectionNode.action` inside a `fits` — passed validation and shipped an ambiguous tree. Both walkers now descend into `fits` children. The exact same fix lands in the TS and .NET twins.
+- **Focus + caret loss on re-render** for table filter inputs, tabs buttons, and standalone checkboxes. These interactive elements were created without a stable `id`, so the renderer's focus/caret-restore couldn't re-find them after a re-render — worst case, a `pollInterval` tick firing mid-keystroke while you type a table filter (the canonical workflow-table pattern) lost your focus and cursor. They now carry stable ids (`vms-tablefilter-{col}`, `vms-tab-{bind}-{value}`, `vms-checkbox-{name}`).
+- **A side-effects-only / poll-keepalive response (`vm` omitted, no redirect) blanked the page.** The shell asserted `body.vm!` and rendered `undefined`. It now keeps the current view, updates state only if fresh state arrived, and still schedules the next poll — so "persist a flag and keep polling, don't rebuild the view" is a valid response shape.
+- **A JSON action body missing `state` returned a 500 `uncaught_exception`** (the handler ran with undefined/null state and crashed). It now returns an actionable 400 `parse_error` in both backends (an empty object `{}` is still a valid state). The .NET `ParseJson` missing-`name` path is likewise normalized to `parse_error` to match TS.
+
+### Fixed (accessibility)
+- **`ProgressNode`** now renders `role="progressbar"` + `aria-valuemin/max/now`, and **clamps `value` to 0–100** (an out-of-range value previously overflowed the track or drew a negative-width bar).
+- **`ImageNode`** always sets `alt` — an explicit `alt=""` for a decorative image (assistive tech skips it) rather than a missing `alt` (which may announce the src URL).
+- **Unknown node types fail loud, not silent.** An unrecognized `n.type` (e.g. a newer server's node reaching an older client) now `console.warn`s instead of vanishing with no trace; sibling nodes still render (forward-compatible degradation).
+
+### Changed
+- **`.NET` optional bools drop their `false` default from the wire (F2).** `LinkNode.External`, `SectionLink.External`, `FieldNode.Required`, and `TableColumn.Sortable`/`Filterable`/`LinkExternal` now carry `[JsonIgnore(WhenWritingDefault)]`, so a `false` value is **absent** on the wire — matching the TS optional (`external?`, `required?`, …) and the framework's "unset optional = absent" contract (same posture `PreventUnload`/`Busy` already used). This removes a real TS↔.NET asymmetry: previously the .NET backend emitted `"external": false` while the TS backend omitted it, and every `*-bun` demo hand-wrote `external: false` / `required: false` purely to match the .NET side (94 such compensations removed across 6 demos).
+- **The framework's own .NET test project (`viewmodel-shell-dotnet/Tests`) is back in the build + CI.** It had been uncompilable since 3.0.0 (a stale `ButtonNode.Variant` argument removed by the appearance-axes unification) because neither the documented green-tree gate nor `parity.yml` ran it. Both now do, so it can't silently rot again.
+
+### Added (parity coverage)
+- **`ModalNode`** is now rendered statically by the FeatureProbe demo on every GET, so the full modal wire shape (title/children/footer/dismissAction/size) is byte-diffed across all backends (it was previously gated behind a state flag no fixture ever opened — zero cross-backend coverage).
+- **`invalid_tree`** (duplicate-action-name → 500) now has a parity fixture step, asserted byte-identical across backends — which is the proof the two hand-mirrored tree validators agree on the error message, not just the status.
+
+### Docs
+- Corrected the npm README's .NET setup (it pointed at a deleted `demo/Tasks/AspNetCore/ViewModels.cs` — now the NuGet package).
+- AGENTS.md: gotcha #4 uses `Tone:"danger"` (the removed `"error"` style); documents the first-class `rejected`/`WithRejection` soft-validation channel; gotcha #8 reflects the F2 `WhenWritingDefault` rule and drops the nonexistent `CheckboxNode.Checked` example; the "Draft value preservation" note now describes the bind model (selects ARE preserved); GET wire shape shows `ok:true`; stale version anchor + a dead test-file path corrected.
+- `ListItemNode.state` TSDoc/.NET comment corrected to the four list-item states actually shipped (`active/done/disabled/high`); a `running` style is TableRow-only for now.
+
+### Migration
+**Apps: none.** Both backends keep the same node types, wire token, and public API. The single behavioral note is for anyone parsing the **raw .NET JSON** directly: the optional bools above are now **absent when false** instead of `"field": false`. Absent and `false` are semantically identical for these fields (and the typed/`viewmodel-shell` clients already treat them so), so no change is needed unless you string-matched a literal `"external": false` / `"required": false` etc. in the raw wire.
+
+---
+
 ## 3.2.1 / — Fix: inline-form submit button bottom-aligns (npm only)
 
 **npm:** `3.2.1` (PATCH) · **NuGet:** unchanged (`3.2.0`). CSS-only bugfix ([#23](https://github.com/ashley-shrok/ViewModelShell/issues/23)); no wire/type change, no .NET change. **Migration: none.**

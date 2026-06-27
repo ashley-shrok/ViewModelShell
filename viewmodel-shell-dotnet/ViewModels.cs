@@ -49,10 +49,30 @@ public record ActionPayload<TState>(
     public static ActionPayload<TState> ParseJson(string jsonBody)
     {
         var root = JsonSerializer.Deserialize<JsonElement>(jsonBody, _parseOpts);
-        var name = root.GetProperty("name").GetString()!;
-        var state = root.TryGetProperty("state", out var stateEl)
-            ? JsonSerializer.Deserialize<TState>(stateEl.GetRawText(), _parseOpts)!
-            : default!;
+        // Throw JsonException for any malformed payload so the framework's
+        // exception filter classifies it as parse_error (400), matching the TS
+        // twin. Without these guards a missing 'name' threw KeyNotFoundException
+        // and a missing 'state' deserialized to null — both crashing later as a
+        // 500 uncaught_exception (the wrong, un-actionable error class for the
+        // caller). (C4, 3.3.0.)
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("name", out var nameEl)
+            || nameEl.ValueKind != JsonValueKind.String
+            || string.IsNullOrEmpty(nameEl.GetString()))
+        {
+            throw new JsonException("Missing required 'name' field in action payload.");
+        }
+        // Require 'state'. An empty object {} is a valid state and passes; only
+        // an absent or null state is rejected.
+        if (!root.TryGetProperty("state", out var stateEl) || stateEl.ValueKind == JsonValueKind.Null)
+        {
+            throw new JsonException(
+                "Missing required 'state' field in action payload. The action wire is " +
+                "{name, state} — echo back the state from the GET response (or the prior " +
+                "action response); send {} only if the app's state really is empty.");
+        }
+        var name = nameEl.GetString()!;
+        var state = JsonSerializer.Deserialize<TState>(stateEl.GetRawText(), _parseOpts)!;
         return new ActionPayload<TState>(name, state);
     }
 }
@@ -325,12 +345,15 @@ public record PageNode(
 // 1.4.0 — SectionNode.Link URL-wrapper variant of the clickable-card primitive
 // (issue #21). Nested record (`{ Url, External }`) matches the TS shape exactly
 // — `link?: { url, external? }`. External is non-nullable bool defaulting to
-// false; same wire posture as LinkNode.External (serializes as "external":
-// false when defaulted). Url is required, non-nullable, must be non-empty
-// (the renderer trusts it as `<a href={Url}>`); validation is the caller's
-// responsibility because empty URLs render as anchors-without-href which
+// false, dropped from the wire when false (WhenWritingDefault) so it's ABSENT
+// rather than "external": false — matching the TS optional `external?` (3.3.0,
+// F2; same posture as LinkNode.External). Url is required, non-nullable, must
+// be non-empty (the renderer trusts it as `<a href={Url}>`); validation is the
+// caller's responsibility because empty URLs render as anchors-without-href which
 // browsers treat as styling-only — semantically wrong, but not a tree-shape bug.
-public record SectionLink(string Url, bool External = false);
+public record SectionLink(
+    string Url,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool External = false);
 
 public record SectionNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Heading,
@@ -475,8 +498,9 @@ public record FitsNode(
 public record ListItemNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id,
     // Row lifecycle/selection STATE (NOT severity — that's Tone). Freeform,
-    // app-extensible; framework-styled set: active/done/disabled/high/running/moving.
-    // Emits .vms-list-item--{state}. Orthogonal to Tone.
+    // app-extensible; framework-styled list-item set: active/done/disabled/high.
+    // An unrecognized state emits an unstyled .vms-list-item--{state} class.
+    // Orthogonal to Tone. (TableRow additionally ships a `running` style.)
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? State,
     IReadOnlyList<ViewNode> Children,
     // Semantic intent/severity — universal tone axis ("danger"|"warning"|"success"|"info").
@@ -528,7 +552,9 @@ public record FieldNode(
     string Bind,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Placeholder,
-    bool Required = false,
+    // Dropped from the wire when false (WhenWritingDefault) → absent, matching
+    // the TS optional `required?` (3.3.0, F2).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Required = false,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<FieldOption>? Options = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Language = null
@@ -598,11 +624,13 @@ public record ModalNode(
 public record TableColumn(
     string Key,
     string Label,
-    bool Sortable = false,
-    bool Filterable = false,
+    // Sortable/Filterable/LinkExternal are dropped from the wire when false
+    // (WhenWritingDefault) → absent, matching the TS optionals (3.3.0, F2).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Sortable = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Filterable = false,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FilterValue = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LinkLabel = null,
-    bool LinkExternal = false
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool LinkExternal = false
 );
 
 public record TableRow(
@@ -666,7 +694,9 @@ public record TableNode(
 public record LinkNode(
     string Label,
     string Href,
-    bool External = false,
+    // Dropped from the wire when false (WhenWritingDefault) → absent, matching
+    // the TS optional `external?` (3.3.0, F2).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool External = false,
     /// <summary>true = current location ("you are here"): emits .vms-link--active
     /// + aria-current="page". Server-owned. Nullable + omitted-when-null so the wire
     /// matches the TS `active?: boolean` posture (absent = not active).</summary>
@@ -870,6 +900,13 @@ public static class ViewTreeValidation
                 }
                 break;
 
+            case FitsNode fits:
+                // A fits candidate can itself be a section with Action/Link (or
+                // contain one), so the nested-section-interaction rules must
+                // descend here too.
+                foreach (var child in fits.Children) WalkForSectionAction(child, outerInteractive);
+                break;
+
             // Leaf-like nodes (FieldNode, CheckboxNode, ButtonNode, TextNode,
             // LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
             // TableNode, CopyButtonNode) carry no SectionNode descendants. No
@@ -961,6 +998,14 @@ public static class ViewTreeValidation
                         }
                     }
                 }
+                break;
+
+            case FitsNode fits:
+                // FitsNode.Children are full ViewNode[] (can hold forms,
+                // buttons, sections with action/link) — the renderer picks ONE
+                // at runtime but every candidate ships on the wire, so all must
+                // be validated for action-name uniqueness.
+                foreach (var child in fits.Children) Collect(child, enclosingForm, sink);
                 break;
 
             // No dispatch-bearing actions of their own:

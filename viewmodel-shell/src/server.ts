@@ -21,6 +21,7 @@ import type {
   SectionNode,
   ListNode,
   ListItemNode,
+  FitsNode,
 } from "./index.js";
 
 // Re-export the ViewNode hierarchy and wire types so a backend can import
@@ -223,6 +224,15 @@ function collectActions(
       }
       return;
     }
+    case "fits": {
+      // FitsNode.children are full ViewNode[] (can hold forms, buttons,
+      // sections with action/link) — the renderer picks ONE at runtime but
+      // every candidate ships on the wire, so all must be validated. Without
+      // this arm the entire fits subtree skipped action-name uniqueness checks.
+      const fits = node as FitsNode;
+      for (const child of fits.children) collectActions(child, enclosingForm, out);
+      return;
+    }
     // Nodes with no dispatch-bearing actions of their own:
     //   text, link, image, stat-bar, progress, copy-button
     default:
@@ -387,6 +397,13 @@ function walkForSectionAction(
       }
       return;
     }
+    case "fits": {
+      // A fits candidate can itself be a section with action/link (or contain
+      // one), so the nested-section-interaction rules must descend here too.
+      const fits = node as FitsNode;
+      for (const child of fits.children) walkForSectionAction(child, outerInteractive);
+      return;
+    }
     // Leaf-like nodes (field, checkbox, button, text, link, image, stat-bar,
     // tabs, progress, table, copy-button) carry no SectionNode descendants —
     // TableNode rows hold strings + per-row controls, not sections.
@@ -438,6 +455,20 @@ export function parseJsonAction<TState>(body: string | object): ActionPayload<TS
     : (body as { name?: string; state: TState });
   if (typeof parsed.name !== "string" || parsed.name === "") {
     throw new Error("Missing required 'name' field in action payload");
+  }
+  // C4 (3.3.0) — require `state`. The shell always sends it, but a hand-rolled
+  // curl/agent caller that posts `{name}` only would otherwise run the handler
+  // with `undefined` state and crash on the first property access → a 500
+  // uncaught_exception, the wrong error class. A missing/null state is a
+  // malformed request the caller can fix, so surface it as a 400 parse_error
+  // (this throw is caught by createAction's parse arm). An EMPTY object `{}` is
+  // a valid state and is left alone.
+  if (parsed.state == null) {
+    throw new Error(
+      "Missing required 'state' field in action payload. The action wire is " +
+      "{name, state} — echo back the state from the GET response (or the prior " +
+      "action response); send {} only if the app's state really is empty.",
+    );
   }
   return {
     name: parsed.name,

@@ -221,4 +221,22 @@ describe("validateActionNames", () => {
     const tree = page(modal, button("close"));
     expect(() => validateActionNames(tree)).toThrow(/Duplicate action name 'close'/);
   });
+
+  it("throws: duplicate action name across FitsNode candidates (the fits blind spot)", () => {
+    // FitsNode renders ONE candidate at runtime, but every candidate ships on
+    // the wire. Two candidates sharing an action name is the same ambiguity the
+    // validator rejects everywhere else — it must descend into fits children.
+    const fits: ViewNode = {
+      type: "fits",
+      children: [button("save"), button("save")],
+    };
+    const tree = page(fits);
+    expect(() => validateActionNames(tree)).toThrow(/Duplicate action name 'save'/);
+  });
+
+  it("throws: action inside a FitsNode collides with a top-level button", () => {
+    const fits: ViewNode = { type: "fits", children: [button("delete")] };
+    const tree = page(fits, button("delete"));
+    expect(() => validateActionNames(tree)).toThrow(/Duplicate action name 'delete'/);
+  });
 });

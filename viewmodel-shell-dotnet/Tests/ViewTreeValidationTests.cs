@@ -13,7 +13,7 @@ using ViewModelShell;
 public class ViewTreeValidationTests
 {
     private static ButtonNode Btn(string name, string? label = null) =>
-        new(label ?? name, new ActionDescriptor(name), Variant: null);
+        new(label ?? name, new ActionDescriptor(name));
 
     private static PageNode Page(params ViewNode[] children) =>
         new(Title: null, Children: children);
@@ -236,6 +236,29 @@ public class ViewTreeValidationTests
         Assert.Contains("Duplicate action name 'close'", ex.Message);
     }
 
+    [Fact]
+    public void Validate_DuplicateActionName_AcrossFitsCandidates_Throws()
+    {
+        // FitsNode renders ONE candidate at runtime, but every candidate ships
+        // on the wire — two candidates sharing an action name is the same
+        // ambiguity rejected everywhere else. The walker must descend into fits.
+        var fits = new FitsNode(new ViewNode[] { Btn("save"), Btn("save") });
+        var tree = Page(fits);
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ViewTreeValidation.ValidateActionNames(tree));
+        Assert.Contains("Duplicate action name 'save'", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_ActionInsideFits_CollidesWithTopLevelButton_Throws()
+    {
+        var fits = new FitsNode(new ViewNode[] { Btn("delete") });
+        var tree = Page(fits, Btn("delete"));
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ViewTreeValidation.ValidateActionNames(tree));
+        Assert.Contains("Duplicate action name 'delete'", ex.Message);
+    }
+
     // Direct verification that ShellResponse<TState>.Validate() invokes the
     // walker on the response's Vm — pins the controller-facing seam Plan 06-04
     // wires into every demo.
@@ -321,6 +344,20 @@ public class ViewTreeValidationTests
         Assert.Contains("Nested SectionNode.Action", ex.Message);
         Assert.Contains("Outer", ex.Message);
         Assert.Contains("Inner", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_SectionAction_NestedThroughFits_Throws()
+    {
+        // Clickable inner card nested via a fits candidate inside a clickable
+        // outer card — the walker must descend into fits children.
+        var inner = Card("Inner", new ActionDescriptor("select-inner"));
+        var fits = new FitsNode(new ViewNode[] { inner });
+        var outer = Card("Outer", new ActionDescriptor("select-outer"), fits);
+        var tree = Page(outer);
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ViewTreeValidation.ValidateSectionAction(tree));
+        Assert.Contains("Nested SectionNode.Action", ex.Message);
     }
 
     [Fact]

@@ -296,7 +296,7 @@ body {
 .vms-maxw--three-quarters { max-inline-size: 75%; }
 .vms-maxw--prose          { max-inline-size: min(65ch, 100%); }
 
-/* ── Layout preset: switcher (SWITCH-01/02 / 1.13.0) — the Every-Layout Switcher,
+/* ── Layout preset: switcher (SWITCH-01/02 / npm 1.12.0) — the Every-Layout Switcher,
    zero @media. N equal items flip all-row ↔ all-stack ATOMICALLY via a negative
    `flex-basis`: above the threshold the basis `(threshold - 100%) * 999` goes
    hugely negative → clamped to 0 → all children share one row; below it the
