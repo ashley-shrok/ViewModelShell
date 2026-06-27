@@ -6,6 +6,18 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 3.2.1 / — Fix: inline-form submit button bottom-aligns (npm only)
+
+**npm:** `3.2.1` (PATCH) · **NuGet:** unchanged (`3.2.0`). CSS-only bugfix ([#23](https://github.com/ashley-shrok/ViewModelShell/issues/23)); no wire/type change, no .NET change. **Migration: none.**
+
+### Fixed
+- **`.vms-form--inline` submit button no longer top-anchors.** The inline form preset bottom-aligns its row (`align-items: flex-end`) so the submit lines up with the field inputs (labels sit above), but the base `align-self: flex-start` on `.vms-button` and `.vms-form__buttons` escaped that (an item's `align-self` beats the parent's `align-items`) — leaving the submit hanging from the top while the fields sat at the bottom. Added `.vms-form--inline > .vms-button, .vms-form--inline > .vms-form__buttons { align-self: auto }` (the child combinator scopes it to the form's own submit / buttons-row, not buttons nested elsewhere), the same override the modal footer already applies. Restores the documented "submit lines up with the input" behavior and lets inline filter bars use a real `FormNode` with an implicit submit — preserving native Enter-to-submit — instead of the buttons-outside-the-form workaround.
+
+### Migration
+None — purely a CSS alignment fix for the inline form preset; nothing else changes.
+
+---
+
 ## 3.2.0 / 3.2.0 — Child-side layout modifiers: alignSelf + maxWidth (npm + NuGet)
 
 **npm:** `3.2.0` (MINOR) · **NuGet:** `3.2.0` (MINOR). Two additive `SectionNode` fields. Wire protocol token stays `viewmodel-shell/1.0` (additive node fields; old agents/apps unaffected). **Migration: none.**

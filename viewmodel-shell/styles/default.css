@@ -439,6 +439,14 @@ body {
   flex-wrap: wrap;
 }
 .vms-form--inline > .vms-field { flex: 1 1 12rem; }
+/* #23 — inline forms bottom-align their row (align-items: flex-end), but the
+   base align-self: flex-start on the implicit submit button and the buttons[]
+   row escapes that (an item's align-self beats the parent's align-items), so
+   the submit would top-anchor while the fields hang at the bottom. Drop those
+   direct children back to auto so the parent's flex-end wins — the same
+   override the modal footer already applies to .vms-button. */
+.vms-form--inline > .vms-button,
+.vms-form--inline > .vms-form__buttons { align-self: auto; }
 /* Multi-action submit buttons row (0.10.0 / #15) — groups the form's
    buttons[] entries on one line, like a dialog action bar. align-self
    flex-start keeps the row from stretching full-width in the stacked form. */
