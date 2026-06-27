@@ -1,5 +1,7 @@
 # Requirements: ViewModel Shell — Milestone v1.12 Layout System Completeness
 
+> ✅ **SHIPPED 2026-06-24** — all v1 requirements below delivered in the consolidated npm `1.12.0` / NuGet `1.10.0` release. See CHANGELOG `1.12.0 / 1.10.0` and the milestone summary in `MILESTONES.md`. (Subsequent interstitial releases through 3.1.0 are CHANGELOG-tracked, not part of this milestone's scope.)
+
 **Defined:** 2026-06-24
 **Core Value:** The core is a platform-agnostic transformer of a structured wire protocol — testable with no browser runtime, portable to any front-end, and drivable end-to-end by an agent reading only the JSON the server emits.
 
@@ -14,37 +16,37 @@ Source of truth for scope: `.planning/design/layout-system-research.md` (4-frame
 ## v1 Requirements
 
 ### Alignment (main/cross-axis enums)
-- [ ] **ALIGN-01**: The `row` layout (on `PageNode`/`SectionNode`, and any flex-row container) accepts an optional `arrange` closed enum — `start | center | end | space-between | space-around | space-evenly` — mapping to `justify-content`. Omitted renders byte-identical to today's left-pack `row`.
-- [ ] **ALIGN-02**: The `row` layout accepts an optional `align` closed enum — `start | center | end | stretch | baseline` — mapping to `align-items`. Omitted renders byte-identical to today's `align-items:center`.
-- [ ] **ALIGN-03**: `arrange`/`align` land byte-identically in TS (`src/index.ts` + `browser.ts` + `styles/default.css`) and .NET (`ViewModels.cs`, both nullable fields carrying `[JsonIgnore(WhenWritingNull)]`); a parity fixture exercises every enum value and `bun run parity/run.ts` is byte-identical green.
-- [ ] **ALIGN-04**: The canonical header-bar pattern — a `row` with `arrange:"space-between"` and a heading-`TextNode` first child — renders title-left / nav-right with zero app CSS (the PBMInvoices consumer's request, served by the general primitive).
+- [x] **ALIGN-01**: The `row` layout (on `PageNode`/`SectionNode`, and any flex-row container) accepts an optional `arrange` closed enum — `start | center | end | space-between | space-around | space-evenly` — mapping to `justify-content`. Omitted renders byte-identical to today's left-pack `row`.
+- [x] **ALIGN-02**: The `row` layout accepts an optional `align` closed enum — `start | center | end | stretch | baseline` — mapping to `align-items`. Omitted renders byte-identical to today's `align-items:center`.
+- [x] **ALIGN-03**: `arrange`/`align` land byte-identically in TS (`src/index.ts` + `browser.ts` + `styles/default.css`) and .NET (`ViewModels.cs`, both nullable fields carrying `[JsonIgnore(WhenWritingNull)]`); a parity fixture exercises every enum value and `bun run parity/run.ts` is byte-identical green.
+- [x] **ALIGN-04**: The canonical header-bar pattern — a `row` with `arrange:"space-between"` and a heading-`TextNode` first child — renders title-left / nav-right with zero app CSS (the PBMInvoices consumer's request, served by the general primitive).
 
 ### Switcher (atomic row↔stack primitive)
-- [ ] **SWITCH-01**: A new `switcher` layout exists that lays N equal-weight children in a single row above a content-width threshold and stacks ALL of them below it — an atomic flip with no intermediate partial-wrap state — implemented via the negative-`flex-basis` trick, zero `@media`.
-- [ ] **SWITCH-02**: `switcher` takes a bounded `threshold` token (the flip width) and an optional bounded `limit` (max items before forcing vertical regardless of width). Both closed/bounded, never raw CSS.
-- [ ] **SWITCH-03**: `switcher` lands byte-identically in TS and .NET (nullable params with `[JsonIgnore(WhenWritingNull)]`); a parity fixture covers it; `bun run parity/run.ts` green.
+- [x] **SWITCH-01**: A new `switcher` layout exists that lays N equal-weight children in a single row above a content-width threshold and stacks ALL of them below it — an atomic flip with no intermediate partial-wrap state — implemented via the negative-`flex-basis` trick, zero `@media`.
+- [x] **SWITCH-02**: `switcher` takes a bounded `threshold` token (the flip width) and an optional bounded `limit` (max items before forcing vertical regardless of width). Both closed/bounded, never raw CSS.
+- [x] **SWITCH-03**: `switcher` lands byte-identically in TS and .NET (nullable params with `[JsonIgnore(WhenWritingNull)]`); a parity fixture covers it; `bun run parity/run.ts` green.
 
 ### Grid (cards minItem wire field)
-- [ ] **GRID-01**: The `cards` layout accepts an optional bounded `minItem` token (a closed size scale) that sets the auto-fit minimum track width — promoting the CSS-only `--vms-card-min` to explicit server intent. Omitted renders byte-identical to today's `--vms-card-min` default.
-- [ ] **GRID-02**: `minItem` lands byte-identically in TS and .NET (`[JsonIgnore(WhenWritingNull)]`); a parity fixture exercises it; `bun run parity/run.ts` green.
+- [x] **GRID-01**: The `cards` layout accepts an optional bounded `minItem` token (a closed size scale) that sets the auto-fit minimum track width — promoting the CSS-only `--vms-card-min` to explicit server intent. Omitted renders byte-identical to today's `--vms-card-min` default.
+- [x] **GRID-02**: `minItem` lands byte-identically in TS and .NET (`[JsonIgnore(WhenWritingNull)]`); a parity fixture exercises it; `bun run parity/run.ts` green.
 
 ### Fits (responsive selection node)
-- [ ] **FITS-01**: A new `fits` node type renders the first child whose intrinsic size fits the available container width, else the next — container-relative selection decided client-side at layout time, zero breakpoints. Carries an axis enum (`horizontal | vertical | both`) and an ordered children list.
-- [ ] **FITS-02**: `fits` has a defined, sensible degradation on the TUI adapter (terminal has no pixel fit — renders a documented child per a fixed rule) so it doesn't break the non-browser target.
-- [ ] **FITS-03**: `fits` lands byte-identically in TS and .NET (record + `[JsonDerivedType]` discriminator, nullable fields `[JsonIgnore(WhenWritingNull)]`); a parity fixture exercises it; `bun run parity/run.ts` green.
+- [x] **FITS-01**: A new `fits` node type renders the first child whose intrinsic size fits the available container width, else the next — container-relative selection decided client-side at layout time, zero breakpoints. Carries an axis enum (`horizontal | vertical | both`) and an ordered children list.
+- [x] **FITS-02**: `fits` has a defined, sensible degradation on the TUI adapter (terminal has no pixel fit — renders a documented child per a fixed rule) so it doesn't break the non-browser target.
+- [x] **FITS-03**: `fits` lands byte-identically in TS and .NET (record + `[JsonDerivedType]` discriminator, nullable fields `[JsonIgnore(WhenWritingNull)]`); a parity fixture exercises it; `bun run parity/run.ts` green.
 
 ### Policy & docs
-- [ ] **POLICY-01**: AGENTS.md gains a "Layout policy" section stating P1 (intrinsic/zero-viewport-breakpoint) and P2 (closed-enum/bounded-scalar) as the governing test for ALL future layout changes — a field joins the vocabulary iff it passes both. The two flexbox-idiom primitives a grid cannot express (`sidebar`, `switcher`) are named.
-- [ ] **POLICY-02**: The node-type/CSS-class concern→source table and the Design-system section in AGENTS.md are updated to reflect the new primitives without enumerating them in a way that drifts (point at source/Showcase, per existing convention).
+- [x] **POLICY-01**: AGENTS.md gains a "Layout policy" section stating P1 (intrinsic/zero-viewport-breakpoint) and P2 (closed-enum/bounded-scalar) as the governing test for ALL future layout changes — a field joins the vocabulary iff it passes both. The two flexbox-idiom primitives a grid cannot express (`sidebar`, `switcher`) are named.
+- [x] **POLICY-02**: The node-type/CSS-class concern→source table and the Design-system section in AGENTS.md are updated to reflect the new primitives without enumerating them in a way that drifts (point at source/Showcase, per existing convention).
 
 ### Demo verification (the centerpiece)
-- [ ] **DEMO-01**: Temporary demo apps (under `demo/`, standard VMS app structure, served locally) visually verify EACH new/affected layout in isolation: header-bar/`arrange`, every `align` value, `switcher` flip across the threshold, `sidebar` collapse, `cards`/`minItem`, and `fits` selection.
-- [ ] **DEMO-02**: At least two real-app compositions (a dashboard and a list-detail view) built from the completed primitive set, proving they compose.
-- [ ] **DEMO-03**: The operator personally reviews every demo layout in a browser and signs off (or returns feedback that is iterated to sign-off) — verification is by human review, not assumed.
+- [x] **DEMO-01**: Temporary demo apps (under `demo/`, standard VMS app structure, served locally) visually verify EACH new/affected layout in isolation: header-bar/`arrange`, every `align` value, `switcher` flip across the threshold, `sidebar` collapse, `cards`/`minItem`, and `fits` selection.
+- [x] **DEMO-02**: At least two real-app compositions (a dashboard and a list-detail view) built from the completed primitive set, proving they compose.
+- [x] **DEMO-03**: The operator personally reviews every demo layout in a browser and signs off (or returns feedback that is iterated to sign-off) — verification is by human review, not assumed.
 
 ### Release
-- [ ] **RELEASE-01**: Each shipped primitive is released lockstep — aligned npm + NuGet version bumps, CHANGELOG (+ MIGRATION note if consumers must act), the manual publish ritual, an annotated `v<version>` git tag, and `main` advanced to contain the release commit (per AGENTS.md release rules). The milestone spans several minors.
-- [ ] **RELEASE-02**: Every release gate is green at ship — full cross-backend parity byte-identical, vitest, the static CI guards (core-globals, WCAG-AA, no-demo-style, layout-classes), and `dotnet test`.
+- [x] **RELEASE-01**: Each shipped primitive is released lockstep — aligned npm + NuGet version bumps, CHANGELOG (+ MIGRATION note if consumers must act), the manual publish ritual, an annotated `v<version>` git tag, and `main` advanced to contain the release commit (per AGENTS.md release rules). The milestone spans several minors.
+- [x] **RELEASE-02**: Every release gate is green at ship — full cross-backend parity byte-identical, vitest, the static CI guards (core-globals, WCAG-AA, no-demo-style, layout-classes), and `dotnet test`.
 
 ---
 
@@ -66,22 +68,22 @@ Source of truth for scope: `.planning/design/layout-system-research.md` (4-frame
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ALIGN-01 | Phase 8 | Pending |
-| ALIGN-02 | Phase 8 | Pending |
-| ALIGN-03 | Phase 8 | Pending |
-| ALIGN-04 | Phase 8 | Pending |
-| POLICY-01 | Phase 8 | Pending |
-| SWITCH-01 | Phase 9 | Pending |
-| SWITCH-02 | Phase 9 | Pending |
-| SWITCH-03 | Phase 9 | Pending |
-| GRID-01 | Phase 9 | Pending |
-| GRID-02 | Phase 9 | Pending |
-| FITS-01 | Phase 10 | Pending |
-| FITS-02 | Phase 10 | Pending |
-| FITS-03 | Phase 10 | Pending |
-| DEMO-01 | Phase 11 | Pending |
-| DEMO-02 | Phase 11 | Pending |
-| DEMO-03 | Phase 11 | Pending |
-| POLICY-02 | Phase 11 | Pending |
-| RELEASE-01 | Phase 11 | Pending |
-| RELEASE-02 | Phase 11 | Pending |
+| ALIGN-01 | Phase 8 | ✓ Shipped (1.12.0) |
+| ALIGN-02 | Phase 8 | ✓ Shipped (1.12.0) |
+| ALIGN-03 | Phase 8 | ✓ Shipped (1.12.0) |
+| ALIGN-04 | Phase 8 | ✓ Shipped (1.12.0) |
+| POLICY-01 | Phase 8 | ✓ Shipped (1.12.0) |
+| SWITCH-01 | Phase 9 | ✓ Shipped (1.12.0) |
+| SWITCH-02 | Phase 9 | ✓ Shipped (1.12.0) |
+| SWITCH-03 | Phase 9 | ✓ Shipped (1.12.0) |
+| GRID-01 | Phase 9 | ✓ Shipped (1.12.0) |
+| GRID-02 | Phase 9 | ✓ Shipped (1.12.0) |
+| FITS-01 | Phase 10 | ✓ Shipped (1.12.0) |
+| FITS-02 | Phase 10 | ✓ Shipped (1.12.0) |
+| FITS-03 | Phase 10 | ✓ Shipped (1.12.0) |
+| DEMO-01 | Phase 11 | ✓ Shipped (1.12.0) |
+| DEMO-02 | Phase 11 | ✓ Shipped (1.12.0) |
+| DEMO-03 | Phase 11 | ✓ Shipped (1.12.0) |
+| POLICY-02 | Phase 11 | ✓ Shipped (1.12.0) |
+| RELEASE-01 | Phase 11 | ✓ Shipped (1.12.0) |
+| RELEASE-02 | Phase 11 | ✓ Shipped (1.12.0) |

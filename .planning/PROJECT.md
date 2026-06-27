@@ -8,9 +8,11 @@ A server-driven UI framework where the wire format is structured enough that age
 
 The core is a platform-agnostic transformer of a structured wire protocol — testable with no browser runtime, portable to any front-end. If platform assumptions leak into the core, the framework's central promise (and its main differentiator) is broken.
 
-## Current Milestone: v1.12 Layout System Completeness
+## Last Shipped Milestone: v1.12 Layout System Completeness
 
-**Goal:** Finish VMS's layout vocabulary so the frontend can express any app's layout with zero app-authored CSS and zero app-specified breakpoints — grounded in a 4-framework research synthesis (`.planning/design/layout-system-research.md`) rather than invented. Completes the layout enum that 0.4.0's Design System milestone started (`stack`/`split`/`cards`). Nothing built on the framework is in production yet, so existing layout tokens may be re-expressed freely — this is the now-or-never window to get the primitive set right.
+> ✅ **SHIPPED 2026-06-24** (npm `1.12.0` / NuGet `1.10.0`). No GSD milestone is currently active — work since has continued as CHANGELOG-tracked interstitial releases (latest **3.1.0**, 2026-06-26: 2.0.0 remove `SectionNode.flyout` [BREAKING], 2.1.0 `LinkNode.active`, 3.0.0 unified appearance axes [BREAKING], 3.0.1/3.0.2 CSS fixes, 3.1.0 admin-shell primitives). The description below is the milestone's original scope, kept as history; see `MILESTONES.md` + `CHANGELOG.md` for what shipped.
+
+**Goal:** Finish VMS's layout vocabulary so the frontend can express any app's layout with zero app-authored CSS and zero app-specified breakpoints — grounded in a 4-framework research synthesis (`.planning/design/layout-system-research.md`) rather than invented. Completes the layout enum that 0.4.0's Design System milestone started (`stack`/`split`/`cards`).
 
 **Target features:**
 - **Main/cross-axis alignment enums (`arrange` / `align`).** Closed unions on the `row` layout (and applicable flex containers), copied verbatim from Jetpack Compose ∩ Flutter (the two that agree exactly): `arrange` (main-axis justify) = `start | center | end | space-between | space-around | space-evenly`; `align` (cross-axis) = `start | center | end | stretch | baseline`. Subsumes the live `justify` header-bar request from the PBMInvoices consumer (header bar = `arrange:"space-between"` + a heading-`TextNode` first child).

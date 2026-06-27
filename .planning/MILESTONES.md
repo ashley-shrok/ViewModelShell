@@ -43,3 +43,30 @@
 - Aligned npm + NuGet `1.0.0` major bump; consolidated MIGRATION.md / CHANGELOG.md / AGENTS.md updated with the full breaking-change recipe and the new agent-driving promise. Cross-backend parity green byte-identical across 7 fixtures × 15 backends (.NET / Bun / Node), including a new envelope-fixture exercising malformed payload + unknown action + uncaught throw. Test gates at release time: vitest 236/237 (1 skipped TUI test deferred), framework dotnet 45/45, demo dotnet 172/172, core-globals + WCAG-AA + parity CI guards all green.
 
 ---
+
+## v1.12 Layout System Completeness (Shipped: 2026-06-24)
+
+**Phases completed:** 4 phases (8–11), 8 plans
+
+**Released:** npm `1.12.0` / NuGet `1.10.0` — one consolidated, additive release for the whole milestone (wire protocol token stays `viewmodel-shell/1.0`; migration: none).
+
+**Key accomplishments:**
+
+- Finished VMS's layout vocabulary so the frontend can express any app's layout with zero app-authored CSS and zero app-specified breakpoints — grounded in the 4-framework research synthesis (`.planning/design/layout-system-research.md`). Added the alignment enums (`arrange`/`align` on the `row` cluster), the `switcher` primitive (atomic row↔stack flip via negative-flex-basis), the `cards` `minItem` bounded wire field (promoting the CSS-only `--vms-card-min` to declared server intent), and the `fits` node (SwiftUI `ViewThatFits` ported to the wire — the one client-side-measurement layout primitive, with documented TUI degradation).
+- Codified the **Layout policy** in AGENTS.md — P1 (intrinsic/container-relative responsiveness, zero viewport breakpoints) and P2 (closed enum or bounded scalar, never raw CSS) as the governing test every future layout field must pass — naming `sidebar` and `switcher` as the two flexbox idioms a grid cannot express.
+- The centerpiece was human-reviewed demo verification: the whole vocabulary was verified in a real browser before release (jsdom has no layout engine), and two genuine framework bugs were caught and fixed pre-publish — `switcher` was permanently stacked (missing `flex-direction:row` override) and `fits` always selected the first child (was measuring constrained `scrollWidth` instead of intrinsic max-content width). Real-app demo compositions (HelpDesk switcher toolbar, ExpenseTracker header bar, RetroBoard widened lanes) exercise the new primitives.
+- Both backends byte-aligned (TS + .NET, nullable wire fields carrying `[JsonIgnore(WhenWritingNull)]`), parity fixtures widened/added per primitive, `bun run parity/run.ts` byte-identical green; lockstep npm + NuGet release with CHANGELOG, annotated tag, and `main` advanced.
+
+---
+
+## Post-v1.12 interstitial releases (2.x / 3.x)
+
+Not phased GSD milestones — tracked as direct feature/release commits + CHANGELOG, the same interstitial cadence as the 1.7–1.11 releases between the 1.0.0 and v1.12 milestones. Authoritative per-version history is in [CHANGELOG.md](../CHANGELOG.md). Summary through 2026-06-26 (both registries at **3.1.0**):
+
+- **2.0.0** (BREAKING) — removed `SectionNode.flyout` (abandoned hover-overlay primitive; consumers use `collapsible`/`modal`/link-to-subpage).
+- **2.1.0** — `LinkNode.active` ("you are here" nav marking).
+- **3.0.0** (BREAKING) — unified appearance axes: the overloaded `variant` field split into orthogonal `tone`/`emphasis`/`size`/`state`/`style` so no field carries two concepts.
+- **3.0.1 / 3.0.2** — CSS-only fixes (jsdom `scrollTo` noise guard; standardized form-control height so inputs + buttons align in a row).
+- **3.1.0** — admin-shell primitives (issue #22): `ButtonNode.width`, `DividerNode`, `FormNode.submitButton`.
+
+---
