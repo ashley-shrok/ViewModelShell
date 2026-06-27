@@ -122,6 +122,17 @@ public class FeatureProbeController : ControllerBase
                 .Validate();
         }
 
+        if (name == "trigger-toast")
+        {
+            // Two toast side-effects: a BARE toast (message only => Tone/DurationMs
+            // omitted = absent on the wire) and a FULL one (Tone + DurationMs).
+            // Byte-identical to the bun twin so parity diffs both shapes.
+            return new ShellResponse<FeatureProbeState>(BuildVm(state), state)
+                .WithEffect(ShellSideEffect.Toast("Saved"))
+                .WithEffect(ShellSideEffect.Toast("Heads up", tone: "warning", durationMs: 5000))
+                .Validate();
+        }
+
         if (name == "do-poll")
         {
             state = state with { PollCount = state.PollCount + 1 };
@@ -600,6 +611,28 @@ public class FeatureProbeController : ControllerBase
         // DismissAction/Size) across all backends. Previously ModalNode appeared
         // only in ExpenseTracker gated behind state.Adding, which no fixture
         // opened, so the modal wire shape had zero cross-backend coverage.
+        // Feedback primitives — BadgeNode + EmptyStateNode (static view-shape;
+        // byte-identical to the bun twin feedbackSection). A bare badge (NEITHER
+        // Tone nor Emphasis => omitted = absent on the wire), a tone-only badge, a
+        // tone+emphasis badge; a bare empty-state (no Message/Action => omitted =
+        // absent), and an empty-state with Message + a CTA ButtonNode (proves the
+        // action serializes with the "type":"button" discriminator AND the
+        // action-name walk descends into EmptyStateNode.Action — unique name
+        // feedback-cta).
+        pageChildren.Add(new SectionNode(
+            Heading: "Feedback primitives",
+            Variant: "card",
+            Children: new ViewNode[]
+            {
+                new BadgeNode("New"),
+                new BadgeNode("3", Tone: "danger"),
+                new BadgeNode("Beta", Tone: "info", Emphasis: "secondary"),
+                new EmptyStateNode("No items yet"),
+                new EmptyStateNode(
+                    "Nothing here",
+                    Message: "Add the first item.",
+                    Action: new ButtonNode("Add item", new ActionDescriptor("feedback-cta"), Emphasis: "primary")),
+            }));
         pageChildren.Add(new ModalNode(
             Title: "Probe modal",
             Children: new ViewNode[] { new TextNode("Modal body for parity coverage.", null) },

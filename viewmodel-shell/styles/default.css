@@ -977,3 +977,117 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   cursor: pointer;
   font-size: var(--vms-text-lg);
 }
+
+/* ── Toast (side-effect-driven transient confirmation) ──
+   The BrowserAdapter lazily creates ONE .vms-toast-region pinned to the
+   bottom-right corner and stacks .vms-toast elements into it; each auto-removes
+   after its durationMs with a brief fade. The region is click-through
+   (pointer-events:none) so it never blocks the UI under it; individual toasts
+   re-enable pointer events for their own content. Framework-owned styling —
+   this is the framework owning its presentation, not app CSS. */
+.vms-toast-region {
+  position: fixed;
+  bottom: var(--vms-space-md);
+  right: var(--vms-space-md);
+  z-index: 1100; /* above .vms-modal-backdrop (1000) */
+  display: flex;
+  flex-direction: column;
+  gap: var(--vms-space-xs);
+  align-items: flex-end;
+  pointer-events: none;
+  max-width: min(24rem, calc(100vw - 2 * var(--vms-space-md)));
+}
+.vms-toast {
+  pointer-events: auto;
+  /* Neutral toast = high-contrast inverted chip (the snackbar pattern): the
+     theme's text color as the surface, the theme's surface as the text. This
+     stands clear of the page background it sits on in EITHER theme — a
+     surface-colored toast was nearly invisible against the page surface. */
+  background: var(--vms-text);
+  color: var(--vms-surface);
+  border: 1px solid transparent;
+  border-radius: var(--vms-radius);
+  font-size: var(--vms-text-base);
+  font-weight: 500;
+  padding: var(--vms-space-sm) var(--vms-space-md);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.30);
+  opacity: 1;
+  transition: opacity var(--vms-t), transform var(--vms-t);
+}
+/* tone — a FULLY filled chip in the status color (not a thin accent rail), so
+   an important toast (especially danger) is impossible to miss. error/warning
+   are dark enough for white body text to clear WCAG-AA on their pure tokens;
+   success/info are deepened (color-mix w/ black) so white at 14px also clears
+   4.5:1 (their pure tokens sit at 3.2 / 4.4:1). */
+.vms-toast--danger  { background: var(--vms-error);   color: #fff; }
+.vms-toast--warning { background: var(--vms-warning); color: #fff; }
+.vms-toast--success { background: color-mix(in srgb, var(--vms-success) 80%, #000); color: #fff; }
+.vms-toast--info    { background: color-mix(in srgb, var(--vms-info) 88%, #000);    color: #fff; }
+/* fade-out applied just before removal. */
+.vms-toast--leaving { opacity: 0; transform: translateY(0.25rem); }
+
+/* ── Empty state (first-class "nothing here" presentation) ──
+   A centered block: heading, optional message, optional CTA button. */
+.vms-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--vms-space-sm);
+  text-align: center;
+  padding: var(--vms-space-xl) var(--vms-space-md);
+  color: var(--vms-text-muted);
+}
+.vms-empty-state__heading {
+  font-size: var(--vms-text-lg);
+  font-weight: 600;
+  color: var(--vms-text);
+}
+.vms-empty-state__message {
+  font-size: var(--vms-text-base);
+  color: var(--vms-text-muted);
+  max-width: min(40ch, 100%);
+}
+/* The CTA button inside an empty state centers (override the button's default
+   align-self:flex-start) so it sits under the centered heading/message. */
+.vms-empty-state .vms-button { align-self: center; }
+
+/* ── Badge (compact inline status pill / count) ──
+   Leaf inline element. Default = neutral filled tint; tone recolors it; emphasis
+   switches between a solid fill (primary) and an outline (secondary). */
+.vms-badge {
+  --_badge-tone: var(--vms-text-muted);
+  display: inline-flex;
+  align-items: center;
+  /* Center the pill on the surrounding text instead of baselining it (an
+     inline-flex pill otherwise hangs below the baseline of adjacent text). */
+  vertical-align: middle;
+  gap: var(--vms-space-2xs);
+  font-size: var(--vms-text-xs);
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.2em 0.6em;
+  border-radius: 999px;
+  white-space: nowrap;
+  /* default (no tone, no emphasis): subtle neutral tint pill. */
+  background: color-mix(in srgb, var(--_badge-tone) 16%, var(--vms-surface));
+  color: var(--_badge-tone);
+  border: 1px solid transparent;
+}
+/* tone — the universal status color, sets the pill's working color. */
+.vms-badge--danger  { --_badge-tone: var(--vms-error); }
+.vms-badge--warning { --_badge-tone: var(--vms-warning); }
+.vms-badge--success { --_badge-tone: var(--vms-success); }
+.vms-badge--info    { --_badge-tone: var(--vms-info); }
+/* emphasis — primary = solid filled tone (white text); secondary = outline.
+   Declared after tone so the chosen --_badge-tone drives both. */
+.vms-badge--primary {
+  background: var(--_badge-tone);
+  border-color: var(--_badge-tone);
+  color: #fff;
+}
+.vms-badge--secondary {
+  background: transparent;
+  border-color: var(--_badge-tone);
+  color: var(--_badge-tone);
+}

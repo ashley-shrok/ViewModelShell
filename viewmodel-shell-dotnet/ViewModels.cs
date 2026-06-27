@@ -82,7 +82,14 @@ public record ShellSideEffect(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Key = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Value = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Url = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Filename = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Filename = null,
+    // Toast effect fields. Message is required-for-toast (the shell guards
+    // message != null before routing); Tone/DurationMs are optional. All
+    // nullable + WhenWritingNull so they stay ABSENT on non-toast effects,
+    // matching the TS twin's conditional-spread wire.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Message = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? DurationMs = null
 )
 {
     public static ShellSideEffect SetLocalStorage(string key, string value) =>
@@ -90,6 +97,16 @@ public record ShellSideEffect(
 
     public static ShellSideEffect SetSessionStorage(string key, string value) =>
         new("set-session-storage", key, value);
+
+    /// <summary>
+    /// Transient confirmation toast (a UX nicety — fail-quiet by absence; see
+    /// Adapter.toast in the TS package). <paramref name="message"/> is required;
+    /// <paramref name="tone"/> ("danger"|"warning"|"success"|"info") and
+    /// <paramref name="durationMs"/> (auto-dismiss delay, adapter default ~4000)
+    /// are optional and stay absent from the wire when null (WhenWritingNull).
+    /// </summary>
+    public static ShellSideEffect Toast(string message, string? tone = null, int? durationMs = null) =>
+        new("toast", Message: message, Tone: tone, DurationMs: durationMs);
 
     /// <summary>
     /// Server-decided authenticated file download. The shell fetches <paramref name="url"/>
@@ -283,6 +300,8 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(CopyButtonNode), "copy-button")]
 [JsonDerivedType(typeof(DividerNode),    "divider")]
 [JsonDerivedType(typeof(FitsNode),       "fits")]
+[JsonDerivedType(typeof(EmptyStateNode), "empty-state")]
+[JsonDerivedType(typeof(BadgeNode),      "badge")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -744,6 +763,33 @@ public record CopyButtonNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Width = null
 ) : ViewNode;
 
+// A first-class "nothing here" presentation (empty-state primitive). Heading is
+// required; Message/Action are nullable wire optionals (absent, never null, per
+// the file-header rule). Action is a ButtonNode carrying a real action name — a
+// dispatch-bearing descendant — so BOTH validation walks (ValidateActionNames /
+// ValidateSectionAction) descend into it (no icon field — the framework ships no
+// icon set).
+public record EmptyStateNode(
+    string Heading,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Message = null,
+    // Typed ViewNode? (NOT concrete ButtonNode) so System.Text.Json emits the
+    // polymorphic "type":"button" discriminator — STJ only writes it when
+    // serializing through the [JsonPolymorphic] base ViewNode. The same
+    // maintainer rule as FormNode.SubmitButton / FormNode.Buttons; without it the
+    // wire drifts from the TS twin (which always includes type:"button").
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Action = null
+) : ViewNode;
+
+// A compact status pill / count (badge primitive). Leaf node — Label required,
+// Tone/Emphasis nullable wire optionals. Tone is the universal status axis
+// ("danger"|"warning"|"success"|"info"); Emphasis mirrors ButtonNode
+// ("primary" filled | "secondary" outline). Emits .vms-badge--{tone}/{emphasis}.
+public record BadgeNode(
+    string Label,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Emphasis = null
+) : ViewNode;
+
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────
 //
 // Mirrors viewmodel-shell/src/server.ts `validateActionNames` byte-for-byte:
@@ -923,9 +969,16 @@ public static class ViewTreeValidation
                 foreach (var child in fits.Children) WalkForSectionAction(child, outerInteractive);
                 break;
 
+            case EmptyStateNode emptyState:
+                // EmptyStateNode.Action is a ButtonNode (no SectionNode
+                // descendants), but descend for consistency with every other
+                // walk so a future shape can't slip an interactive section past.
+                if (emptyState.Action is { } esAction) WalkForSectionAction(esAction, outerInteractive);
+                break;
+
             // Leaf-like nodes (FieldNode, CheckboxNode, ButtonNode, TextNode,
             // LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
-            // TableNode, CopyButtonNode) carry no SectionNode descendants. No
+            // TableNode, CopyButtonNode, BadgeNode) carry no SectionNode descendants. No
             // recursion needed — TableNode rows hold strings + per-row controls,
             // not sections, so a section can never sit inside a table row.
         }
@@ -1024,9 +1077,18 @@ public static class ViewTreeValidation
                 foreach (var child in fits.Children) Collect(child, enclosingForm, sink);
                 break;
 
+            case EmptyStateNode emptyState:
+                // EmptyStateNode.Action is an optional ButtonNode carrying a real
+                // action name. It is a dispatch-bearing descendant, so the
+                // uniqueness collector MUST descend into it — otherwise the CTA is
+                // silently exempt from the one-name-one-operation rule (the
+                // missed-walk failure class). Recurse so the ButtonNode arm records it.
+                if (emptyState.Action is { } esAction) Collect(esAction, enclosingForm, sink);
+                break;
+
             // No dispatch-bearing actions of their own:
             //   TextNode, LinkNode, ImageNode, StatBarNode, ProgressNode,
-            //   CopyButtonNode.
+            //   CopyButtonNode, BadgeNode.
         }
     }
 

@@ -543,6 +543,31 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // Feedback primitives — BadgeNode + EmptyStateNode (static view-shape captured
+  // by every GET step; byte-identical to the .NET twin feedbackSection). A bare
+  // badge (NEITHER tone nor emphasis => omitted = absent on the wire), a
+  // tone-only badge, a tone+emphasis badge; a bare empty-state (no message/action
+  // => omitted = absent), and an empty-state with message + a CTA ButtonNode
+  // (proves the action serializes with type:"button" AND the action-name walk
+  // descends into empty-state.action on both backends — unique name feedback-cta).
+  const feedbackSection: ViewNode = {
+    type: "section",
+    heading: "Feedback primitives",
+    variant: "card",
+    children: [
+      { type: "badge", label: "New" },
+      { type: "badge", label: "3", tone: "danger" },
+      { type: "badge", label: "Beta", tone: "info", emphasis: "secondary" },
+      { type: "empty-state", heading: "No items yet" },
+      {
+        type: "empty-state",
+        heading: "Nothing here",
+        message: "Add the first item.",
+        action: { type: "button", label: "Add item", action: { name: "feedback-cta" }, emphasis: "primary" },
+      },
+    ],
+  };
+
   return {
     type: "page",
     title: "Feature Probe",
@@ -557,6 +582,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       childModifiersSection,
       buildTableSection(state),
       formsSection,
+      feedbackSection,
       probeModal,
     ],
   };
@@ -590,6 +616,20 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
           state.downloadUrl      || "/api/probe/file/hello.txt",
           state.downloadFilename || "hello.txt",
         ),
+      ],
+    };
+  }
+
+  if (name === "trigger-toast") {
+    // Two toast side-effects in one response: a BARE toast (message only =>
+    // tone/durationMs omitted = absent on the wire) and a FULL one (tone +
+    // durationMs present). Byte-identical to the .NET twin so parity diffs both.
+    return {
+      vm: buildVm(state),
+      state,
+      sideEffects: [
+        shellSideEffect.toast("Saved"),
+        shellSideEffect.toast("Heads up", { tone: "warning", durationMs: 5000 }),
       ],
     };
   }

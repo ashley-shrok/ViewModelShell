@@ -6,6 +6,22 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 3.5.0 / 3.5.0 — Feedback primitives: toast, empty-state, badge (npm + NuGet)
+
+**npm:** `3.5.0` (MINOR) · **NuGet:** `3.5.0` (MINOR). The audit's feedback cluster: VMS had no first-class way to *acknowledge* an action ("Saved"), present *emptiness* ("nothing here yet"), or show *status at a glance* (a pill/count). Three additive primitives close it. Wire protocol token stays `viewmodel-shell/1.0` (additive optional nodes + one new side-effect type; old agents/apps unaffected). **Migration: none.**
+
+### Added
+- **Toast — a transient confirmation via the side-effect seam (not a view node).** A new `ShellSideEffect` of `type: "toast"` (`message`, optional `tone` + `durationMs`), created with `ShellSideEffect.Toast(...)` (.NET) / `shellSideEffect.toast(...)` (TS). It rides the existing side-effect channel, so the server stays stateless — a toast fires **once** when the response lands rather than living in the view tree (which would re-show it on every render). Routed to a **new optional `Adapter.toast?()` capability verb**, which is **fail-quiet by absence** (modeled on `setPreventUnload`/`setBusy`, *not* on `navigate`/`storage`/`saveFile`): a dropped toast is a missed UX nicety, never a correctness/security bug, so a non-toast adapter simply no-ops. `BrowserAdapter` stacks toasts in one fixed-corner region (`role="status"` / `aria-live="polite"`) and auto-dismisses each after `durationMs` (default ~4000ms). Neutral toasts render as a high-contrast inverted chip; tone toasts are fully filled in the status color so an important alert is impossible to miss. (MUI Snackbar, Sonner, Ant message.)
+- **`EmptyStateNode`** — a first-class "nothing here" block: required `heading`, optional `message`, optional `action` (a call-to-action `ButtonNode`, e.g. "Create your first invoice"). Replaces hand-rolled muted-`TextNode` empty messages (HelpDesk alone hand-rolled three). The `action` button is a real dispatch-bearing descendant, so both tree validators descend into it (action-name uniqueness is enforced on the CTA). No icon field — the framework ships no icon set. (MUI/Ant `<Empty>`.)
+- **`BadgeNode`** — a compact inline status pill / count: `label` + the universal `tone` (semantic color) × `emphasis` (filled vs outline) axes — no new appearance concepts. A leaf node for `"3"`, `"New"`, `"Overdue"`, etc., inside headings, list items, or table cells. (MUI/Ant `<Badge>`/`<Tag>`.)
+
+All three render zero app CSS (shipped `default.css` styles `.vms-toast`/`.vms-empty-state`/`.vms-badge` + their tone/emphasis modifiers). FeatureProbe renders both nodes statically and emits the toast side-effect (both the omitted-field and fully-populated cases) so every new wire field is byte-diffed across all backends in parity.
+
+### Migration
+None — the two nodes and the `"toast"` side-effect are additive and optional; omitting them is byte-identical to 3.4.0. The new `Adapter.toast?()` verb is optional, so any existing custom adapter compiles unchanged (it just no-ops on toast effects until it implements the verb).
+
+---
+
 ## 3.4.0 / 3.4.0 — Forms completeness: per-field validation, hints, disabled/readonly, input constraints (npm + NuGet)
 
 **npm:** `3.4.0` (MINOR) · **NuGet:** `3.4.0` (MINOR). The audit's clearest gap was forms — `FieldNode` was bare and per-field validation had no first-class home. Eight additive optional fields close it. Wire protocol token stays `viewmodel-shell/1.0` (additive optional fields; old agents/apps unaffected). **Migration: none.**

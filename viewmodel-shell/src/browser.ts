@@ -17,6 +17,7 @@ import type {
   FormNode, FieldNode, CheckboxNode, ButtonNode,
   TextNode, LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
   ModalNode, TableNode, CopyButtonNode, DividerNode, FitsNode,
+  EmptyStateNode, BadgeNode,
 } from "./index.js";
 
 function legacyCopy(text: string): boolean {
@@ -183,6 +184,39 @@ export class BrowserAdapter implements Adapter {
     this.container.classList.toggle("vms-busy", active);
   }
 
+  /** Transient confirmation toast. Lazily creates/reuses a single fixed-corner
+   *  host region (.vms-toast-region) appended to <body> so toasts stack and
+   *  survive the container's innerHTML wipe on each render(); appends a
+   *  .vms-toast element (+ tone modifier) and auto-removes it after
+   *  durationMs (default 4000), with a brief fade-out. This is the ONLY place
+   *  toast DOM lives — core stays platform-agnostic (it just calls this verb).
+   *  Fail-quiet by absence is the core's concern (it optional-chains the call). */
+  toast(message: string, opts?: { tone?: string; durationMs?: number }): void {
+    let region = document.querySelector<HTMLElement>(".vms-toast-region");
+    if (!region) {
+      region = document.createElement("div");
+      region.className = "vms-toast-region";
+      document.body.appendChild(region);
+    }
+    const el = document.createElement("div");
+    el.className = `vms-toast${opts?.tone ? ` vms-toast--${opts.tone}` : ""}`;
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    el.textContent = message;
+    region.appendChild(el);
+
+    const duration = opts?.durationMs ?? 4000;
+    setTimeout(() => {
+      el.classList.add("vms-toast--leaving");
+      // Remove after the fade-out transition; a short fixed delay keeps it
+      // simple (no transitionend bookkeeping). Clean up the region if it empties.
+      setTimeout(() => {
+        el.remove();
+        if (region && region.childElementCount === 0) region.remove();
+      }, 200);
+    }, duration);
+  }
+
   private unloadHandler: ((e: BeforeUnloadEvent) => void) | null = null;
   setPreventUnload(active: boolean): void {
     if (active && this.unloadHandler == null) {
@@ -271,6 +305,8 @@ export class BrowserAdapter implements Adapter {
       case "copy-button":  return this.copyButton(n, parent);
       case "divider":      return this.divider(n, parent);
       case "fits":         return this.fits(n, parent, on);
+      case "empty-state":  return this.emptyState(n, parent, on);
+      case "badge":        return this.badge(n, parent);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -1404,5 +1440,39 @@ export class BrowserAdapter implements Adapter {
       }
     });
     parent.appendChild(btn);
+  }
+
+  /** EmptyStateNode — a centered "nothing here" block: a heading, an optional
+   *  message, then the optional CTA ButtonNode (rendered via the shared button
+   *  renderer so it dispatches like any other button). */
+  private emptyState(n: EmptyStateNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const el = document.createElement("div");
+    el.className = "vms-empty-state";
+
+    const heading = document.createElement("div");
+    heading.className = "vms-empty-state__heading";
+    heading.textContent = n.heading;
+    el.appendChild(heading);
+
+    if (n.message != null && n.message !== "") {
+      const msg = document.createElement("div");
+      msg.className = "vms-empty-state__message";
+      msg.textContent = n.message;
+      el.appendChild(msg);
+    }
+
+    if (n.action) this.button(n.action, el, on);
+
+    parent.appendChild(el);
+  }
+
+  /** BadgeNode — a compact inline status pill / count. Leaf node: label text +
+   *  tone/emphasis modifier classes. */
+  private badge(n: BadgeNode, parent: HTMLElement): void {
+    const span = document.createElement("span");
+    span.className = `vms-badge${n.tone ? ` vms-badge--${n.tone}` : ""}${
+      n.emphasis ? ` vms-badge--${n.emphasis}` : ""}`;
+    span.textContent = n.label;
+    parent.appendChild(span);
   }
 }

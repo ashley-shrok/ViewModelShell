@@ -91,7 +91,8 @@ Optional success-path fields, which may appear alone or alongside `vm`/`state`:
 { "sideEffects": [
   { "type": "set-local-storage", "key": "auth_jwt", "value": "eyJ..." },
   { "type": "set-session-storage", "key": "draft_id", "value": "42" },
-  { "type": "download", "url": "/api/invoices/42/pdf", "filename": "invoice-42.pdf" }
+  { "type": "download", "url": "/api/invoices/42/pdf", "filename": "invoice-42.pdf" },
+  { "type": "toast", "message": "Ticket #4012 closed.", "tone": "success" }
 ] }
 ```
 
@@ -100,6 +101,7 @@ Optional success-path fields, which may appear alone or alongside `vm`/`state`:
 | `set-local-storage` | Write `key`/`value` to platform localStorage (or your agent's equivalent persistent store). |
 | `set-session-storage` | Same as above for session-scoped storage. |
 | `download` | Fetch `url` (re-presenting your auth headers — see *Auth*) and save the bytes. Filename precedence: `Content-Disposition` > side-effect `filename` > URL basename > `"download"`. |
+| `toast` | Show a transient confirmation: `message` (required) + optional `tone` (`danger`\|`warning`\|`success`\|`info`) + `durationMs`. A UX nicety — **fail-quiet**: an agent/adapter with no toast surface simply ignores it (nothing to persist or act on), so it carries no state and needs no acknowledgement. |
 
 **Forward-compat rule — silently ignore unknown verbs.** A future minor release may add new verbs. If you see a `type` you do not recognize, skip it; do not error. Honor or ignore per your policy.
 

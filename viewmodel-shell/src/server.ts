@@ -22,6 +22,7 @@ import type {
   ListNode,
   ListItemNode,
   FitsNode,
+  EmptyStateNode,
 } from "./index.js";
 
 // Re-export the ViewNode hierarchy and wire types so a backend can import
@@ -233,8 +234,17 @@ function collectActions(
       for (const child of fits.children) collectActions(child, enclosingForm, out);
       return;
     }
+    case "empty-state": {
+      // EmptyStateNode.action is an optional ButtonNode carrying a real action
+      // name. It is a dispatch-bearing descendant, so the uniqueness collector
+      // MUST descend into it — otherwise the CTA is silently exempt from the
+      // one-name-one-operation rule (the 3.3.0 missed-walk failure class).
+      const es = node as EmptyStateNode;
+      if (es.action) collectActions(es.action, enclosingForm, out);
+      return;
+    }
     // Nodes with no dispatch-bearing actions of their own:
-    //   text, link, image, stat-bar, progress, copy-button
+    //   text, link, image, stat-bar, progress, copy-button, badge
     default:
       return;
   }
@@ -404,9 +414,17 @@ function walkForSectionAction(
       for (const child of fits.children) walkForSectionAction(child, outerInteractive);
       return;
     }
+    case "empty-state": {
+      // EmptyStateNode.action is a ButtonNode (no SectionNode descendants), but
+      // descend for consistency with every other walk so a future shape can't
+      // slip an interactive section past this validator.
+      const es = node as EmptyStateNode;
+      if (es.action) walkForSectionAction(es.action, outerInteractive);
+      return;
+    }
     // Leaf-like nodes (field, checkbox, button, text, link, image, stat-bar,
-    // tabs, progress, table, copy-button) carry no SectionNode descendants —
-    // TableNode rows hold strings + per-row controls, not sections.
+    // tabs, progress, table, copy-button, badge) carry no SectionNode
+    // descendants — TableNode rows hold strings + per-row controls, not sections.
     default:
       return;
   }
@@ -539,6 +557,19 @@ export const shellSideEffect = {
    *  JSON wire, matching the .NET WhenWritingNull null-omission contract. */
   download: (url: string, filename?: string): ShellSideEffect =>
     ({ type: "download", url, ...(filename != null ? { filename } : {}) }),
+  /** Transient confirmation toast (a UX nicety, fail-quiet by absence — see
+   *  Adapter.toast). `message` is required; `tone`/`durationMs` are optional and
+   *  kept ABSENT (not undefined) from the JSON wire via conditional spread,
+   *  matching the .NET WhenWritingNull null-omission contract. */
+  toast: (
+    message: string,
+    opts?: { tone?: string; durationMs?: number },
+  ): ShellSideEffect => ({
+    type: "toast",
+    message,
+    ...(opts?.tone != null ? { tone: opts.tone } : {}),
+    ...(opts?.durationMs != null ? { durationMs: opts.durationMs } : {}),
+  }),
 };
 
 // ─── Canonical agent skill mount helper (1.6.0 / 1.5.0) ──────────────────────

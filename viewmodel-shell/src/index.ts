@@ -88,6 +88,15 @@ export interface Adapter {
    *  none), so a rapid checkbox click during an in-flight round-trip never
    *  visually flips the box. Fail-quiet by absence (TUI has no equivalent). */
   setBusy?(active: boolean): void;
+  /** Show a transient confirmation toast, driven by a `{ type: "toast" }`
+   *  ShellSideEffect. `BrowserAdapter` stacks toasts in a single fixed-corner
+   *  host region and auto-dismisses each after `opts.durationMs` (default
+   *  ~4000ms). FAIL-QUIET BY ABSENCE — modeled on setPreventUnload/setBusy,
+   *  NOT on navigate/storage/saveFile: a dropped toast is a missed UX nicety,
+   *  never a correctness/security bug, so the core MUST NOT call failCapability
+   *  when this verb is absent (non-browser targets like the TUI simply have no
+   *  toast surface and the effect is a no-op). */
+  toast?(message: string, opts?: { tone?: string; durationMs?: number }): void;
 }
 
 // ─── Node types ───────────────────────────────────────────────────────────────
@@ -111,7 +120,9 @@ export type ViewNode =
   | TableNode
   | CopyButtonNode
   | DividerNode
-  | FitsNode;
+  | FitsNode
+  | EmptyStateNode
+  | BadgeNode;
 
 export interface PageNode {
   type: "page";
@@ -550,6 +561,49 @@ export interface CopyButtonNode {
 }
 
 /**
+ * A first-class "nothing here" presentation — the empty-state primitive
+ * (MUI/Ant `<Empty>`, the standard zero-data placeholder). A centered block
+ * with a required heading, an optional supporting message, and an optional
+ * call-to-action ButtonNode (e.g. "Create your first ticket"). No icon field —
+ * the framework ships no icon set.
+ *
+ * The `action` ButtonNode carries a real action name and is a dispatch-bearing
+ * descendant, so EVERY tree-walk (action-name uniqueness collector, section
+ * shape validator) descends into it — exactly like `modal.footer` / `fits`
+ * candidates / `section.action`. A missed walk would silently exempt the CTA
+ * from the one-name-one-operation rule.
+ */
+export interface EmptyStateNode {
+  type: "empty-state";
+  /** The primary line — what's missing / what to do. Required. */
+  heading: string;
+  /** Optional supporting line below the heading. */
+  message?: string;
+  /** Optional call-to-action button (e.g. "Add the first item"). */
+  action?: ButtonNode;
+}
+
+/**
+ * A compact status pill / count — the badge primitive (MUI/Ant `<Badge>`,
+ * `<Tag>`). A leaf inline node (no children, no action) for a short label or
+ * count that appears inside text/section/list/table contexts. Appearance is
+ * the universal `tone` (semantic color) + `emphasis` (filled vs outline) axes,
+ * matching the rest of the framework's appearance vocabulary.
+ */
+export interface BadgeNode {
+  type: "badge";
+  /** The pill text — a short label or count (e.g. "New", "3", "Beta"). */
+  label: string;
+  /** Semantic intent/severity — the universal status tone axis. Emits
+   *  .vms-badge--{tone}. Omitted = neutral. Closed union. */
+  tone?: "danger" | "warning" | "success" | "info";
+  /** Visual weight — `primary` = filled solid tone, `secondary` = outline.
+   *  Mirrors ButtonNode's emphasis semantics. Emits .vms-badge--{emphasis}.
+   *  Omitted = the default filled tint. Closed union. */
+  emphasis?: "primary" | "secondary";
+}
+
+/**
  * The SwiftUI `ViewThatFits` port. The renderer picks the FIRST child whose
  * intrinsic size FITS the available container (no axis overflow), else the next,
  * else the LAST child as the guaranteed-fits fallback — container-relative
@@ -631,7 +685,7 @@ export interface ShellOptions {
 }
 
 export interface ShellSideEffect {
-  /** "set-local-storage" | "set-session-storage" | "download" — unknown types are silently ignored. */
+  /** "set-local-storage" | "set-session-storage" | "download" | "toast" — unknown types are silently ignored. */
   type: string;
   /** For "set-local-storage" / "set-session-storage": the storage key. */
   key?: string;
@@ -642,6 +696,13 @@ export interface ShellSideEffect {
   /** For "download": optional filename hint. Response Content-Disposition wins
    *  when present; this is the fallback before the URL basename. */
   filename?: string;
+  /** For "toast": the text shown in the transient confirmation. Required for a
+   *  toast effect (the shell guards `message != null` before routing). */
+  message?: string;
+  /** For "toast": optional semantic tone — "danger" | "warning" | "success" | "info". */
+  tone?: string;
+  /** For "toast": optional auto-dismiss delay in ms (adapter default ~4000). */
+  durationMs?: number;
 }
 
 // ─── Error envelope types (Phase 7 / v1.0.0) ─────────────────────────────────
@@ -985,6 +1046,15 @@ export class ViewModelShell {
         // render/redirect branch below — downloads are a side channel, like
         // storage, and a slow download MUST NOT delay the user-visible update.
         void this.download(effect.url, effect.filename);
+      } else if (effect.type === "toast" && effect.message != null) {
+        // FAIL-QUIET (cf. setPreventUnload/setBusy): a toast is a UX nicety,
+        // not a correctness/security guarantee, so an adapter without the
+        // capability simply drops it — NO failCapability, no onError. The
+        // optional-chaining call is the entire contract.
+        adapter.toast?.(effect.message, {
+          tone: effect.tone,
+          durationMs: effect.durationMs,
+        });
       }
     }
     // 0.14.0 — apply the unload guard before the redirect/render branch so it's
