@@ -557,7 +557,20 @@ public record FieldNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Required = false,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<FieldOption>? Options = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Language = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Language = null,
+    // Forms-completeness (3.4.0). Disabled/Readonly drop their false default like
+    // Required (WhenWritingDefault); Error/Help are nullable strings (WhenWritingNull).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Disabled = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Readonly = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Error = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Help = null,
+    // min/max/step are native input-attribute strings (numeric bound, date
+    // bound, or "any" for step) — strings keep the wire byte-identical across
+    // backends. MaxLength is the native maxlength (integer). All omitted-when-null.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Min = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Max = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Step = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? MaxLength = null
 ) : ViewNode;
 
 public record CheckboxNode(
@@ -584,6 +597,9 @@ public record ButtonNode(
     // Width axis ("full" = stretch to fill the container's cross axis — the
     // standard full-width/block button). Emits .vms-button--full. Omit/"auto" = hug.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Width = null,
+    // Forms-completeness (3.4.0). Disabled greys the button + the renderer
+    // refuses to dispatch its action; drops false (WhenWritingDefault).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Disabled = false,
     // Transient label shown from click until dispatch resolves (issue #11).
     // Adapter additionally adds `.vms-button--pending` while pending so the
     // button visibly disables. Null = instant-click behavior (pre-0.8.0).

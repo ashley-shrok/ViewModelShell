@@ -520,6 +520,29 @@ function buildVm(state: FeatureProbeState): ViewNode {
     footer: [{ type: "button", label: "OK", action: { name: "modal-ok" } }],
   };
 
+  // 3.4.0 — forms-completeness parity coverage: FieldNode error/help/disabled/
+  // readonly/min/max/step/maxLength + ButtonNode.disabled. Static so every GET
+  // byte-diffs the new wire fields across all backends.
+  const formsSection: ViewNode = {
+    type: "section",
+    heading: "Forms completeness",
+    variant: "card",
+    children: [
+      { type: "field", name: "fc-email", inputType: "email", bind: "note", label: "Email",
+        required: true, help: "We never share it.", error: "That email is already taken." },
+      { type: "field", name: "fc-qty", inputType: "number", bind: "note", label: "Quantity",
+        min: "0", max: "10", step: "0.5" },
+      { type: "field", name: "fc-code", inputType: "text", bind: "note", label: "Code",
+        maxLength: 8, placeholder: "max 8 chars" },
+      { type: "field", name: "fc-locked", inputType: "text", bind: "note", label: "Account ID",
+        readonly: true },
+      { type: "field", name: "fc-region", inputType: "text", bind: "note", label: "Region",
+        disabled: true },
+      { type: "button", label: "Submit (disabled)", action: { name: "fc-submit" },
+        emphasis: "primary", disabled: true },
+    ],
+  };
+
   return {
     type: "page",
     title: "Feature Probe",
@@ -533,6 +556,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       fitsAxisOmittedSection, fitsAxisBothSection,
       childModifiersSection,
       buildTableSection(state),
+      formsSection,
       probeModal,
     ],
   };

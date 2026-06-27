@@ -6,6 +6,12 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `3.4.0` / `3.4.0` (npm + NuGet) — additive, no action
+
+**Nothing to do.** Eight additive optional fields complete the forms vocabulary (see CHANGELOG 3.4.0): `FieldNode.error` (first-class per-field validation message — view-side complement to the `rejected` envelope, not a replacement for it), `FieldNode.help` (hint text), `FieldNode.disabled`/`readonly`, `FieldNode.min`/`max`/`step` (native input bounds, as strings) + `maxLength` (int), and `ButtonNode.disabled` (server-declared disabled button that the renderer won't dispatch). All optional; omitting them is byte-identical to 3.3.0. No wire-token change.
+
+---
+
 ## Upgrading to `3.3.0` / `3.3.0` (npm + NuGet) — no action for apps
 
 **Nothing to do** for normal app code — same node types, same wire token (`viewmodel-shell/1.0`), same public API. It's a correctness/a11y/parity hardening release (see CHANGELOG 3.3.0): the `fits` validation blind spot is closed, focus/caret survives re-render on table-filter/tab/checkbox controls, a `vm`-less non-redirect response no longer blanks the page, a `state`-less JSON action returns a clean 400 `parse_error` instead of a 500, and `ProgressNode`/`ImageNode`/unknown-node handling got a11y + fail-loud fixes.

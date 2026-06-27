@@ -494,6 +494,27 @@ body {
 textarea.vms-field__input { min-height: 80px; }
 select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); }
 
+/* Forms-completeness (3.4.0) — help/error text + disabled/readonly/error states.
+   help is the muted hint; error is the danger message (role="alert"). */
+.vms-field__help  { font-size: var(--vms-text-sm); color: var(--vms-text-muted); }
+.vms-field__error { font-size: var(--vms-text-sm); color: var(--vms-error); }
+.vms-field--error .vms-field__input { border-color: var(--vms-error); }
+.vms-field--error .vms-field__input:focus {
+  border-color: var(--vms-error);
+  box-shadow: 0 0 0 3px var(--vms-error-glow);
+}
+.vms-field__input:disabled,
+.vms-field--disabled .vms-field__input {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.vms-field--disabled .vms-field__label { opacity: 0.7; }
+/* read-only: editable-looking but visibly inert background (not greyed like disabled). */
+.vms-field__input:read-only:not([type="file"]) {
+  background: color-mix(in srgb, var(--vms-surface) 70%, var(--vms-border));
+  cursor: default;
+}
+
 /* Code editor field — monospaced, tab-aware, no spell-check chrome.
    Apps add syntax highlighting via .vms-field--code-{language} hooks. */
 .vms-field__input--code {
@@ -614,6 +635,14 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-button--pending {
   opacity: 0.55;
   cursor: progress;
+  pointer-events: none;
+}
+
+/* Forms-completeness (3.4.0) — server-declared disabled button. */
+.vms-button:disabled,
+.vms-button--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
   pointer-events: none;
 }
 

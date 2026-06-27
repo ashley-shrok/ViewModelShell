@@ -851,7 +851,59 @@ export class BrowserAdapter implements Adapter {
       wrapper.appendChild(inp);
     }
 
+    this.decorateField(wrapper, n);
     parent.appendChild(wrapper);
+  }
+
+  /** Forms-completeness (3.4.0) — apply disabled/readonly to the control and
+   *  render help + error text below it, wiring aria-describedby / aria-invalid.
+   *  Runs on the main field path (the hidden + checkbox-FieldNode variants
+   *  return before this). */
+  private decorateField(wrapper: HTMLElement, n: FieldNode): void {
+    const control = wrapper.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+      ".vms-field__input",
+    );
+    if (n.disabled) {
+      if (control) (control as HTMLInputElement).disabled = true;
+      wrapper.classList.add("vms-field--disabled");
+    }
+    if (n.readonly && control && "readOnly" in control) {
+      (control as HTMLInputElement | HTMLTextAreaElement).readOnly = true;
+    }
+    // Native input constraints — min/max/step on <input>, maxLength on
+    // <input>/<textarea>. Strings pass straight to the attribute.
+    if (control instanceof HTMLInputElement) {
+      if (n.min != null) control.min = n.min;
+      if (n.max != null) control.max = n.max;
+      if (n.step != null) control.step = n.step;
+    }
+    if (n.maxLength != null &&
+        (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) {
+      control.maxLength = n.maxLength;
+    }
+    const describedBy: string[] = [];
+    if (n.help != null && n.help !== "") {
+      const helpEl = document.createElement("div");
+      helpEl.className = "vms-field__help";
+      helpEl.id = `vms-${n.name}-help`;
+      helpEl.textContent = n.help;
+      wrapper.appendChild(helpEl);
+      describedBy.push(helpEl.id);
+    }
+    if (n.error != null && n.error !== "") {
+      wrapper.classList.add("vms-field--error");
+      const errEl = document.createElement("div");
+      errEl.className = "vms-field__error";
+      errEl.id = `vms-${n.name}-error`;
+      errEl.setAttribute("role", "alert");
+      errEl.textContent = n.error;
+      wrapper.appendChild(errEl);
+      describedBy.push(errEl.id);
+      control?.setAttribute("aria-invalid", "true");
+    }
+    if (control && describedBy.length > 0) {
+      control.setAttribute("aria-describedby", describedBy.join(" "));
+    }
   }
 
   /** CheckboxNode (standalone, immediate-dispatch) — bound boolean; on toggle,
@@ -891,9 +943,15 @@ export class BrowserAdapter implements Adapter {
     btn.type = "button";
     btn.className = `vms-button${n.emphasis ? ` vms-button--${n.emphasis}` : ""}${
       n.tone ? ` vms-button--${n.tone}` : ""}${n.size ? ` vms-button--${n.size}` : ""}${
-      n.width === "full" ? " vms-button--full" : ""}`;
+      n.width === "full" ? " vms-button--full" : ""}${
+      n.disabled ? " vms-button--disabled" : ""}`;
     btn.textContent = n.label;
+    if (n.disabled) btn.disabled = true;
     btn.addEventListener("click", () => {
+      // Forms-completeness (3.4.0): a disabled button never dispatches. (Native
+      // `disabled` already suppresses the click, but guard anyway in case the
+      // attribute was cleared out-of-band.)
+      if (n.disabled) return;
       // pendingLabel: instant client-side feedback. Swap text + add
       // .vms-button--pending BEFORE handing off to the dispatcher. On
       // success the next render replaces the button entirely. On dispatch

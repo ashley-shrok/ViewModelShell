@@ -6,6 +6,24 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 3.4.0 / 3.4.0 — Forms completeness: per-field validation, hints, disabled/readonly, input constraints (npm + NuGet)
+
+**npm:** `3.4.0` (MINOR) · **NuGet:** `3.4.0` (MINOR). The audit's clearest gap was forms — `FieldNode` was bare and per-field validation had no first-class home. Eight additive optional fields close it. Wire protocol token stays `viewmodel-shell/1.0` (additive optional fields; old agents/apps unaffected). **Migration: none.**
+
+### Added
+- **`FieldNode.error?: string`** — first-class per-field inline validation error, rendered below the control as `.vms-field__error` (`role="alert"`), with the wrapper marked `.vms-field--error`, the control's `aria-invalid="true"`, and the message wired into `aria-describedby`. The **view-side** complement to the response-level `rejected` channel: `rejected.violations[]` is the structured wire/agent signal, `field.error` is the rendered message you bake onto the offending field. They compose (every form library ships both a field-error and a form-level error list); use either or both. Previously the only way to show a field error was a loose `TextNode` (gotcha #4). (MUI `TextField error`, Formik/RHF field errors.)
+- **`FieldNode.help?: string`** — hint/description text below the control (`.vms-field__help`), wired into `aria-describedby`. (MUI `helperText`.)
+- **`FieldNode.disabled?` / `readonly?`** — native disabled (greyed, excluded from submit) / read-only (shown + submitted, not editable) states. `disabled` adds `.vms-field--disabled`.
+- **`FieldNode.min?` / `max?` / `step?` (strings) + `maxLength?` (int)** — passthrough to the native input attributes for `number`/`range`/date-time bounds and text length caps. `min`/`max`/`step` are **strings** (HTML-attribute semantics — a numeric bound `"0"`, a date bound `"2020-01-01"`, or `step:"any"`), typed as strings so the wire stays byte-identical across backends.
+- **`ButtonNode.disabled?: boolean`** — server-declared disabled button (greyed via `.vms-button--disabled` + native `disabled`); the renderer refuses to dispatch its action. Distinct from the transient `pendingLabel` (which only covers the in-flight round-trip). (Universal.)
+
+All eight are optional and render zero app CSS (the shipped `default.css` styles `.vms-field__help`/`__error`/`--error`/`--disabled` + `.vms-button--disabled`). FeatureProbe renders the full set statically so the new wire fields are byte-diffed across all backends in parity.
+
+### Migration
+None — every field is optional and additive; omitting them is byte-identical to 3.3.0. `FieldNode.error` does not replace or change the `rejected` envelope channel; it's an independent view-side primitive you opt into.
+
+---
+
 ## 3.3.0 / 3.3.0 — Correctness, a11y & cross-backend parity hardening (npm + NuGet)
 
 **npm:** `3.3.0` (MINOR) · **NuGet:** `3.3.0` (MINOR). A consolidated correctness/robustness pass — renderer + shell-loop bug fixes, accessibility fixes, a closed validation blind spot, a wire-normalization that removes a long-standing TS↔.NET asymmetry, and new parity coverage. Wire protocol token stays `viewmodel-shell/1.0` (all changes are additive or absent-vs-false normalizations; old agents/apps keep working). **Migration: effectively none** — one .NET raw-wire normalization noted below.

@@ -574,6 +574,27 @@ public class FeatureProbeController : ControllerBase
         pageChildren.Add(fitsAxisBothSection);
         pageChildren.Add(childModifiersSection);
         pageChildren.Add(BuildTableSection(state));
+        // 3.4.0 — forms-completeness parity coverage: FieldNode error/help/
+        // disabled/readonly/min/max/step/maxLength + ButtonNode.disabled. Static
+        // so every GET byte-diffs the new wire fields across all backends.
+        pageChildren.Add(new SectionNode(
+            Heading: "Forms completeness",
+            Variant: "card",
+            Children: new ViewNode[]
+            {
+                new FieldNode("fc-email", "email", "note", "Email", null,
+                    Required: true, Help: "We never share it.", Error: "That email is already taken."),
+                new FieldNode("fc-qty", "number", "note", "Quantity", null,
+                    Min: "0", Max: "10", Step: "0.5"),
+                new FieldNode("fc-code", "text", "note", "Code", "max 8 chars",
+                    MaxLength: 8),
+                new FieldNode("fc-locked", "text", "note", "Account ID", null,
+                    Readonly: true),
+                new FieldNode("fc-region", "text", "note", "Region", null,
+                    Disabled: true),
+                new ButtonNode("Submit (disabled)", new ActionDescriptor("fc-submit"),
+                    Emphasis: "primary", Disabled: true),
+            }));
         // 3.3.0 (F3) — a STATIC ModalNode on every GET so the parity suite
         // byte-diffs the full modal wire shape (Title/Children/Footer/
         // DismissAction/Size) across all backends. Previously ModalNode appeared

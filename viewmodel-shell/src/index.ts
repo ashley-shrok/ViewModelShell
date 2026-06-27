@@ -297,6 +297,35 @@ export interface FieldNode {
   label?: string;
   placeholder?: string;
   required?: boolean;
+  /** Disables the control (greys it out, blocks input, excludes it from form
+   *  submission). Server-owned. Emits `.vms-field--disabled` on the wrapper +
+   *  the native `disabled` attribute. Omitted = enabled. */
+  disabled?: boolean;
+  /** Read-only: the value is shown and submitted but the user can't edit it
+   *  (distinct from `disabled`, which also greys out + excludes from submit).
+   *  Text-like inputs + textarea only. Emits the native `readonly` attribute. */
+  readonly?: boolean;
+  /** Per-field validation error message, rendered inline below the control as
+   *  `.vms-field__error` (role="alert"); also sets the wrapper's
+   *  `.vms-field--error`, the control's `aria-invalid="true"`, and wires the
+   *  message into `aria-describedby`. The view-side complement to the
+   *  response-level `rejected` channel — set it on the offending field when you
+   *  build the tree. Omitted = no error shown. */
+  error?: string;
+  /** Hint/help text rendered below the control as `.vms-field__help` and wired
+   *  into the control's `aria-describedby`. Omitted = no hint. */
+  help?: string;
+  /** `min`/`max`/`step` passed through to the native input attribute for
+   *  `number`/`range`/date-time inputs. STRINGS (HTML-attribute semantics): a
+   *  numeric bound (`"0"`), a date bound (`"2020-01-01"`), and `step` also
+   *  accepts `"any"`. Typed as strings (not numbers) so the wire stays
+   *  byte-identical across backends. Omitted = no constraint. */
+  min?: string;
+  max?: string;
+  step?: string;
+  /** Maximum input length (characters) for text-like inputs + textarea →
+   *  native `maxlength`. Integer. Omitted = no cap. */
+  maxLength?: number;
   options?: Array<{ value: string; label: string }>;
   /** Optional language hint for `inputType: "code"`. Emitted as a class
    *  (`vms-field--code-{language}`) so apps can attach a syntax-highlighter
@@ -334,6 +363,10 @@ export interface ButtonNode {
    *  `block`, Chakra `width="full"`). Emits `.vms-button--full`. Omitted/`"auto"`
    *  = content-width (the default hug). Orthogonal to emphasis/tone/size. */
   width?: "auto" | "full";
+  /** Disables the button — greys it out (`.vms-button--disabled` + native
+   *  `disabled`) and the renderer will NOT dispatch its action on click.
+   *  Server-owned (e.g. a submit gated on a precondition). Omitted = enabled. */
+  disabled?: boolean;
   /** Transient label shown from click until the dispatch resolves (response
    *  arrives or dispatch errors). Mirrors `CopyButtonNode.copiedLabel`'s
    *  lifecycle pattern at a different beat: shown DURING the round-trip
