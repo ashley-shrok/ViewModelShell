@@ -26,7 +26,7 @@
     "LICENSE"
   ],
   "bin": {
-    "vms-tui": "./dist/tui-cli.js"
+    "vms-tui": "dist/tui-cli.js"
   },
   "scripts": {
     "build": "tsc -b tsconfig.tui.json",
