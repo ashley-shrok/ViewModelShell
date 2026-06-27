@@ -278,6 +278,24 @@ body {
 .vms-align--stretch  { align-items: stretch; }
 .vms-align--baseline { align-items: baseline; }
 
+/* ── Child-side modifiers: alignSelf (per-child cross axis → align-self) + maxWidth
+   (bounded content cap → max-inline-size) on a SectionNode (CHILD-01/02 / 3.2.0).
+   alignSelf is the per-child counterpart to align: in the default flex column stack
+   the cross axis is horizontal, so start/center/end = left/center/right and it
+   overrides the parent's alignment for ONE section — the chat-bubble case (a card
+   pinned to one side). maxWidth is a CLOSED token set (P2), not raw CSS: fractional
+   values scale with the container (the chat gutter), prose caps at the readable
+   measure min(65ch,100%) (the established min(X,100%) intrinsic-safety idiom, same
+   as the cards rule). Both intrinsic, zero @media (P1). An OMITTED field emits no
+   class → inherit parent alignment / no cap = byte-identical to today. ── */
+.vms-self--start  { align-self: flex-start; }
+.vms-self--center { align-self: center; }
+.vms-self--end    { align-self: flex-end; }
+.vms-maxw--half           { max-inline-size: 50%; }
+.vms-maxw--two-thirds     { max-inline-size: 66.6667%; }
+.vms-maxw--three-quarters { max-inline-size: 75%; }
+.vms-maxw--prose          { max-inline-size: min(65ch, 100%); }
+
 /* ── Layout preset: switcher (SWITCH-01/02 / 1.13.0) — the Every-Layout Switcher,
    zero @media. N equal items flip all-row ↔ all-stack ATOMICALLY via a negative
    `flex-basis`: above the threshold the basis `(threshold - 100%) * 999` goes

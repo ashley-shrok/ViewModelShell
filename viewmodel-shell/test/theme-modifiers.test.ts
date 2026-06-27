@@ -246,6 +246,65 @@ describe("ALIGN-01/02/03 — arrange/align modifier emission (1.12.0)", () => {
   });
 });
 
+describe("CHILD-01/02 — alignSelf/maxWidth child-side modifier emission (3.2.0)", () => {
+  const alignSelfValues = ["start", "center", "end"] as const;
+  const maxWidthValues = ["half", "two-thirds", "three-quarters", "prose"] as const;
+
+  // section — alignSelf
+  for (const v of alignSelfValues) {
+    it(`section alignSelf:"${v}" => section className contains vms-self--${v}`, () => {
+      const el = renderSection({ type: "section", children: [], alignSelf: v });
+      expect(el.classList.contains(`vms-self--${v}`)).toBe(true);
+    });
+  }
+  // section — maxWidth
+  for (const v of maxWidthValues) {
+    it(`section maxWidth:"${v}" => section className contains vms-maxw--${v}`, () => {
+      const el = renderSection({ type: "section", children: [], maxWidth: v });
+      expect(el.classList.contains(`vms-maxw--${v}`)).toBe(true);
+    });
+  }
+
+  // byte-identical-when-omitted: neither field ⇒ no vms-self--/vms-maxw-- token
+  it("section with NEITHER alignSelf nor maxWidth => no vms-self-- / vms-maxw-- class", () => {
+    const el = renderSection({ type: "section", children: [] });
+    expect(el.className).not.toMatch(/vms-self--/);
+    expect(el.className).not.toMatch(/vms-maxw--/);
+  });
+
+  // emission present in the non-base section branches (collapsible / link)
+  it("collapsible section carries alignSelf/maxWidth classes", () => {
+    const el = renderSection({
+      type: "section", children: [], collapsible: true,
+      alignSelf: "center", maxWidth: "prose",
+    });
+    expect(el.classList.contains("vms-section--collapsible")).toBe(true);
+    expect(el.classList.contains("vms-self--center")).toBe(true);
+    expect(el.classList.contains("vms-maxw--prose")).toBe(true);
+  });
+  it("link section carries alignSelf/maxWidth classes", () => {
+    const el = renderSection({
+      type: "section", children: [], link: { url: "/x" },
+      alignSelf: "end", maxWidth: "half",
+    });
+    expect(el.classList.contains("vms-section--linked")).toBe(true);
+    expect(el.classList.contains("vms-self--end")).toBe(true);
+    expect(el.classList.contains("vms-maxw--half")).toBe(true);
+  });
+
+  // the motivating chat-bubble composition: one card pinned right, capped
+  it("chat-bubble combo (alignSelf:end + maxWidth:three-quarters) carries both", () => {
+    const el = renderSection({
+      type: "section", children: [], variant: "card",
+      alignSelf: "end", maxWidth: "three-quarters", tone: "info",
+    });
+    expect(el.classList.contains("vms-section--card")).toBe(true);
+    expect(el.classList.contains("vms-self--end")).toBe(true);
+    expect(el.classList.contains("vms-maxw--three-quarters")).toBe(true);
+    expect(el.classList.contains("vms-section--info")).toBe(true);
+  });
+});
+
 describe("SWITCH-01/02 — switcher threshold/limit modifier emission (1.13.0)", () => {
   const thresholdValues = ["sm", "md", "lg", "xl"] as const;
   const limitValues = [2, 4, 8] as const;

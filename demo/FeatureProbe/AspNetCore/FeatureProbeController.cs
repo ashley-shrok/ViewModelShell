@@ -524,6 +524,25 @@ public class FeatureProbeController : ControllerBase
                     SubmitButton: new ButtonNode("Search", new ActionDescriptor("axes-search"), Emphasis: "primary", Width: "full")),
             },
             Variant: "card");
+        // 3.2.0 — child-side modifiers alignSelf + maxWidth on SectionNode (parity
+        // for CHILD-01/02/03). Byte-identical to the bun/node twin (handler.ts
+        // childModifiersSection). Omitted alignSelf/maxWidth ABSENT on the wire, set
+        // ones present; the last two children are the chat-bubble composition.
+        var childModifiersSection = new SectionNode(
+            Heading: "Child modifiers (alignSelf + maxWidth)",
+            Children: new ViewNode[]
+            {
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("bare (omitted)", null) }, Variant: "card"),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("alignSelf start", null) },  Variant: "card", AlignSelf: "start"),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("alignSelf center", null) }, Variant: "card", AlignSelf: "center"),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("alignSelf end", null) },    Variant: "card", AlignSelf: "end"),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("maxWidth half", null) },           Variant: "card", MaxWidth: "half"),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("maxWidth two-thirds", null) },     Variant: "card", MaxWidth: "two-thirds"),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("maxWidth three-quarters", null) }, Variant: "card", MaxWidth: "three-quarters"),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("maxWidth prose", null) },          Variant: "card", MaxWidth: "prose"),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("Hi there!", null) },          Variant: "card", AlignSelf: "start", MaxWidth: "three-quarters"),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("Doing great, thanks!", null) }, Variant: "card", AlignSelf: "end", MaxWidth: "three-quarters", Tone: "info"),
+            });
         var pageChildren = new List<ViewNode>
         {
             probeSection, clickableCardSection, linkedCardSection, rowSection,
@@ -538,6 +557,7 @@ public class FeatureProbeController : ControllerBase
         pageChildren.AddRange(cardsMinItemSections);
         pageChildren.Add(fitsAxisOmittedSection);
         pageChildren.Add(fitsAxisBothSection);
+        pageChildren.Add(childModifiersSection);
         pageChildren.Add(BuildTableSection(state));
         return new PageNode("Feature Probe", pageChildren,
             Density: "compact", Layout: "cards");

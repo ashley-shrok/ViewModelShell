@@ -6,6 +6,22 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 3.2.0 / 3.2.0 — Child-side layout modifiers: alignSelf + maxWidth (npm + NuGet)
+
+**npm:** `3.2.0` (MINOR) · **NuGet:** `3.2.0` (MINOR). Two additive `SectionNode` fields. Wire protocol token stays `viewmodel-shell/1.0` (additive node fields; old agents/apps unaffected). **Migration: none.**
+
+### Added
+- **`SectionNode.alignSelf?: "start" | "center" | "end"`** — per-child cross-axis self-alignment, the child-side counterpart to the parent-level `align`. Maps to CSS `align-self`; in the default flex-column stack the cross axis is horizontal, so `start`/`center`/`end` = left/center/right, overriding the parent's alignment for one section. Emits `.vms-self--{value}`. Omitted = inherits parent alignment (byte-identical to today). (Mirrors CSS `align-self` / Jetpack Compose `Modifier.align` / SwiftUI `.frame(alignment:)`.)
+- **`SectionNode.maxWidth?: "half" | "two-thirds" | "three-quarters" | "prose"`** — a bounded content-width cap (closed token set, never raw CSS → passes the P2 gate), implemented with `max-inline-size`. Fractional values are proportional to the container (50% / 66.6667% / 75%); `prose` caps at the readable measure (`min(65ch, 100%)`, the Tailwind `max-w-prose` / Every-Layout `--measure` cap). The section still shrinks to content below the cap. Emits `.vms-maxw--{value}`. Omitted = no cap (today's full-width behavior). Intrinsic, zero `@media` → passes P1.
+
+### Why
+These are the two per-child modifiers mature frameworks universally use to express aligned, width-capped content. Together they compose a **chat transcript** — a flex-column stack of `variant:"card"` bubbles, each `alignSelf:"start"|"end"` + `maxWidth:"three-quarters"` + `tone` by sender — with **zero app CSS**, plus prose columns and centered narrow groups. Per the framework's compose-don't-special-case rule there is **no `ChatBubble` node**: general-purpose design systems build chat from `align-self` + `max-width`, so VMS does too. Also substantially satisfies the formerly-deferred nestable center+measure-cap (`alignSelf:"center"` + `maxWidth:"prose"`). `SectionNode` only in this release; broadening to other node types is additive-future.
+
+### Migration
+None — both fields are optional and additive; omitting them is byte-identical to 3.1.0.
+
+---
+
 ## 3.1.0 / 3.1.0 — Admin-shell primitives: button width, divider, form submitButton (npm + NuGet)
 
 **npm:** `3.1.0` (MINOR) · **NuGet:** `3.1.0` (MINOR). Three additive features (issue #22). Wire protocol token stays `viewmodel-shell/1.0` (additive node fields + one new node type; old agents/apps unaffected). **Migration: none.**

@@ -414,7 +414,9 @@ export class BrowserAdapter implements Adapter {
         n.align ? ` vms-align--${n.align}` : ""}${
         n.threshold ? ` vms-switch--${n.threshold}` : ""}${
         n.limit ? ` vms-switch-limit--${n.limit}` : ""}${
-        n.minItem ? ` vms-cards-min--${n.minItem}` : ""}`;
+        n.minItem ? ` vms-cards-min--${n.minItem}` : ""}${
+        n.alignSelf ? ` vms-self--${n.alignSelf}` : ""}${
+        n.maxWidth ? ` vms-maxw--${n.maxWidth}` : ""}`;
       el.dataset.sectionKey = finalKey;
       // Initial render is always closed — the post-render restore loop in
       // render() re-applies `open=true` for keys the user had open before.
@@ -449,7 +451,9 @@ export class BrowserAdapter implements Adapter {
         n.align ? ` vms-align--${n.align}` : ""}${
         n.threshold ? ` vms-switch--${n.threshold}` : ""}${
         n.limit ? ` vms-switch-limit--${n.limit}` : ""}${
-        n.minItem ? ` vms-cards-min--${n.minItem}` : ""}`;
+        n.minItem ? ` vms-cards-min--${n.minItem}` : ""}${
+        n.alignSelf ? ` vms-self--${n.alignSelf}` : ""}${
+        n.maxWidth ? ` vms-maxw--${n.maxWidth}` : ""}`;
       a.href = n.link.url;
       // Mirror LinkNode's external-attribute pattern (browser.ts ~line 666)
       // byte-for-byte: target=_blank + rel=noopener noreferrer when external.
@@ -502,6 +506,8 @@ export class BrowserAdapter implements Adapter {
       n.threshold ? ` vms-switch--${n.threshold}` : ""}${
       n.limit ? ` vms-switch-limit--${n.limit}` : ""}${
       n.minItem ? ` vms-cards-min--${n.minItem}` : ""}${
+      n.alignSelf ? ` vms-self--${n.alignSelf}` : ""}${
+      n.maxWidth ? ` vms-maxw--${n.maxWidth}` : ""}${
       n.action ? " vms-section--clickable" : ""}`;
     if (n.heading) {
       const h = document.createElement("h2");

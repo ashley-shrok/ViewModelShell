@@ -426,7 +426,26 @@ public record SectionNode(
     // Semantic intent/severity tone — the universal status color axis, orthogonal
     // to Variant (a section can be a card AND tone:"warning"). Emits .vms-section--{tone}
     // (tinted surface + colored border). "danger"|"warning"|"success"|"info".
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null,
+    // 3.2.0 — per-child cross-axis self-alignment (CHILD-01). Free-form string
+    // mirroring the TS closed union "start"|"center"|"end" (closed union enforced
+    // TS-side + validated by parity, matching the Layout/Arrange field pattern).
+    // Maps to CSS align-self — the per-child counterpart to Align; in the default
+    // flex column the cross axis is horizontal (start/center/end = left/center/
+    // right), overriding the parent's alignment for this one section (the chat-
+    // bubble case). Omitted = no class → inherits parent alignment = byte-identical
+    // to today; any value emits .vms-self--{value}. JsonIgnore-on-null per the
+    // file-header rule.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AlignSelf = null,
+    // 3.2.0 — bounded content-width cap (CHILD-02). Free-form string mirroring the
+    // TS closed union "half"|"two-thirds"|"three-quarters"|"prose" (closed set, not
+    // raw CSS, per P2; enforced TS-side + validated by parity). Maps to
+    // max-inline-size: fractional → proportional (50% / 66.6667% / 75%), prose →
+    // the readable measure min(65ch,100%). The section still shrinks to content
+    // below the cap. Omitted = no class → no cap (full-width) = byte-identical to
+    // today; any value emits .vms-maxw--{value}. JsonIgnore-on-null per the
+    // file-header rule.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MaxWidth = null
 ) : ViewNode;
 
 public record ListNode(

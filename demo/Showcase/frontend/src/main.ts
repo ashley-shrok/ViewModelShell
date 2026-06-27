@@ -558,6 +558,38 @@ function layoutsView(): ViewNode[] {
         ]},
       ]},
     ]},
+
+    // ── child-side modifiers (alignSelf + maxWidth) — the chat-bubble case ─
+    { type: "section", heading: "Child-side modifiers (alignSelf + maxWidth)", children: [
+      { type: "text", value: "Two per-child modifiers on a section: `alignSelf` (start/center/end — the per-child counterpart to `align`) and `maxWidth` (half/two-thirds/three-quarters/prose — a bounded cap). Together they compose a chat transcript with ZERO app CSS: a vertical stack of card bubbles, each pinned to one side and capped so the opposite gutter stays open. Resize the window — the fractional caps scale with it.", style: "muted" },
+      // the headline composition: a chat transcript (no ChatBubble node — just sections)
+      { type: "section", variant: "card", children: [
+        { type: "section", variant: "card", alignSelf: "start", maxWidth: "three-quarters", children: [
+          { type: "text", value: "Hey! Did the new layout primitives land?" },
+        ]},
+        { type: "section", variant: "card", alignSelf: "end", maxWidth: "three-quarters", tone: "info", children: [
+          { type: "text", value: "Yep — alignSelf + maxWidth, no ChatBubble node needed." },
+        ]},
+        { type: "section", variant: "card", alignSelf: "start", maxWidth: "three-quarters", children: [
+          { type: "text", value: "So the whole transcript is zero app CSS?" },
+        ]},
+        { type: "section", variant: "card", alignSelf: "end", maxWidth: "three-quarters", tone: "info", children: [
+          { type: "text", value: "Every bubble — section + variant:card + alignSelf + maxWidth + tone." },
+        ]},
+      ]},
+      // alignSelf in isolation — a capped card pinned to each side / center
+      { type: "text", value: "alignSelf in isolation — a half-width card pinned to each position:", style: "muted" },
+      ...(["start", "center", "end"] as const).map(v => (
+        { type: "section" as const, variant: "card" as const, alignSelf: v, maxWidth: "half" as const, children: [
+          { type: "text" as const, value: `alignSelf: "${v}" (maxWidth: half)` },
+        ]}
+      )),
+      // maxWidth: prose — the readable measure cap
+      { type: "text", value: "maxWidth: \"prose\" — caps a text column at the readable measure (~65ch) so long body copy doesn't sprawl edge to edge:", style: "muted" },
+      { type: "section", variant: "card", maxWidth: "prose", children: [
+        { type: "text", value: "This paragraph is capped at the prose measure. Comfortable line length is roughly 45–75 characters; the prose token pins the column near 65ch — min(65ch, 100%), so it never overflows a narrow container — the same cap Tailwind exposes as max-w-prose and Every-Layout calls the measure. Resize the window: it stops growing at the measure even when there's more room." },
+      ]},
+    ]},
   ];
 }
 

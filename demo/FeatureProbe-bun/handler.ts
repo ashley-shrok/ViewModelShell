@@ -482,6 +482,29 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // 3.2.0 — child-side modifiers alignSelf + maxWidth on SectionNode (parity for
+  // CHILD-01/02/03). Static view-shape captured by every GET step; the .NET twin
+  // (FeatureProbeController.cs childModifiersSection) must serialize byte-identically
+  // — omitted alignSelf/maxWidth ABSENT on the wire, set ones present. The last two
+  // children are the motivating chat-bubble composition (a card pinned to one side,
+  // capped, tone by sender; zero app CSS).
+  const childModifiersSection: ViewNode = {
+    type: "section",
+    heading: "Child modifiers (alignSelf + maxWidth)",
+    children: [
+      { type: "section", variant: "card", children: [{ type: "text", value: "bare (omitted)" }] },
+      { type: "section", variant: "card", alignSelf: "start",  children: [{ type: "text", value: "alignSelf start" }] },
+      { type: "section", variant: "card", alignSelf: "center", children: [{ type: "text", value: "alignSelf center" }] },
+      { type: "section", variant: "card", alignSelf: "end",    children: [{ type: "text", value: "alignSelf end" }] },
+      { type: "section", variant: "card", maxWidth: "half",           children: [{ type: "text", value: "maxWidth half" }] },
+      { type: "section", variant: "card", maxWidth: "two-thirds",     children: [{ type: "text", value: "maxWidth two-thirds" }] },
+      { type: "section", variant: "card", maxWidth: "three-quarters", children: [{ type: "text", value: "maxWidth three-quarters" }] },
+      { type: "section", variant: "card", maxWidth: "prose",          children: [{ type: "text", value: "maxWidth prose" }] },
+      { type: "section", variant: "card", alignSelf: "start", maxWidth: "three-quarters",               children: [{ type: "text", value: "Hi there!" }] },
+      { type: "section", variant: "card", alignSelf: "end",   maxWidth: "three-quarters", tone: "info", children: [{ type: "text", value: "Doing great, thanks!" }] },
+    ],
+  };
+
   return {
     type: "page",
     title: "Feature Probe",
@@ -493,6 +516,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       bareSwitcherSection, ...switcherThresholdSections, switcherLimitSection,
       bareCardsSection, ...cardsMinItemSections,
       fitsAxisOmittedSection, fitsAxisBothSection,
+      childModifiersSection,
       buildTableSection(state),
     ],
   };
