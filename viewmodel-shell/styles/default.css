@@ -154,6 +154,20 @@ body {
    Orthogonal to layout; outside a fill page the section rule is an inert no-op. */
 .vms-page--fill { height: 100dvh; }
 .vms-section--fill { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* Fill makes the host's <body> margin load-bearing: the base `body` rule above
+   deliberately leaves margin to the host (one-line `body{margin:0}` convention),
+   but a 100dvh page plus the UA's default 8px body margin overflows the viewport
+   (100dvh + 16px → ~16px of scroll, a clipped pinned footer). So when — and ONLY
+   when — a fill page is present, the framework owns the body reset itself. Scoped
+   via :has() so non-fill pages keep the existing host-owns-margin convention. */
+body:has(.vms-page--fill) { margin: 0; }
+/* Fill + sidebar composition: `.vms-page--sidebar` is `flex-wrap: wrap` (for the
+   breakpoint-free stacked collapse), so the flex LINE's cross-size is the children's
+   natural max, not the container's 100dvh. With `align: stretch` the children then
+   stretch to that natural max and burst the fill height (e.g. a long sidebar list
+   pushes the page past the viewport). Cap each child at the page height and let it
+   scroll internally instead. Scoped to fill+sidebar so no other layout is touched. */
+.vms-page--fill.vms-page--sidebar > * { max-height: 100%; overflow-y: auto; }
 
 /* ── Section ── */
 .vms-section { display: flex; flex-direction: column; gap: var(--vms-space-sm); }

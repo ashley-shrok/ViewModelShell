@@ -6,6 +6,19 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 3.6.1 / — Fill axis CSS fixes: body-margin overflow + fill·sidebar composition (npm only)
+
+**npm:** `3.6.1` (PATCH) · **NuGet:** unchanged (`3.6.0`). CSS-only — no wire/type change, no `.NET` change. Two rendering bugs in the 3.6.0 fill axis, both surfaced by a live consumer (`/ai`) and DevTools-verified, fixed in `styles/default.css`. **Migration: none** — re-bundle the stylesheet (`npm i @ashley-shrok/viewmodel-shell@3.6.1`); no app code changes. Consumers carrying an app-side `body{margin:0}` stopgap for fill pages can drop it.
+
+### Fixed
+- **`page.fill` + the host body margin overflowed the viewport.** The base `body` rule deliberately leaves `margin` to the host (the one-line `body{margin:0}` convention), but a `100dvh` fill page plus the UA's default 8px body margin = `100dvh + 16px` → ~16px of scroll and a clipped pinned footer/composer. Fill is the feature that makes that gap load-bearing, so the framework now owns the reset **only when a fill page is present** — `body:has(.vms-page--fill) { margin: 0 }`. Scoped via `:has()` so non-fill pages keep the existing host-owns-margin convention untouched.
+- **`page.fill` + `layout:"sidebar"` + `align:"stretch"` burst the fill height.** `.vms-page--sidebar` is `flex-wrap: wrap` (for the breakpoint-free stacked collapse), so the wrapped flex line's cross-size is the children's *natural* max, not the container's `100dvh`; `align:stretch` then stretched both children to that natural max (e.g. a long sidebar list pushed the page past the viewport, clipping the composer). Fixed by capping each child at the page height and letting it scroll internally: `.vms-page--fill.vms-page--sidebar > * { max-height: 100%; overflow-y: auto }`. Scoped to the fill+sidebar composition so no other layout is affected.
+
+### Migration
+None — CSS-only. Update the package and re-bundle; remove any app-side `body{margin:0}` stopgap added for fill pages.
+
+---
+
 ## 3.6.0 / 3.6.0 — Fill layout axis (page.fill + section.fill): full-height app shells (npm + NuGet)
 
 **npm:** `3.6.0` (MINOR) · **NuGet:** `3.6.0` (MINOR). Until now VMS's layout vocabulary was entirely the **inline (horizontal-flow) axis** — `stack`/`row`/`cards`/`sidebar`/`switcher`/`fits` — with no **block-axis / height** knob, so it could not express the everyday **full-height app shell**: a page that fills the viewport with a pinned header/footer and ONE body region that takes the leftover height and scrolls internally (the chat shell — a transcript above a fixed composer; a sticky-toolbar admin frame). This is the Flutter `Column` + `Expanded` mechanism. Two additive optional booleans add it. Wire protocol token stays `viewmodel-shell/1.0` (additive optional fields; old agents/apps unaffected). **Migration: none.**
