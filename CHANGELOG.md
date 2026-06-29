@@ -6,6 +6,21 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 3.6.0 / 3.6.0 — Fill layout axis (page.fill + section.fill): full-height app shells (npm + NuGet)
+
+**npm:** `3.6.0` (MINOR) · **NuGet:** `3.6.0` (MINOR). Until now VMS's layout vocabulary was entirely the **inline (horizontal-flow) axis** — `stack`/`row`/`cards`/`sidebar`/`switcher`/`fits` — with no **block-axis / height** knob, so it could not express the everyday **full-height app shell**: a page that fills the viewport with a pinned header/footer and ONE body region that takes the leftover height and scrolls internally (the chat shell — a transcript above a fixed composer; a sticky-toolbar admin frame). This is the Flutter `Column` + `Expanded` mechanism. Two additive optional booleans add it. Wire protocol token stays `viewmodel-shell/1.0` (additive optional fields; old agents/apps unaffected). **Migration: none.**
+
+### Added
+- **`PageNode.fill`** — when `true`, the page fills the viewport height (`.vms-page--fill` → `height:100dvh`) so a `fill` section inside it can claim the leftover column height. Absent/false = normal document flow, byte-identical to 3.5.0.
+- **`SectionNode.fill`** — when `true` (inside a `fill` page), the section becomes the Expanded body region: `.vms-section--fill` → `flex:1 1 auto; min-height:0; overflow-y:auto` (take remaining height, allow shrink-below-content, scroll internally). Orthogonal to `layout` — a fill section still arranges its own children via `layout`. Outside a `fill` page the modifier class is an inert no-op.
+
+Passes the layout gate cleanly: **P1** — the mechanism is intrinsic flex distribution of leftover height (`100dvh` + `flex:1; min-height:0; overflow-y:auto`), zero viewport breakpoints; **P2** — each field is a single boolean, the most-closed value set possible, no raw CSS on the wire. Distinct from the deferred `Cover` primitive (vertical-centering for splash/empty-state), which stays deferred. Both backends drop `false` from the wire (`WhenWritingDefault` / TS optional absent), so the false-vs-absent contract holds. FeatureProbe renders a static `section` with `fill:true` so the new wire field is byte-diffed across all backends in parity; `PageNode.fill` is covered by the .NET serialization tests.
+
+### Migration
+None — both fields are additive and optional; omitting them is byte-identical to 3.5.0.
+
+---
+
 ## 3.5.0 / 3.5.0 — Feedback primitives: toast, empty-state, badge (npm + NuGet)
 
 **npm:** `3.5.0` (MINOR) · **NuGet:** `3.5.0` (MINOR). The audit's feedback cluster: VMS had no first-class way to *acknowledge* an action ("Saved"), present *emptiness* ("nothing here yet"), or show *status at a glance* (a pill/count). Three additive primitives close it. Wire protocol token stays `viewmodel-shell/1.0` (additive optional nodes + one new side-effect type; old agents/apps unaffected). **Migration: none.**

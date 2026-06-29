@@ -315,6 +315,15 @@ public record PageNode(
     // cannot express). Omitted or "stack" = vertical flow (no modifier class);
     // any other value emits .vms-page--{value}.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null,
+    // Fill / full-height app-shell axis. When true the page fills the viewport
+    // height (height:100dvh) so a SectionNode.Fill child can claim the leftover
+    // column height and scroll internally — the pinned footer/header + internally-
+    // scrolling body shell (Flutter Column+Expanded). Meant to pair with a
+    // SectionNode.Fill child. Orthogonal to Layout. Non-nullable bool defaulting to
+    // false, dropped from the wire when false (WhenWritingDefault) so it's ABSENT
+    // rather than "fill": false — matching the TS optional `fill?` (F2; same posture
+    // as LinkNode.External). false/omitted = normal document flow, byte-identical.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Fill = false,
     // Page-shell max-width override (issue #13). null = default cap (--vms-page-max,
     // 1080px). "wide" = --vms-page-max-wide (1440px default). "full" = uncapped.
     // TUI ignores this — width caps are a browser concern.
@@ -386,6 +395,16 @@ public record SectionNode(
     // a grid cannot express). Omitted or "stack" = vertical flow (no modifier
     // class); any other value emits .vms-section--{value}.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null,
+    // Fill / full-height app-shell axis. When true (and inside a Fill page) this
+    // section takes the remaining column height and scrolls internally
+    // (flex:1 1 auto; min-height:0; overflow-y:auto) — the body region of a
+    // full-height app shell (e.g. a chat transcript above a pinned composer).
+    // Orthogonal to Layout — a fill section still arranges its own children via
+    // Layout. Outside a Fill page it's a harmless no-op. Non-nullable bool
+    // defaulting to false, dropped from the wire when false (WhenWritingDefault)
+    // so it's ABSENT rather than "fill": false — matching the TS optional `fill?`
+    // (F2; same posture as LinkNode.External). false/omitted = byte-identical.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Fill = false,
     // 1.2.0 — client-side disclosure widget. true = renderer emits
     // <details>/<summary> (closed by default; open state DOM-local and
     // preserved across re-renders by the browser adapter). Omitted/false =

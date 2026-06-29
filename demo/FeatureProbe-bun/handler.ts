@@ -568,6 +568,22 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // Fill axis (SectionNode.fill) — one representative section carrying fill:true
+  // so the parity diff covers the new SectionNode wire field. Byte-identical to
+  // the .NET twin (FeatureProbeController.cs fillSection). NOTE the probe root
+  // page deliberately does NOT set fill (it must stay a natural-scroll inventory
+  // page); PageNode.fill is covered by the serialization tests instead.
+  const fillSection: ViewNode = {
+    type: "section",
+    heading: "Fill section",
+    variant: "card",
+    fill: true,
+    children: [
+      { type: "text", value: "This section claims leftover height and scrolls internally inside a fill page." },
+      { type: "text", value: "Outside a fill page the modifier class is an inert no-op." },
+    ],
+  };
+
   return {
     type: "page",
     title: "Feature Probe",
@@ -583,6 +599,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       buildTableSection(state),
       formsSection,
       feedbackSection,
+      fillSection,
       probeModal,
     ],
   };

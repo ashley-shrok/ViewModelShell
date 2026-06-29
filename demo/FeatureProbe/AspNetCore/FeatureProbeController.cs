@@ -633,6 +633,21 @@ public class FeatureProbeController : ControllerBase
                     Message: "Add the first item.",
                     Action: new ButtonNode("Add item", new ActionDescriptor("feedback-cta"), Emphasis: "primary")),
             }));
+        // Fill axis (SectionNode.Fill) — one representative section carrying
+        // Fill:true so the parity diff covers the new SectionNode wire field.
+        // Byte-identical to the bun twin (handler.ts fillSection). NOTE the probe
+        // root page deliberately does NOT set Fill (it must stay a natural-scroll
+        // inventory page); PageNode.Fill is covered by the serialization tests
+        // instead.
+        pageChildren.Add(new SectionNode(
+            Heading: "Fill section",
+            Variant: "card",
+            Fill: true,
+            Children: new ViewNode[]
+            {
+                new TextNode("This section claims leftover height and scrolls internally inside a fill page.", null),
+                new TextNode("Outside a fill page the modifier class is an inert no-op.", null),
+            }));
         pageChildren.Add(new ModalNode(
             Title: "Probe modal",
             Children: new ViewNode[] { new TextNode("Modal body for parity coverage.", null) },

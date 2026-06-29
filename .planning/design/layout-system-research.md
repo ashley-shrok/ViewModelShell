@@ -70,6 +70,18 @@ The four families agree on an **irreducible core of three**, a **+3 completeness
 
 **The load-bearing finding:** of all 12 Every-Layout primitives, exactly **two are genuine flexbox idioms a column-grid fundamentally cannot reproduce** — **Sidebar** (Holy Albatross: `flex-grow:999` + `min-inline-size:50%` coupled wrap) and **Switcher** (negative-flex-basis atomic axis-flip). These are the primitives that *earn their name* — they can't be folded into the grid substrate. VMS has Sidebar. **VMS is missing Switcher.** Everything else is either a grid/flex configuration (foldable) or a different concern (overlay→modal, surface→card).
 
+### Recorded decision (3.6.0) — VMS now has a height / "fill" axis (`page.fill` + `section.fill`)
+
+The primitive set above is the **inline (cross/main horizontal-flow) axis**. VMS shipped no **block-axis / height** knob, so it could not express the everyday **full-height app shell** — a page that fills the viewport with a pinned header/footer and ONE body region that takes the leftover height and scrolls internally (the chat shell: transcript above a fixed composer; an admin frame with a sticky toolbar). This is the Flutter `Column` + `Expanded` mechanism, and it has no expression in `stack`/`row`/`cards`/`sidebar`/`switcher`/`fits`, all of which are inline-axis.
+
+The axis is **two additive optional booleans**: `PageNode.fill` (the page becomes `height:100dvh`) and `SectionNode.fill` (that section becomes the `flex:1 1 auto; min-height:0; overflow-y:auto` Expanded region). Orthogonal to `layout` — a fill section still arranges its own children via `layout`.
+
+**Passes the P1/P2 gate cleanly:**
+- **P1 (intrinsic, zero viewport breakpoints):** the mechanism is `100dvh` + `flex:1 1 auto; min-height:0; overflow-y:auto` — intrinsic flex distribution of the leftover column height, no `@media`, no viewport query, no knowledge of how wide/tall the slot is. The body region sizes to "whatever's left," the definition of intrinsic.
+- **P2 (closed enum / bounded scalar, never raw CSS):** each field is a single **boolean** — the most-closed value set there is. No CSS length, track, span, or breakpoint map crosses the wire.
+
+**Distinct from the deferred `Cover` (Tier 2 above).** `Cover` is *vertical-centering* a region for a splash / login / empty-state (content floats in the middle of available height). The `fill` axis is *app-shell height distribution* (a body region eats the leftover height and scrolls, siblings stay pinned). Different intents, different mechanisms — shipping `fill` does NOT close `Cover`, which stays deferred until a centering case appears.
+
 ---
 
 ## The alignment / arrangement enums (this is where `justify` lives)

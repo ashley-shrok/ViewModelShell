@@ -144,6 +144,17 @@ body {
 .vms-page--wide { max-width: var(--vms-page-max-wide); }
 .vms-page--full { max-width: none; }
 
+/* ── Fill / full-height app-shell axis ──
+   `.vms-page--fill` makes the page fill the viewport height so a `.vms-section--fill`
+   child can claim the leftover column height and scroll internally (the
+   pinned-footer/header + internally-scrolling body shell — Flutter Column+Expanded).
+   `.vms-section--fill` is the Expanded region: flex:1 → take remaining height,
+   min-height:0 → allow the flex child to shrink below content so overflow scrolls
+   instead of pushing siblings off-screen, overflow-y:auto → scroll internally.
+   Orthogonal to layout; outside a fill page the section rule is an inert no-op. */
+.vms-page--fill { height: 100dvh; }
+.vms-section--fill { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
 /* ── Section ── */
 .vms-section { display: flex; flex-direction: column; gap: var(--vms-space-sm); }
 .vms-section__heading {

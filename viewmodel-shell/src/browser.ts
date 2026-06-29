@@ -332,6 +332,7 @@ export class BrowserAdapter implements Adapter {
     const el = document.createElement("div");
     el.className = `vms-page${n.density === "compact" ? " vms-page--compact" : ""}${
       n.layout && n.layout !== "stack" ? ` vms-page--${n.layout}` : ""}${
+      n.fill === true ? " vms-page--fill" : ""}${
       n.width ? ` vms-page--${n.width}` : ""}${
       n.arrange ? ` vms-arrange--${n.arrange}` : ""}${
       n.align ? ` vms-align--${n.align}` : ""}${
@@ -460,6 +461,7 @@ export class BrowserAdapter implements Adapter {
         n.variant === "card" ? " vms-section--card" : ""}${
         n.tone ? ` vms-section--${n.tone}` : ""}${
         n.layout && n.layout !== "stack" ? ` vms-section--${n.layout}` : ""}${
+        n.fill === true ? " vms-section--fill" : ""}${
         n.arrange ? ` vms-arrange--${n.arrange}` : ""}${
         n.align ? ` vms-align--${n.align}` : ""}${
         n.threshold ? ` vms-switch--${n.threshold}` : ""}${
@@ -497,6 +499,7 @@ export class BrowserAdapter implements Adapter {
         n.variant === "card" ? " vms-section--card" : ""}${
         n.tone ? ` vms-section--${n.tone}` : ""}${
         n.layout && n.layout !== "stack" ? ` vms-section--${n.layout}` : ""}${
+        n.fill === true ? " vms-section--fill" : ""}${
         n.arrange ? ` vms-arrange--${n.arrange}` : ""}${
         n.align ? ` vms-align--${n.align}` : ""}${
         n.threshold ? ` vms-switch--${n.threshold}` : ""}${
@@ -551,6 +554,7 @@ export class BrowserAdapter implements Adapter {
     el.className = `vms-section${n.variant === "card" ? " vms-section--card" : ""}${
       n.tone ? ` vms-section--${n.tone}` : ""}${
       n.layout && n.layout !== "stack" ? ` vms-section--${n.layout}` : ""}${
+      n.fill === true ? " vms-section--fill" : ""}${
       n.arrange ? ` vms-arrange--${n.arrange}` : ""}${
       n.align ? ` vms-align--${n.align}` : ""}${
       n.threshold ? ` vms-switch--${n.threshold}` : ""}${
