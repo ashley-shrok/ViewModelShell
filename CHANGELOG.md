@@ -6,6 +6,18 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 3.6.2 / — Select FieldNode: seed the displayed value into state (empty-bind data-loss fix) (npm only)
+
+**npm:** `3.6.2` (PATCH) · **NuGet:** unchanged (`3.6.0`). Client-only (`browser.ts`) — no wire/type change, no `.NET` change. **Migration: none** — `npm i @ashley-shrok/viewmodel-shell@3.6.2` and re-bundle.
+
+### Fixed
+- **A `select` FieldNode whose bound path had no value never wrote its displayed value into state → the key was ABSENT on dispatch.** A `<select>` always displays a selected option (HTML auto-selects the first when none is explicitly `selected`), but VMS only wrote to the bound state path on the `change` event — and the submitted `_state` is the state object, not a DOM harvest. So a select left at its displayed default (or whose bind had no initial value) contributed **nothing** to state: on the wire the key was missing entirely (not `""`), and presence-checking server validators reported the field unset even though the user saw an option chosen. Text/number/date fields were unaffected (an untouched text input legitimately has `""`). Latent since the Phase-6 bind model; surfaced when a consumer (PBMInvoices) first operator-drove a select-bearing form in prod. **Fix:** on render, seed the select's effective displayed value into state whenever state doesn't already carry it — state now faithfully mirrors the control. An app wanting a "please choose" state uses a placeholder option with value `""`: the seeded value is then `""` (an explicit empty a `required` validator correctly rejects), never a silently-missing key. Applies to single- and multi-select (a multi with no selection seeds `[]`).
+
+### Migration
+None — client-only. Update the package and re-bundle; no app or server changes. Any consumer-side workaround that pre-seeded select defaults in server state can stay or be removed — the seed is idempotent when state already matches the display.
+
+---
+
 ## 3.6.1 / — Fill axis CSS fixes: body-margin overflow + fill·sidebar composition (npm only)
 
 **npm:** `3.6.1` (PATCH) · **NuGet:** unchanged (`3.6.0`). CSS-only — no wire/type change, no `.NET` change. Two rendering bugs in the 3.6.0 fill axis, both surfaced by a live consumer (`/ai`) and DevTools-verified, fixed in `styles/default.css`. **Migration: none** — re-bundle the stylesheet (`npm i @ashley-shrok/viewmodel-shell@3.6.1`); no app code changes. Consumers carrying an app-side `body{margin:0}` stopgap for fill pages can drop it.

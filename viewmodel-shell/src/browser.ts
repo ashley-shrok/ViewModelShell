@@ -787,6 +787,24 @@ export class BrowserAdapter implements Adapter {
         o.selected = isMulti ? selectedSet.has(opt.value) : opt.value === selectedSingle;
         sel.appendChild(o);
       });
+      // A <select> ALWAYS displays a selected option — HTML auto-selects the
+      // first when none is explicitly `selected`. VMS is state-driven: the
+      // submitted _state carries the value, NOT a DOM harvest, so the value the
+      // user SEES selected must be reflected in state. Without this seed a select
+      // whose bound path has no value (or that the user leaves at its displayed
+      // default) writes NOTHING to state — its key is ABSENT on dispatch even
+      // though an option is visibly chosen — so presence-checking server
+      // validators report it unset. Seed the effective displayed value whenever
+      // state doesn't already carry it. An app wanting a "please choose" state
+      // uses a placeholder option (value ""): the seeded value is then "" — an
+      // explicit empty the server can reject, never a silently-missing key.
+      if (isMulti) {
+        if (!Array.isArray(stateValue)) {
+          this.sa.write(n.bind, Array.from(sel.selectedOptions, o => o.value));
+        }
+      } else if (stateValue === undefined || String(stateValue) !== sel.value) {
+        this.sa.write(n.bind, sel.value);
+      }
       sel.addEventListener("change", () => {
         if (isMulti) {
           const arr = Array.from(sel.selectedOptions).map(o => o.value);
