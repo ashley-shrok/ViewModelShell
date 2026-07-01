@@ -6,6 +6,18 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 3.7.0 / 3.7.0 — `SectionNode.followTail`: append-only feed / stick-to-bottom scroll (npm + NuGet)
+
+**npm:** `3.7.0` (MINOR) · **NuGet:** `3.7.0` (MINOR). One additive optional boolean, `SectionNode.followTail`. Wire protocol token stays `viewmodel-shell/1.0` (additive optional field; old agents/apps unaffected). **Migration: none.** (Includes the 3.6.2 select empty-bind fix.)
+
+### Added
+- **`SectionNode.followTail` (boolean) — the append-only-feed scroll axis.** A growing transcript (chat log above a pinned composer, a live `tail -f` view, an activity/audit stream, streamed job output) whose NEWEST content stays in view across re-renders, unless the user has scrolled up to read history. It exists because the default scroll-preservation contract (0.7.1/#7 — restore the prior `scrollTop`) is INVERTED for a growing feed: the old bottom becomes mid-scroll once taller content is appended, so the newest content silently ends up off-screen. **Pure client-side render behavior** — scroll position never rides the wire, the server stays stateless. The `BrowserAdapter` records, before each re-render, whether a `[data-follow-tail]` element was within a small threshold (40px) of the bottom; after the re-render it pins a near-bottom (or brand-new) feed to the new bottom and leaves a scrolled-up feed exactly where the user parked it. The follow decision is a pure function of the feed's scroll position at render time — a background poll, an SSE push, and the user's own submit all follow the same rule, so a genuinely scrolled-up feed is never hijacked. Emits `data-follow-tail` (no CSS — the scroll comes from the element already being an overflow region), so it pairs with `fill` (which provides the internal `overflow-y:auto`); inert on a non-scrolling element. Orthogonal to `fill` and `layout`. The TUI ignores it (terminals follow naturally). Absent/false = byte-identical to today's preserve-my-place restore. Reported + prod-verified by a consumer (`/ai`).
+
+### Migration
+None — additive optional field. Set `followTail: true` (TS) / `FollowTail: true` (.NET) on the `fill` body section of a chat/log shell to opt in; every existing section is byte-identical.
+
+---
+
 ## 3.6.2 / — Select FieldNode: seed the displayed value into state (empty-bind data-loss fix) (npm only)
 
 **npm:** `3.6.2` (PATCH) · **NuGet:** unchanged (`3.6.0`). Client-only (`browser.ts`) — no wire/type change, no `.NET` change. **Migration: none** — `npm i @ashley-shrok/viewmodel-shell@3.6.2` and re-bundle.

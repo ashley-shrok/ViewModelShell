@@ -584,6 +584,22 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // Follow-tail axis (SectionNode.followTail) — one representative section
+  // carrying followTail:true so the parity diff covers the new SectionNode wire
+  // field. Byte-identical to the .NET twin (FeatureProbeController.cs
+  // followTailSection). Append-only feed scroll behavior is client-side
+  // (BrowserAdapter); on the wire it's just the boolean, false stays absent (F2).
+  const followTailSection: ViewNode = {
+    type: "section",
+    heading: "Follow-tail feed",
+    variant: "card",
+    fill: true,
+    followTail: true,
+    children: [
+      { type: "text", value: "An append-only feed (chat transcript, log tail, activity stream) that keeps its newest content in view unless the user scrolls up." },
+    ],
+  };
+
   return {
     type: "page",
     title: "Feature Probe",
@@ -600,6 +616,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       formsSection,
       feedbackSection,
       fillSection,
+      followTailSection,
       probeModal,
     ],
   };

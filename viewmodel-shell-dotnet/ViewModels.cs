@@ -506,7 +506,22 @@ public record SectionNode(
     // below the cap. Omitted = no class → no cap (full-width) = byte-identical to
     // today; any value emits .vms-maxw--{value}. JsonIgnore-on-null per the
     // file-header rule.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MaxWidth = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MaxWidth = null,
+    // Follow-the-tail append-only scroll axis. When true this section is a
+    // growing feed (chat transcript, live log tail, activity/audit stream,
+    // streamed job output) whose NEWEST content stays in view across
+    // re-renders unless the user has scrolled up. Pure client-side render
+    // behavior (scroll position never rides the wire — the server stays
+    // stateless): the BrowserAdapter pins a near-bottom feed to the new bottom
+    // after each re-render and leaves a scrolled-up one where the user parked
+    // it, inverting the default 0.7.1 preserve-scrollTop restore that would
+    // otherwise push new content off-screen. Meant to pair with Fill (which
+    // provides the internal overflow-y:auto); inert on a non-scrolling
+    // element. Non-nullable bool defaulting to false, dropped from the wire
+    // when false (WhenWritingDefault) so it's ABSENT rather than
+    // "followTail": false — matching the TS optional `followTail?` (F2; same
+    // posture as Fill). false/omitted = byte-identical.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool FollowTail = false
 ) : ViewNode;
 
 public record ListNode(

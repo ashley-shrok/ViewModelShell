@@ -648,6 +648,20 @@ public class FeatureProbeController : ControllerBase
                 new TextNode("This section claims leftover height and scrolls internally inside a fill page.", null),
                 new TextNode("Outside a fill page the modifier class is an inert no-op.", null),
             }));
+        // Follow-tail axis (SectionNode.FollowTail) — one representative section
+        // carrying FollowTail:true so the parity diff covers the new SectionNode
+        // wire field. Byte-identical to the bun twin (handler.ts followTailSection).
+        // Append-only feed scroll behavior is client-side (BrowserAdapter); on
+        // the wire it's just the boolean, and false stays ABSENT (F2).
+        pageChildren.Add(new SectionNode(
+            Heading: "Follow-tail feed",
+            Variant: "card",
+            Fill: true,
+            FollowTail: true,
+            Children: new ViewNode[]
+            {
+                new TextNode("An append-only feed (chat transcript, log tail, activity stream) that keeps its newest content in view unless the user scrolls up.", null),
+            }));
         pageChildren.Add(new ModalNode(
             Title: "Probe modal",
             Children: new ViewNode[] { new TextNode("Modal body for parity coverage.", null) },

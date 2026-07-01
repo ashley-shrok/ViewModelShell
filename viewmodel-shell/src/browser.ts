@@ -47,6 +47,13 @@ const noopStateAccess: StateAccess = {
   write: () => { /* drop */ },
 };
 
+// SectionNode.followTail — a `[data-follow-tail]` element counts as "at the
+// bottom" (and should stay pinned to the newest content on re-render) when it
+// is within this many pixels of the bottom. A small tolerance so sub-pixel
+// rounding and being ~a line off the bottom still counts as "following"; scroll
+// up past it and the adapter respects the user reading history instead.
+const FOLLOW_TAIL_STICK_THRESHOLD_PX = 40;
+
 export class BrowserAdapter implements Adapter {
   private fileRegistry = new Map<string, File>();
   private sa: StateAccess = noopStateAccess;
@@ -91,8 +98,25 @@ export class BrowserAdapter implements Adapter {
 
     const scrollMap = new Map<string, { top: number; left: number }>();
     this.container.querySelectorAll<HTMLElement>("[id]").forEach(el => {
+      // follow-tail elements own their own restore (see below) — the generic
+      // preserve-the-prior-scrollTop contract is exactly what they must NOT do.
+      if (el.hasAttribute("data-follow-tail")) return;
       if (el.scrollTop !== 0 || el.scrollLeft !== 0)
         scrollMap.set(el.id, { top: el.scrollTop, left: el.scrollLeft });
+    });
+
+    // SectionNode.followTail — snapshot, in document order, whether each
+    // append-only feed was scrolled near its bottom (and its prior scrollTop
+    // for the scrolled-up case). Ordinal-matched to the post-render walk below,
+    // the same stable-order approach as the collapsible-section snapshot; a
+    // brand-new feed has no entry at its ordinal and is pinned to the bottom.
+    const followTail: Array<{ nearBottom: boolean; top: number }> = [];
+    this.container.querySelectorAll<HTMLElement>("[data-follow-tail]").forEach(el => {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      followTail.push({
+        nearBottom: distanceFromBottom <= FOLLOW_TAIL_STICK_THRESHOLD_PX,
+        top: el.scrollTop,
+      });
     });
 
     // 1.2.0 — snapshot collapsible-section open state by stable key. Same
@@ -132,6 +156,18 @@ export class BrowserAdapter implements Adapter {
     scrollMap.forEach(({ top, left }, id) => {
       const el = this.container.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
       if (el) { el.scrollTop = top; el.scrollLeft = left; }
+    });
+
+    // SectionNode.followTail restore — runs AFTER the generic scrollMap restore
+    // so it wins on any element carrying both an id and data-follow-tail. Walk
+    // the rebuilt feeds in document order and match them to the pre-render
+    // snapshot by ordinal: a feed that WAS near the bottom (or is brand new, no
+    // snapshot at its ordinal) is pinned to the NEW bottom so freshly appended
+    // content is visible; a feed the user had scrolled up in keeps its place.
+    this.container.querySelectorAll<HTMLElement>("[data-follow-tail]").forEach((el, i) => {
+      const snap = followTail[i];
+      if (!snap || snap.nearBottom) el.scrollTop = el.scrollHeight;
+      else el.scrollTop = snap.top;
     });
 
     // Only restore window scroll when the page was actually scrolled — restoring
@@ -563,6 +599,11 @@ export class BrowserAdapter implements Adapter {
       n.alignSelf ? ` vms-self--${n.alignSelf}` : ""}${
       n.maxWidth ? ` vms-maxw--${n.maxWidth}` : ""}${
       n.action ? " vms-section--clickable" : ""}`;
+    // SectionNode.followTail — mark this as an append-only feed so render()'s
+    // snapshot/restore keeps its newest content in view (see render() + the
+    // FOLLOW_TAIL_STICK_THRESHOLD_PX constant). No CSS/class — the scroll comes
+    // from the element already being an overflow region (pair with fill).
+    if (n.followTail === true) el.dataset.followTail = "";
     if (n.heading) {
       const h = document.createElement("h2");
       h.className = "vms-section__heading";
