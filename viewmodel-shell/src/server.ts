@@ -523,6 +523,12 @@ export interface ShellResponseBody<TState> {
    *  ErrorEntry {path?, message, code?} shape; `path` is OPTIONAL — a violation
    *  with no path is a form/action-level rejection (vs field-bound when set). */
   rejected?: ShellRejection;
+  /** 3.8.0 — the server's current-deployed client-build id. Normally stamped
+   *  automatically by `createAction(handler, { currentBuild })`; also settable
+   *  by hand on a response built outside createAction (e.g. a GET handler or a
+   *  server-pushed SSE/WebSocket body) so those responses carry `serverBuild`
+   *  too. Absent = the versioning feature is off for this response. */
+  serverBuild?: string;
 }
 
 /** Wrapper for a soft-validation rejection on an ok:true response. */
@@ -708,6 +714,10 @@ export const ERR_CODES = {
   INVALID_TREE: "invalid_tree",
   /** App handler threw an unrecognised exception. HTTP 500. */
   UNCAUGHT: "uncaught_exception",
+  /** 3.8.0 — request's `X-VMS-Client-Build` header ≠ the server's current-deployed
+   *  build id (a stale, never-reloaded tab attempting a mutation). The request is
+   *  rejected BEFORE `_state` is deserialized. HTTP 400. */
+  STALE_CLIENT: "stale_client",
 } as const;
 
 /** Union type of the framework error codes from ERR_CODES. Useful for narrowing `errors[0].code`. */
@@ -763,12 +773,43 @@ function jsonResponse(body: string, status: number): Response {
  *     const state = applyAction(payload);
  *     return { vm: buildVm(state), state };
  *   }));
+ *
+ * 3.8.0 — optional version-skew half. Pass `{ currentBuild }` (the id of the
+ * client bundle this server currently deploys) to opt in:
+ *   - GUARD (fail-closed): if the request carries an `X-VMS-Client-Build` header
+ *     whose value ≠ `currentBuild`, the mutation is rejected with a 400
+ *     `stale_client` envelope BEFORE the body/`_state` is deserialized (the
+ *     app's typed handler never runs on a stale client's payload).
+ *   - STAMP: every successful response includes `serverBuild: currentBuild` so
+ *     the client can detect a never-reloaded tab.
+ * Omit `currentBuild` (or pass nothing) and behavior is byte-identical to
+ * before — no guard, no stamp. The existing handler-only call signature is
+ * unchanged.
  */
 export function createAction<TState>(
   handler: (payload: ActionPayload<TState>) =>
-    Promise<ShellResponseBody<TState>> | ShellResponseBody<TState>
+    Promise<ShellResponseBody<TState>> | ShellResponseBody<TState>,
+  options?: { currentBuild?: string },
 ): (request: Request) => Promise<Response> {
+  const currentBuild = options?.currentBuild;
   return async (request: Request): Promise<Response> => {
+    // 3.8.0 — fail-closed stale-client guard. Runs FIRST, before any body parse,
+    // so a stale client's `_state` is never deserialized. Only when the app
+    // configured `currentBuild` AND the header is present AND it mismatches.
+    if (currentBuild) {
+      const clientBuild = request.headers.get("x-vms-client-build");
+      if (clientBuild !== null && clientBuild !== currentBuild) {
+        return jsonResponse(
+          errorEnvelope([{
+            message:
+              `Stale client: request build "${clientBuild}" does not match the ` +
+              `current deployed build "${currentBuild}". Reload to continue.`,
+            code: ERR_CODES.STALE_CLIENT,
+          }]),
+          400,
+        );
+      }
+    }
     const contentType = request.headers.get("content-type") ?? "";
     let payload: ActionPayload<TState>;
     try {
@@ -830,6 +871,15 @@ export function createAction<TState>(
     }
     // Phase 07 / ERROR-01 — every successful response acquires ok:true at the
     // response edge. Controllers / app handlers do NOT set ok themselves.
-    return jsonResponse(JSON.stringify({ ok: true, ...result }), 200);
+    // 3.8.0 — stamp serverBuild when versioning is configured. Placed after the
+    // result spread so `currentBuild` wins over any hand-set result.serverBuild.
+    return jsonResponse(
+      JSON.stringify({
+        ok: true,
+        ...result,
+        ...(currentBuild ? { serverBuild: currentBuild } : {}),
+      }),
+      200,
+    );
   };
 }

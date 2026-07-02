@@ -18,9 +18,10 @@ public class AgentController(HelpDeskDb db) : ControllerBase
     [Consumes("multipart/form-data")]
     public ActionResult<ShellResponse<AgentState>> Action()
     {
-        var payload = ActionPayload<AgentState>.Parse(
-            Request.Form["_action"].ToString(),
-            Request.Form["_state"].ToString());
+        // 3.8.0 — version-aware parse: rejects a stale client (mismatched
+        // X-VMS-Client-Build header) with a 400 stale_client BEFORE _state is
+        // deserialized. The build id matches AddVmsShellVersioning in Program.cs.
+        var payload = ActionPayload<AgentState>.Parse(Request, HelpDeskBuild.Id);
 
         var state = payload.State with { NotesSaved = false };
         var name = payload.Name;

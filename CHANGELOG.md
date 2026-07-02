@@ -6,6 +6,29 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 3.8.0 / 3.8.0 — client/server version-skew detection + fail-closed stale-client guard (npm + NuGet)
+
+**npm:** `3.8.0` (MINOR) · **NuGet:** `3.8.0` (MINOR). Additive and **fully opt-in** — supply no build ids and behavior is byte-identical to 3.7.0. Wire protocol token stays `viewmodel-shell/1.0` (all additions are optional fields / an optional header). **Migration: none.**
+
+Closes the never-reloaded-tab gap: `UseVmsShellStaticFiles` (1.8.0) makes any *reload* pick up a fresh shell, but a tab that loaded this morning and is never reloaded keeps running yesterday's in-memory JS against a server that rolled forward at midday. This release lets that fail-loud (detection) and, for correctness-sensitive apps, fail-closed on mutations.
+
+### Added
+- **Response `serverBuild` field (`ShellResponse.serverBuild` TS / `ShellResponse<TState>.ServerBuild` .NET).** The server's current-deployed client-build id, stamped on every response when versioning is enabled. Absent ⇒ the feature is off (WhenWritingNull on .NET).
+- **`X-VMS-Client-Build` request header.** The client auto-attaches it to every action POST when `clientBuildId` is configured.
+- **Client `ShellOptions.clientBuildId?: string`** — the running bundle's id, injected by the app at build time (VMS never derives it, staying platform-agnostic). Enables both halves below.
+- **Phase 1 — detection.** On a *successful* response, if `serverBuild` differs from `clientBuildId`, the shell renders normally FIRST, then fires a new catchable `VmsVersionSkewError` (`serverBuild`, `clientBuild`, `code = "version_skew"`) via the existing `onError` seam. Distinguish it with `if (err instanceof VmsVersionSkewError)`. Never fires at initial load (ids match on a fresh bundle), when `clientBuildId` is unset, or when `serverBuild` is absent — and never swallows the render.
+- **Phase 2 — fail-closed guard + recovery.** A new framework error code **`stale_client`** (peer of `unknown_action`/`invalid_tree`/`parse_error`/`uncaught_exception`). When a mutating request's `X-VMS-Client-Build` header ≠ the server's current build, the server returns `ok:false` / HTTP 400 / `code:"stale_client"` **before `_state` is deserialized** (the app's typed handler never runs on a stale payload). The client surfaces it via `onError` (as `VmsActionError`), then calls a new optional `Adapter.reload?()` verb to reload to the fresh bundle (the rejected action applied nothing; reload is the only safe recovery). `reload` is **fail-quiet by absence** (the `stale_client` error already surfaces via `onError`); `BrowserAdapter.reload()` = `window.location.reload()`.
+
+### How to enable
+- **Client (both backends' apps):** set `ShellOptions.clientBuildId` to the running bundle id.
+- **Server — TypeScript:** `createAction(handler, { currentBuild: "<id>" })` (new optional second arg; the handler-only signature is unchanged). Stamps `serverBuild` and enforces the guard centrally.
+- **Server — .NET:** `builder.Services.AddVmsShellVersioning("<id>")` + register `ShellVersionResultFilter` (stamps `ServerBuild` on every controller-returned `ShellResponse`, GET and POST) + change each action controller's parse to the new `ActionPayload<T>.Parse(Request, "<id>")` overload (the fail-closed guard; the existing `Parse(actionJson, stateJson)` overload is unchanged). New `StaleClientException` → 400 `stale_client` via `ShellExceptionFilter`.
+
+### Migration
+None — additive, opt-in. Supply no build ids and nothing changes. See MIGRATION.md for the opt-in recipe.
+
+---
+
 ## 3.7.0 / 3.7.0 — `SectionNode.followTail`: append-only feed / stick-to-bottom scroll (npm + NuGet)
 
 **npm:** `3.7.0` (MINOR) · **NuGet:** `3.7.0` (MINOR). One additive optional boolean, `SectionNode.followTail`. Wire protocol token stays `viewmodel-shell/1.0` (additive optional field; old agents/apps unaffected). **Migration: none.** (Includes the 3.6.2 select empty-bind fix.)

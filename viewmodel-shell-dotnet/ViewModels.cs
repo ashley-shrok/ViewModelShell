@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Http;
 
 namespace ViewModelShell;
 
@@ -39,6 +40,30 @@ public record ActionPayload<TState>(
         var name = actionDoc.GetProperty("name").GetString()!;
         var state = JsonSerializer.Deserialize<TState>(stateJson, _parseOpts)!;
         return new ActionPayload<TState>(name, state);
+    }
+
+    /// <summary>
+    /// 3.8.0 — version-aware overload of <see cref="Parse(string, string)"/>. Reads
+    /// the <c>X-VMS-Client-Build</c> request header and, when <paramref name="currentBuild"/>
+    /// is non-empty AND the header is present AND it does NOT match, throws
+    /// <see cref="StaleClientException"/> <em>before</em> touching the form / deserializing
+    /// <c>_state</c> — so a stale client's typed state is never parsed. The exception is
+    /// mapped to a 400 <c>stale_client</c> envelope by <see cref="ShellExceptionFilter"/>.
+    /// When <paramref name="currentBuild"/> is null/empty the guard is skipped entirely
+    /// (behavior identical to the string overload). An absent header always passes through
+    /// (the fail-closed guard fires only for a mismatching client that DID advertise a build).
+    /// </summary>
+    public static ActionPayload<TState> Parse(HttpRequest request, string currentBuild)
+    {
+        if (!string.IsNullOrEmpty(currentBuild))
+        {
+            var clientBuild = request.Headers["X-VMS-Client-Build"].ToString();
+            if (!string.IsNullOrEmpty(clientBuild) && clientBuild != currentBuild)
+            {
+                throw new StaleClientException(clientBuild, currentBuild);
+            }
+        }
+        return Parse(request.Form["_action"].ToString(), request.Form["_state"].ToString());
     }
 
     /// <summary>
@@ -159,6 +184,12 @@ public static class ErrorCodes
     public const string InvalidTree = "invalid_tree";
     /// <summary>App handler threw an unrecognised exception. HTTP 500.</summary>
     public const string Uncaught = "uncaught_exception";
+    /// <summary>
+    /// 3.8.0 — request's <c>X-VMS-Client-Build</c> header ≠ the server's current-deployed
+    /// build id (a stale, never-reloaded tab attempting a mutation). Rejected BEFORE
+    /// <c>_state</c> is deserialized. HTTP 400.
+    /// </summary>
+    public const string StaleClient = "stale_client";
 }
 
 /// <summary>
@@ -200,6 +231,25 @@ public record ShellErrorResponse(
     /// </summary>
     public static ShellErrorResponse OfUncaught(Exception ex) =>
         new([new ErrorEntry(ex.Message, Code: ErrorCodes.Uncaught)]);
+
+    /// <summary>
+    /// 3.8.0 — request came from a stale client (its <c>X-VMS-Client-Build</c> header did
+    /// not match the current deployed build). HTTP 400. Mirrors the TS
+    /// <c>ERR_CODES.STALE_CLIENT</c> envelope.
+    /// </summary>
+    public static ShellErrorResponse OfStaleClient(string message) =>
+        new([new ErrorEntry(message, Code: ErrorCodes.StaleClient)]);
+}
+
+/// <summary>
+/// 3.8.0 — marker interface implemented by <see cref="ShellResponse{TState}"/> so the
+/// non-generic <see cref="ShellVersionResultFilter"/> can stamp the current build id onto
+/// any controller-returned shell response without knowing its <c>TState</c>.
+/// </summary>
+public interface IShellResponse
+{
+    /// <summary>Return a copy of this response carrying <paramref name="build"/> as its <c>serverBuild</c>.</summary>
+    IShellResponse WithServerBuild(string build);
 }
 
 public record ShellResponse<TState>(
@@ -228,11 +278,25 @@ public record ShellResponse<TState>(
     // user's input. Distinct from the ok:false + errors[] channel (no view).
     // App-driven (controllers set it via WithRejection); nullable so the wire
     // stays absent when there's no rejection.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ShellRejection? Rejected = null
-)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ShellRejection? Rejected = null,
+    // 3.8.0 — the server's current-deployed client-build id. Normally stamped by
+    // ShellVersionResultFilter (when AddVmsShellVersioning configured a build);
+    // also settable directly. Nullable + WhenWritingNull so the wire stays absent
+    // when versioning is off. Trailing so existing positional call sites are
+    // unaffected.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ServerBuild = null
+) : IShellResponse
 {
     public static ShellResponse<TState> RedirectTo(string url) =>
         new(null, default, url);
+
+    /// <summary>
+    /// 3.8.0 — return a copy stamped with <paramref name="build"/> as <see cref="ServerBuild"/>.
+    /// Used by <see cref="ShellVersionResultFilter"/> to auto-stamp every controller-returned
+    /// response; apps may also call it directly.
+    /// </summary>
+    public IShellResponse WithServerBuild(string build) =>
+        this with { ServerBuild = build };
 
     public ShellResponse<TState> WithEffect(ShellSideEffect effect) =>
         this with { SideEffects = [.. (SideEffects ?? []), effect] };
@@ -1157,5 +1221,30 @@ public class UnknownActionException : Exception
         : base($"Unknown action: {actionName}")
     {
         ActionName = actionName;
+    }
+}
+
+/// <summary>
+/// 3.8.0 — thrown by <see cref="ActionPayload{TState}.Parse(HttpRequest, string)"/> when a
+/// request's <c>X-VMS-Client-Build</c> header does not match the server's current-deployed
+/// build id (a stale, never-reloaded tab attempting a mutation). The framework catches this
+/// in <see cref="ShellExceptionFilter"/> and returns a 400 with <c>code: "stale_client"</c>,
+/// so the client can reload to the fresh bundle. Thrown BEFORE <c>_state</c> is deserialized,
+/// so the app's typed handler never runs on a stale client's payload. Mirrors the TS
+/// <c>ERR_CODES.STALE_CLIENT</c> path.
+/// </summary>
+public class StaleClientException : Exception
+{
+    /// <summary>The build id the client advertised in the <c>X-VMS-Client-Build</c> header.</summary>
+    public string ClientBuild { get; }
+    /// <summary>The server's current-deployed build id the client failed to match.</summary>
+    public string CurrentBuild { get; }
+
+    public StaleClientException(string clientBuild, string currentBuild)
+        : base($"Stale client: request build \"{clientBuild}\" does not match the current " +
+               $"deployed build \"{currentBuild}\". Reload to continue.")
+    {
+        ClientBuild = clientBuild;
+        CurrentBuild = currentBuild;
     }
 }

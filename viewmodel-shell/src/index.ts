@@ -97,6 +97,19 @@ export interface Adapter {
    *  when this verb is absent (non-browser targets like the TUI simply have no
    *  toast surface and the effect is a no-op). */
   toast?(message: string, opts?: { tone?: string; durationMs?: number }): void;
+  /** 3.8.0 — force a full reload of the running client (the browser adapter
+   *  calls `window.location.reload()`). The shell invokes this ONLY as the
+   *  fail-closed recovery for a `stale_client` rejection: the server refused a
+   *  mutation because the tab is running an out-of-date bundle, nothing was
+   *  applied, and reloading to the fresh bundle is the only honest recovery.
+   *  FAIL-QUIET BY ABSENCE — modeled on setBusy/toast, NOT on
+   *  navigate/storage/saveFile: the `stale_client` failure ALSO surfaces via
+   *  `onError` (as a VmsActionError), so an adapter without this verb still
+   *  learns of the skew and can recover its own way. A missing `reload` is
+   *  therefore NOT a silent failure, so the core MUST NOT call failCapability
+   *  when it is absent (non-browser targets like the TUI have no reload
+   *  concept). */
+  reload?(): void;
 }
 
 // ─── Node types ───────────────────────────────────────────────────────────────
@@ -688,6 +701,16 @@ export interface ShellOptions {
    *  The server can override the next interval via ShellResponse.nextPollIn, or stop polling by
    *  omitting nextPollIn when no pollInterval is configured. */
   pollInterval?: number;
+  /** 3.8.0 — the id of the client bundle this shell instance is running (the app
+   *  injects it at build time, e.g. from a Vite `define`/env — VMS never derives
+   *  it, staying platform-agnostic). When set, the shell (1) attaches it as the
+   *  `X-VMS-Client-Build` header on every action POST so the server can
+   *  fail-closed on a stale mutation, and (2) compares it against a response's
+   *  `serverBuild` and fires a `VmsVersionSkewError` via `onError` when they
+   *  differ (AFTER rendering — detection never swallows the render). Absent =
+   *  the whole version-skew feature is off; behavior is byte-identical to a
+   *  build without it. */
+  clientBuildId?: string;
 }
 
 export interface ShellSideEffect {
@@ -767,6 +790,31 @@ export class VmsActionError extends Error {
   }
 }
 
+/**
+ * 3.8.0 — surfaced via `onError` when a SUCCESS response's `serverBuild` differs
+ * from the configured `ShellOptions.clientBuildId` (client/server version skew:
+ * a long-lived tab is running an out-of-date bundle against a server that has
+ * rolled forward). This is fired AFTER the response renders normally — it never
+ * swallows the render — so it is a loud, catchable signal, not a failure. The
+ * app distinguishes it with `if (err instanceof VmsVersionSkewError)` (typically
+ * to prompt the user to reload). Distinct from `VmsActionError`: this rides on a
+ * fully-successful `ok:true` response.
+ */
+export class VmsVersionSkewError extends Error {
+  /** Stable discriminator for this failure class (parallels VmsActionError.code). */
+  readonly code = "version_skew";
+  constructor(
+    public readonly serverBuild: string,
+    public readonly clientBuild: string,
+  ) {
+    super(
+      `Client build "${clientBuild}" is out of date — the server is now serving ` +
+      `build "${serverBuild}". Reload to get the current app.`,
+    );
+    this.name = "VmsVersionSkewError";
+  }
+}
+
 export interface ShellResponse {
   vm: ViewNode;
   state: unknown;
@@ -794,6 +842,11 @@ export interface ShellResponse {
   ok?: boolean;
   /** 1.0.0 — structured error entries. Present when `ok: false`. */
   errors?: ErrorEntry[];
+  /** 3.8.0 — the server's current-deployed client-build id, stamped on every
+   *  response when the app configures versioning. Compared against
+   *  `ShellOptions.clientBuildId` to detect a never-reloaded tab running against
+   *  a rolled-forward server. Absent = the feature is off. */
+  serverBuild?: string;
 }
 
 export class ViewModelShell {
@@ -854,6 +907,10 @@ export class ViewModelShell {
       this.syncBusy();
       adapter.render(body.vm, (action) => this.dispatch(action), this.stateAccessForAdapter());
       this.schedulePoll(body.nextPollIn);
+      // 3.8.0 — version-skew DETECTION (Phase 1). Render happened above FIRST;
+      // this only fires a loud, catchable signal and never affects the render.
+      // At initial load the ids normally match (fresh bundle) so it's a no-op.
+      this.checkVersionSkew(body);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       onError ? onError(error) : console.error("[ViewModelShell]", error);
@@ -901,9 +958,14 @@ export class ViewModelShell {
       }
       const extraHeaders = this.options.getRequestHeaders ? await this.options.getRequestHeaders() : {};
       const adapter = this.options.adapter;
+      // 3.8.0 — Phase 2 fail-closed guard: advertise the running bundle id so the
+      // server can reject a mutation from a stale client BEFORE deserializing
+      // _state. Merged AFTER getRequestHeaders() so app headers can't clobber it.
+      const headers: Record<string, string> = { Accept: "application/json", ...extraHeaders };
+      if (this.options.clientBuildId) headers["X-VMS-Client-Build"] = this.options.clientBuildId;
       const init = {
         method: "POST",
-        headers: { Accept: "application/json", ...extraHeaders },
+        headers,
         body: form,
       };
       let res: Response;
@@ -940,6 +1002,17 @@ export class ViewModelShell {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       onError ? onError(error) : console.error("[ViewModelShell]", error);
+      // 3.8.0 — Phase 2 fail-closed recovery. The server rejected this mutation
+      // because the tab is running a stale bundle (nothing was applied). Order
+      // per the locked design: surface via onError FIRST (done above), THEN
+      // force a reload to the fresh bundle — the only safe recovery. reload is
+      // fail-quiet by absence (the VmsActionError already surfaced), so this is
+      // a plain optional-chain call, and we return before the below re-render
+      // (the page is reloading; re-rendering the stale tree is pointless).
+      if (error instanceof VmsActionError && error.code === "stale_client") {
+        this.options.adapter.reload?.();
+        return;
+      }
       // 0.8.0 (#11) — re-render the current VM on dispatch error. Adapters
       // may have applied client-side ephemeral state in onAction handlers
       // (e.g., BrowserAdapter swaps button text for ButtonNode.pendingLabel).
@@ -1095,6 +1168,28 @@ export class ViewModelShell {
       this.currentState = body.state;
     }
     this.schedulePoll(body.nextPollIn);
+    // 3.8.0 — version-skew DETECTION (Phase 1) on the dispatch / poll / push
+    // success path. Fired AFTER the render above (never swallows it). A redirect
+    // response returned early above, so this is the non-redirect path only.
+    this.checkVersionSkew(body);
+  }
+
+  /**
+   * 3.8.0 — Phase 1 detection. When the app configured `clientBuildId` and the
+   * response carries a differing `serverBuild`, fire a `VmsVersionSkewError`
+   * through the existing `onError` seam so the app can react (e.g. prompt a
+   * reload). Called from BOTH success paths (`load()` and `processResponse()`)
+   * AFTER the response has rendered — detection is additive and never affects
+   * the render. No-op when `clientBuildId` is unset, `serverBuild` is absent, or
+   * the two ids match.
+   */
+  private checkVersionSkew(body: ShellResponse): void {
+    const clientBuild = this.options.clientBuildId;
+    const serverBuild = body.serverBuild;
+    if (clientBuild && serverBuild && serverBuild !== clientBuild) {
+      const err = new VmsVersionSkewError(serverBuild, clientBuild);
+      this.options.onError ? this.options.onError(err) : console.error("[ViewModelShell]", err);
+    }
   }
 
   private schedulePoll(nextPollIn?: number): void {

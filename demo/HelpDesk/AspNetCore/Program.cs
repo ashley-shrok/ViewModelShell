@@ -3,9 +3,15 @@ using ViewModelShell;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// 3.8.0 — version-skew: register the current-deployed client-build id (stamped
+// onto responses by ShellVersionResultFilter; enforced by the Parse(Request, id)
+// guard in each action controller).
+builder.Services.AddVmsShellVersioning(HelpDeskBuild.Id);
+
 builder.Services.AddControllers(options =>
     {
         options.Filters.Add<ViewModelShell.ShellExceptionFilter>();
+        options.Filters.Add<ViewModelShell.ShellVersionResultFilter>();
     })
     .AddJsonOptions(o =>
     {

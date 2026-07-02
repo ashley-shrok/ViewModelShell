@@ -73,6 +73,19 @@ public class ShellExceptionFilter : IAsyncExceptionFilter, IAsyncResultFilter
             return Task.CompletedTask;
         }
 
+        // 1b. Stale client (3.8.0) — the request's X-VMS-Client-Build header did not match
+        //     the server's current-deployed build → 400 + stale_client. Checked before the
+        //     generic paths so a stale mutation is rejected with an actionable code (the
+        //     client reloads to the fresh bundle) rather than a generic 500.
+        if (ex is StaleClientException staleEx)
+        {
+            context.Result = MakeJsonResult(
+                400,
+                ShellErrorResponse.OfStaleClient(staleEx.Message));
+            context.ExceptionHandled = true;
+            return Task.CompletedTask;
+        }
+
         // 2. JSON body parse failure from ActionPayload<T>.Parse / ParseJson → 400 + parse_error.
         if (ex is JsonException jsonEx)
         {

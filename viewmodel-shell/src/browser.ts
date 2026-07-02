@@ -220,6 +220,16 @@ export class BrowserAdapter implements Adapter {
     this.container.classList.toggle("vms-busy", active);
   }
 
+  /** 3.8.0 — force a full page reload. The shell calls this as the fail-closed
+   *  recovery for a `stale_client` rejection (a mutation refused because this
+   *  tab is running an out-of-date bundle). `window.location.reload()` pulls the
+   *  fresh, cache-revalidated shell + bundle. Fail-quiet by absence in core (the
+   *  `stale_client` VmsActionError already surfaced via onError), so this is a
+   *  plain implementation, not a fail-loud capability. */
+  reload(): void {
+    window.location.reload();
+  }
+
   /** Transient confirmation toast. Lazily creates/reuses a single fixed-corner
    *  host region (.vms-toast-region) appended to <body> so toasts stack and
    *  survive the container's innerHTML wipe on each render(); appends a

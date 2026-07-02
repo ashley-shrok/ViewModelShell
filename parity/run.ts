@@ -70,6 +70,10 @@ interface FixtureStep {
    *  "non-json" sends _action with a syntactically-broken JSON string; "missing-action-field"
    *  omits the _action form field entirely. When set, the step's `action` field is ignored. */
   malformedBody?: "empty-action" | "non-json" | "missing-action-field";
+  /** 3.8.0 — when set, this POST step sends the given value as the `X-VMS-Client-Build`
+   *  request header (the version-skew fail-closed guard). A value equal to the backend's
+   *  configured build id passes; a mismatching value triggers a 400 `stale_client`. */
+  clientBuild?: string;
   /** Phase 07 — dotted paths into the captured response that the cross-backend diff should
    *  IGNORE for this step. Used when backends legitimately differ on a field (e.g. parse-error
    *  messages from System.Text.Json vs JSON.parse). Walked AFTER normalize, BEFORE diff.
@@ -241,7 +245,10 @@ async function runFixtureAgainst(cfg: BackendConfig, fixture: Fixture): Promise<
           form.append(fieldName, new Blob([file.content], { type: "application/octet-stream" }), file.name);
         }
       }
-      init = { method: "POST", body: form };
+      // 3.8.0 — version-skew: attach the X-VMS-Client-Build header when the step declares one.
+      const headers: Record<string, string> = {};
+      if (step.clientBuild != null) headers["X-VMS-Client-Build"] = step.clientBuild;
+      init = { method: "POST", body: form, headers };
     }
 
     const res = await fetch(url, init);

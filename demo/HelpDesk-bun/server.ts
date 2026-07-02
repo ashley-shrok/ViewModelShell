@@ -31,6 +31,12 @@ import {
 } from "@ashley-shrok/viewmodel-shell/server";
 import { Database } from "bun:sqlite";
 
+// 3.8.0 — version-skew: this server's current-deployed client-build id. Passed to
+// createAction (stamps serverBuild + fail-closed guard on the X-VMS-Client-Build
+// header) and stamped manually onto GET responses. Kept byte-equal to the .NET
+// twin's HelpDeskBuild.Id so the parity gate diffs identical serverBuild values.
+const CURRENT_BUILD = "helpdesk-build-1";
+
 // ─── Ticket / state types ────────────────────────────────────────────────────
 
 interface Ticket {
@@ -627,7 +633,7 @@ const agentHandler = createAction<AgentState>(async (payload) => {
   }
 
   return { vm: agentBuildVm(state), state };
-});
+}, { currentBuild: CURRENT_BUILD });
 
 // ─── Requester controller ───────────────────────────────────────────────────
 
@@ -884,7 +890,7 @@ const requesterHandler = createAction<RequesterState>(async (payload) => {
   }
 
   return { vm: requesterBuildVm(state), state, ...(violations ? shellRejection(violations) : {}) };
-});
+}, { currentBuild: CURRENT_BUILD });
 
 // ─── HTTP server ─────────────────────────────────────────────────────────────
 
@@ -906,7 +912,9 @@ Bun.serve({
       const state = agentInitial();
       const vm = agentBuildVm(state);
       validateActionNames(vm);
-      return Response.json({ ok: true, vm, state });
+      // 3.8.0 — stamp serverBuild on the GET too (the .NET twin's result filter
+      // stamps every ShellResponse incl. GET; match it for parity).
+      return Response.json({ ok: true, vm, state, serverBuild: CURRENT_BUILD });
     }
     if (url.pathname === "/api/agent/action" && request.method === "POST") {
       return agentHandler(request);
@@ -915,7 +923,9 @@ Bun.serve({
       const state = requesterInitial();
       const vm = requesterBuildVm(state);
       validateActionNames(vm);
-      return Response.json({ ok: true, vm, state });
+      // 3.8.0 — stamp serverBuild on the GET too (parity with the .NET twin's
+      // result filter, which stamps every ShellResponse incl. GET).
+      return Response.json({ ok: true, vm, state, serverBuild: CURRENT_BUILD });
     }
     if (url.pathname === "/api/requester/action" && request.method === "POST") {
       return requesterHandler(request);

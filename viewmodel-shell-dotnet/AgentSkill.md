@@ -63,6 +63,7 @@ Optional success-path fields, which may appear alone or alongside `vm`/`state`:
 | `busy` | Boolean. While `true`, drop user-initiated dispatches. Polls bypass. The next response that omits or sets `false` clears the lock. |
 | `preventUnload` | Boolean. While `true`, treat the page as having unsaved work — warn before navigating away. |
 | `rejected` | A SOFT (domain/validation) rejection — see below. The action was refused, but `vm`/`state` are still returned. |
+| `serverBuild` | A string id of the client bundle the server currently deploys. Present only when the app enables versioning. If you advertise your own build via the `X-VMS-Client-Build` request header and it differs from `serverBuild`, you are running against a rolled-forward server — see *Client build / version skew*. |
 
 **Failure:**
 
@@ -115,8 +116,16 @@ Optional success-path fields, which may appear alone or alongside `vm`/`state`:
 | `unknown_action` | The `name` in your action envelope does not match any handler in the current tree. |
 | `invalid_tree` | The server built a tree that violates a wire invariant (this is a server bug, not yours). |
 | `uncaught_exception` | The action handler threw. Treat as a 500-class failure. |
+| `stale_client` | Your request advertised an `X-VMS-Client-Build` header that no longer matches the server's current deployed build. The mutation was rejected **before your `_state` was read — nothing was applied.** The fix is to reload to the current app (re-`GET` the endpoint for a fresh `vm`/`state`), not to retry the same request. See *Client build / version skew*. |
 
 Stop on `ok: false`. Surface the message to the user. Do not retry blindly — most of these are deterministic.
+
+## Client build / version skew
+
+Optional, opt-in. When the app enables versioning, every response carries a `serverBuild` string (the client bundle the server currently deploys), and you may advertise the build you are running by sending an `X-VMS-Client-Build: <your-build-id>` header on every action POST.
+
+- **Detection.** On any successful response, if you sent a build and `serverBuild` differs from it, the server has rolled forward while you kept running an old bundle. Reload to the current app (re-`GET` the endpoint) so you are driving the current tree.
+- **Fail-closed guard.** If you send a mismatching `X-VMS-Client-Build`, a *mutating* action is rejected with `ok: false`, HTTP 400, `code: "stale_client"` — **before** your `_state` is deserialized, so nothing is applied. Do not retry the same request against the same build; reload first. If you do NOT send the header, no request is ever rejected on this basis (the guard only fires for a client that advertised a stale build).
 
 ## Auth
 

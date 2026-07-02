@@ -38,6 +38,9 @@
 
     { "id": "agt-filter-resolved",  "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "filter-resolved" }, "stateMutations": [{ "path": "filter", "value": "resolved" }] },
 
+    { "id": "agt-build-match",      "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "filter-all" }, "stateMutations": [{ "path": "filter", "value": "all" }], "clientBuild": "helpdesk-build-1", "$comment": "3.8.0 — matching X-VMS-Client-Build header passes; response carries serverBuild (both backends stamp identically)." },
+    { "id": "agt-build-stale",      "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "filter-all" }, "clientBuild": "OLD-BUILD-999", "expectStatus": 400, "compareIgnoreFields": ["errors.0.message"], "$comment": "3.8.0 — mismatched header → 400 ok:false stale_client, rejected BEFORE _state is deserialized. Message wording differs per backend so it's ignored; errors.0.code (stale_client) is diffed." },
+
     { "id": "req-back-to-list",     "method": "GET",  "freshState": true },
     { "id": "req-view-1",           "method": "POST", "action": { "name": "select-ticket-1" } },
     { "id": "req-back",             "method": "POST", "action": { "name": "back-to-list" } }

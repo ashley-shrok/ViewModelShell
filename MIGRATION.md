@@ -6,6 +6,26 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `3.8.0` / `3.8.0` (npm + NuGet) — additive, opt-in, no forced action
+
+**Nothing to do to keep working.** Client/server version-skew detection + a fail-closed stale-client guard ship additive and fully opt-in: supply no build ids and behavior is byte-identical to 3.7.0 (no `serverBuild` on the wire, no `X-VMS-Client-Build` header, no guard). Wire token stays `viewmodel-shell/1.0`.
+
+**To opt in** (recommended for apps that deploy while users keep long-lived tabs open):
+
+1. **Client** — set `ShellOptions.clientBuildId` to the running bundle's id (inject at build time, e.g. a Vite `define` / env var). This attaches the `X-VMS-Client-Build` header on every action POST and enables `VmsVersionSkewError` detection. Handle it in `onError`:
+   ```ts
+   onError: (err) => {
+     if (err instanceof VmsVersionSkewError) { /* prompt reload */ }
+   }
+   ```
+   The stale-client fail-closed recovery (auto-reload) works out of the box with `BrowserAdapter` (implements the new optional `reload` verb). A custom adapter can add `reload?()`; it's fail-quiet by absence (the `stale_client` error still surfaces via `onError`).
+2. **Server, TypeScript** — pass the current build id: `createAction(handler, { currentBuild: "<id>" })`. The handler-only call signature is unchanged.
+3. **Server, .NET** — `builder.Services.AddVmsShellVersioning("<id>")`, register `ShellVersionResultFilter` in `AddControllers(o => o.Filters.Add<ShellVersionResultFilter>())`, and switch each action controller to the new `ActionPayload<T>.Parse(Request, "<id>")` overload (the existing `Parse(actionJson, stateJson)` overload is untouched).
+
+Use the SAME id on client and server; when they diverge (a deploy), mutations from stale tabs are rejected with `ok:false` / 400 / `code:"stale_client"` before any state is applied, and the client reloads to the fresh bundle.
+
+---
+
 ## Upgrading to `3.4.0` / `3.4.0` (npm + NuGet) — additive, no action
 
 **Nothing to do.** Eight additive optional fields complete the forms vocabulary (see CHANGELOG 3.4.0): `FieldNode.error` (first-class per-field validation message — view-side complement to the `rejected` envelope, not a replacement for it), `FieldNode.help` (hint text), `FieldNode.disabled`/`readonly`, `FieldNode.min`/`max`/`step` (native input bounds, as strings) + `maxLength` (int), and `ButtonNode.disabled` (server-declared disabled button that the renderer won't dispatch). All optional; omitting them is byte-identical to 3.3.0. No wire-token change.
