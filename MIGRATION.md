@@ -34,6 +34,71 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 Use the SAME id on client and server; when they diverge (a deploy), mutations from stale tabs are rejected with `ok:false` / 400 / `code:"stale_client"` before any state is applied, and the client reloads to the fresh bundle.
 
+### Reference wire-up — the manifest-hash build id (prod-proven)
+
+The **build id must change exactly when the client bundle changes** — so use a **content hash of the built Vite `manifest.json`**, computed the same way on both sides (npm/assembly version is too coarse; a git deploy SHA is too noisy on backend-only deploys). The recipe below is the first solution-wide adoption (PBMInvoices), verified in prod with the client's compiled-in hash matching the server-computed hash byte-for-byte.
+
+**Server (`Program.cs`, before `builder.Build()`)** — hash the built manifest once at startup and feed the SAME string to the stamp and the guard:
+```csharp
+var manifestPath = Path.Combine(builder.Environment.WebRootPath ?? "", "manifest.json");
+var vmsBuildId = File.Exists(manifestPath)
+    ? Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+          File.ReadAllBytes(manifestPath)))[..12].ToLowerInvariant()
+    : "dev-none"; // sentinel: no manifest in dev → guard inert (an absent client header never trips it anyway)
+builder.Services.AddVmsShellVersioning(vmsBuildId);
+builder.Services.Configure<MvcOptions>(o => o.Filters.Add<ShellVersionResultFilter>());
+```
+Then per action controller, inject `VmsVersioningOptions` and swap to the version-aware overload:
+```csharp
+public InvoicesController(/* … */ VmsVersioningOptions vmsOpts) { _vmsOpts = vmsOpts; /* … */ }
+// in the multipart action:
+payload = ActionPayload<InvoicesState>.Parse(Request, _vmsOpts.CurrentBuild);
+```
+The guard fires on the **multipart** action path (the browser shell). The `application/json` agent-convenience path (`ParseJson`) is unchanged — agent callers aren't stale browser bundles, so they're deliberately not gated.
+
+**Client (`vite.config.ts`) — the chicken-and-egg fix.** Vite writes chunk content-hashes into `manifest.json` during the bundle, so the final hash isn't known until after the bundle is written. Bake a unique placeholder via `define`, then string-replace it in a `writeBundle` hook once the hash exists:
+```ts
+const VMS_BUILD_PLACEHOLDER = "__VMS_BUILD_" + crypto.randomBytes(4).toString("hex") + "__";
+function vmsBuildIdPlugin() {
+  return {
+    name: "vms-build-id",
+    apply: "build" as const,
+    writeBundle(options, bundle) {
+      const manifest = fs.readFileSync(path.join(options.dir ?? "", "manifest.json"));
+      const buildId = crypto.createHash("sha256").update(manifest).digest("hex").slice(0, 12);
+      for (const fileName of Object.keys(bundle)) {
+        if (!fileName.endsWith(".js")) continue;
+        const p = path.join(options.dir ?? "", fileName);
+        const src = fs.readFileSync(p, "utf-8");
+        if (src.includes(VMS_BUILD_PLACEHOLDER))
+          fs.writeFileSync(p, src.replaceAll(VMS_BUILD_PLACEHOLDER, buildId));
+      }
+    },
+  };
+}
+export default defineConfig({
+  define: { "import.meta.env.VITE_VMS_BUILD": JSON.stringify(VMS_BUILD_PLACEHOLDER) },
+  plugins: [vmsBuildIdPlugin()],
+  build: { manifest: "manifest.json" }, // ⚠️ NOT Vite's default `.vite/manifest.json` — must match the server's read path
+});
+```
+⚠️ **`build.manifest: "manifest.json"`** is load-bearing: Vite 5 defaults the manifest to `.vite/manifest.json`, but the server reads `wwwroot/manifest.json` — they must point at the same file or the two hashes are computed over different inputs.
+
+**Client entry + the `import.meta.env` type decl:**
+```ts
+// src/vms-build-id.ts
+export const VMS_CLIENT_BUILD_ID: string | undefined =
+  (import.meta.env.VITE_VMS_BUILD as string | undefined) || undefined;
+// each entry point:
+new ViewModelShell({ /* … */ clientBuildId: VMS_CLIENT_BUILD_ID });
+
+// src/vite-env.d.ts (else tsc: "Property 'env' does not exist on type 'ImportMeta'")
+/// <reference types="vite/client" />
+interface ImportMetaEnv { readonly VITE_VMS_BUILD?: string; }
+interface ImportMeta { readonly env: ImportMetaEnv; }
+```
+**Tests** stay green with no per-test churn: construction sites pass `new VmsVersioningOptions { CurrentBuild = "test-build" }`, and a multipart test helper that doesn't set the `X-VMS-Client-Build` header never trips the guard (byte-identical to pre-adoption). **Verify a live deploy:** `curl -H "X-VMS-Client-Build: wrong-hash"` against any action endpoint returns `ok:false` / `400` / `code:"stale_client"` before `_state` is deserialized.
+
 ---
 
 ## Upgrading to `3.4.0` / `3.4.0` (npm + NuGet) — additive, no action
