@@ -6,6 +6,19 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## NuGet 3.10.0 — server-side `[vms:type-mismatch]` diagnostic (the certain half) (NuGet)
+
+**NuGet:** `3.10.0` (MINOR) · **npm:** unchanged at `3.9.0`. Backend-only, additive. Wire protocol token unchanged (`viewmodel-shell/1.0`); no wire/envelope/error-code change. **Migration: none — the signal is a server log line.**
+
+Completes the `[vms:type-mismatch]` story begun in 3.9.0. That release added the *client* observable-subset warning; but the untyped JS client can't see an empty/null slot's declared server type — the exact shape that broke PBMInvoices (a `{filename,size}` object into an empty `Dictionary<string,string>`). This is the **certain** detection, server-side.
+
+### Added
+- **`[vms:type-mismatch]` server-log diagnostic.** When a typed `_state` deserialize fails with a **conversion** failure (a `System.Text.Json.JsonException` whose `.Path` is set and whose message contains "could not be converted" — e.g. an object landing in a `string` / `Dictionary<string,string>` slot), `ShellExceptionFilter` now emits a structured `_logger.LogWarning` carrying the **same `[vms:type-mismatch]` prefix** as the client warn (grep symmetry), the failing **JSON path**, the STJ message (which names the target type), and a fix-hint. It reuses the filter's existing injected `ILogger`, so it flows through the app's normal logging pipeline (e.g. Serilog → CloudWatch) with **zero wiring**. A structurally-malformed body (no path / not a conversion failure) stays a plain `parse_error` and does NOT emit this.
+- **The wire response is UNCHANGED** — still a `400 parse_error`. This is a maintainer diagnostic surface, not a behavior change for callers/users.
+- **.NET-only by nature:** the TS backend has no typed `_state` deserialize (untyped at runtime), so there is nothing to detect there — hence the NuGet-only bump (npm stays `3.9.0`). All ASP.NET consumers are covered.
+
+---
+
 ## 3.9.0 / 3.9.0 — `FieldNode.bind` optional (file inputs) + two dev-console diagnostics (npm + NuGet)
 
 **npm:** `3.9.0` (MINOR) · **NuGet:** `3.9.0` (MINOR). Additive — a required field became optional (widening, not breaking) and two console diagnostics were added. Wire protocol token stays `viewmodel-shell/1.0` (a `bind`-less file field simply omits the `bind` key). **Migration: none — opt-in.**

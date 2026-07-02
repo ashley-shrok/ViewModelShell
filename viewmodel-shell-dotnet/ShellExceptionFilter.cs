@@ -89,6 +89,33 @@ public class ShellExceptionFilter : IAsyncExceptionFilter, IAsyncResultFilter
         // 2. JSON body parse failure from ActionPayload<T>.Parse / ParseJson → 400 + parse_error.
         if (ex is JsonException jsonEx)
         {
+            // 3.10.0 — CERTAIN server-side type-mismatch diagnostic. A typed
+            // `_state` deserialize that fails to CONVERT a value into the target
+            // model type (STJ: "The JSON value could not be converted to X. Path:
+            // $.…") is the certain-detection half of the client's observable-subset
+            // `[vms:type-mismatch]` warn (3.9.0): the untyped JS client can't see a
+            // slot's declared server type, but the server's typed deserialize CAN —
+            // including the empty-slot case the client misses (a field's bind writes
+            // a shape that doesn't fit the slot's declared type; classic: a file
+            // FieldNode's {filename,size} object bound into a string / string-map).
+            // Emitted via ILogger with the SAME `[vms:type-mismatch]` prefix as the
+            // client warn (grep symmetry across a maintainer's log groups). The WIRE
+            // is unchanged — this stays a 400 parse_error; the signal is the log only.
+            // .NET-only by nature: the TS backend has no typed `_state` deserialize.
+            // Gate on a located CONVERSION failure so a pure syntax-malformed body
+            // (no Path / no "could not be converted") stays a plain parse_error.
+            if (jsonEx.Path is not null
+                && jsonEx.Message.Contains("could not be converted", StringComparison.Ordinal))
+            {
+                _logger.LogWarning(
+                    "[vms:type-mismatch] _state did not fit the typed model at '{Path}': {Message} "
+                    + "A field's bind is writing a value whose shape doesn't match this state slot's "
+                    + "declared type (classic: a file FieldNode's {{filename,size}} object bound into a "
+                    + "string / Dictionary<string,string> slot). Fix the state slot type, or omit bind "
+                    + "on the file field (its binary rides multipart regardless).",
+                    jsonEx.Path,
+                    jsonEx.Message);
+            }
             context.Result = MakeJsonResult(
                 400,
                 ShellErrorResponse.OfParseError(jsonEx.Message));

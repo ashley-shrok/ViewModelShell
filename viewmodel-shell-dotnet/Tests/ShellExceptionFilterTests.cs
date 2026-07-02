@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MvcActionDescriptor = Microsoft.AspNetCore.Mvc.Abstractions.ActionDescriptor;
 
@@ -29,6 +30,17 @@ public class ShellExceptionFilterTests
 
     private static ShellExceptionFilter CreateFilter() =>
         new ShellExceptionFilter(NullLogger<ShellExceptionFilter>.Instance);
+
+    // Captures log entries so the 3.10.0 [vms:type-mismatch] diagnostic can be asserted.
+    private sealed class CapturingLogger : ILogger<ShellExceptionFilter>
+    {
+        public readonly List<(LogLevel Level, string Message)> Entries = new();
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+            Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, formatter(state, exception)));
+    }
 
     private static ActionContext MakeActionContext() =>
         new ActionContext(
@@ -99,6 +111,51 @@ public class ShellExceptionFilterTests
         var entry = errors[0];
         Assert.Equal(ErrorCodes.Parse, entry.GetProperty("code").GetString());
         Assert.Contains("unexpected token", entry.GetProperty("message").GetString());
+    }
+
+    // ─── OnExceptionAsync: type-mismatch JsonException → parse_error (unchanged) + [vms:type-mismatch] log (3.10.0) ─
+
+    [Fact]
+    public async Task OnExceptionAsync_TypeMismatchJsonException_LogsVmsTypeMismatch_AndStillReturnsParseError()
+    {
+        var logger = new CapturingLogger();
+        var filter = new ShellExceptionFilter(logger);
+        // A typed _state deserialize CONVERSION failure: STJ sets .Path and a
+        // "could not be converted" message (e.g. a {filename,size} object landing
+        // in a string-typed slot).
+        var ex = new JsonException(
+            "The JSON value could not be converted to System.String.",
+            "$.bulkAddFormValues.invoiceFile", null, null);
+        var ctx = MakeExceptionContext(ex);
+
+        await filter.OnExceptionAsync(ctx);
+
+        // Wire is UNCHANGED — still a 400 parse_error.
+        Assert.True(ctx.ExceptionHandled);
+        Assert.Equal(400, GetStatus(ctx));
+        var entry = Parse(GetContent(ctx)).GetProperty("errors")[0];
+        Assert.Equal(ErrorCodes.Parse, entry.GetProperty("code").GetString());
+
+        // The certain server-side diagnostic fired: a Warning carrying the prefix + the JSON path.
+        var warn = Assert.Single(logger.Entries.FindAll(e => e.Level == LogLevel.Warning));
+        Assert.Contains("[vms:type-mismatch]", warn.Message);
+        Assert.Contains("$.bulkAddFormValues.invoiceFile", warn.Message);
+    }
+
+    [Fact]
+    public async Task OnExceptionAsync_SyntaxJsonException_DoesNotLogTypeMismatch()
+    {
+        var logger = new CapturingLogger();
+        var filter = new ShellExceptionFilter(logger);
+        // Structurally malformed JSON (no .Path, no "could not be converted") must
+        // stay a plain parse_error with NO type-mismatch diagnostic.
+        var ex = new JsonException("unexpected token at position 12");
+        var ctx = MakeExceptionContext(ex);
+
+        await filter.OnExceptionAsync(ctx);
+
+        Assert.Equal(400, GetStatus(ctx));
+        Assert.DoesNotContain(logger.Entries, e => e.Message.Contains("[vms:type-mismatch]"));
     }
 
     // ─── OnExceptionAsync: InvalidOperationException from ValidateActionNames → 500 + invalid_tree ─
