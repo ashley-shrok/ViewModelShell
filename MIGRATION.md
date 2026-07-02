@@ -6,6 +6,52 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `3.11.0` / `3.11.0` (npm + NuGet) — additive, opt-in, no forced action
+
+**Nothing to do to keep working.** This release packages the 3.8.0 version-skew *build id* so adopters stop hand-rolling it. Wire token stays `viewmodel-shell/1.0`; no wire/envelope change. If you already wired up the manifest-hash build id by hand (the 3.8.0 recipe below), it keeps working unchanged — migrate to the packaged path whenever convenient.
+
+### Recommended — the packaged path (~2 lines each side)
+
+**Client (`vite.config.ts`)** — the plugin does the placeholder/`writeBundle` two-step and sets the manifest path for you:
+```ts
+import { defineConfig } from "vite";
+import { vmsBuildIdPlugin } from "@ashley-shrok/viewmodel-shell/vite";
+
+export default defineConfig({
+  plugins: [vmsBuildIdPlugin()], // injects import.meta.env.VITE_VMS_BUILD; sets build.manifest="manifest.json"
+});
+```
+```ts
+// each entry point
+new ViewModelShell({ /* … */ clientBuildId: import.meta.env.VITE_VMS_BUILD });
+
+// src/vite-env.d.ts (else tsc: "Property 'env' does not exist on type 'ImportMeta'")
+/// <reference types="vite/client" />
+interface ImportMetaEnv { readonly VITE_VMS_BUILD?: string; }
+interface ImportMeta { readonly env: ImportMetaEnv; }
+```
+`vite` is an **optional peer dependency** (the plugin's `vite` import is type-only), so non-Vite consumers of the root package aren't nagged; the plugin accepts `{ extensions?: string[]; hashLength?: number }` (defaults `[".js"]` / `12`). If you already set `build.manifest` to a path OTHER than `"manifest.json"`, the plugin **warns** (`[vms]`) and does not override — the .NET server reads `wwwroot/manifest.json`, so a divergent path silently breaks skew detection.
+
+**Server (`Program.cs`)** — the no-arg overload self-hashes `wwwroot/manifest.json`:
+```csharp
+builder.Services.AddVmsShellVersioning();           // hashes wwwroot/manifest.json itself
+builder.Services.Configure<MvcOptions>(o => o.Filters.Add<ShellVersionResultFilter>());
+```
+Then per action controller, inject `VmsVersioningOptions` and use the version-aware parse (unchanged from 3.8.0):
+```csharp
+public InvoicesController(/* … */ VmsVersioningOptions vmsOpts) { _vmsOpts = vmsOpts; }
+// in the multipart action:
+payload = ActionPayload<InvoicesState>.Parse(Request, _vmsOpts.CurrentBuild);
+```
+
+**Locked hash contract (both sides):** SHA-256 of the **raw `manifest.json` file bytes** → **first 12 hex, lowercase**; missing manifest → `"dev-none"`. The plugin and the no-arg helper compute the identical id, so a client's compiled-in hash matches the server-computed hash byte-for-byte.
+
+⚠️ **Do NOT modify `manifest.json` post-build.** A deploy-pipeline step that minifies/prettifies/re-formats the manifest between Vite emit and .NET startup changes the raw bytes and diverges the two hashes. Ship it byte-for-byte as Vite wrote it.
+
+**Non-Vite / hand-rolled setups** (or if you prefer explicit control): the plugin is exactly the [3.8.0 reference recipe](#reference-wire-up--the-manifest-hash-build-id-prod-proven) below, packaged. Use that recipe under the hood as your guide, or pass a string id to `createAction(handler, { currentBuild })` / `AddVmsShellVersioning("<id>")` as before.
+
+---
+
 ## Upgrading to `3.9.0` / `3.9.0` (npm + NuGet) — additive, opt-in, no forced action
 
 **Nothing to do to keep working.** `FieldNode.bind` became optional (a required field widening to optional is not a breaking change) and two dev-console diagnostics were added. Wire token stays `viewmodel-shell/1.0`.

@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using MvcActionDescriptor = Microsoft.AspNetCore.Mvc.Abstractions.ActionDescriptor;
 
@@ -187,5 +188,64 @@ public class VersioningTests
         var response = new ShellResponse<DemoState>(new TextNode("hi"), new DemoState("x")) with { ServerBuild = "b1" };
         var json = JsonSerializer.Serialize(response, _opts);
         Assert.Contains("\"serverBuild\":\"b1\"", json);
+    }
+
+    // ─── 3.11.0 — manifest-hash build id (VmsManifestBuildId + no-arg overload) ──
+
+    // The LOCKED cross-backend hash of Tests/fixtures/manifest.json:
+    // sha256(rawBytes) → first 12 hex, lowercase. This fixture is BYTE-IDENTICAL
+    // to viewmodel-shell/test/fixtures/manifest.json, and the npm suite
+    // (test/vite-plugin.test.ts) asserts the SAME expected value. Touch one
+    // fixture → touch both and re-derive this constant.
+    private const string ExpectedFixtureHash = "2f64b9072074";
+
+    private static string FixtureDir =>
+        Path.Combine(AppContext.BaseDirectory, "fixtures");
+
+    [Fact]
+    public void VmsManifestBuildId_HashesFixtureToLockedContract()
+    {
+        Assert.Equal(ExpectedFixtureHash, VmsManifestBuildId.Compute(FixtureDir));
+    }
+
+    [Fact]
+    public void VmsManifestBuildId_AbsentManifest_ReturnsDevNone()
+    {
+        var emptyDir = Path.Combine(Path.GetTempPath(), "vms-no-manifest-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(emptyDir);
+        try
+        {
+            Assert.Equal("dev-none", VmsManifestBuildId.Compute(emptyDir));
+        }
+        finally
+        {
+            Directory.Delete(emptyDir, recursive: true);
+        }
+    }
+
+    // Minimal IWebHostEnvironment whose WebRootPath points at the fixture dir;
+    // the other members are unused by AddVmsShellVersioning().
+    private sealed class FakeWebHostEnvironment : Microsoft.AspNetCore.Hosting.IWebHostEnvironment
+    {
+        public string WebRootPath { get; set; } = "";
+        public Microsoft.Extensions.FileProviders.IFileProvider WebRootFileProvider { get; set; } = null!;
+        public string ApplicationName { get; set; } = "Tests";
+        public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } = null!;
+        public string ContentRootPath { get; set; } = "";
+        public string EnvironmentName { get; set; } = "Development";
+    }
+
+    [Fact]
+    public void AddVmsShellVersioning_NoArg_SelfHashesManifestFromWebRoot()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>(
+            new FakeWebHostEnvironment { WebRootPath = FixtureDir });
+        services.AddVmsShellVersioning(); // no-arg → lazy factory hashes wwwroot/manifest.json
+
+        using var sp = services.BuildServiceProvider();
+        var opts = sp.GetRequiredService<VmsVersioningOptions>();
+
+        Assert.Equal(ExpectedFixtureHash, opts.CurrentBuild);
     }
 }

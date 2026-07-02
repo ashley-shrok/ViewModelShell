@@ -6,6 +6,27 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 3.11.0 / 3.11.0 — packaged version-skew build id: Vite plugin + no-arg `AddVmsShellVersioning()` (npm + NuGet)
+
+**npm:** `3.11.0` (MINOR, from `3.9.0` — skips the NuGet-only `3.10.0`) · **NuGet:** `3.11.0` (MINOR, from `3.10.0`). The two packages converge at `3.11.0`. Additive and opt-in. Wire protocol token unchanged (`viewmodel-shell/1.0`); no wire/envelope/error-code change; `agent-skill.md` untouched. **Migration: none — opt-in ergonomics.**
+
+Turns the 3.8.0 version-skew build-id boilerplate (every adopter hand-rolled ~40 lines: a placeholder-`define` → `writeBundle` two-step Vite plugin, the load-bearing `build.manifest:"manifest.json"` path gotcha, and a C# hash snippet) into two packaged one-liners. VMS now owns the build-id contract end-to-end, so two adopters can't hash the same manifest differently and silently break skew detection across a fleet.
+
+### Added
+- **npm — new `@ashley-shrok/viewmodel-shell/vite` subpath** exporting `vmsBuildIdPlugin(options?)`. Adoption drops to: `plugins: [vmsBuildIdPlugin()]` in `vite.config.ts` + `clientBuildId: import.meta.env.VITE_VMS_BUILD` in the shell init. The plugin injects an internal placeholder via `import.meta.env.VITE_VMS_BUILD`, sets `build.manifest = "manifest.json"` when unset (and **warns, without overriding,** if the app set a different manifest path — killing the path-alignment gotcha), and in `writeBundle` hashes the emitted `manifest.json` and substitutes the placeholder in every emitted chunk that carries it (default `extensions: [".js"]`, `hashLength: 12`; both overridable). The `vite` import is **type-only** → `dist/vite.js` has no runtime `vite` require; `vite` is an **optional peer dependency** so non-Vite consumers of the root package aren't nagged. Also exports `vmsHashManifestBytes(bytes, hashLength=12)`.
+- **NuGet — new no-arg `AddVmsShellVersioning()` overload** that self-hashes the build id from the built `wwwroot/manifest.json` (via the new internal `VmsManifestBuildId.Compute`). Adoption drops to `services.AddVmsShellVersioning();` — no more hand-rolled `SHA256.HashData(File.ReadAllBytes(...))` snippet. Registered via a **lazy factory** (the hash needs `IWebHostEnvironment.WebRootPath`, unavailable at ConfigureServices time; computed once on first resolution). The existing `AddVmsShellVersioning(string)` overload, `VmsVersioningOptions`, and `ShellVersionResultFilter` are unchanged.
+
+### Hash contract (locked, both sides)
+**SHA-256 of the RAW `manifest.json` file bytes on disk → the FIRST 12 hex chars, LOWERCASE.** No re-serialize, no normalization, no BOM. A missing manifest → the sentinel `"dev-none"` (guard inert in dev). A cross-backend test asserts both `vmsHashManifestBytes` (npm) and `VmsManifestBuildId.Compute` (.NET) produce the same 12-hex against one byte-identical shared fixture.
+
+### Fleet constraint
+**Do NOT modify `manifest.json` post-build.** The server hashes it at startup; the client id is hashed at build time — a deploy-pipeline step that minifies/prettifies/re-formats `manifest.json` between Vite emit and .NET startup changes the raw bytes and diverges the two hashes. Ship the manifest byte-for-byte as Vite wrote it.
+
+### Migration
+None — additive/opt-in. Existing hand-rolled 3.8.0 wire-ups keep working; migrate to the packaged path at leisure. See MIGRATION.md.
+
+---
+
 ## NuGet 3.10.0 — server-side `[vms:type-mismatch]` diagnostic (the certain half) (NuGet)
 
 **NuGet:** `3.10.0` (MINOR) · **npm:** unchanged at `3.9.0`. Backend-only, additive. Wire protocol token unchanged (`viewmodel-shell/1.0`); no wire/envelope/error-code change. **Migration: none — the signal is a server log line.**

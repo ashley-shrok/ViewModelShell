@@ -46,4 +46,12 @@
     <ProjectReference Include="../AshleyShrok.ViewModelShell.csproj" />
   </ItemGroup>
 
+  <!-- 3.11.0 — the version-skew build-id fixture manifest.json, copied to the
+       test output so VmsManifestBuildId.Compute can hash it. BYTE-IDENTICAL to
+       viewmodel-shell/test/fixtures/manifest.json (the npm side hashes the same
+       bytes to the same 12-hex — the cross-backend hash lock). -->
+  <ItemGroup>
+    <None Include="fixtures/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
