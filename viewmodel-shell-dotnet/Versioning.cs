@@ -6,20 +6,18 @@
 // onto every controller-returned ShellResponse<T> — GET and POST alike — without
 // each controller touching its return path.
 //
-// Registration — in the app's Program.cs:
-//   builder.Services.AddVmsShellVersioning("<build-id>");
-//   builder.Services.AddControllers(o =>
-//   {
-//       o.Filters.Add<ShellExceptionFilter>();
-//       o.Filters.Add<ShellVersionResultFilter>();
-//   });
+// Registration — in the app's Program.cs (3.11.1+): AddVmsShellVersioning
+// self-registers ShellVersionResultFilter, so one call wires the whole stamp:
+//   builder.Services.AddVmsShellVersioning();          // or AddVmsShellVersioning("<build-id>")
+//   builder.Services.AddControllers(o => o.Filters.Add<ShellExceptionFilter>());
 //
-// Additive & opt-in: an app that never calls AddVmsShellVersioning / never
-// registers the filter is byte-identical to before (no VmsVersioningOptions in
-// DI, no stamp). Mirrors the TS `createAction(handler, { currentBuild })` stamp.
+// Additive & opt-in: an app that never calls AddVmsShellVersioning is
+// byte-identical to before (no VmsVersioningOptions in DI, no filter, no stamp).
+// Mirrors the TS `createAction(handler, { currentBuild })` stamp.
 
 namespace ViewModelShell;
 
+using System.Linq;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -46,10 +44,9 @@ public sealed class VmsVersioningOptions
 /// 3.8.0 — global result filter that stamps <see cref="ShellResponse{TState}.ServerBuild"/>
 /// onto every controller-returned shell response when a current build is configured, so a
 /// long-lived (never-reloaded) client can detect that the server has rolled forward. Reads
-/// <see cref="VmsVersioningOptions"/> via constructor DI. Register with
-/// <c>options.Filters.Add&lt;ShellVersionResultFilter&gt;()</c> alongside
-/// <see cref="ShellExceptionFilter"/>; the app must also call
-/// <see cref="VmsVersioningExtensions.AddVmsShellVersioning"/> so the options are in DI.
+/// <see cref="VmsVersioningOptions"/> via constructor DI. As of 3.11.1 this filter is
+/// self-registered by <see cref="VmsVersioningExtensions.AddVmsShellVersioning"/> (which
+/// also puts the options in DI), so an app does not add it by hand.
 /// </summary>
 public sealed class ShellVersionResultFilter : IResultFilter
 {
@@ -111,9 +108,11 @@ public static class VmsVersioningExtensions
 {
     /// <summary>
     /// Register the server's current-deployed client-build id for the version-skew feature.
-    /// Pair with <c>options.Filters.Add&lt;ShellVersionResultFilter&gt;()</c> (the stamp) and
-    /// <c>ActionPayload&lt;T&gt;.Parse(Request, currentBuild)</c> in each action controller
-    /// (the fail-closed guard). Additive: omit it and behavior is byte-identical to before.
+    /// As of 3.11.1 this ALSO self-registers <see cref="ShellVersionResultFilter"/> on
+    /// <see cref="MvcOptions"/> (the Phase-1 <c>serverBuild</c> stamp) — you no longer add it
+    /// by hand; just add <c>ActionPayload&lt;T&gt;.Parse(Request, currentBuild)</c> in each
+    /// action controller for the fail-closed guard. Additive: omit this call and behavior is
+    /// byte-identical to before (no options, no filter, no stamp).
     /// </summary>
     /// <param name="services">The service collection (typically <c>builder.Services</c>).</param>
     /// <param name="currentBuild">The build id of the client bundle this server currently deploys.</param>
@@ -123,6 +122,7 @@ public static class VmsVersioningExtensions
         string currentBuild)
     {
         services.AddSingleton(new VmsVersioningOptions { CurrentBuild = currentBuild });
+        AddVersionResultFilter(services);
         return services;
     }
 
@@ -135,9 +135,11 @@ public static class VmsVersioningExtensions
     /// ConfigureServices time), this registers via a <b>lazy factory</b> — the
     /// hash is computed once, on first resolution of
     /// <see cref="VmsVersioningOptions"/> (i.e. the first
-    /// <see cref="ShellVersionResultFilter"/> construction). Pair with the same
-    /// filter + <c>ActionPayload&lt;T&gt;.Parse(Request, opts.CurrentBuild)</c>
-    /// as the string overload.
+    /// <see cref="ShellVersionResultFilter"/> construction). Like the string
+    /// overload it also self-registers that filter (3.11.1) — the only thing an
+    /// adopter adds beyond this one line is
+    /// <c>ActionPayload&lt;T&gt;.Parse(Request, opts.CurrentBuild)</c> in each
+    /// action controller for the fail-closed guard.
     /// <para>
     /// Fleet constraint: do NOT modify <c>manifest.json</c> post-build (a
     /// deploy-pipeline minifier/prettifier between Vite emit and .NET startup
@@ -153,6 +155,26 @@ public static class VmsVersioningExtensions
             var env = sp.GetRequiredService<IWebHostEnvironment>();
             return new VmsVersioningOptions { CurrentBuild = VmsManifestBuildId.Compute(env.WebRootPath) };
         });
+        AddVersionResultFilter(services);
         return services;
+    }
+
+    /// <summary>
+    /// 3.11.1 — self-register <see cref="ShellVersionResultFilter"/> on
+    /// <see cref="MvcOptions"/> so the Phase-1 <c>serverBuild</c> stamp is part of
+    /// "registering versioning" (previously the app had to add it by hand, and if
+    /// forgotten Phase-1 skew detection silently no-op'd). Dedup-guarded so a
+    /// legacy caller that still adds it manually doesn't register it twice; a
+    /// double-registration would be harmless anyway (the stamp is idempotent), but
+    /// this keeps exactly one filter in the pipeline.
+    /// </summary>
+    private static void AddVersionResultFilter(IServiceCollection services)
+    {
+        services.Configure<MvcOptions>(o =>
+        {
+            bool already = o.Filters.OfType<TypeFilterAttribute>()
+                .Any(f => f.ImplementationType == typeof(ShellVersionResultFilter));
+            if (!already) o.Filters.Add<ShellVersionResultFilter>();
+        });
     }
 }

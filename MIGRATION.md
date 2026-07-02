@@ -6,6 +6,12 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to NuGet `3.11.1` (NuGet only) — fix: versioning self-registers its stamp filter
+
+**npm unchanged at `3.11.0`.** Bug fix: `AddVmsShellVersioning()` (both the no-arg and string overloads) now **self-registers `ShellVersionResultFilter`** on `MvcOptions`. On `3.11.0` it registered only the options singleton, so the Phase-1 `serverBuild` stamp silently no-op'd unless you also added the filter by hand (the fail-closed guard via `Parse(Request, id)` was unaffected). If you adopted `3.11.0` with the `Configure<MvcOptions>(o => o.Filters.Add<ShellVersionResultFilter>())` workaround, **drop that line** on `3.11.1` — it's automatic (and a leftover manual add is deduped, not doubled). Nothing else changes; no wire change.
+
+---
+
 ## Upgrading to `3.11.0` / `3.11.0` (npm + NuGet) — additive, opt-in, no forced action
 
 **Nothing to do to keep working.** This release packages the 3.8.0 version-skew *build id* so adopters stop hand-rolling it. Wire token stays `viewmodel-shell/1.0`; no wire/envelope change. If you already wired up the manifest-hash build id by hand (the 3.8.0 recipe below), it keeps working unchanged — migrate to the packaged path whenever convenient.
@@ -32,11 +38,11 @@ interface ImportMeta { readonly env: ImportMetaEnv; }
 ```
 `vite` is an **optional peer dependency** (the plugin's `vite` import is type-only), so non-Vite consumers of the root package aren't nagged; the plugin accepts `{ extensions?: string[]; hashLength?: number }` (defaults `[".js"]` / `12`). If you already set `build.manifest` to a path OTHER than `"manifest.json"`, the plugin **warns** (`[vms]`) and does not override — the .NET server reads `wwwroot/manifest.json`, so a divergent path silently breaks skew detection.
 
-**Server (`Program.cs`)** — the no-arg overload self-hashes `wwwroot/manifest.json`:
+**Server (`Program.cs`)** — the no-arg overload self-hashes `wwwroot/manifest.json` **and** self-registers the stamp filter (as of NuGet `3.11.1` — see below):
 ```csharp
-builder.Services.AddVmsShellVersioning();           // hashes wwwroot/manifest.json itself
-builder.Services.Configure<MvcOptions>(o => o.Filters.Add<ShellVersionResultFilter>());
+builder.Services.AddVmsShellVersioning();           // hashes wwwroot/manifest.json + registers ShellVersionResultFilter
 ```
+(On NuGet `3.11.0` exactly, you must ALSO add `builder.Services.Configure<MvcOptions>(o => o.Filters.Add<ShellVersionResultFilter>());` or the Phase-1 `serverBuild` stamp silently no-ops — fixed in `3.11.1`.)
 Then per action controller, inject `VmsVersioningOptions` and use the version-aware parse (unchanged from 3.8.0):
 ```csharp
 public InvoicesController(/* … */ VmsVersioningOptions vmsOpts) { _vmsOpts = vmsOpts; }

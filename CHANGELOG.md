@@ -40,6 +40,15 @@ Completes the `[vms:type-mismatch]` story begun in 3.9.0. That release added the
 
 ---
 
+## NuGet 3.11.1 — `AddVmsShellVersioning` self-registers its stamp filter (NuGet)
+
+**NuGet:** `3.11.1` (PATCH) · **npm:** unchanged at `3.11.0`. Bug fix, no wire change (`viewmodel-shell/1.0`). **Migration: 3.11.0 adopters drop the manual filter line — see MIGRATION.md.**
+
+### Fixed
+- **`AddVmsShellVersioning()` now self-registers `ShellVersionResultFilter`** (both the no-arg and `string` overloads), via `Configure<MvcOptions>`. Before this, the call registered only the `VmsVersioningOptions` singleton, NOT the result filter — so the **Phase-1 `serverBuild` stamp silently no-op'd** and version-skew *detection* (the `VmsVersionSkewError` / banner path) never fired unless the app *also* added the filter by hand. The Phase-2 fail-closed guard (`ActionPayload<T>.Parse(Request, id)`) was unaffected. The one-line adoption story (`services.AddVmsShellVersioning();`) now actually works. Caught in prod by the first packaged-3.11.0 adopter. The registration is **dedup-guarded**, so a legacy caller that still adds the filter manually gets exactly one (a double-stamp would be harmless anyway — the stamp is idempotent). The HelpDesk demo drops its now-redundant manual `Filters.Add<ShellVersionResultFilter>()`.
+
+---
+
 ## 3.9.0 / 3.9.0 — `FieldNode.bind` optional (file inputs) + two dev-console diagnostics (npm + NuGet)
 
 **npm:** `3.9.0` (MINOR) · **NuGet:** `3.9.0` (MINOR). Additive — a required field became optional (widening, not breaking) and two console diagnostics were added. Wire protocol token stays `viewmodel-shell/1.0` (a `bind`-less file field simply omits the `bind` key). **Migration: none — opt-in.**

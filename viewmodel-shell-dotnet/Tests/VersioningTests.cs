@@ -248,4 +248,47 @@ public class VersioningTests
 
         Assert.Equal(ExpectedFixtureHash, opts.CurrentBuild);
     }
+
+    // ─── 3.11.1: AddVmsShellVersioning self-registers ShellVersionResultFilter ──
+    // Regression for the Phase-1 gap Poppy caught in prod: before 3.11.1, the
+    // overloads registered the options singleton but NOT the result filter, so the
+    // serverBuild stamp silently no-op'd unless the app added the filter by hand.
+
+    private static bool HasVersionFilter(IServiceProvider sp) =>
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MvcOptions>>().Value.Filters
+            .OfType<TypeFilterAttribute>()
+            .Count(f => f.ImplementationType == typeof(ShellVersionResultFilter)) == 1;
+
+    [Fact]
+    public void AddVmsShellVersioning_String_SelfRegistersResultFilter()
+    {
+        var services = new ServiceCollection();
+        services.AddControllers();
+        services.AddVmsShellVersioning("build-x");
+        using var sp = services.BuildServiceProvider();
+        Assert.True(HasVersionFilter(sp), "AddVmsShellVersioning(string) must self-register ShellVersionResultFilter");
+    }
+
+    [Fact]
+    public void AddVmsShellVersioning_NoArg_SelfRegistersResultFilter()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>(
+            new FakeWebHostEnvironment { WebRootPath = FixtureDir });
+        services.AddControllers();
+        services.AddVmsShellVersioning();
+        using var sp = services.BuildServiceProvider();
+        Assert.True(HasVersionFilter(sp), "no-arg AddVmsShellVersioning() must self-register ShellVersionResultFilter");
+    }
+
+    [Fact]
+    public void AddVmsShellVersioning_ManualFilterFirst_NotDoubleRegistered()
+    {
+        // A legacy caller that still adds the filter manually must not get two.
+        var services = new ServiceCollection();
+        services.AddControllers(o => o.Filters.Add<ShellVersionResultFilter>());
+        services.AddVmsShellVersioning("build-x");
+        using var sp = services.BuildServiceProvider();
+        Assert.True(HasVersionFilter(sp), "dedup guard must keep exactly one ShellVersionResultFilter");
+    }
 }
