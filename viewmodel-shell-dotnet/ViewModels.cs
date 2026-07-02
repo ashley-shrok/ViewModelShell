@@ -665,8 +665,15 @@ public record FieldOption(string Value, string Label);
 public record FieldNode(
     string Name,
     string InputType,
-    /// <summary>Path into state where this input reads its current value and writes user changes (e.g. "fields.title").</summary>
-    string Bind,
+    /// <summary>Path into state where this input reads its current value and writes user
+    /// changes (e.g. "fields.title"). REQUIRED for value-bearing inputs
+    /// (text/email/password/number/date/time/datetime-local/textarea/select/
+    /// select-multiple/checkbox/code) and OPTIONAL for <c>file</c> inputs — a file
+    /// input's binary rides the multipart side channel (fileRegistry keyed on
+    /// <c>Name</c>), so pass <c>Bind: null</c> on a file input to avoid writing a
+    /// {filename,size} placeholder object into state (which breaks a string/string-map
+    /// state slot on round-trip). Kept in its positional slot; a null bind is absent on the wire.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Bind,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Placeholder,
     // Dropped from the wire when false (WhenWritingDefault) → absent, matching

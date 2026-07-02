@@ -6,6 +6,16 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `3.9.0` / `3.9.0` (npm + NuGet) — additive, opt-in, no forced action
+
+**Nothing to do to keep working.** `FieldNode.bind` became optional (a required field widening to optional is not a breaking change) and two dev-console diagnostics were added. Wire token stays `viewmodel-shell/1.0`.
+
+**What you can now drop:** a **file** `FieldNode` no longer needs a `bind` — its binary rides the multipart side channel (the `fileRegistry`, keyed on `name`). Omit `bind` on file inputs and drop the old `Bind: null!` (.NET) workaround. This matters if a file field's bind slot was typed `string` / `Dictionary<string,string>`: the framework used to write a `{filename,size}` object there, which broke the `_state` round-trip (System.Text.Json "could not convert object to String"). Omitting `bind` removes the placeholder write entirely.
+
+**No forced action** — a file field that still carries a `bind` pointing at an object-typed slot keeps working exactly as before (the placeholder is still written). Value-bearing inputs (text/textarea/select/checkbox/code/etc.) still require a `bind`; render one without and you'll now see a `[vms:no-bind]` console warning (the field renders but its input is dropped). A file field writing over a scalar slot now warns `[vms:type-mismatch]`. Both warnings are deduped and fire in dev and prod.
+
+---
+
 ## Upgrading to `3.8.0` / `3.8.0` (npm + NuGet) — additive, opt-in, no forced action
 
 **Nothing to do to keep working.** Client/server version-skew detection + a fail-closed stale-client guard ship additive and fully opt-in: supply no build ids and behavior is byte-identical to 3.7.0 (no `serverBuild` on the wire, no `X-VMS-Client-Build` header, no guard). Wire token stays `viewmodel-shell/1.0`.

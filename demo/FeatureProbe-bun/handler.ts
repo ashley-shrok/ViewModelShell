@@ -543,6 +543,20 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // 3.9.0 — FieldNode.bind optional (file inputs). A file field with NO bind:
+  // its binary rides the multipart side channel (fileRegistry keyed on `name`),
+  // so `bind` is omitted here. Static view-shape captured by every GET step;
+  // proves the node serializes with NO `bind` key identically across backends
+  // (the .NET twin passes Bind: null → WhenWritingNull → absent).
+  const fileNoBindSection: ViewNode = {
+    type: "section",
+    heading: "File field (optional bind)",
+    variant: "card",
+    children: [
+      { type: "field", name: "upload-nobind", inputType: "file", label: "Attachment (no bind)" },
+    ],
+  };
+
   // Feedback primitives — BadgeNode + EmptyStateNode (static view-shape captured
   // by every GET step; byte-identical to the .NET twin feedbackSection). A bare
   // badge (NEITHER tone nor emphasis => omitted = absent on the wire), a
@@ -614,6 +628,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       childModifiersSection,
       buildTableSection(state),
       formsSection,
+      fileNoBindSection,
       feedbackSection,
       fillSection,
       followTailSection,

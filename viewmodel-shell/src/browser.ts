@@ -57,6 +57,11 @@ const FOLLOW_TAIL_STICK_THRESHOLD_PX = 40;
 export class BrowserAdapter implements Adapter {
   private fileRegistry = new Map<string, File>();
   private sa: StateAccess = noopStateAccess;
+  // Dev-console diagnostics dedup (3.9.0). Both [vms:no-bind] and
+  // [vms:type-mismatch] warn at most once per key over this adapter's lifetime.
+  // The client bundle can't distinguish dev/prod, so these fire in both — which
+  // is intentional: prod telemetry that captures console.warn sees them too.
+  private diagWarned = new Set<string>();
   // 1.2.0 — open-state snapshot for SectionNode.collapsible. Captured by
   // render() BEFORE this.container.innerHTML = "" by walking
   // [data-section-key] details elements; consumed by render() AFTER node()
@@ -766,8 +771,41 @@ export class BrowserAdapter implements Adapter {
   /** FieldNode — reads value from `sa.read(bind)`; writes back on input/change.
    *  When `action` is set, it fires on Enter (text-like) or change (select) —
    *  the new value is already in state by that point. */
+  /** Warn to the dev console at most once per key (deduped over this adapter's
+   *  lifetime). Fires in dev AND prod — the client bundle can't tell them apart,
+   *  and prod telemetry that captures console.warn should see these too. */
+  private warnOnce(key: string, msg: string): void {
+    if (!this.diagWarned.has(key)) {
+      this.diagWarned.add(key);
+      console.warn(msg);
+    }
+  }
+
+  /** Read a bind path, tolerating a bind-less field (file inputs) — null bind
+   *  reads nothing. */
+  private readBind(bind: string | undefined): unknown {
+    return bind == null ? undefined : this.sa.read(bind);
+  }
+
+  /** Write to a bind path, no-op when the field has no bind (file inputs). */
+  private writeBind(bind: string | undefined, value: unknown): void {
+    if (bind != null) this.sa.write(bind, value);
+  }
+
   private field(n: FieldNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
-    const stateValue = this.sa.read(n.bind);
+    const stateValue = this.readBind(n.bind);
+
+    // [vms:no-bind] — a value-bearing input with no bind renders but silently
+    // drops user input (nothing to persist to). Exclude `file` (bind is
+    // legitimately optional — the binary rides multipart) and `hidden`
+    // (server-authoritative, no user input).
+    if (n.inputType !== "file" && n.inputType !== "hidden" && n.bind == null) {
+      this.warnOnce(
+        "no-bind:" + n.name,
+        "[vms:no-bind] FieldNode '" + n.name + "' (inputType=" + n.inputType +
+          ") has no bind — value-bearing inputs need a bind path to persist; the field renders but user input is dropped.",
+      );
+    }
 
     if (n.inputType === "hidden") {
       // Hidden fields don't write back — server is authoritative for hidden.
@@ -793,7 +831,7 @@ export class BrowserAdapter implements Adapter {
       inp.name = n.name;
       inp.checked = Boolean(stateValue);
       inp.addEventListener("change", () => {
-        this.sa.write(n.bind, inp.checked);
+        this.writeBind(n.bind, inp.checked);
       });
 
       wrapper.appendChild(inp);
@@ -851,17 +889,17 @@ export class BrowserAdapter implements Adapter {
       // explicit empty the server can reject, never a silently-missing key.
       if (isMulti) {
         if (!Array.isArray(stateValue)) {
-          this.sa.write(n.bind, Array.from(sel.selectedOptions, o => o.value));
+          this.writeBind(n.bind, Array.from(sel.selectedOptions, o => o.value));
         }
       } else if (stateValue === undefined || String(stateValue) !== sel.value) {
-        this.sa.write(n.bind, sel.value);
+        this.writeBind(n.bind, sel.value);
       }
       sel.addEventListener("change", () => {
         if (isMulti) {
           const arr = Array.from(sel.selectedOptions).map(o => o.value);
-          this.sa.write(n.bind, arr);
+          this.writeBind(n.bind, arr);
         } else {
-          this.sa.write(n.bind, sel.value);
+          this.writeBind(n.bind, sel.value);
         }
         if (n.action) on({ name: n.action.name });
       });
@@ -885,13 +923,33 @@ export class BrowserAdapter implements Adapter {
         const file = inp.files?.[0];
         if (file) {
           this.fileRegistry.set(n.name, file);
+          // [vms:type-mismatch] — OBSERVABLE-SUBSET diagnostic. The client is
+          // untyped JS: it CANNOT know a state slot's *declared* server type, so
+          // it only catches the observable case where a file object overwrites a
+          // slot that already holds a scalar. It does NOT catch an empty/null slot
+          // typed string-map server-side — certain detection of that is a
+          // server-side `_state` deserialize diagnostic (a separate follow-up).
+          if (n.bind != null) {
+            const existing = this.readBind(n.bind);
+            if (existing != null && typeof existing !== "object") {
+              this.warnOnce(
+                "type-mismatch:" + n.name + ":" + n.bind,
+                "[vms:type-mismatch] file FieldNode '" + n.name +
+                  "' writes a {filename,size} object into bind '" + n.bind +
+                  "', whose current state value is a " + (typeof existing) +
+                  " — if that slot is typed string/string-map the _state round-trip will FAIL (cannot convert object to String). Give the file field an object-typed slot, or omit bind (the file rides multipart regardless).",
+              );
+            }
+          }
           // Per Phase-6 decision: the picked file is visible in state as a
           // serialization-safe placeholder; the binary travels on the
-          // multipart side channel.
-          this.sa.write(n.bind, { filename: file.name, size: file.size });
+          // multipart side channel. Backward-compat: apps binding a file field
+          // to an object slot still get the placeholder. A bind-less file input
+          // writes nothing (writeBind no-ops) — the binary rides multipart.
+          this.writeBind(n.bind, { filename: file.name, size: file.size });
         } else {
           this.fileRegistry.delete(n.name);
-          this.sa.write(n.bind, null);
+          this.writeBind(n.bind, null);
         }
       });
       wrapper.appendChild(inp);
@@ -903,7 +961,7 @@ export class BrowserAdapter implements Adapter {
       if (n.placeholder) ta.placeholder = n.placeholder;
       ta.value = stateValue == null ? "" : String(stateValue);
       if (n.required) ta.required = true;
-      ta.addEventListener("input", () => { this.sa.write(n.bind, ta.value); });
+      ta.addEventListener("input", () => { this.writeBind(n.bind, ta.value); });
       wrapper.appendChild(ta);
     } else if (n.inputType === "code") {
       // Monospaced editable text. Tab inserts a literal tab instead of moving
@@ -922,7 +980,7 @@ export class BrowserAdapter implements Adapter {
       if (n.placeholder) ta.placeholder = n.placeholder;
       ta.value = stateValue == null ? "" : String(stateValue);
       if (n.required) ta.required = true;
-      ta.addEventListener("input", () => { this.sa.write(n.bind, ta.value); });
+      ta.addEventListener("input", () => { this.writeBind(n.bind, ta.value); });
       ta.addEventListener("keydown", (e) => {
         if (e.key === "Tab") {
           e.preventDefault();
@@ -930,7 +988,7 @@ export class BrowserAdapter implements Adapter {
           const end   = ta.selectionEnd   ?? 0;
           ta.value = ta.value.slice(0, start) + "\t" + ta.value.slice(end);
           ta.selectionStart = ta.selectionEnd = start + 1;
-          this.sa.write(n.bind, ta.value);
+          this.writeBind(n.bind, ta.value);
         }
       });
       wrapper.appendChild(ta);
@@ -943,7 +1001,7 @@ export class BrowserAdapter implements Adapter {
       if (n.placeholder) inp.placeholder = n.placeholder;
       inp.value = stateValue == null ? "" : String(stateValue);
       if (n.required) inp.required = true;
-      inp.addEventListener("input", () => { this.sa.write(n.bind, inp.value); });
+      inp.addEventListener("input", () => { this.writeBind(n.bind, inp.value); });
       if (n.action) {
         const action = n.action;
         inp.addEventListener("keydown", (e) => {
@@ -952,7 +1010,7 @@ export class BrowserAdapter implements Adapter {
             // Belt-and-suspenders: flush the latest value to state before
             // dispatching, in case the browser hasn't fired `input` yet
             // (e.g. an autofill that lands then submits).
-            this.sa.write(n.bind, inp.value);
+            this.writeBind(n.bind, inp.value);
             on({ name: action.name });
           }
         });

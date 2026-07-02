@@ -6,6 +6,23 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 3.9.0 / 3.9.0 — `FieldNode.bind` optional (file inputs) + two dev-console diagnostics (npm + NuGet)
+
+**npm:** `3.9.0` (MINOR) · **NuGet:** `3.9.0` (MINOR). Additive — a required field became optional (widening, not breaking) and two console diagnostics were added. Wire protocol token stays `viewmodel-shell/1.0` (a `bind`-less file field simply omits the `bind` key). **Migration: none — opt-in.**
+
+### Changed
+- **`FieldNode.bind` is now OPTIONAL.** TS `bind?: string`; .NET `Bind` is now `string?` (kept in its positional slot, `WhenWritingNull` → absent). A file input's binary rides the multipart side channel (the `fileRegistry`, keyed on the field's `name`, NOT its `bind`), so a file field needs no bind — **omit it** (drop the old `Bind: null!` type-lie workaround). This avoids writing the `{filename,size}` placeholder object into state, which broke a state slot typed `string` / `Dictionary<string,string>` on the `_state` round-trip (System.Text.Json "could not convert object to String"). Value-bearing inputs (text/email/password/number/date/time/datetime-local/textarea/select/select-multiple/checkbox/code) still require a bind. A `bind`-less file field serializes with NO `bind` key identically from both backends.
+
+### Added
+- **`[vms:no-bind]` diagnostic (dev console).** A value-bearing (non-file, non-hidden) `FieldNode` rendered with no `bind` warns once (deduped per adapter) — the field renders but user input has nowhere to persist and is dropped.
+- **`[vms:type-mismatch]` diagnostic (dev console, observable subset).** When a file `FieldNode` is about to write its `{filename,size}` object into a bind slot whose current value is a non-object scalar, it warns once — if that slot is typed `string`/string-map server-side the `_state` round-trip will fail. The client is untyped JS, so it only catches the OBSERVABLE case (a file object overwriting an already-scalar slot); it can't see an empty/null slot's declared server type (certain detection of that is a separate server-side deserialize diagnostic, not in this release). Fix by giving the file field an object-typed slot, or by omitting `bind`.
+- Both warnings fire in dev AND prod (the client bundle can't distinguish environments) and are deduped, so prod telemetry that captures `console.warn` sees them without spam.
+
+### Migration
+None — additive/opt-in. A Phase-6 string/string-map state that held a file field can drop the placeholder; omit `bind` on file inputs. See MIGRATION.md.
+
+---
+
 ## 3.8.0 / 3.8.0 — client/server version-skew detection + fail-closed stale-client guard (npm + NuGet)
 
 **npm:** `3.8.0` (MINOR) · **NuGet:** `3.8.0` (MINOR). Additive and **fully opt-in** — supply no build ids and behavior is byte-identical to 3.7.0. Wire protocol token stays `viewmodel-shell/1.0` (all additions are optional fields / an optional header). **Migration: none.**

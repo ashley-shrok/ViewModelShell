@@ -322,8 +322,15 @@ export interface FieldNode {
     | "textarea" | "hidden" | "file"
     | "select" | "select-multiple" | "checkbox"
     | "code";
-  /** Path into state where this input reads its current value and writes user changes (e.g. `fields.title`). */
-  bind: string;
+  /** Path into state where this input reads its current value and writes user
+   *  changes (e.g. `fields.title`). REQUIRED for value-bearing inputs
+   *  (text/email/password/number/date/time/datetime-local/textarea/select/
+   *  select-multiple/checkbox/code) and OPTIONAL for `file` inputs — a file
+   *  input's binary rides the multipart side channel (fileRegistry keyed on
+   *  `name`), so omit `bind` on a file input to avoid writing a
+   *  `{filename,size}` placeholder object into state (which breaks a
+   *  string/string-map state slot on round-trip). */
+  bind?: string;
   label?: string;
   placeholder?: string;
   required?: boolean;

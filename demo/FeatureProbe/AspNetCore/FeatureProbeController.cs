@@ -606,6 +606,17 @@ public class FeatureProbeController : ControllerBase
                 new ButtonNode("Submit (disabled)", new ActionDescriptor("fc-submit"),
                     Emphasis: "primary", Disabled: true),
             }));
+        // 3.9.0 — FieldNode.Bind optional (file inputs). A file field with
+        // Bind: null: its binary rides the multipart side channel (fileRegistry
+        // keyed on Name), so bind is absent (WhenWritingNull). Static view-shape
+        // so every GET byte-diffs the NO-`bind`-key wire against the bun twin.
+        pageChildren.Add(new SectionNode(
+            Heading: "File field (optional bind)",
+            Variant: "card",
+            Children: new ViewNode[]
+            {
+                new FieldNode("upload-nobind", "file", null, "Attachment (no bind)", null),
+            }));
         // 3.3.0 (F3) — a STATIC ModalNode on every GET so the parity suite
         // byte-diffs the full modal wire shape (Title/Children/Footer/
         // DismissAction/Size) across all backends. Previously ModalNode appeared
