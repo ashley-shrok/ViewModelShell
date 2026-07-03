@@ -694,7 +694,14 @@ public record FieldNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Min = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Max = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Step = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? MaxLength = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? MaxLength = null,
+    // FILE INPUTS ONLY. The action name(s) whose dispatch carries this file's
+    // binary over the multipart wire — a file rides an action iff its name is
+    // listed here. Declared on the file, so which trigger sends it does NOT
+    // depend on button position (buttons[]/children/submit/Enter all honor it
+    // equally). Absent/empty = the file rides nothing (no positional fallback);
+    // the browser warns [vms:orphan-file]. Omitted-when-null on the wire.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? UploadOn = null
 ) : ViewNode;
 
 public record CheckboxNode(

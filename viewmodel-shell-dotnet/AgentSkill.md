@@ -139,6 +139,8 @@ If a response carries `nextPollIn: N`, schedule a POST `{ "name": "poll", "state
 
 File uploads use the multipart form above. One form entry per file input, keyed by the input's `name` attribute (from the corresponding node's `name` field in the tree). The file's binary content is the entry's value. JSON-body dispatch cannot carry files; use multipart.
 
+**A file rides only the action(s) its input declares.** Each file `FieldNode` carries an `uploadOn` array of action names. Send a file's binary entry **only** when the action you are dispatching (`_action.name`) is listed in that file input's `uploadOn`; if you dispatch any other action, do **not** include the file. A file input with no `uploadOn` (absent or empty) rides **nothing** — its binary is never sent. This mirrors the browser, where the same declaration decides which click sends the file: an agent should not attach a file to an action a human's click could not have sent it with. (There is no positional/implicit rule — the file's own `uploadOn` is the whole contract.)
+
 ## Versioning
 
 This manual applies to protocol token `viewmodel-shell/1.0` — the value of the `protocol` field on the discoverability meta tag. The protocol token tracks the wire shape, NOT the package version: a 1.5.x or 1.6.x package release may still carry protocol `viewmodel-shell/1.0` because the wire has not undergone a breaking change. A future major-version bump (`viewmodel-shell/2.0`) signals a breaking change and invalidates this manual; expect a new skill at the same `/.well-known/vms-skill.md` URL.

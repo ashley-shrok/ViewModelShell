@@ -692,17 +692,31 @@ export class BrowserAdapter implements Adapter {
     const form = document.createElement("form");
     form.className = `vms-form${n.layout && n.layout !== "stack" ? ` vms-form--${n.layout}` : ""}`;
     form.noValidate = true;
-    this.kids(n.children, form, on);
 
+    // File collection is by DECLARED intent, not button position: a file input
+    // rides an action iff that action's name is listed in the input's `uploadOn`
+    // (carried here via the data-vms-upload-on attribute set in field()). EVERY
+    // trigger inside the form — submit, buttons[], a ButtonNode or
+    // FieldNode.action nested in children — routes through this one path, so
+    // where a trigger sits is irrelevant; the file's own uploadOn decides. An
+    // input with no uploadOn rides nothing (there is no positional fallback).
     const dispatchWithFiles = (action: ActionEvent): void => {
       const files: Record<string, File> = {};
       form.querySelectorAll<HTMLInputElement>("input[type=file]").forEach(inp => {
-        if (inp.name && inp.files?.[0]) files[inp.name] = inp.files[0];
+        if (!inp.name || !inp.files?.[0]) return;
+        let uploadOn: string[] = [];
+        try { uploadOn = JSON.parse(inp.dataset.vmsUploadOn ?? "[]"); } catch { uploadOn = []; }
+        if (uploadOn.includes(action.name)) files[inp.name] = inp.files[0];
       });
       const ev: ActionEvent = { name: action.name };
       if (Object.keys(files).length > 0) ev.files = files;
       on(ev);
     };
+
+    // Children dispatch through the file-aware path too — so a ButtonNode (or a
+    // FieldNode.action Enter) nested anywhere in the form carries files per the
+    // uploadOn contract, identical to a footer buttons[] trigger.
+    this.kids(n.children, form, dispatchWithFiles);
 
     // #22 — submitButton takes precedence: the form renders the consumer's own
     // button (its label + emphasis/tone/size/width) as the submit and fires its
@@ -910,6 +924,10 @@ export class BrowserAdapter implements Adapter {
       inp.className = "vms-field__input";
       inp.id = `vms-${n.name}`;
       inp.name = n.name;
+      // Carry the declared upload routing to dispatch time — form()'s
+      // dispatchWithFiles reads this and attaches the file only to an action
+      // named here. Absent/empty => the file rides no action.
+      inp.dataset.vmsUploadOn = JSON.stringify(n.uploadOn ?? []);
       // File-input persistence: re-apply any registered file to the new node.
       const existingFile = this.fileRegistry.get(n.name);
       if (existingFile) {
@@ -923,6 +941,16 @@ export class BrowserAdapter implements Adapter {
         const file = inp.files?.[0];
         if (file) {
           this.fileRegistry.set(n.name, file);
+          // [vms:orphan-file] — a picked file that declares no uploadOn action
+          // will never be sent (the binary rides an action, and this input
+          // names none). Silent under-attach is the dangerous failure, so warn.
+          if (!n.uploadOn || n.uploadOn.length === 0) {
+            this.warnOnce(
+              "orphan-file:" + n.name,
+              "[vms:orphan-file] file field '" + n.name + "' has a picked file but no uploadOn action — " +
+                "its binary will not be sent; add uploadOn:[\"<action>\"] naming the action that should carry it.",
+            );
+          }
           // [vms:type-mismatch] — OBSERVABLE-SUBSET diagnostic. The client is
           // untyped JS: it CANNOT know a state slot's *declared* server type, so
           // it only catches the observable case where a file object overwrites a

@@ -304,7 +304,10 @@ export interface FormNode {
    *  `bind` path and travel with the dispatch's `_state` payload. Mirrors
    *  HTML's multiple submit buttons / `formaction` — different action per
    *  button, same underlying state. A plain ButtonNode placed in `children`
-   *  has identical dispatch semantics; the buttons[] slot is a layout hint. */
+   *  has identical dispatch semantics: both flow through the same file-aware
+   *  dispatch, so file collection is governed by each file input's `uploadOn`
+   *  (below), NOT by whether the trigger sits in `buttons[]` or `children`. The
+   *  buttons[] slot is purely a layout hint. */
   buttons?: ButtonNode[];
   /** Opt-in: bare Enter inside a descendant <textarea> dispatches submitAction
    *  (chat-composer "Enter sends, Shift/Ctrl/Meta/Alt+Enter = newline"). No-op
@@ -372,6 +375,15 @@ export interface FieldNode {
   /** Dispatched when Enter is pressed (text-like inputs only). Carries an
    *  action name only — the current value is already in state at the bind path. */
   action?: ActionEvent;
+  /** FILE INPUTS ONLY. The action name(s) whose dispatch carries this file's
+   *  binary over the multipart wire. A file rides an action iff that action's
+   *  name is listed here — declared on the *file*, so which trigger sends it no
+   *  longer depends on where a button sits (the trigger can live anywhere in the
+   *  form; footer `buttons[]`, `children`, submit, and Enter all honor this
+   *  equally). An absent or empty `uploadOn` means the file rides **nothing**
+   *  (there is no positional fallback); the browser warns `[vms:orphan-file]`
+   *  when a file is picked with no `uploadOn`. Ignored on non-file inputs. */
+  uploadOn?: string[];
 }
 
 export interface CheckboxNode {

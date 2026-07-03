@@ -6,6 +6,32 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `4.0.0` / `4.0.0` (npm + NuGet) — file uploads must declare `uploadOn` **(BREAKING)**
+
+**What breaks:** file-upload forms stop sending their file until you declare where it rides. Previously a form's submit button and any `FormNode.buttons[]` entry auto-swept every `<input type=file>` and attached it to the dispatch. As of `4.0.0` that positional sweep is **removed** — a file rides an action **only** if that action's name is listed in the file input's new `uploadOn` array. A file input with no `uploadOn` sends nothing (the browser warns `[vms:orphan-file]` in the dev console when a file is picked into it).
+
+**Why:** which dispatch carried a file was an invisible, positional property (footer/submit swept, in-body buttons didn't — the docs even claimed they were identical). It's now a declared property of the file input, so the upload trigger can live anywhere in the form, and an agent can't attach a file to an action a human's click could not have.
+
+**The fix — one line per file input.** Name the action(s) that should carry the file:
+
+```ts
+// before (3.x) — the file rode the submit implicitly, by button position
+{ type: "field", name: "receipt", inputType: "file", label: "Receipt" }
+
+// after (4.0.0) — declare which action carries it
+{ type: "field", name: "receipt", inputType: "file", label: "Receipt", uploadOn: ["save-invoice"] }
+```
+```csharp
+// .NET — UploadOn is the LAST positional param; use a named arg
+new FieldNode("receipt", "file", null, "Receipt", null, UploadOn: new[] { "save-invoice" })
+```
+
+`uploadOn` lists **action names** — the same names your buttons/submit dispatch. List several if more than one action should carry the file (`uploadOn: ["draft", "publish"]`). The upload button can now sit right next to the file field (in `children`) instead of being exiled to the footer.
+
+**Not breaking:** any form without file inputs; the multipart wire *shape* (still `_action` + `_state` + file entries); an agent that builds its own multipart body (same request shape — it just keys the file entry to an action named in `uploadOn`). Wire protocol token stays `viewmodel-shell/1.0`.
+
+---
+
 ## Upgrading to NuGet `3.11.1` (NuGet only) — fix: versioning self-registers its stamp filter
 
 **npm unchanged at `3.11.0`.** Bug fix: `AddVmsShellVersioning()` (both the no-arg and string overloads) now **self-registers `ShellVersionResultFilter`** on `MvcOptions`. On `3.11.0` it registered only the options singleton, so the Phase-1 `serverBuild` stamp silently no-op'd unless you also added the filter by hand (the fail-closed guard via `Parse(Request, id)` was unaffected). If you adopted `3.11.0` with the `Configure<MvcOptions>(o => o.Filters.Add<ShellVersionResultFilter>())` workaround, **drop that line** on `3.11.1` — it's automatic (and a leftover manual add is deduped, not doubled). Nothing else changes; no wire change.

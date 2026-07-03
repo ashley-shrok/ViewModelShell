@@ -6,6 +6,29 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 4.0.0 / 4.0.0 — file uploads route by declared `uploadOn`, not button position (npm + NuGet)
+
+**npm:** `4.0.0` (MAJOR, from `3.11.0`) · **NuGet:** `4.0.0` (MAJOR, from `3.11.1`). **BREAKING** runtime change to file-upload forms. Wire protocol token unchanged (`viewmodel-shell/1.0`) — the wire *shape* is identical (multipart `_action` + `_state` + file entries); `uploadOn` is an additive optional field on the tree. **Migration: add `uploadOn: ["<action>"]` to every file input — see MIGRATION.md.**
+
+Fixes a positional coupling surfaced by a consumer (`/ai`): whether a button's dispatch carried a form's file uploads used to depend on WHERE the button sat in the tree. The submit paths and `FormNode.buttons[]` swept every `<input type=file>`, but a byte-identical `ButtonNode` in `FormNode.children` silently carried none — forcing the upload button into the footer, away from its file field. The routing intent now lives on the **file input**, which declares which action(s) carry it; the stateless server is unchanged (it never enforced browser file-routing), and the contract lives in each adapter — the browser renderer for humans, `agent-skill.md` for agents.
+
+### Changed (BREAKING)
+- **File collection is by declared `uploadOn`, not button position.** A file rides an action **iff** the dispatched action's name is listed in that file input's `uploadOn`, regardless of whether the trigger is a submit, a footer `buttons[]` entry, a `ButtonNode`/`FieldNode.action` nested anywhere in `children`, or textarea-Enter. **The old positional auto-sweep is removed** — submit and `buttons[]` no longer carry files automatically. A file input with no `uploadOn` (absent/empty) rides **nothing**. This is the break: an existing upload form stops sending its file until each file input declares `uploadOn`.
+- **The click-vs-Enter inconsistency is gone.** Because the file rides the *action* (not the trigger), any trigger of a declared action carries it — a `FieldNode.action` Enter now carries files identically to a button.
+
+### Added
+- **`FieldNode.uploadOn`** (`uploadOn?: string[]` / `IReadOnlyList<string>? UploadOn`) on both backends — file-input-only, omitted-when-absent on the wire (last positional param on the .NET record).
+- **`[vms:orphan-file]` dev-console warning** (browser): picking a file into an input with no `uploadOn` warns once that its binary will never be sent — silent under-attach is the dangerous failure the declared model makes visible.
+- **`agent-skill.md` documents the contract:** an agent attaches a file's entry only when dispatching an action listed in that file input's `uploadOn` — mirroring the browser, so an agent can't send a file with an action a human's click could not have.
+
+### Fixed
+- The false `FormNode.buttons?` TSDoc invariant (claimed `children`/`buttons[]` had identical dispatch semantics — was false for files). It is now true: both route through the same file-aware dispatch governed by `uploadOn`.
+
+### Migration
+Add `uploadOn: ["<your-submit-or-upload-action>"]` to each file `FieldNode`. See MIGRATION.md for the recipe. Wire token stays `viewmodel-shell/1.0`.
+
+---
+
 ## 3.11.0 / 3.11.0 — packaged version-skew build id: Vite plugin + no-arg `AddVmsShellVersioning()` (npm + NuGet)
 
 **npm:** `3.11.0` (MINOR, from `3.9.0` — skips the NuGet-only `3.10.0`) · **NuGet:** `3.11.0` (MINOR, from `3.10.0`). The two packages converge at `3.11.0`. Additive and opt-in. Wire protocol token unchanged (`viewmodel-shell/1.0`); no wire/envelope/error-code change; `agent-skill.md` untouched. **Migration: none — opt-in ergonomics.**

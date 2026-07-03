@@ -79,8 +79,9 @@ describe("3.9.0 — bind-less file FieldNode", () => {
       submitAction: { name: "upload" },
       submitLabel: "Upload",
       children: [
-        // No `bind` — a file input needs none.
-        { type: "field", name: "attachment", inputType: "file", label: "Attachment" },
+        // No `bind` — a file input needs none. `uploadOn` names the action the
+        // binary rides (the submit here); without it the file rides nothing.
+        { type: "field", name: "attachment", inputType: "file", label: "Attachment", uploadOn: ["upload"] },
       ],
     });
     const inp = container.querySelector("input[type=file]") as HTMLInputElement;

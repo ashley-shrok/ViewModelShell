@@ -554,6 +554,9 @@ function buildVm(state: FeatureProbeState): ViewNode {
     variant: "card",
     children: [
       { type: "field", name: "upload-nobind", inputType: "file", label: "Attachment (no bind)" },
+      // File field declaring uploadOn — the binary rides only the named action.
+      // Byte-diffs the uploadOn wire array against the .NET twin.
+      { type: "field", name: "upload-routed", inputType: "file", label: "Attachment (routed)", uploadOn: ["probe-submit"] },
     ],
   };
 

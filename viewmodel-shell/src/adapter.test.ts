@@ -294,6 +294,7 @@ describe("Phase 6 — file input populates action.files and writes placeholder t
           name: "attachment",
           inputType: "file",
           bind: "attachment",
+          uploadOn: ["upload"],
         },
       ],
     });

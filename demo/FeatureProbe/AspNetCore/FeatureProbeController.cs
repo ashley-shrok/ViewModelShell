@@ -616,6 +616,9 @@ public class FeatureProbeController : ControllerBase
             Children: new ViewNode[]
             {
                 new FieldNode("upload-nobind", "file", null, "Attachment (no bind)", null),
+                // File field declaring UploadOn — the binary rides only the named
+                // action. Byte-diffs the uploadOn wire array against the bun twin.
+                new FieldNode("upload-routed", "file", null, "Attachment (routed)", null, UploadOn: new[] { "probe-submit" }),
             }));
         // 3.3.0 (F3) — a STATIC ModalNode on every GET so the parity suite
         // byte-diffs the full modal wire shape (Title/Children/Footer/
