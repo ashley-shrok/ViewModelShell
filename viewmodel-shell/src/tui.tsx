@@ -84,6 +84,7 @@ import type {
   TabsNode,
   ProgressNode,
   StatBarNode,
+  ChartNode,
   TableNode,
   ModalNode,
   CopyButtonNode,
@@ -959,6 +960,7 @@ function renderNode(node: ViewNode, ctx: RCtx, key?: string | number): React.Rea
     case "tabs":         return <TabsView         key={key} node={node} ctx={ctx} />;
     case "progress":     return <ProgressView     key={key} node={node} />;
     case "stat-bar":     return <StatBarView      key={key} node={node} />;
+    case "chart":        return <ChartView        key={key} node={node} />;
     case "modal":        return <ModalView        key={key} node={node} ctx={ctx} />;
     case "copy-button":  return <CopyButtonView   key={key} node={node} ctx={ctx} />;
     case "divider":      return <text key={key} fg="#555555">{node.orientation === "vertical" ? "│" : "─".repeat(40)}</text>;
@@ -1541,6 +1543,40 @@ function StatBarView({ node }: { node: StatBarNode }) {
           <text>{String(s.value)}</text>
         </box>
       ))}
+    </box>
+  );
+}
+
+// ── chart ─────────────────────────────────────────────────────────────────
+// CHART-05 — DELIBERATE degradation. A terminal has no canvas, but a ChartNode
+// is STRUCTURED data, so it prints as a legible label/value/ASCII-bar series:
+// the title (if any) on its own line, then per point `<label padded>  <value>
+// <bar>` where <bar> is a run of "█" scaled to value/max × CHART_BAR_WIDTH.
+// Empty points render just the title (or nothing); an all-zero / non-positive
+// max renders labels+values with no bars (guarded, never throws / divides).
+// The TUI is @experimental; the requirement is only that ChartNode does not
+// break it and degrades legibly. ChartNode is a LEAF (no children) → no
+// container-walk arm is needed (mirrors StatBarView / ProgressView).
+
+const CHART_BAR_WIDTH = 20;
+
+function ChartView({ node }: { node: ChartNode }) {
+  const points = node.points ?? [];
+  const maxValue = points.length ? Math.max(0, ...points.map((p) => p.value)) : 0;
+  const labelWidth = points.reduce((w, p) => Math.max(w, p.label.length), 0);
+  return (
+    <box flexDirection="column">
+      {node.title ? <text attributes={1 /* BOLD */}>{node.title}</text> : null}
+      {points.map((p, i) => {
+        const barLen = maxValue > 0 ? Math.round((p.value / maxValue) * CHART_BAR_WIDTH) : 0;
+        return (
+          <box key={i} flexDirection="row" gap={1}>
+            <text fg="#888888">{p.label.padEnd(labelWidth)}</text>
+            <text>{String(p.value).padStart(4)}</text>
+            <text fg="#4a9eff">{"█".repeat(barLen)}</text>
+          </box>
+        );
+      })}
     </box>
   );
 }
