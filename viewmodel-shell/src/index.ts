@@ -135,7 +135,8 @@ export type ViewNode =
   | DividerNode
   | FitsNode
   | EmptyStateNode
-  | BadgeNode;
+  | BadgeNode
+  | ChartNode;
 
 export interface PageNode {
   type: "page";
@@ -696,6 +697,33 @@ export interface FitsNode {
    *  size fits the container on `axis` (no overflow); the LAST candidate is the
    *  guaranteed-fits fallback rendered when none fit. */
   children: ViewNode[];
+}
+
+export interface ChartPoint {
+  /** Category label (x-axis tick). */
+  label: string;
+  /** Numeric magnitude (bar height). */
+  value: number;
+}
+
+export interface ChartNode {
+  type: "chart";
+  /** Chart type. CLOSED union; OMITTED = "bar". "bar" is the only value in v4.1;
+   *  `line` is an ADDITIVE future value (CHART-LINE), NOT a new node — so
+   *  consumers/agents key off `kind`, and a later milestone widens the union
+   *  without a wire break. The renderer treats an absent `kind` as "bar". */
+  kind?: "bar";
+  /** Ordered category→value data. Each point is a SELF-CONTAINED {label, value}
+   *  pair (mirroring StatItem) so an agent reads the series DIRECTLY with no
+   *  parallel-array index alignment. Bars render in array order. */
+  points: ChartPoint[];
+  /** Optional chart title rendered above the plot. */
+  title?: string;
+  /** Optional appearance tone from the existing tone axis, mapped to the theme's
+   *  --vms-* tone tokens (danger→--vms-error, warning→--vms-warning,
+   *  success→--vms-success, info→--vms-info; omitted → --vms-accent). NO raw
+   *  color/CSS crosses the wire (D3) — only the closed tone token. */
+  tone?: "danger" | "warning" | "success" | "info";
 }
 
 // ─── Shell ────────────────────────────────────────────────────────────────────

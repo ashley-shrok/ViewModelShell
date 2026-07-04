@@ -366,6 +366,7 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(FitsNode),       "fits")]
 [JsonDerivedType(typeof(EmptyStateNode), "empty-state")]
 [JsonDerivedType(typeof(BadgeNode),      "badge")]
+[JsonDerivedType(typeof(ChartNode),      "chart")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -750,6 +751,30 @@ public record TextNode(
 public record StatItem(string Label, string Value);
 public record StatBarNode(IReadOnlyList<StatItem> Stats) : ViewNode;
 
+// ChartNode (CHART-01..05) — VMS's first data-visualization primitive: a
+// single-series bar chart drawn by the BrowserAdapter via Chart.js (a private,
+// lazy, optional adapter dependency — the wire carries only data). ChartPoint
+// mirrors StatItem: a self-contained {Label, Value} pair per datum so an agent
+// reads each category→value directly with no parallel-array index alignment.
+// Value is `double` to mirror TS `number` (ProgressNode uses `int` only because
+// it's a 0–100 integer; chart values are real magnitudes) — whole-number
+// fixtures keep the wire byte-identical across TS/.NET (System.Text.Json emits a
+// whole double as `12`, JSON.stringify emits `12`). Kind/Tone are free-form
+// `string?` mirroring the TS CLOSED unions ("bar"; "danger"|"warning"|"success"|
+// "info") — the closed set is enforced TS-side + validated by parity. Points is
+// required + first; Kind/Title/Tone are trailing nullable, omitted = absent on
+// the wire per the file-header rule. ChartNode is a childless/action-free LEAF —
+// both validators (WalkForSectionAction / Collect) fall through it with no
+// recursion (no fits-style blind spot).
+public record ChartPoint(string Label, double Value);
+
+public record ChartNode(
+    IReadOnlyList<ChartPoint> Points,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Kind = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Title = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null
+) : ViewNode;
+
 public record TabItem(string Value, string Label, ActionDescriptor Action);
 public record TabsNode(
     string Selected,
@@ -1090,9 +1115,10 @@ public static class ViewTreeValidation
 
             // Leaf-like nodes (FieldNode, CheckboxNode, ButtonNode, TextNode,
             // LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
-            // TableNode, CopyButtonNode, BadgeNode) carry no SectionNode descendants. No
-            // recursion needed — TableNode rows hold strings + per-row controls,
-            // not sections, so a section can never sit inside a table row.
+            // TableNode, CopyButtonNode, BadgeNode, ChartNode) carry no SectionNode
+            // descendants. No recursion needed — TableNode rows hold strings +
+            // per-row controls, not sections, so a section can never sit inside a
+            // table row; ChartNode (CHART-05) is a childless/action-free data leaf.
         }
     }
 
@@ -1200,7 +1226,9 @@ public static class ViewTreeValidation
 
             // No dispatch-bearing actions of their own:
             //   TextNode, LinkNode, ImageNode, StatBarNode, ProgressNode,
-            //   CopyButtonNode, BadgeNode.
+            //   CopyButtonNode, BadgeNode, ChartNode.
+            // ChartNode (CHART-05) is a DELIBERATE childless/action-free data
+            // leaf — it falls through here with no recursion (no fits-style blind spot).
         }
     }
 

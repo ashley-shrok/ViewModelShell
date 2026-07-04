@@ -244,7 +244,10 @@ function collectActions(
       return;
     }
     // Nodes with no dispatch-bearing actions of their own:
-    //   text, link, image, stat-bar, progress, copy-button, badge
+    //   text, link, image, stat-bar, progress, copy-button, badge, chart
+    // ChartNode (CHART-05) is a DELIBERATE childless/action-free leaf — it
+    // carries only data points, so it falls through here with no recursion (no
+    // fits-style blind spot).
     default:
       return;
   }
@@ -423,8 +426,9 @@ function walkForSectionAction(
       return;
     }
     // Leaf-like nodes (field, checkbox, button, text, link, image, stat-bar,
-    // tabs, progress, table, copy-button, badge) carry no SectionNode
-    // descendants — TableNode rows hold strings + per-row controls, not sections.
+    // tabs, progress, table, copy-button, badge, chart) carry no SectionNode
+    // descendants — TableNode rows hold strings + per-row controls, not sections;
+    // ChartNode (CHART-05) is a childless/action-free data leaf.
     default:
       return;
   }
