@@ -433,6 +433,32 @@ The **`fits` node** — SwiftUI `ViewThatFits` ported to the wire. The one genui
 
 - **None needed** — a purely additive new node; existing trees, callers, and agents are unaffected (an agent that doesn't know `fits` simply ignores it; a non-browser adapter degrades to the last child). **Known v1 limitation:** a resize-triggered candidate switch rebuilds the `fits` subtree, so focus / caret / draft state inside a fits child may reset on a resize-switch (the framework's normal focus/scroll preservation still applies to server-driven re-renders; this is specifically the resize-switch path). Acceptable for v1.
 
+### ChartNode — Phase 12 (on `main`, unpublished)
+
+The **`ChartNode`** (`type:"chart"`) — VMS's first data-visualization primitive. It carries **bounded declared data** an agent reads directly (`points: {label, value}[]` + an optional `title` + a `tone` from the existing tone axis) and renders a single-series **bar** chart drawn by **Chart.js as a PRIVATE, lazy, optional dependency of the browser adapter** — apps never import or touch Chart.js. On new server data the chart **redraws in place** via Chart.js `.update()` (a persistent-across-renders instance registry survives the `innerHTML` wipe). Closes the design of GitHub issue #6. Additive — the wire protocol token stays `viewmodel-shell/1.0`.
+
+### Added
+
+- **`ChartNode`** — a new `ViewNode` (`type:"chart"`; `kind?:"bar"` [omitted = `"bar"`, the only v4.1 value — `line` is a future ADDITIVE union value, CHART-LINE, not a new node]; `points: {label, value}[]`; `title?`; `tone?:"danger" | "warning" | "success" | "info"`) + the **`ChartPoint`** sub-record (self-contained `{label, value}` pairs mirroring `StatItem` — no parallel-array index alignment) in the TS `ViewNode` union, mirrored as a .NET `ChartNode` / `ChartPoint` record + `[JsonDerivedType(typeof(ChartNode),"chart")]` discriminator (`Points` required + first; `Kind` / `Title` / `Tone` free-form `string?` each with `[JsonIgnore(WhenWritingNull)]`; `Value` is `double` to mirror TS `number`).
+- **The `browser.ts` renderer** — `BrowserAdapter.chart()`: a `.vms-chart` wrapper + `<canvas>` drawing a single-series bar chart via a **lazy tree-shaken `import("chart.js")`** (registers only `BarController` / `BarElement` / `CategoryScale` / `LinearScale` / `Tooltip`, so a tree with no chart loads zero chart.js bytes); tone → theme-token color via `getComputedStyle` (`danger→--vms-error`, `warning→--vms-warning`, `success→--vms-success`, `info→--vms-info`, omitted → `--vms-accent`); **redraw-in-place** via `.update()` keyed by a stable title-derived + ordinal key with a per-render mark-sweep that `.destroy()`s any chart the new tree omitted; and a **fail-loud** `console.error` (the sanctioned capability seam) when the optional `chart.js` peer dep is absent — never a silent no-op or a floating unhandled rejection.
+- **The `.vms-chart`** structural framework CSS (`display:block; position:relative; width:100%; height:20rem` — bounded + positioned for Chart.js responsive sizing).
+- **The TUI degradation (CHART-05)** — `tui.tsx` renders a `ChartNode` as a legible **printed series**: the `title` (if any), then per point a `label  value  ASCII-bar` line where the bar is a run of `█` scaled to `value / max × 20`, with empty-points / non-positive-max guards. A terminal has no canvas, but the ChartNode is structured data, so it prints. `ChartNode` is a **LEAF** (no children) → no container-walk arm (same as `StatBarNode` / `ProgressNode`). The TUI is `@experimental`; the requirement is only that `ChartNode` doesn't break it and degrades legibly.
+- **`chart.js@^4`** declared as a `devDependency` + an **OPTIONAL** `peerDependency` (`peerDependenciesMeta.chart.js.optional:true`) — apps that render no chart install nothing and load zero chart.js bytes.
+
+### Not changed
+
+- No wire-shape change — the protocol token stays `viewmodel-shell/1.0` (a new optional-field-bearing leaf ViewNode is additive). The core `index.ts` gains the **TYPE only** — all rendering / canvas / `getComputedStyle` / Chart.js live in `browser.ts`, so the `check:core-globals` guard stays green. The **.NET / bun backends gain NO chart.js dependency** (they only EMIT the data). `agent-skill.md` / `AgentSkill.md` are **untouched here** — ChartNode is documented in the agent skill in Phase 13 / CHART-06 (both copies must change together to keep the parity skill gate green).
+
+### Demo + tests
+
+- **FeatureProbe** twins (`FeatureProbe-bun/handler.ts` + `FeatureProbe/AspNetCore/FeatureProbeController.cs`) render a static `chart (bar)` node (whole-number points `Mon/Tue/Wed` = 12/19/7, `title:"Weekly visits"`, `tone:"info"`, `kind` omitted); the existing `feature-probe` GET steps capture it, so both backends emit **byte-identical** `{type:"chart", kind?, points, title?, tone?}` wire (cross-backend parity verified; whole-number values keep `double`/`number` serialization byte-identical — `12` not `12.0`). **The client-side Chart.js pixels are browser-only and explicitly NOT part of parity** — parity proves only identical serialization.
+- `viewmodel-shell/test/chart.test.ts` (+ `test/chart-missing-dep.test.ts`) cover the bar-config integration (mocked chart.js), redraw-in-place via `.update()`, removal `.destroy()` mark-sweep, fail-loud on a missing dep, and the validator no-blind-spot. Real pixels (bars / colors / title) are **jsdom-untestable** and verified by the Phase 13 operator browser review (CHART-06).
+- The **Showcase** (`demo/Showcase/frontend/src/main.ts`) gains a bar-chart demo (`title:"Signups"`, `tone:"success"`), built only from ViewNodes (zero `<style>`).
+
+### Migration
+
+- **None needed** — a purely additive new leaf node; existing trees, callers, and agents are unaffected. **Consumers who render a `ChartNode` must install the optional `chart.js` peer dependency**; apps that render no chart need nothing.
+
 ## 1.11.0 / 1.9.0 — Horizontal `row` layout + Section `flyout` (overlay disclosure) (npm + NuGet)
 
 **npm:** `1.11.0` (MINOR — additive layout value + `SectionNode.flyout`) · **NuGet:** `1.9.0` (MINOR — additive `SectionNode.Flyout`; `Layout` already free-form string).

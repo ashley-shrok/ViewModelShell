@@ -559,6 +559,22 @@ function layoutsView(): ViewNode[] {
       ]},
     ]},
 
+    // ── chart (bar) — VMS's first data-viz primitive ─────────────────────
+    // A ChartNode is STRUCTURED data (labelled categories × numeric values)
+    // drawn as a single-series bar chart by Chart.js — a PRIVATE, lazy, optional
+    // dep of the browser adapter (apps NEVER touch Chart.js). The app ships only
+    // the data: `points` + an optional `title` + a `tone` from the tone axis. No
+    // chart library import, no CSS. Real bars/colors are the Phase-13 pixel review.
+    { type: "section", heading: "Chart (bar)", children: [
+      { type: "text", value: "A `chart` node is bounded declared data — labelled categories × numeric values — an agent reads directly. The browser adapter draws it as a single-series bar chart via Chart.js loaded LAZILY as a private optional dependency; the app ships only the data (`points`), a `title`, and a `tone` from the existing tone axis — no chart library and no CSS.", style: "muted" },
+      { type: "chart", points: [
+        { label: "Jan", value: 30 },
+        { label: "Feb", value: 45 },
+        { label: "Mar", value: 28 },
+        { label: "Apr", value: 52 },
+      ], title: "Signups", tone: "success" },
+    ]},
+
     // ── child-side modifiers (alignSelf + maxWidth) — the chat-bubble case ─
     { type: "section", heading: "Child-side modifiers (alignSelf + maxWidth)", children: [
       { type: "text", value: "Two per-child modifiers on a section: `alignSelf` (start/center/end — the per-child counterpart to `align`) and `maxWidth` (half/two-thirds/three-quarters/prose — a bounded cap). Together they compose a chat transcript with ZERO app CSS: a vertical stack of card bubbles, each pinned to one side and capped so the opposite gutter stays open. Resize the window — the fractional caps scale with it.", style: "muted" },
