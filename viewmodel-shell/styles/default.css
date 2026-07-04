@@ -283,6 +283,12 @@ body:has(.vms-page--fill) { margin: 0; }
    the renderer (browser.ts), not in CSS. ── */
 .vms-fits { display: block; }
 
+/* ── Chart container (CHART-01 / Phase 12). Framework CSS (NOT app CSS): Chart.js
+   responsive sizing requires a BOUNDED, positioned container — the canvas fills
+   this wrapper. The zero-app-CSS policy is unaffected (this is shipped framework
+   CSS, and no raw style crosses the wire — tone maps to a --vms-* token). ── */
+.vms-chart { display: block; position: relative; width: 100%; height: 20rem; }
+
 /* ── Alignment: arrange (main axis → justify-content) / align (cross axis →
    align-items) (ALIGN-01/02/03 / 1.12.0). Intended for layout:"row" (the cluster
    primitive) but these are generic box-alignment, so they're harmless on any flex

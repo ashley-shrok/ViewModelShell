@@ -17,7 +17,7 @@ import type {
   FormNode, FieldNode, CheckboxNode, ButtonNode,
   TextNode, LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
   ModalNode, TableNode, CopyButtonNode, DividerNode, FitsNode,
-  EmptyStateNode, BadgeNode,
+  EmptyStateNode, BadgeNode, ChartNode,
 } from "./index.js";
 
 function legacyCopy(text: string): boolean {
@@ -79,6 +79,24 @@ export class BrowserAdapter implements Adapter {
   // never leak when the tree is rebuilt — the same per-render reset idiom as
   // detailsOpenSnapshot / sectionKeyCounter above.
   private fitsObservers: ResizeObserver[] = [];
+  // Phase 12 (CHART-01/03) — live Chart.js instances keyed by a stable per-render
+  // ordinal chart key. DELIBERATELY PERSISTENT across renders (NOT reset like the
+  // per-render fields below): the canvas + Chart instance must SURVIVE render()'s
+  // innerHTML wipe so a re-render with changed data redraws IN PLACE via
+  // .update() instead of re-constructing. `chart` is `any` (the module is
+  // dynamically imported, so there's no compile-time Chart type dependency);
+  // `latest` stashes the newest config while an async load is in flight so a fast
+  // second render still applies once the import resolves. Instances are
+  // mark-swept (destroy()'d + deleted) in render() when the new tree drops them.
+  private chartInstances = new Map<string, { canvas: HTMLCanvasElement; chart: any | null; latest: any | null }>();
+  // Per-render disambiguator for chart keys (title-derived or anonymous). Reset
+  // at the TOP of every render() (like sectionKeyCounter) so snapshot keys and
+  // rebuild keys compute identically across a render pass.
+  private chartKeyCounter = new Map<string, number>();
+  // Per-render set of every chart key rendered this pass. Reset at the TOP of
+  // every render(); render() mark-sweeps any chartInstances key NOT in this set
+  // (a ChartNode removed from the new tree → its Chart instance is destroyed).
+  private chartKeysSeen = new Set<string>();
 
   constructor(private container: HTMLElement) {}
 
@@ -143,8 +161,27 @@ export class BrowserAdapter implements Adapter {
     this.fitsObservers.forEach(o => o.disconnect());
     this.fitsObservers = [];
 
+    // Phase 12 (CHART-01/03) — reset the per-render chart bookkeeping (NOT
+    // chartInstances, which is deliberately persistent). Same per-render reset
+    // model as sectionKeyCounter: keys must compute identically across the
+    // rebuild + the post-rebuild mark-sweep below.
+    this.chartKeyCounter = new Map();
+    this.chartKeysSeen = new Set();
+
     this.container.innerHTML = "";
     this.node(vm, this.container, onAction);
+
+    // Phase 12 (CHART-03) — mark-sweep: destroy + drop any Chart instance whose
+    // key was NOT rendered this pass (a ChartNode removed from the new tree), so
+    // instances never leak across a long session. Swept POST-rebuild (unlike the
+    // fits pre-wipe disconnect) because a persisting chart's canvas must survive
+    // the innerHTML wipe to be reused for an in-place .update().
+    for (const [key, entry] of this.chartInstances) {
+      if (!this.chartKeysSeen.has(key)) {
+        entry.chart?.destroy();
+        this.chartInstances.delete(key);
+      }
+    }
 
     if (focusId) {
       const el = this.container.querySelector<HTMLInputElement | HTMLTextAreaElement>(
@@ -358,6 +395,7 @@ export class BrowserAdapter implements Adapter {
       case "fits":         return this.fits(n, parent, on);
       case "empty-state":  return this.emptyState(n, parent, on);
       case "badge":        return this.badge(n, parent);
+      case "chart":        return this.chart(n, parent);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -494,6 +532,133 @@ export class BrowserAdapter implements Adapter {
     const ro = new ResizeObserver(() => pick());
     ro.observe(container);
     this.fitsObservers.push(ro);
+  }
+
+  /**
+   * ChartNode (CHART-01/02/03/04) — a single-series BAR chart drawn by Chart.js,
+   * loaded as a PRIVATE, LAZY, OPTIONAL adapter dependency: the dynamic
+   * `import("chart.js")` in loadChart() is reached ONLY when a ChartNode renders,
+   * and it registers ONLY the bar pieces so the bundle tree-shakes (an app that
+   * renders no chart loads zero chart.js bytes; the core + .NET/bun backends gain
+   * no dependency). tone→theme-token color (CHART-02) is read via getComputedStyle
+   * — NO raw CSS crosses the wire.
+   *
+   * The canvas + Chart instance are keyed by a stable per-render ordinal and kept
+   * in `chartInstances` ACROSS renders, so a re-render with changed data reuses
+   * the SAME canvas (detached, not destroyed, by render()'s innerHTML wipe — its
+   * 2D context + bitmap survive) and redraws IN PLACE via `.update()` (CHART-03)
+   * rather than reconstructing. render() mark-sweeps + destroy()s any instance the
+   * new tree dropped (leak prevention). getComputedStyle / canvas / Chart.js live
+   * ONLY here in browser.ts — the core (index.ts) stays platform-agnostic.
+   */
+  private chart(n: ChartNode, parent: HTMLElement): void {
+    // Stable key: title-derived base disambiguated by a per-render ordinal so
+    // multiple/anonymous charts get distinct keys that compute identically across
+    // renders (mirrors the collapsible-section key disambiguation).
+    const baseKey = n.title ?? "vms-chart-anon";
+    const ordinal = this.chartKeyCounter.get(baseKey) ?? 0;
+    this.chartKeyCounter.set(baseKey, ordinal + 1);
+    const key = `${baseKey}#${ordinal}`;
+    this.chartKeysSeen.add(key);
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "vms-chart";
+    parent.appendChild(wrapper);
+
+    // tone → theme token, NOT `--vms-${tone}`: `danger` maps to `--vms-error`
+    // (matching .vms-section--danger); omitted → the neutral `--vms-accent`.
+    const toneToken: Record<string, string> = {
+      danger: "--vms-error",
+      warning: "--vms-warning",
+      success: "--vms-success",
+      info: "--vms-info",
+    };
+    const token = (n.tone && toneToken[n.tone]) || "--vms-accent";
+    const color = getComputedStyle(this.container).getPropertyValue(token).trim();
+
+    const config = {
+      type: "bar" as const,
+      data: {
+        labels: n.points.map(p => p.label),
+        datasets: [{
+          data: n.points.map(p => p.value),
+          backgroundColor: color,
+          borderColor: color,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: n.title ? { display: true, text: n.title } : { display: false },
+          legend: { display: false }, // single series — no legend
+        },
+      },
+    };
+
+    const existing = this.chartInstances.get(key);
+    if (existing) {
+      // Reuse the SAME canvas element (detached by the innerHTML wipe, not
+      // destroyed) — its 2D context + drawn bitmap survive.
+      wrapper.appendChild(existing.canvas);
+      if (existing.chart) {
+        // Redraw in place (CHART-03).
+        existing.chart.data = config.data;
+        existing.chart.options = config.options;
+        existing.chart.update();
+      } else {
+        // Still loading — stash the newest config to apply when the import resolves.
+        existing.latest = config;
+      }
+      return;
+    }
+
+    // First render of this key: create a fresh canvas + kick the lazy loader
+    // (do NOT await inside the synchronous render()).
+    const canvas = document.createElement("canvas");
+    wrapper.appendChild(canvas);
+    this.chartInstances.set(key, { canvas, chart: null, latest: config });
+    void this.loadChart(key, config);
+  }
+
+  /**
+   * Lazily import chart.js and construct the Chart for `key`. The dynamic import
+   * is what keeps chart.js zero-bytes-when-absent; registering ONLY the bar
+   * controller/elements/scales/tooltip is what keeps CHART-04 small (tree-shaken).
+   * Fire-and-forget from chart() (`void this.loadChart(...)`), so a missing
+   * dependency is surfaced through the fail-loud seam (chartFailLoud), NEVER a
+   * floating unhandled rejection.
+   */
+  private async loadChart(key: string, config: any): Promise<void> {
+    let mod: any;
+    try {
+      mod = await import("chart.js");
+    } catch {
+      this.chartFailLoud(
+        "ChartNode present but the optional peer dependency 'chart.js' is not " +
+        "installed. Run: npm install chart.js"
+      );
+      return;
+    }
+    const { Chart, BarController, BarElement, CategoryScale, LinearScale, Tooltip } = mod;
+    // Tree-shaken registration — ONLY the bar pieces.
+    Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip);
+    const entry = this.chartInstances.get(key);
+    // A later render may have mark-swept this key before the import resolved.
+    if (!entry) return;
+    entry.chart = new Chart(entry.canvas, entry.latest ?? config);
+    entry.latest = null;
+  }
+
+  /**
+   * Fail-loud for a missing chart.js — routed through the SAME sanctioned seam as
+   * the other no-safe-default capabilities (AGENTS.md fail-loud rule). The
+   * BrowserAdapter holds no ShellOptions.onError reference, so it uses the
+   * AGENTS.md-sanctioned fallback (console.error). NEVER a silent no-op, NEVER a
+   * floating unhandled rejection — deterministic + spy-able in tests.
+   */
+  private chartFailLoud(msg: string): void {
+    console.error("[ViewModelShell]", new Error(msg));
   }
 
   private section(n: SectionNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
