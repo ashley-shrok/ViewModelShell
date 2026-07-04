@@ -59,7 +59,7 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
 
 **Milestone Goal:** Add VMS's first data-visualization primitive — a structured `ChartNode` (bar, single-series, `title` + `tone`) whose payload is bounded declared data (a numeric series + labelled categories), rendered by Chart.js behind the browser adapter as a private implementation detail. Closes GitHub issue #6 (the lone open issue). Additive; the wire protocol token stays `viewmodel-shell/1.0`. Ships as an aligned minor (npm + NuGet `4.1.0`).
 
-- [ ] **Phase 12: ChartNode Primitive** — Structured bar `ChartNode` across both backends + `browser.ts` renderer via lazy/optional Chart.js + both tree-validators + TUI degradation + `agent-skill.md` + parity/FeatureProbe + adapter/backend tests
+- [x] **Phase 12: ChartNode Primitive** (2/2 plans) — completed 2026-07-04 — Structured bar `ChartNode` across both backends + `browser.ts` renderer via lazy/optional Chart.js + both tree-validators + TUI degradation + parity/FeatureProbe + adapter/backend tests (green-tree gate green; agent-skill.md + release deferred to Phase 13)
 - [ ] **Phase 13: Data-Viz Verification + Release Closeout** — Operator browser sign-off on the rendered chart, CHANGELOG/MIGRATION, aligned `4.1.0` npm+NuGet release, tag, advance `main`, announce `#vms-changelog`, close issue #6
 
 ## Phase Details
@@ -75,8 +75,8 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
   4. The `ChartNode` round-trips byte-identically across TS + .NET, both tree-validators descend into it, and `bun run parity/run.ts` is green with a FeatureProbe fixture exercising it (CHART-05).
   5. The TUI adapter renders a defined legible fallback for a `ChartNode` (printed series / ASCII bars) instead of crashing (CHART-05).
 **Plans**: 2 plans
-- [ ] 12-01-PLAN.md — ChartNode + ChartPoint wire type (both backends) + browser.ts bar renderer (lazy/optional Chart.js) + validators + adapter tests (wave 1)
-- [ ] 12-02-PLAN.md — TUI degradation + FeatureProbe/parity + Showcase demo + CHANGELOG (wave 2)
+- [x] 12-01-PLAN.md — ChartNode + ChartPoint wire type (both backends) + browser.ts bar renderer (lazy/optional Chart.js) + validators + adapter tests (wave 1) — completed 2026-07-04
+- [x] 12-02-PLAN.md — TUI degradation + FeatureProbe/parity + Showcase demo + CHANGELOG (wave 2) — completed 2026-07-04
 **UI hint**: yes
 
 ### Phase 13: Data-Viz Verification + Release Closeout
