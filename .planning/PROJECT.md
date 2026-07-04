@@ -8,9 +8,22 @@ A server-driven UI framework where the wire format is structured enough that age
 
 The core is a platform-agnostic transformer of a structured wire protocol — testable with no browser runtime, portable to any front-end. If platform assumptions leak into the core, the framework's central promise (and its main differentiator) is broken.
 
+## Current Milestone: v4.1 Data Visualization
+
+**Goal:** Add VMS's first data-visualization primitive — a structured `ChartNode` (bar, single-series, `title` + `tone`) whose payload is bounded declared data (a numeric series + labelled categories), rendered by **Chart.js behind the browser adapter** as a private implementation detail. Closes GitHub issue #6 (the lone open issue). Additive; the wire protocol token stays `viewmodel-shell/1.0`.
+
+**Target features:**
+- **`ChartNode` — a structured, agent-legible node, not an escape hatch.** The series/categories are declared fields an agent reads; parity diffs the DATA, not the pixels. A general "raw content / embed anything" node was explicitly REJECTED (the absence of an escape hatch is the product).
+- **Chart.js behind the adapter, lazy/optional.** The library is a private detail of the browser adapter (apps never touch it); loaded only when a `ChartNode` is present so non-charting apps pay zero bytes; core + .NET/bun backends stay dependency-free (they only emit ChartNode data).
+- **Closed appearance.** `title` + the existing `tone` axis (danger/warning/success/info) only — no raw hex/CSS/axis/tooltip config on the wire.
+- **Re-render on new data.** The chart redraws in place when the server returns updated data (the standard VMS control→server→redraw loop).
+- **Two-backend parity + TUI degradation.** Byte-identical TS/.NET node, both tree-validators descend into it, FeatureProbe/parity coverage, and a legible TUI fallback.
+
+**Key context:** Design was settled with the operator ahead of planning (a design session + a live tailnet comparison of frappe-charts / Chart.js / ApexCharts / hand-drawn SVG — Chart.js chosen on maintenance health + v4 tree-shakeability + free interactivity). Scope is deliberately MINIMAL (bar only; `line` and multi-series deferred) and hard-gated against a config/CSS surface. Ships as an aligned additive **minor** (npm + NuGet `4.1.0`). This is a deliberate return to a formal GSD milestone for the flagship #6 feature; interstitial 2.x/3.x/4.0 releases since v1.12 were CHANGELOG-tracked direct releases.
+
 ## Last Shipped Milestone: v1.12 Layout System Completeness
 
-> ✅ **SHIPPED 2026-06-24** (npm `1.12.0` / NuGet `1.10.0`). No GSD milestone is currently active — work since has continued as CHANGELOG-tracked interstitial releases (latest **3.1.0**, 2026-06-26: 2.0.0 remove `SectionNode.flyout` [BREAKING], 2.1.0 `LinkNode.active`, 3.0.0 unified appearance axes [BREAKING], 3.0.1/3.0.2 CSS fixes, 3.1.0 admin-shell primitives). The description below is the milestone's original scope, kept as history; see `MILESTONES.md` + `CHANGELOG.md` for what shipped.
+> ✅ **SHIPPED 2026-06-24** (npm `1.12.0` / NuGet `1.10.0`). Work since shipped as CHANGELOG-tracked interstitial releases up to **4.0.0** (through 3.1.0 on 2026-06-26: 2.0.0 remove `SectionNode.flyout` [BREAKING], 2.1.0 `LinkNode.active`, 3.0.0 unified appearance axes [BREAKING], 3.0.1/3.0.2 CSS fixes, 3.1.0 admin-shell primitives; then the version-skew arc 3.5–3.11 and 4.0.0 file-upload `uploadOn` routing [BREAKING]). The description below is the milestone's original scope, kept as history; see `MILESTONES.md` + `CHANGELOG.md` for what shipped.
 
 **Goal:** Finish VMS's layout vocabulary so the frontend can express any app's layout with zero app-authored CSS and zero app-specified breakpoints — grounded in a 4-framework research synthesis (`.planning/design/layout-system-research.md`) rather than invented. Completes the layout enum that 0.4.0's Design System milestone started (`stack`/`split`/`cards`).
 

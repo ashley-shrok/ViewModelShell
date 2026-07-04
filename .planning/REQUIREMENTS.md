@@ -1,89 +1,59 @@
-# Requirements: ViewModel Shell — Milestone v1.12 Layout System Completeness
+# Requirements: ViewModel Shell — Milestone v4.1 Data Visualization
 
-> ✅ **SHIPPED 2026-06-24** — all v1 requirements below delivered in the consolidated npm `1.12.0` / NuGet `1.10.0` release. See CHANGELOG `1.12.0 / 1.10.0` and the milestone summary in `MILESTONES.md`. (Subsequent interstitial releases through 3.1.0 are CHANGELOG-tracked, not part of this milestone's scope.)
-
-**Defined:** 2026-06-24
+**Defined:** 2026-07-04
 **Core Value:** The core is a platform-agnostic transformer of a structured wire protocol — testable with no browser runtime, portable to any front-end, and drivable end-to-end by an agent reading only the JSON the server emits.
 
-Source of truth for scope: `.planning/design/layout-system-research.md` (4-framework research synthesis). This milestone completes the layout vocabulary started by the 0.4.0 Design System milestone. Pre-production: no backward-compat burden.
+This milestone adds VMS's first data-visualization primitive: a **structured `ChartNode`** whose payload is bounded declared data (a numeric series + labelled categories), rendered by **Chart.js behind the browser adapter** as a private implementation detail. It closes GitHub issue #6 (the lone open issue). Design was settled with the operator ahead of planning (a design session + a live tailnet comparison of frappe-charts / Chart.js / ApexCharts / hand-drawn SVG). Additive, no wire break — the protocol token stays `viewmodel-shell/1.0`.
 
-**Two standing principles every requirement must satisfy** (also shipped as AGENTS.md policy, POLICY-01):
-- **(P1) Intrinsic responsiveness, zero viewport breakpoints.** Collapse must be container-relative — auto-fit/`minmax`, flex-wrap, negative-flex-basis, or container queries. Never a viewport `@media` rule.
-- **(P2) Closed enum or bounded scalar, never raw CSS.** Every layout knob crossing the wire is a closed union or bounded token. No CSS values, no spans/tracks/areas, no breakpoint objects.
+**Locked design principles every requirement must satisfy:**
+- **(D1) Structured, not an escape hatch.** The ChartNode carries bounded declared data (numeric series + labelled categories) an agent reads directly; parity diffs the DATA, not the pixels. A general "raw content / embed anything" node is explicitly REJECTED (the absence of an escape hatch is the product; agents would reach for it as least-resistance).
+- **(D2) Library behind the adapter.** Chart.js is a PRIVATE implementation detail of the browser adapter (apps never touch it, same as the adapter using the DOM). The core (`src/index.ts`) and the .NET/bun backends stay dependency-free — they only EMIT ChartNode data; only the browser renders pixels.
+- **(D3) Closed appearance, never raw CSS.** Chart appearance is `title` + the existing `tone` axis (danger/warning/success/info) only — no raw hex, no CSS, no arbitrary axis/tooltip config.
 
 ---
 
 ## v1 Requirements
 
-### Alignment (main/cross-axis enums)
-- [x] **ALIGN-01**: The `row` layout (on `PageNode`/`SectionNode`, and any flex-row container) accepts an optional `arrange` closed enum — `start | center | end | space-between | space-around | space-evenly` — mapping to `justify-content`. Omitted renders byte-identical to today's left-pack `row`.
-- [x] **ALIGN-02**: The `row` layout accepts an optional `align` closed enum — `start | center | end | stretch | baseline` — mapping to `align-items`. Omitted renders byte-identical to today's `align-items:center`.
-- [x] **ALIGN-03**: `arrange`/`align` land byte-identically in TS (`src/index.ts` + `browser.ts` + `styles/default.css`) and .NET (`ViewModels.cs`, both nullable fields carrying `[JsonIgnore(WhenWritingNull)]`); a parity fixture exercises every enum value and `bun run parity/run.ts` is byte-identical green.
-- [x] **ALIGN-04**: The canonical header-bar pattern — a `row` with `arrange:"space-between"` and a heading-`TextNode` first child — renders title-left / nav-right with zero app CSS (the PBMInvoices consumer's request, served by the general primitive).
+### Chart primitive
+- [ ] **CHART-01**: A `ChartNode` renders a single-series **bar** chart (labelled categories × numeric values) from structured wire data — the series/categories are declared, agent-legible fields, not opaque pixels.
+- [ ] **CHART-02**: Chart appearance is limited to an optional `title` and a `tone` drawn from the existing tone axis (`danger | warning | success | info`) mapped to the theme's `--vms-*` tone tokens. No raw color/CSS/axis/tooltip config crosses the wire (D3).
+- [ ] **CHART-03**: When the server returns a new view tree with updated chart data, the adapter **redraws the chart in place** (re-render on view update — the standard VMS control→server→redraw loop), via Chart.js's native update path.
+- [ ] **CHART-04**: **Chart.js is a lazy/optional dependency of the browser package** — loaded only when a `ChartNode` is present (the optional-subpath pattern used by `@ashley-shrok/viewmodel-shell/vite`), tree-shaken to the registered controllers (bar first). Apps that render no chart pay zero chart bytes; the core + .NET/bun backends gain no dependency (D2).
+- [ ] **CHART-05**: The `ChartNode` lands byte-identically in TS (`src/index.ts` + `browser.ts`) and .NET (`ViewModels.cs` record + `[JsonDerivedType]` discriminator, every nullable wire field carrying `[JsonIgnore(WhenWritingNull)]`); **both** tree-validators descend into it (no fits-node-style blind spot); a `parity/` fixture (FeatureProbe) exercises it and `bun run parity/run.ts` is byte-identical green (data diffed, not pixels). The TUI adapter has a defined legible degradation (e.g. printed series / ASCII bars) so it doesn't break the non-browser target.
 
-### Switcher (atomic row↔stack primitive)
-- [x] **SWITCH-01**: A new `switcher` layout exists that lays N equal-weight children in a single row above a content-width threshold and stacks ALL of them below it — an atomic flip with no intermediate partial-wrap state — implemented via the negative-`flex-basis` trick, zero `@media`.
-- [x] **SWITCH-02**: `switcher` takes a bounded `threshold` token (the flip width) and an optional bounded `limit` (max items before forcing vertical regardless of width). Both closed/bounded, never raw CSS.
-- [x] **SWITCH-03**: `switcher` lands byte-identically in TS and .NET (nullable params with `[JsonIgnore(WhenWritingNull)]`); a parity fixture covers it; `bun run parity/run.ts` green.
-
-### Grid (cards minItem wire field)
-- [x] **GRID-01**: The `cards` layout accepts an optional bounded `minItem` token (a closed size scale) that sets the auto-fit minimum track width — promoting the CSS-only `--vms-card-min` to explicit server intent. Omitted renders byte-identical to today's `--vms-card-min` default.
-- [x] **GRID-02**: `minItem` lands byte-identically in TS and .NET (`[JsonIgnore(WhenWritingNull)]`); a parity fixture exercises it; `bun run parity/run.ts` green.
-
-### Fits (responsive selection node)
-- [x] **FITS-01**: A new `fits` node type renders the first child whose intrinsic size fits the available container width, else the next — container-relative selection decided client-side at layout time, zero breakpoints. Carries an axis enum (`horizontal | vertical | both`) and an ordered children list.
-- [x] **FITS-02**: `fits` has a defined, sensible degradation on the TUI adapter (terminal has no pixel fit — renders a documented child per a fixed rule) so it doesn't break the non-browser target.
-- [x] **FITS-03**: `fits` lands byte-identically in TS and .NET (record + `[JsonDerivedType]` discriminator, nullable fields `[JsonIgnore(WhenWritingNull)]`); a parity fixture exercises it; `bun run parity/run.ts` green.
-
-### Policy & docs
-- [x] **POLICY-01**: AGENTS.md gains a "Layout policy" section stating P1 (intrinsic/zero-viewport-breakpoint) and P2 (closed-enum/bounded-scalar) as the governing test for ALL future layout changes — a field joins the vocabulary iff it passes both. The two flexbox-idiom primitives a grid cannot express (`sidebar`, `switcher`) are named.
-- [x] **POLICY-02**: The node-type/CSS-class concern→source table and the Design-system section in AGENTS.md are updated to reflect the new primitives without enumerating them in a way that drifts (point at source/Showcase, per existing convention).
-
-### Demo verification (the centerpiece)
-- [x] **DEMO-01**: Temporary demo apps (under `demo/`, standard VMS app structure, served locally) visually verify EACH new/affected layout in isolation: header-bar/`arrange`, every `align` value, `switcher` flip across the threshold, `sidebar` collapse, `cards`/`minItem`, and `fits` selection.
-- [x] **DEMO-02**: At least two real-app compositions (a dashboard and a list-detail view) built from the completed primitive set, proving they compose.
-- [x] **DEMO-03**: The operator personally reviews every demo layout in a browser and signs off (or returns feedback that is iterated to sign-off) — verification is by human review, not assumed.
-
-### Release
-- [x] **RELEASE-01**: Each shipped primitive is released lockstep — aligned npm + NuGet version bumps, CHANGELOG (+ MIGRATION note if consumers must act), the manual publish ritual, an annotated `v<version>` git tag, and `main` advanced to contain the release commit (per AGENTS.md release rules). The milestone spans several minors.
-- [x] **RELEASE-02**: Every release gate is green at ship — full cross-backend parity byte-identical, vitest, the static CI guards (core-globals, WCAG-AA, no-demo-style, layout-classes), and `dotnet test`.
+### Verification & release
+- [ ] **CHART-06**: The operator personally reviews the rendered chart in a browser (served over the tailnet) and signs off — a chart is visual, so verification is by human review, not assumed. `agent-skill.md` documents the `ChartNode` for wire-driving agents, byte-copied to the .NET `AgentSkill.md` (the parity gate diffs both).
+- [ ] **CHART-07**: Aligned additive **minor** release on both packages (npm + NuGet `4.1.0`) with CHANGELOG + MIGRATION, git tag, `main` advanced (verified `git merge-base --is-ancestor`), full green-tree gate at release time, `#vms-changelog` announcement, and GitHub issue #6 closed. Wire protocol token stays `viewmodel-shell/1.0`.
 
 ---
 
-## v2 / Future Requirements (deferred, not this milestone)
-- **CENTER-01** (deferred): a nestable `center` primitive (center + measure-cap an inner subtree, not just the page). Cheap; add when a real app hits it.
-- **COVER-01** (deferred): a `cover` primitive (vertical-center a region for login/splash/empty-state). Add when an app needs it.
-- **SPACER-01** (deferred): a `Spacer{grow}` node for asymmetric push-apart cases `arrange` can't cover. Add only if a real composition needs it (`arrange:"space-between"` covers ~90%).
-- **CQ-DISCRETE-01** (deferred): container-query-driven discrete reflow (named app-shell regions, "exactly 2 cols above width X else 1") for what auto-fit can't express. The Tier-2 escape hatch; build when needed.
+## Future Requirements (deferred — not this milestone)
+
+- **CHART-LINE**: A `line` chart type (ordered / time-ish series) — the natural second type; pull in when a real consumer needs it.
+- **CHART-MULTI**: Multi-series charts (grouped/stacked bars, multiple lines) with the legend/per-series color surface that implies — deferred until a real consumer need justifies the added surface.
+- **CHART-PIE**: Pie/donut — less agent-legible (parts-of-a-whole), more decorative; deferred.
 
 ## Out of Scope (explicit exclusions)
-- **12-column placement/span grid** (`colSpan`/`col-start`) — rejected by the research: breakpoint-driven by construction, violates P1; spans violate P2. Never on the VMS wire.
-- **Viewport-breakpoint objects** (`{xs, md, lg}` per-node) — makes the *app* own breakpoints, the opposite of the framework contract; violates P1. Never on the wire.
-- **`frame` (aspect-ratio media crop)** and **`reel` (horizontal scroller)** — out of a forms/tables/workflow framework's wheelhouse; pure-CSS-cheap to add later if ever needed.
-- **Per-child proportional `weight`/`flex` field** — superseded for now by `arrange` + (deferred) `Spacer`; revisit only if proportional column splits are genuinely needed.
+
+- **A general raw-content / embed / iframe node.** Rejected on principle (D1): an "put anything here" node is invisible to agents, browser-only, and erodes the discipline that makes VMS drivable. The sanctioned valve for genuinely un-expressible content is a separate non-VMS page reached via `LinkNode` (the existing vault `/upload-page` pattern), never a tree node.
+- **Raw color / CSS / arbitrary axis-tick / tooltip configuration on the wire** (D3). If a needed appearance can't be expressed by `title` + `tone`, that's a gap to discuss, not a raw-style escape hatch.
+- **Exposing Chart.js (its config objects, plugins, or instance) to apps.** The library is an adapter implementation detail (D2); an app that could pass Chart.js config would be authoring browser-only, un-testable UI.
 
 ---
 
 ## Traceability
 
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| ALIGN-01 | Phase 8 | ✓ Shipped (1.12.0) |
-| ALIGN-02 | Phase 8 | ✓ Shipped (1.12.0) |
-| ALIGN-03 | Phase 8 | ✓ Shipped (1.12.0) |
-| ALIGN-04 | Phase 8 | ✓ Shipped (1.12.0) |
-| POLICY-01 | Phase 8 | ✓ Shipped (1.12.0) |
-| SWITCH-01 | Phase 9 | ✓ Shipped (1.12.0) |
-| SWITCH-02 | Phase 9 | ✓ Shipped (1.12.0) |
-| SWITCH-03 | Phase 9 | ✓ Shipped (1.12.0) |
-| GRID-01 | Phase 9 | ✓ Shipped (1.12.0) |
-| GRID-02 | Phase 9 | ✓ Shipped (1.12.0) |
-| FITS-01 | Phase 10 | ✓ Shipped (1.12.0) |
-| FITS-02 | Phase 10 | ✓ Shipped (1.12.0) |
-| FITS-03 | Phase 10 | ✓ Shipped (1.12.0) |
-| DEMO-01 | Phase 11 | ✓ Shipped (1.12.0) |
-| DEMO-02 | Phase 11 | ✓ Shipped (1.12.0) |
-| DEMO-03 | Phase 11 | ✓ Shipped (1.12.0) |
-| POLICY-02 | Phase 11 | ✓ Shipped (1.12.0) |
-| RELEASE-01 | Phase 11 | ✓ Shipped (1.12.0) |
-| RELEASE-02 | Phase 11 | ✓ Shipped (1.12.0) |
+| REQ-ID | Phase |
+|--------|-------|
+| CHART-01 | 12 |
+| CHART-02 | 12 |
+| CHART-03 | 12 |
+| CHART-04 | 12 |
+| CHART-05 | 12 |
+| CHART-06 | 13 |
+| CHART-07 | 13 |
+
+---
+
+*Milestone: v4.1 Data Visualization*
+*Requirements defined: 2026-07-04*
