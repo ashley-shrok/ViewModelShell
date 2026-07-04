@@ -74,7 +74,9 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
   3. An app that renders no `ChartNode` ships zero Chart.js bytes; the core (`src/index.ts`) and the .NET/bun backends gain no dependency (CHART-04).
   4. The `ChartNode` round-trips byte-identically across TS + .NET, both tree-validators descend into it, and `bun run parity/run.ts` is green with a FeatureProbe fixture exercising it (CHART-05).
   5. The TUI adapter renders a defined legible fallback for a `ChartNode` (printed series / ASCII bars) instead of crashing (CHART-05).
-**Plans**: TBD (set by `/gsd:plan-phase 12`)
+**Plans**: 2 plans
+- [ ] 12-01-PLAN.md — ChartNode + ChartPoint wire type (both backends) + browser.ts bar renderer (lazy/optional Chart.js) + validators + adapter tests (wave 1)
+- [ ] 12-02-PLAN.md — TUI degradation + FeatureProbe/parity + Showcase demo + CHANGELOG (wave 2)
 **UI hint**: yes
 
 ### Phase 13: Data-Viz Verification + Release Closeout
