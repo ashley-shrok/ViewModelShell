@@ -431,6 +431,30 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // 12.x (Phase 12) — chart node vocabulary (parity coverage for CHART-05).
+  // Static view-shape captured by the existing GET step: a {type:"chart",
+  // points, title?, tone?} bar chart with WHOLE-NUMBER values so double/number
+  // serialize byte-identically (12 not 12.0). `kind` OMITTED → absent on the
+  // wire (proves omitted = absent). The client-side Chart.js pixels are NOT
+  // parity-tested (browser-only); parity proves only identical serialization.
+  // Byte-identical to the .NET twin (FeatureProbeController.cs chartSection).
+  const chartSection: ViewNode = {
+    type: "section",
+    heading: "chart (bar)",
+    children: [
+      {
+        type: "chart",
+        points: [
+          { label: "Mon", value: 12 },
+          { label: "Tue", value: 19 },
+          { label: "Wed", value: 7 },
+        ],
+        title: "Weekly visits",
+        tone: "info",
+      },
+    ],
+  };
+
   // 3.0.0 — appearance axes (parity coverage for the unified vocabulary).
   // Byte-identical to the .NET twin (FeatureProbeController.cs axesSection).
   const axesSection: ViewNode = {
@@ -628,6 +652,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       bareSwitcherSection, ...switcherThresholdSections, switcherLimitSection,
       bareCardsSection, ...cardsMinItemSections,
       fitsAxisOmittedSection, fitsAxisBothSection,
+      chartSection,
       childModifiersSection,
       buildTableSection(state),
       formsSection,

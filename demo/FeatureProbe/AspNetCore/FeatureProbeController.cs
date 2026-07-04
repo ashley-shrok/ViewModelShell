@@ -493,6 +493,26 @@ public class FeatureProbeController : ControllerBase
                     }, Layout: "stack"),
                 }, Axis: "both"),
             });
+        // 12.x (Phase 12) — chart node vocabulary (parity coverage for CHART-05).
+        // Static view-shape captured by the existing GET step: a ChartNode bar
+        // chart with WHOLE-NUMBER points so double/number serialize byte-identically
+        // (12 not 12.0). Kind omitted → absent on the wire (proves omitted = absent).
+        // Client-side Chart.js pixels are NOT parity-tested; parity proves only
+        // identical serialization. Byte-identical to the bun twin (handler.ts).
+        var chartSection = new SectionNode(
+            Heading: "chart (bar)",
+            Children: new ViewNode[]
+            {
+                new ChartNode(
+                    Points: new ChartPoint[]
+                    {
+                        new("Mon", 12),
+                        new("Tue", 19),
+                        new("Wed", 7),
+                    },
+                    Title: "Weekly visits",
+                    Tone: "info"),
+            });
         // 3.0.0 — appearance axes (parity coverage for the unified vocabulary:
         // button emphasis × tone × size, section tone, text tone, list-item/row
         // state + tone). Static view-shape captured by the existing GET steps;
@@ -583,6 +603,7 @@ public class FeatureProbeController : ControllerBase
         pageChildren.AddRange(cardsMinItemSections);
         pageChildren.Add(fitsAxisOmittedSection);
         pageChildren.Add(fitsAxisBothSection);
+        pageChildren.Add(chartSection);
         pageChildren.Add(childModifiersSection);
         pageChildren.Add(BuildTableSection(state));
         // 3.4.0 — forms-completeness parity coverage: FieldNode error/help/
