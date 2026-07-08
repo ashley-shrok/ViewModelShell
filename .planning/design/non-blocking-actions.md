@@ -63,6 +63,28 @@ late/stale responses discarded). In a stateless world every round-trip is indepe
 is the only place with global order — **no server change, no new wire field.** (The outside spec put
 "view tree epoch" on the wire; we keep it a pure client concern.)
 
+**Refinement (Phase 14 gap closure, CR-02): the epoch is lane-aware, not symmetric across lanes —
+a blocking (user) response is authoritative and ALWAYS applies.** The initial Phase 14 build made
+`appliedSeq` a single counter gating *both* lanes symmetrically (`seq >= appliedSeq` before applying
+any response, regardless of which lane it came from). That is correct for the direction the design
+above describes — a stale *non-blocking* response arriving after a newer one must not clobber it —
+but it is wrong in the reverse direction: because `blockingInFlight` guarantees **at most one
+blocking dispatch is ever in flight** (a second blocking trigger is dropped, never queued, while one
+is pending), a blocking response can never be superseded by *another blocking* response — there is
+nothing for the epoch to protect it from within its own lane. Gating it against a later-fired,
+faster-resolving *non-blocking* response (a poll, or any `blocking:false` trigger) instead let a
+legitimate, `ok:true` response to the user's own action be silently discarded — no render, no
+`onError` — while the busy lock cleared normally, so a click visibly appeared to do nothing.
+
+The corrected rule: **only non-blocking/background responses are subject to the staleness-discard**
+(`seq >= appliedSeq`, exactly as before). A **blocking response always applies unconditionally** the
+moment it arrives (after its own `ok:false`/`stale_client` handling) — it is never dropped because a
+later-fired non-blocking dispatch happened to resolve first. `appliedSeq` stays a single monotonic
+counter shared across both lanes for the purpose of gating *non-blocking* applications (advanced via
+`Math.max` on every applied response, blocking or non-blocking, and never lowered) — only the
+*gating condition* is lane-aware, not the counter itself. This is the design of record for any future
+phase (e.g. Phase 15's poll-fold) building on this mechanism.
+
 ### Admission — staged, not built speculatively
 
 The spec's **admission barrier + full-node diff** (hold a blocking action while any non-blocking
