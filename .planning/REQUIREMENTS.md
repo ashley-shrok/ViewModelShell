@@ -25,6 +25,18 @@ This milestone adds VMS's first data-visualization primitive: a **structured `Ch
 - [ ] **CHART-06**: The operator personally reviews the rendered chart in a browser (served over the tailnet) and signs off — a chart is visual, so verification is by human review, not assumed. `agent-skill.md` documents the `ChartNode` for wire-driving agents, byte-copied to the .NET `AgentSkill.md` (the parity gate diffs both).
 - [ ] **CHART-07**: Aligned additive **minor** release on both packages (npm + NuGet `4.1.0`) with CHANGELOG + MIGRATION, git tag, `main` advanced (verified `git merge-base --is-ancestor`), full green-tree gate at release time, `#vms-changelog` announcement, and GitHub issue #6 closed. Wire protocol token stays `viewmodel-shell/1.0`.
 
+### Non-blocking actions (v4.2) — design of record `.planning/design/non-blocking-actions.md`
+- [ ] **NBA-01**: A dispatch can carry `blocking: false` (optional; default `true` → existing apps byte-unchanged). A non-blocking (silent) round-trip no longer occupies the single global dispatch mutex: a user action fired while a non-blocking round-trip is in flight is honored, not silently dropped, and vice versa.
+- [ ] **NBA-02**: Rapid `blocking:false` triggers debounce/coalesce to a single in-flight request (latest wins) — the rapid-fire selection case never queues N round-trips.
+- [ ] **NBA-03**: A stale / out-of-order non-blocking response is discarded rather than clobbering a newer render, via a **client-side** sequence/epoch counter — NO wire epoch field, NO server-side reconciliation state, server code unchanged beyond handling the (normal) action name.
+- [ ] **NBA-04**: `blocking` is absent-when-default on BOTH backends (F2 `WhenWritingDefault` / TS optional); the wire token stays `viewmodel-shell/1.0`; `bun run parity/run.ts` is byte-identical green with new fixtures for non-blocking dispatch, coalesced rapid fire, and out-of-order discard.
+- [ ] **NBA-05**: `pollInterval` runs its polls over the non-blocking path so the poll/user-action contention is gone — a user action clicked during a poll round-trip is honored, not dropped.
+- [ ] **NBA-06**: Per-checkbox/table-selection server-refresh works correctly: the box checks immediately (optimistic local `bind` write) AND fires a `blocking:false` action whose returned tree echoes selection back, so a stale response can never revert a rapid toggle (the 0.15.0 `selection.action` failure is fixed).
+- [ ] **NBA-07**: `agent-skill.md` documents `blocking:false` semantics for wire-driving agents and is byte-identical to the .NET `AgentSkill.md` (parity gate diffs both).
+- [ ] **NBA-08**: Three purpose-built demo apps (selection→live action bar; poll+user coexistence contrast; out-of-order staleness), each with a step-by-step "trigger X, then Y, expect Z" script, served over the tailnet; the operator signs off that rapid-toggle, poll-coexistence, and staleness behave as specified — this is a concurrency/timing feature, verified by human review, not assumed.
+- [ ] **NBA-09**: Aligned additive **minor** release on both packages (npm + NuGet) with CHANGELOG + MIGRATION, git tag, `main` advanced (verified `git merge-base --is-ancestor`), full green-tree gate at release time, `#vms-changelog` announcement. Wire token stays `viewmodel-shell/1.0`.
+- [ ] **NBA-10** (CONDITIONAL — Phase 17, only if intent-drift is reported): a blocking action whose target node changed under an in-flight non-blocking round-trip is not dispatched with stale intent (hold + full-node-diff at departure; drop on any difference); the dropped-action outcome is surfaced, not silently swallowed.
+
 ---
 
 ## Future Requirements (deferred — not this milestone)
@@ -52,6 +64,16 @@ This milestone adds VMS's first data-visualization primitive: a **structured `Ch
 | CHART-05 | 12 |
 | CHART-06 | 13 |
 | CHART-07 | 13 |
+| NBA-01 | 14 |
+| NBA-02 | 14 |
+| NBA-03 | 14 |
+| NBA-04 | 14 |
+| NBA-05 | 15 |
+| NBA-06 | 15 |
+| NBA-07 | 15 |
+| NBA-08 | 16 |
+| NBA-09 | 16 |
+| NBA-10 | 17 |
 
 ---
 

@@ -7,6 +7,7 @@
 - ✅ **1.0.0 Truly Self-Describing Wire** — Phases 6–7 (shipped 2026-06-08; npm + NuGet 1.0.0)
 - ✅ **v1.12 Layout System Completeness** — Phases 8–11 (shipped 2026-06-24; npm 1.12.0 / NuGet 1.10.0)
 - 🚧 **v4.1 Data Visualization** — Phases 12–13 (in progress) — `ChartNode` primitive, closes issue #6 (ships npm + NuGet 4.1.0)
+- ⏳ **v4.2 Non-Blocking Actions** — Phases 14–17 (planned) — `blocking:false` dispatch + client-side epoch reconciliation; fixes today's single-mutex poll/user contention; resurrects `selection.action` correctly; ships purpose-built human-verifiable test apps (design of record: [non-blocking-actions.md](./design/non-blocking-actions.md))
 
 **Post-v1.12 interstitial releases** (not phased milestones — direct feature commits + CHANGELOG, the same cadence as the 1.7–1.11 interstitials): **2.0.0** remove `SectionNode.flyout` (BREAKING), **2.1.0** `LinkNode.active`, **3.0.0** unified appearance axes (BREAKING — `variant` split into `tone`/`emphasis`/`size`/`state`/`style`), **3.0.1**/**3.0.2** CSS-only fixes, **3.1.0** admin-shell primitives (`ButtonNode.width`, `DividerNode`, `FormNode.submitButton`). Both registries currently at **3.1.0** (2026-06-26). See [CHANGELOG.md](../CHANGELOG.md) for the authoritative per-version history.
 
@@ -60,7 +61,16 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
 **Milestone Goal:** Add VMS's first data-visualization primitive — a structured `ChartNode` (bar, single-series, `title` + `tone`) whose payload is bounded declared data (a numeric series + labelled categories), rendered by Chart.js behind the browser adapter as a private implementation detail. Closes GitHub issue #6 (the lone open issue). Additive; the wire protocol token stays `viewmodel-shell/1.0`. Ships as an aligned minor (npm + NuGet `4.1.0`).
 
 - [x] **Phase 12: ChartNode Primitive** (2/2 plans) — completed 2026-07-04 — Structured bar `ChartNode` across both backends + `browser.ts` renderer via lazy/optional Chart.js + both tree-validators + TUI degradation + parity/FeatureProbe + adapter/backend tests (green-tree gate green; agent-skill.md + release deferred to Phase 13)
-- [ ] **Phase 13: Data-Viz Verification + Release Closeout** — Operator browser sign-off on the rendered chart, CHANGELOG/MIGRATION, aligned `4.1.0` npm+NuGet release, tag, advance `main`, announce `#vms-changelog`, close issue #6
+- [ ] **Phase 13: Data-Viz Verification + Release Closeout** — Operator browser sign-off on the rendered chart, CHANGELOG/MIGRATION, aligned `4.1.0` npm+NuGet release, tag, advance `main`, announce `#vms-changelog`, close issue #6 — ⏳ **operator sign-off RECEIVED 2026-07-08** (a chart grid/tick theme-token fix was applied during review — `browser.ts`); the `4.1.0` **publish is BATCHED with v4.2** into a single operator release session per Ashley (avoid running the whole release ceremony twice). No version bump yet.
+
+### ⏳ v4.2 Non-Blocking Actions (Phases 14–17) — PLANNED
+
+**Milestone Goal:** Give the dispatch loop a real concurrency model. Add the **non-blocking action** primitive (`blocking:false` on a dispatch, default `true` → fully backward-compatible): a silent round-trip that coexists with user actions instead of being silently dropped by today's single global dispatch mutex. Reconcile with a **client-side epoch/sequence counter** (stale/out-of-order responses discarded; no wire epoch, no server change) and **debounce/coalescing**. Fold `poll` into this path (fixing the poll/user-action contention) and **resurrect `selection.action`** correctly (the 0.15.0 rapid-toggle bug is fixed by optimistic-check + echo-back + epoch). Correctness stays server-side (re-validation + the `rejected` envelope). The admission barrier (hold-and-full-node-diff) is a **conditional Stage 2** (Phase 17), built only if intent-drift bites. Additive → wire token stays `viewmodel-shell/1.0`; ships as an aligned minor (npm + NuGet), sequenced after v4.1. Design of record: [design/non-blocking-actions.md](./design/non-blocking-actions.md).
+
+- [ ] **Phase 14: Non-blocking dispatch core** — `blocking:false` optional field (F2 WhenWritingDefault), replace the single dispatch mutex so a silent round-trip coexists with user actions, client-side epoch ordering (discard stale/out-of-order), debounce/coalesce rapid triggers to one in-flight; both backends + new parity fixtures (non-blocking dispatch, coalesced rapid fire, out-of-order discard). No admission barrier.
+- [ ] **Phase 15: Poll-fold + `selection.action` resurrection** — `pollInterval` becomes sugar over the non-blocking path (kills the mutex contention); per-checkbox/selection server-refresh returns correctly (optimistic local check + echo-back so a stale response can't revert a rapid toggle); `agent-skill.md` note on `blocking:false` + byte-copy to `.NET AgentSkill.md`.
+- [ ] **Phase 16: Test apps + human verification + release** — 3 purpose-built demo apps, each with a step-by-step "trigger X, then Y, expect Z" script (selection→live action bar; poll+user coexistence contrast; out-of-order staleness), served over the tailnet for operator sign-off; then aligned minor release npm+NuGet, tag, advance `main`, announce `#vms-changelog`.
+- [ ] **Phase 17 (CONDITIONAL): Admission barrier (Stage 2)** — hold blocking actions while any non-blocking round-trip is in flight; full-node-diff at departure; drop on any difference. Built ONLY if transient intent-drift actually bites in PBMInvoices UX after Stage 1 ships.
 
 ## Phase Details
 
@@ -90,3 +100,45 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
   4. GitHub issue #6 is closed with a comment citing the `4.1.0` release (CHART-07).
 **Plans**: TBD (set by `/gsd:plan-phase 13`)
 **UI hint**: no
+
+### Phase 14: Non-blocking dispatch core
+**Goal**: A dispatch can carry `blocking: false` (optional, default `true` → existing apps byte-unchanged). A non-blocking (silent) round-trip no longer occupies the single global dispatch mutex — it coexists with user actions instead of silently dropping them (or being dropped). Rapid non-blocking triggers debounce/coalesce to one in-flight request. A client-side epoch/sequence counter discards stale, out-of-order responses (last-writer-wins) with no wire epoch and no server change. Correctness comes from server re-validation + the `rejected` envelope; NO admission barrier this phase. Both backends stay byte-aligned (the optional bool follows the F2 `WhenWritingDefault` rule → absent-when-default on both), and new parity fixtures exercise a non-blocking dispatch, coalesced rapid fire, and out-of-order discard.
+**Depends on**: Phase 13 (v4.1 released — clean baseline; parity green) — design of record `.planning/design/non-blocking-actions.md`
+**Requirements**: NBA-01, NBA-02, NBA-03, NBA-04
+**Success Criteria** (what must be TRUE):
+  1. A dispatch with `blocking:false` runs a silent round-trip that does NOT trip the dispatch mutex or busy-lock; a user action fired while it is in flight is honored, not dropped (and vice versa) (NBA-01).
+  2. Rapid `blocking:false` triggers coalesce to a single in-flight request (latest wins) (NBA-02).
+  3. An out-of-order / late non-blocking response is discarded rather than clobbering a newer render, via a client-side sequence counter — no wire field, no server change (NBA-03).
+  4. `blocking` is absent-when-default on BOTH backends (F2), the wire token stays `viewmodel-shell/1.0`, and `bun run parity/run.ts` is green with fixtures for non-blocking dispatch + coalesced rapid fire + out-of-order discard (NBA-04).
+**Plans**: TBD (set by `/gsd:plan-phase 14`)
+**UI hint**: no
+
+### Phase 15: Poll-fold + `selection.action` resurrection
+**Goal**: `pollInterval` becomes sugar over the non-blocking dispatch path, so the today-observed single-mutex contention (a poll in flight silently dropping a user click) is gone. Per-checkbox / table-selection server-refresh returns as a first-class pattern, correctly this time: the checkbox checks immediately (optimistic local `bind` write) AND fires a `blocking:false` action whose returned tree echoes the selection back, so a stale response can never revert a rapid toggle (the exact 0.15.0 failure that got `selection.action` removed). `agent-skill.md` gains a note on `blocking:false` semantics, byte-copied to `.NET AgentSkill.md` (parity gate diffs both).
+**Depends on**: Phase 14 (the non-blocking primitive + epoch must exist)
+**Requirements**: NBA-05, NBA-06, NBA-07
+**Success Criteria** (what must be TRUE):
+  1. An app configuring `pollInterval` runs its polls over the non-blocking path; a user action clicked during a poll round-trip is honored, not dropped (NBA-05).
+  2. Rapid checkbox/selection toggling with a `blocking:false` refresh never visually reverts a checked box, and the server-computed fragment (e.g. an action bar) reflects the latest coalesced selection (NBA-06).
+  3. `agent-skill.md` documents `blocking:false` and is byte-identical to `.NET AgentSkill.md` (parity gate green) (NBA-07).
+**Plans**: TBD (set by `/gsd:plan-phase 15`)
+**UI hint**: yes
+
+### Phase 16: Test apps + human verification + release
+**Goal**: Three purpose-built demo apps — each shipped with a step-by-step "trigger X, then Y, expect Z" script so coverage is explicit — let the operator verify the concurrency behavior in a real browser: (1) selection → live server-computed action bar (the PBMInvoices shape); (2) poll + user-action coexistence (today-vs-fixed contrast); (3) out-of-order/staleness (a delayed background response discarded). Served over the tailnet for sign-off. Then the milestone ships as an aligned additive minor (npm + NuGet) with CHANGELOG/MIGRATION, git tag, `main` advanced (verified `git merge-base --is-ancestor`), and `#vms-changelog` announced — full green-tree gate at release time.
+**Depends on**: Phase 15 (the full Stage-1 behavior must exist to demo + release)
+**Requirements**: NBA-08, NBA-09
+**Success Criteria** (what must be TRUE):
+  1. The 3 demo apps + their trigger scripts exist, are served over the tailnet, and the operator signs off that rapid-toggle, poll-coexistence, and staleness all behave as specified (NBA-08).
+  2. The aligned minor is published on npm + NuGet, tagged, `main` advanced, and `#vms-changelog` announced (NBA-09).
+**Plans**: TBD (set by `/gsd:plan-phase 16`)
+**UI hint**: yes
+
+### Phase 17: Admission barrier (Stage 2) — CONDITIONAL
+**Goal**: (Built ONLY if transient intent-drift actually bites in PBMInvoices UX after Stage 1 ships.) When a blocking action is triggered while any non-blocking round-trip is in flight, hold it until that round-trip resolves and the tree reaches the new epoch, then compare the clicked node's click-time snapshot against the current-epoch tree; if the node is missing or differs in any part, drop the action rather than dispatch a different action than the user believed they triggered. Global barrier (not scoped to affected nodes — scoping would require app-ish client reasoning). The dropped-action UX (silent vs surfaced) is decided as part of this phase, not left silent.
+**Depends on**: Phase 16 (Stage 1 shipped + observed); GATED on a real intent-drift report
+**Requirements**: NBA-10 (conditional)
+**Success Criteria** (what must be TRUE):
+  1. A blocking action whose target node changed under an in-flight non-blocking round-trip is not dispatched with stale intent; the outcome is surfaced to the user, not silently swallowed (NBA-10).
+**Plans**: TBD — do NOT plan until a concrete intent-drift case is reported
+**UI hint**: yes
