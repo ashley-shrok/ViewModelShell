@@ -761,7 +761,10 @@ export interface ShellOptions {
   onUploadProgress?: (sent: number, total: number) => void;
   /** When set, the shell dispatches a "poll" action at this interval (ms) after every load/dispatch.
    *  The server can override the next interval via ShellResponse.nextPollIn, or stop polling by
-   *  omitting nextPollIn when no pollInterval is configured. */
+   *  omitting nextPollIn when no pollInterval is configured. NBA-05 (Phase 15): every poll dispatch
+   *  rides the non-blocking lane (see `schedulePoll`'s doc comment) — a blocking user action fired
+   *  while a poll round trip is in flight is never dropped or delayed by it. See
+   *  `.planning/design/non-blocking-actions.md`. */
   pollInterval?: number;
   /** 3.8.0 — the id of the client bundle this shell instance is running (the app
    *  injects it at build time, e.g. from a Vite `define`/env — VMS never derives
@@ -952,7 +955,21 @@ export class ViewModelShell {
    *  gating it against a faster-resolving, later-fired NON-blocking response
    *  would silently discard the user's own action with no signal. Always
    *  advanced via `Math.max` (never lowered) regardless of which lane
-   *  applied. See `.planning/design/non-blocking-actions.md` — "Epoch". */
+   *  applied. See `.planning/design/non-blocking-actions.md` — "Epoch".
+   *
+   *  NBA-06 (Phase 15): the non-blocking apply gate ALSO discards a response
+   *  whenever `pendingNonBlockingRefire !== null` at apply time, even if its
+   *  own seq is not stale by the `seq >= appliedSeq` test above. This closes
+   *  the rapid-double-toggle gap: toggle A fires, toggle B (the user's very
+   *  next click on the same control) coalesces into `pendingNonBlockingRefire`
+   *  while A is still in flight; A's response is the ONLY one outstanding, so
+   *  it is never stale by seq alone — but it necessarily echoes state as of
+   *  A's own send time, predating B's local write. Applying it would revert
+   *  B's not-yet-sent value AND poison the refire (which reads `currentState`
+   *  fresh at its own fire time). Discarding A here is safe because the
+   *  queued refire (B) is guaranteed to fire immediately next, in the same
+   *  `finally` block, and will itself advance `appliedSeq` when it applies.
+   *  See `.planning/design/non-blocking-actions.md` — "Coalescing". */
   private appliedSeq = 0;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   // 0.16.0 — busy = serverBusy OR a user-initiated dispatch is in flight.
@@ -1100,8 +1117,16 @@ export class ViewModelShell {
       if (nonBlocking) {
         // Non-blocking (background) response: apply only if no strictly-newer
         // dispatch (of either lane) has already been applied — this is the
-        // staleness-discard NBA-03 exists for.
-        if (seq >= this.appliedSeq) {
+        // staleness-discard NBA-03 exists for. Phase 15 (NBA-06) ALSO
+        // discards when a coalesced re-fire is already queued
+        // (`pendingNonBlockingRefire !== null`) at the moment this response
+        // is ready to apply: a strictly newer round trip — carrying the
+        // user's latest local writes — is guaranteed to fire immediately
+        // after (in this same dispatch's `finally` block) and supersede it,
+        // so applying THIS response first would only clobber those
+        // not-yet-sent writes with a stale echo. See the `pendingNonBlockingRefire`
+        // field doc and .planning/design/non-blocking-actions.md — "Coalescing".
+        if (seq >= this.appliedSeq && this.pendingNonBlockingRefire === null) {
           this.appliedSeq = Math.max(this.appliedSeq, seq);
           this.processResponse(body);
         }
@@ -1385,6 +1410,18 @@ export class ViewModelShell {
     }
   }
 
+  /**
+   * NBA-05 (Phase 15): the timer-driven poll dispatch below always calls
+   * `this.dispatch({ name: "poll" }, true)` — passing `silent = true` — so
+   * `nonBlocking = silent || action.blocking === false` in `dispatch()` is
+   * ALWAYS `true` for a poll, regardless of any `blocking` field on the
+   * action itself. This means poll ALWAYS rides the non-blocking lane and
+   * never contends with `blockingInFlight`: `ShellOptions.pollInterval` is
+   * sugar over the same non-blocking dispatch path a `blocking: false`
+   * action uses, not a separate mechanism. See
+   * `.planning/design/non-blocking-actions.md` — "Wire / API surface" (the
+   * "`pollInterval` becomes sugar over the same non-blocking path" line).
+   */
   private schedulePoll(nextPollIn?: number): void {
     const delay = nextPollIn ?? this.options.pollInterval;
     if (delay == null) return;

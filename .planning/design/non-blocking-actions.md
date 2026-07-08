@@ -118,6 +118,28 @@ Rapid non-blocking triggers **debounce/coalesce to a single in-flight request** 
 wins" for a fast-changing selection). At most one background round-trip in flight at a time; input
 accumulation (local) is never blocked.
 
+**Refinement (Phase 15, NBA-06): a response is discarded whenever a coalesced re-fire is already
+queued, even if it is not stale by seq alone.** Coalescing alone is not sufficient to protect a rapid
+double-toggle of the SAME control. Trace the exact interleaving: toggle A fires (seq N, non-blocking,
+in flight); toggle B — the user's very next click, un-toggling A — arrives while A is still in flight,
+so it coalesces into `pendingNonBlockingRefire` instead of firing its own request. When A's response
+arrives, it is the ONLY response outstanding, so it is not stale by the `seq >= appliedSeq` rule under
+"Epoch" above — it applies via `processResponse`, which does a whole-state replace. Because A's
+response necessarily echoes state as of A's OWN send time (before B's local optimistic write
+happened), applying it overwrites B's not-yet-sent local write with A's older value: a "checked, then
+unchecked" interaction ends up rendering checked. Worse, because the coalesced re-fire (B) reads
+`this.currentState` fresh at ITS OWN fire time — which is now A's just-applied stale echo — B's own
+request is sent with the WRONG (A's) value too, permanently losing the user's second toggle. This is
+exactly the 0.15.0 `selection.action` failure mode.
+
+The fix: the non-blocking apply gate discards a response not only when a strictly newer response has
+already applied (`seq >= appliedSeq`), but ALSO whenever `pendingNonBlockingRefire !== null` at the
+moment this response is ready to apply — because a strictly newer round trip (carrying the user's
+latest local writes, i.e. B) is guaranteed to fire immediately after, in the same dispatch's `finally`
+block, and will supersede it. This requires no wire change — it is a pure client-side refinement to
+the existing non-blocking apply gate, reusing the `pendingNonBlockingRefire` field introduced in
+Phase 14. This is the design of record for any future phase building on this mechanism.
+
 ## Wire / API surface (minimal)
 
 - `blocking?: boolean` on the dispatch (default true). Likely expressed on the triggering node
