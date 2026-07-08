@@ -6,6 +6,67 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 4.2.0 / 4.2.0 — Non-blocking actions: `blocking:false` dispatch lane + poll-fold + selection.action resurrection (npm + NuGet)
+
+**npm:** `4.2.0` (MINOR, from `4.1.0`) · **NuGet:** `4.2.0` (MINOR, from `4.1.0`). A real concurrency model for the dispatch loop: non-blocking round trips that coexist with user actions instead of contending for a single global mutex. Fully additive — wire protocol token stays `viewmodel-shell/1.0`. `ActionEvent.blocking?` / `ActionDescriptor.Blocking` is the only new wire-adjacent field, and it never actually rides the `_action` payload (it is a purely client-side dispatch-lane hint). **Migration: none** — `blocking` defaults to `true`, byte-identical to every existing app's behavior until it opts in.
+
+### Added
+
+- **`blocking?: boolean`** on TS `ActionEvent` (omitted = `true`, byte-identical default) and the .NET twin `bool? Blocking` (note: NOT the usual F2 `WhenWritingDefault` pattern — because the default is `true`, not `false`, the correct .NET shape is nullable + `[JsonIgnore(WhenWritingNull)]`, byte-aligned with the TS optional-defaults-true field).
+- **A two-lane dispatch loop** (`blockingInFlight` / `nonBlockingInFlight`) replacing the old single `dispatching` mutex — a `blocking:false` round trip now coexists with an in-flight blocking one instead of contending for one shared slot, fixing the poll/user-action contention as a side effect (today's poll silently occupied the one dispatch slot and could drop a user click, and vice versa).
+- **Coalescing** (`pendingNonBlockingRefire`) — rapid repeated triggers of the same non-blocking action collapse to at most one background round trip in flight, latest-wins.
+- **A client-side, lane-aware epoch** (`dispatchSeq` / `appliedSeq`) — a blocking response always applies unconditionally (there is only ever one blocking dispatch in flight, so it can never be superseded within its own lane); a non-blocking response is discarded once a strictly newer response has already applied OR a coalesced re-fire is already queued (closing the exact rapid-double-toggle revert bug — see below).
+- **`pollInterval` formally documented as sugar over the non-blocking path** — no behavior change from 3.x, just now provably contention-free (a poll always rides the non-blocking lane, proven by a real-timer test, not just a manual dispatch call).
+- **`selection.action` / per-checkbox live-refresh, correctly resurrected** — a selection checkbox checks immediately (optimistic local `bind` write) and fires its action with `blocking: false`; the returned tree echoes the selection back so the response can't un-check what the user just checked. This closes the exact 0.15.0 rapid-toggle revert bug that got the old `selection.action` mechanism removed: a stale in-flight response could previously apply after a same-control double-toggle and silently revert the user's second click (and poison the coalesced re-fire's own request with the wrong value). The fix discards a response whenever a coalesced re-fire is already queued, not just when it's stale by sequence number alone.
+- **`agent-skill.md` gained a `## Non-blocking actions (blocking:false)` section** (already shipped in Phase 15), byte-copied to the .NET `AgentSkill.md`, explaining to wire-driving agents that `blocking` is informational-only — dispatch exactly the same way regardless of its value.
+
+### Demo + tests
+
+- Three new human-verification demos exercise every edge of the concurrency model: `demo/NonBlockingActionBar-bun` (rapid checkbox toggling + a server-computed live action bar + locked-row rejection), `demo/NonBlockingPoll-bun` (poll + user-action coexistence), `demo/NonBlockingStaleness-bun` (out-of-order/staleness discard). `demo/NonBlocking-VERIFICATION.md` carries the combined numbered "trigger X, then Y, expect Z" script; the operator signed off **PASS** on 2026-07-08 — every expected outcome held across all three scenarios (no checkbox revert, no dropped clicks, action bar recomputed server-side, locked-row rejection surfaced with a message, poll + clicks coexist without contention, stale background response discarded in favor of the newer user result).
+- Vitest coverage added across Phases 14–15: `nonblocking-dispatch.test.ts` (lane coexistence, coalescing, epoch discard, the CR-01/CR-02 gap-closure regressions, the NBA-06 coalesce-pending-discard regression), `poll-fold.test.ts` (real `pollInterval` → `setTimeout` → auto-dispatch proof of coexistence, stale-discard, and loop-continuation), `checkbox-rapid-toggle.test.ts` (a real jsdom-rendered checkbox, rapidly double-toggled through the actual `ViewModelShell` + `BrowserAdapter` path, ends up matching the user's last click), `blocking-propagation.test.ts` (the `blocking` field survives dispatch from every trigger node: checkbox, button, tabs, section action, table row action).
+
+### Migration
+
+- **None needed** — purely additive; `blocking` defaults to `true`, byte-identical to every existing app's behavior until it opts in to `blocking: false` on a specific action.
+
+---
+
+## 4.1.0 / 4.1.0 — ChartNode: single-series bar-chart data-viz primitive (npm + NuGet)
+
+**npm:** `4.1.0` (MINOR, from `4.0.0`) · **NuGet:** `4.1.0` (MINOR, from `4.0.0`). VMS's first data-visualization primitive — a structured `ChartNode` (bar, single-series, `title` + `tone`) rendered by Chart.js behind the browser adapter as a private implementation detail. Closes GitHub issue #6. Additive — the wire protocol token stays `viewmodel-shell/1.0`.
+
+### Review fixes (pre-release visual verification)
+
+Found during the operator's Phase 13 browser review: the default Chart.js grid used a fixed color (`rgba(0,0,0,0.1)`) that clashed with dark themes — visible on light backgrounds, nearly invisible on dark. Fixed in `cfa3175` (`fix(12): chart grid/tick/axis colors track theme tokens`) by wiring the grid/border/tick colors to the `--vms-border` / `--vms-text-muted` theme tokens so the chart reads consistently in every theme. Browser-only (no wire/.NET/parity impact).
+
+### ChartNode — Phase 12 (on `main`, unpublished)
+
+The **`ChartNode`** (`type:"chart"`) — VMS's first data-visualization primitive. It carries **bounded declared data** an agent reads directly (`points: {label, value}[]` + an optional `title` + a `tone` from the existing tone axis) and renders a single-series **bar** chart drawn by **Chart.js as a PRIVATE, lazy, optional dependency of the browser adapter** — apps never import or touch Chart.js. On new server data the chart **redraws in place** via Chart.js `.update()` (a persistent-across-renders instance registry survives the `innerHTML` wipe). Closes the design of GitHub issue #6. Additive — the wire protocol token stays `viewmodel-shell/1.0`.
+
+### Added
+
+- **`ChartNode`** — a new `ViewNode` (`type:"chart"`; `kind?:"bar"` [omitted = `"bar"`, the only v4.1 value — `line` is a future ADDITIVE union value, CHART-LINE, not a new node]; `points: {label, value}[]`; `title?`; `tone?:"danger" | "warning" | "success" | "info"`) + the **`ChartPoint`** sub-record (self-contained `{label, value}` pairs mirroring `StatItem` — no parallel-array index alignment) in the TS `ViewNode` union, mirrored as a .NET `ChartNode` / `ChartPoint` record + `[JsonDerivedType(typeof(ChartNode),"chart")]` discriminator (`Points` required + first; `Kind` / `Title` / `Tone` free-form `string?` each with `[JsonIgnore(WhenWritingNull)]`; `Value` is `double` to mirror TS `number`).
+- **The `browser.ts` renderer** — `BrowserAdapter.chart()`: a `.vms-chart` wrapper + `<canvas>` drawing a single-series bar chart via a **lazy tree-shaken `import("chart.js")`** (registers only `BarController` / `BarElement` / `CategoryScale` / `LinearScale` / `Tooltip`, so a tree with no chart loads zero chart.js bytes); tone → theme-token color via `getComputedStyle` (`danger→--vms-error`, `warning→--vms-warning`, `success→--vms-success`, `info→--vms-info`, omitted → `--vms-accent`); **redraw-in-place** via `.update()` keyed by a stable title-derived + ordinal key with a per-render mark-sweep that `.destroy()`s any chart the new tree omitted; and a **fail-loud** `console.error` (the sanctioned capability seam) when the optional `chart.js` peer dep is absent — never a silent no-op or a floating unhandled rejection.
+- **The `.vms-chart`** structural framework CSS (`display:block; position:relative; width:100%; height:20rem` — bounded + positioned for Chart.js responsive sizing).
+- **The TUI degradation (CHART-05)** — `tui.tsx` renders a `ChartNode` as a legible **printed series**: the `title` (if any), then per point a `label  value  ASCII-bar` line where the bar is a run of `█` scaled to `value / max × 20`, with empty-points / non-positive-max guards. A terminal has no canvas, but the ChartNode is structured data, so it prints. `ChartNode` is a **LEAF** (no children) → no container-walk arm (same as `StatBarNode` / `ProgressNode`). The TUI is `@experimental`; the requirement is only that `ChartNode` doesn't break it and degrades legibly.
+- **`chart.js@^4`** declared as a `devDependency` + an **OPTIONAL** `peerDependency` (`peerDependenciesMeta.chart.js.optional:true`) — apps that render no chart install nothing and load zero chart.js bytes.
+
+### Not changed
+
+- No wire-shape change — the protocol token stays `viewmodel-shell/1.0` (a new optional-field-bearing leaf ViewNode is additive). The core `index.ts` gains the **TYPE only** — all rendering / canvas / `getComputedStyle` / Chart.js live in `browser.ts`, so the `check:core-globals` guard stays green. The **.NET / bun backends gain NO chart.js dependency** (they only EMIT the data). `agent-skill.md` / `AgentSkill.md` are **untouched here** — ChartNode is documented in the agent skill in Phase 13 / CHART-06 (both copies must change together to keep the parity skill gate green).
+
+### Demo + tests
+
+- **FeatureProbe** twins (`FeatureProbe-bun/handler.ts` + `FeatureProbe/AspNetCore/FeatureProbeController.cs`) render a static `chart (bar)` node (whole-number points `Mon/Tue/Wed` = 12/19/7, `title:"Weekly visits"`, `tone:"info"`, `kind` omitted); the existing `feature-probe` GET steps capture it, so both backends emit **byte-identical** `{type:"chart", kind?, points, title?, tone?}` wire (cross-backend parity verified; whole-number values keep `double`/`number` serialization byte-identical — `12` not `12.0`). **The client-side Chart.js pixels are browser-only and explicitly NOT part of parity** — parity proves only identical serialization.
+- `viewmodel-shell/test/chart.test.ts` (+ `test/chart-missing-dep.test.ts`) cover the bar-config integration (mocked chart.js), redraw-in-place via `.update()`, removal `.destroy()` mark-sweep, fail-loud on a missing dep, and the validator no-blind-spot. Real pixels (bars / colors / title) are **jsdom-untestable** and verified by the Phase 13 operator browser review (CHART-06).
+- The **Showcase** (`demo/Showcase/frontend/src/main.ts`) gains a bar-chart demo (`title:"Signups"`, `tone:"success"`), built only from ViewNodes (zero `<style>`).
+
+### Migration
+
+- **None needed** — a purely additive new leaf node; existing trees, callers, and agents are unaffected. **Consumers who render a `ChartNode` must install the optional `chart.js` peer dependency**; apps that render no chart need nothing.
+
+---
+
 ## 4.0.0 / 4.0.0 — file uploads route by declared `uploadOn`, not button position (npm + NuGet)
 
 **npm:** `4.0.0` (MAJOR, from `3.11.0`) · **NuGet:** `4.0.0` (MAJOR, from `3.11.1`). **BREAKING** runtime change to file-upload forms. Wire protocol token unchanged (`viewmodel-shell/1.0`) — the wire *shape* is identical (multipart `_action` + `_state` + file entries); `uploadOn` is an additive optional field on the tree. **Migration: add `uploadOn: ["<action>"]` to every file input — see MIGRATION.md.**
@@ -432,32 +493,6 @@ The **`fits` node** — SwiftUI `ViewThatFits` ported to the wire. The one genui
 ### Migration
 
 - **None needed** — a purely additive new node; existing trees, callers, and agents are unaffected (an agent that doesn't know `fits` simply ignores it; a non-browser adapter degrades to the last child). **Known v1 limitation:** a resize-triggered candidate switch rebuilds the `fits` subtree, so focus / caret / draft state inside a fits child may reset on a resize-switch (the framework's normal focus/scroll preservation still applies to server-driven re-renders; this is specifically the resize-switch path). Acceptable for v1.
-
-### ChartNode — Phase 12 (on `main`, unpublished)
-
-The **`ChartNode`** (`type:"chart"`) — VMS's first data-visualization primitive. It carries **bounded declared data** an agent reads directly (`points: {label, value}[]` + an optional `title` + a `tone` from the existing tone axis) and renders a single-series **bar** chart drawn by **Chart.js as a PRIVATE, lazy, optional dependency of the browser adapter** — apps never import or touch Chart.js. On new server data the chart **redraws in place** via Chart.js `.update()` (a persistent-across-renders instance registry survives the `innerHTML` wipe). Closes the design of GitHub issue #6. Additive — the wire protocol token stays `viewmodel-shell/1.0`.
-
-### Added
-
-- **`ChartNode`** — a new `ViewNode` (`type:"chart"`; `kind?:"bar"` [omitted = `"bar"`, the only v4.1 value — `line` is a future ADDITIVE union value, CHART-LINE, not a new node]; `points: {label, value}[]`; `title?`; `tone?:"danger" | "warning" | "success" | "info"`) + the **`ChartPoint`** sub-record (self-contained `{label, value}` pairs mirroring `StatItem` — no parallel-array index alignment) in the TS `ViewNode` union, mirrored as a .NET `ChartNode` / `ChartPoint` record + `[JsonDerivedType(typeof(ChartNode),"chart")]` discriminator (`Points` required + first; `Kind` / `Title` / `Tone` free-form `string?` each with `[JsonIgnore(WhenWritingNull)]`; `Value` is `double` to mirror TS `number`).
-- **The `browser.ts` renderer** — `BrowserAdapter.chart()`: a `.vms-chart` wrapper + `<canvas>` drawing a single-series bar chart via a **lazy tree-shaken `import("chart.js")`** (registers only `BarController` / `BarElement` / `CategoryScale` / `LinearScale` / `Tooltip`, so a tree with no chart loads zero chart.js bytes); tone → theme-token color via `getComputedStyle` (`danger→--vms-error`, `warning→--vms-warning`, `success→--vms-success`, `info→--vms-info`, omitted → `--vms-accent`); **redraw-in-place** via `.update()` keyed by a stable title-derived + ordinal key with a per-render mark-sweep that `.destroy()`s any chart the new tree omitted; and a **fail-loud** `console.error` (the sanctioned capability seam) when the optional `chart.js` peer dep is absent — never a silent no-op or a floating unhandled rejection.
-- **The `.vms-chart`** structural framework CSS (`display:block; position:relative; width:100%; height:20rem` — bounded + positioned for Chart.js responsive sizing).
-- **The TUI degradation (CHART-05)** — `tui.tsx` renders a `ChartNode` as a legible **printed series**: the `title` (if any), then per point a `label  value  ASCII-bar` line where the bar is a run of `█` scaled to `value / max × 20`, with empty-points / non-positive-max guards. A terminal has no canvas, but the ChartNode is structured data, so it prints. `ChartNode` is a **LEAF** (no children) → no container-walk arm (same as `StatBarNode` / `ProgressNode`). The TUI is `@experimental`; the requirement is only that `ChartNode` doesn't break it and degrades legibly.
-- **`chart.js@^4`** declared as a `devDependency` + an **OPTIONAL** `peerDependency` (`peerDependenciesMeta.chart.js.optional:true`) — apps that render no chart install nothing and load zero chart.js bytes.
-
-### Not changed
-
-- No wire-shape change — the protocol token stays `viewmodel-shell/1.0` (a new optional-field-bearing leaf ViewNode is additive). The core `index.ts` gains the **TYPE only** — all rendering / canvas / `getComputedStyle` / Chart.js live in `browser.ts`, so the `check:core-globals` guard stays green. The **.NET / bun backends gain NO chart.js dependency** (they only EMIT the data). `agent-skill.md` / `AgentSkill.md` are **untouched here** — ChartNode is documented in the agent skill in Phase 13 / CHART-06 (both copies must change together to keep the parity skill gate green).
-
-### Demo + tests
-
-- **FeatureProbe** twins (`FeatureProbe-bun/handler.ts` + `FeatureProbe/AspNetCore/FeatureProbeController.cs`) render a static `chart (bar)` node (whole-number points `Mon/Tue/Wed` = 12/19/7, `title:"Weekly visits"`, `tone:"info"`, `kind` omitted); the existing `feature-probe` GET steps capture it, so both backends emit **byte-identical** `{type:"chart", kind?, points, title?, tone?}` wire (cross-backend parity verified; whole-number values keep `double`/`number` serialization byte-identical — `12` not `12.0`). **The client-side Chart.js pixels are browser-only and explicitly NOT part of parity** — parity proves only identical serialization.
-- `viewmodel-shell/test/chart.test.ts` (+ `test/chart-missing-dep.test.ts`) cover the bar-config integration (mocked chart.js), redraw-in-place via `.update()`, removal `.destroy()` mark-sweep, fail-loud on a missing dep, and the validator no-blind-spot. Real pixels (bars / colors / title) are **jsdom-untestable** and verified by the Phase 13 operator browser review (CHART-06).
-- The **Showcase** (`demo/Showcase/frontend/src/main.ts`) gains a bar-chart demo (`title:"Signups"`, `tone:"success"`), built only from ViewNodes (zero `<style>`).
-
-### Migration
-
-- **None needed** — a purely additive new leaf node; existing trees, callers, and agents are unaffected. **Consumers who render a `ChartNode` must install the optional `chart.js` peer dependency**; apps that render no chart need nothing.
 
 ## 1.11.0 / 1.9.0 — Horizontal `row` layout + Section `flyout` (overlay disclosure) (npm + NuGet)
 
