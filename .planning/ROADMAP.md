@@ -61,7 +61,7 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
 **Milestone Goal:** Add VMS's first data-visualization primitive — a structured `ChartNode` (bar, single-series, `title` + `tone`) whose payload is bounded declared data (a numeric series + labelled categories), rendered by Chart.js behind the browser adapter as a private implementation detail. Closes GitHub issue #6 (the lone open issue). Additive; the wire protocol token stays `viewmodel-shell/1.0`. Ships as an aligned minor (npm + NuGet `4.1.0`).
 
 - [x] **Phase 12: ChartNode Primitive** (2/2 plans) — completed 2026-07-04 — Structured bar `ChartNode` across both backends + `browser.ts` renderer via lazy/optional Chart.js + both tree-validators + TUI degradation + parity/FeatureProbe + adapter/backend tests (green-tree gate green; agent-skill.md + release deferred to Phase 13)
-- [ ] **Phase 13: Data-Viz Verification + Release Closeout** — Operator browser sign-off on the rendered chart, CHANGELOG/MIGRATION, aligned `4.1.0` npm+NuGet release, tag, advance `main`, announce `#vms-changelog`, close issue #6 — ⏳ **operator sign-off RECEIVED 2026-07-08** (a chart grid/tick theme-token fix was applied during review — `browser.ts`); the `4.1.0` **publish is BATCHED with v4.2** into a single operator release session per Ashley (avoid running the whole release ceremony twice). No version bump yet.
+- [ ] **Phase 13: Data-Viz Verification + Release Closeout** — Operator browser sign-off on the rendered chart, CHANGELOG/MIGRATION, aligned `4.1.0` npm+NuGet release, tag, advance `main`, announce `#vms-changelog`, close issue #6 — ⏳ **operator sign-off RECEIVED 2026-07-08** (a chart grid/tick theme-token fix was applied during review — `browser.ts`); the `4.1.0` **publish is BATCHED into Phase 16's release session** per Ashley (avoid running the whole release ceremony twice) — its remaining deliverables (CHART-06 ChartNode `agent-skill.md` doc, CHART-07 4.1.0 publish/tag/announce/close #6) are carried by Phase 16 plans **16-05/16-06**. This checkbox resolves when Phase 16's release lands. No version bump yet.
 
 ### ⏳ v4.2 Non-Blocking Actions (Phases 14–17) — PLANNED
 
@@ -133,10 +133,10 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
 ### Phase 16: Test apps + human verification + release
 **Goal**: Three purpose-built demo apps — each shipped with a step-by-step "trigger X, then Y, expect Z" script so coverage is explicit — let the operator verify the concurrency behavior in a real browser: (1) selection → live server-computed action bar (the PBMInvoices shape); (2) poll + user-action coexistence (today-vs-fixed contrast); (3) out-of-order/staleness (a delayed background response discarded). Served over the tailnet for sign-off. Then the milestone ships as an aligned additive minor (npm + NuGet) with CHANGELOG/MIGRATION, git tag, `main` advanced (verified `git merge-base --is-ancestor`), and `#vms-changelog` announced — full green-tree gate at release time.
 **Depends on**: Phase 15 (the full Stage-1 behavior must exist to demo + release)
-**Requirements**: NBA-08, NBA-09
+**Requirements**: NBA-08, NBA-09 — PLUS the **batched** deferred chart requirements **CHART-06, CHART-07** (the v4.1 release closeout was folded into this session per Ashley's "don't run the release ceremony twice"; see Phase 13). The release plans (16-05/16-06) close all four.
 **Success Criteria** (what must be TRUE):
   1. The 3 demo apps + their trigger scripts exist, are served over the tailnet, and the operator signs off that rapid-toggle, poll-coexistence, and staleness all behave as specified (NBA-08).
-  2. The aligned minor is published on npm + NuGet, tagged, `main` advanced, and `#vms-changelog` announced (NBA-09).
+  2. The release session ships BOTH `4.1.0` (chart: ChartNode `agent-skill.md` doc [CHART-06], CHANGELOG extracted out of the mis-nested `## 1.12.0` draft, tag, close issue #6 [CHART-07]) AND `4.2.0` (non-blocking) on npm + NuGet, tagged, `main` advanced (`git merge-base --is-ancestor`), full green-tree gate, `#vms-changelog` announced (NBA-09).
 **Plans**: 6 plans
 - [ ] 16-01-PLAN.md — Demo: selection -> live server-computed action bar (NonBlockingActionBar-bun, port 3008)
 - [ ] 16-02-PLAN.md — Demo: poll + user-action coexistence (NonBlockingPoll-bun, port 3009)
