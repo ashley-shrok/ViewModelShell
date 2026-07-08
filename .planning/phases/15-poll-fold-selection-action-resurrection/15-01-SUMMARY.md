@@ -136,3 +136,11 @@ None - no external service configuration required.
 ---
 *Phase: 15-poll-fold-selection-action-resurrection*
 *Completed: 2026-07-08*
+
+## Self-Check: PASSED
+
+- FOUND: viewmodel-shell/test/poll-fold.test.ts
+- FOUND: viewmodel-shell/test/checkbox-rapid-toggle.test.ts
+- FOUND: .planning/phases/15-poll-fold-selection-action-resurrection/15-01-SUMMARY.md
+- FOUND: .planning/design/non-blocking-actions.md
+- FOUND commits: 9bd5381, 645f8a0, 659f5ee, 8b884c1
