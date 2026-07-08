@@ -963,6 +963,7 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
    hairline. Buttons reuse .vms-button styling; only sizing/disabled is added. */
 .vms-table__pagination {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--vms-space-sm);
   padding-top: var(--vms-space-sm);
@@ -972,6 +973,26 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-table__pagination-range { color: var(--vms-text-muted); font-size: var(--vms-text-sm); margin-right: auto; }
 .vms-table__pagination-btn { padding: var(--vms-space-xs) var(--vms-space-sm); font-size: var(--vms-text-sm); }
 .vms-table__pagination-btn:disabled { opacity: 0.45; cursor: default; }
+
+/* Jump-to-page control — "Page [ N ] of TOTAL  Go", inserted between Prev/Next. */
+.vms-table__pagination-jump { display: flex; align-items: center; gap: var(--vms-space-xs); }
+.vms-table__pagination-jump-label { color: var(--vms-text-muted); font-size: var(--vms-text-sm); white-space: nowrap; }
+.vms-table__pagination-jump-input {
+  width: 3.5em;
+  text-align: center;
+  background: var(--vms-surface);
+  border: 1px solid var(--vms-border);
+  border-radius: var(--vms-radius);
+  color: var(--vms-text);
+  font-family: var(--vms-font-body);
+  font-size: var(--vms-text-sm);
+  padding: var(--vms-space-xs);
+  color-scheme: var(--vms-color-scheme);
+}
+.vms-table__pagination-jump-input:focus {
+  border-color: var(--vms-accent);
+  outline: none;
+}
 
 /* 0.16.0 — `.vms-busy` is applied by BrowserAdapter when the shell is in a
    busy state (a user-initiated dispatch is in flight OR the server returned

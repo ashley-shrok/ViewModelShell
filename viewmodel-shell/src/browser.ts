@@ -1743,6 +1743,54 @@ export class BrowserAdapter implements Adapter {
       const prevDisabled = pg.page <= 1 || pg.prevAction == null;
       const nextDisabled = pg.page >= totalPages || pg.nextAction == null;
       footer.appendChild(mkBtn("‹ Prev", pg.page - 1, pg.prevAction, prevDisabled));
+
+      if (pg.jumpAction) {
+        const jumpAction = pg.jumpAction;
+        const jump = document.createElement("span");
+        jump.className = "vms-table__pagination-jump";
+
+        const label = document.createElement("span");
+        label.className = "vms-table__pagination-jump-label";
+        label.textContent = "Page";
+        jump.appendChild(label);
+
+        const input = document.createElement("input");
+        input.type = "number";
+        input.className = "vms-table__pagination-jump-input";
+        input.min = "1";
+        input.max = String(totalPages);
+        input.inputMode = "numeric";
+        input.setAttribute("aria-label", "Page number");
+        input.value = String(pg.page);
+        jump.appendChild(input);
+
+        const ofLabel = document.createElement("span");
+        ofLabel.className = "vms-table__pagination-jump-label";
+        ofLabel.textContent = `of ${totalPages}`;
+        jump.appendChild(ofLabel);
+
+        const submitJump = (): void => {
+          const parsed = Number.parseInt(input.value.trim(), 10);
+          if (!Number.isFinite(parsed)) return;
+          const clamped = Math.min(Math.max(parsed, 1), totalPages);
+          input.value = String(clamped);
+          if (paginationBind != null) this.sa.write(paginationBind, clamped);
+          on(jumpAction);
+        };
+
+        const goBtn = document.createElement("button");
+        goBtn.type = "button";
+        goBtn.className = "vms-button vms-button--secondary vms-table__pagination-btn";
+        goBtn.textContent = "Go";
+        goBtn.addEventListener("click", submitJump);
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") submitJump();
+        });
+        jump.appendChild(goBtn);
+
+        footer.appendChild(jump);
+      }
+
       footer.appendChild(mkBtn("Next ›", pg.page + 1, pg.nextAction, nextDisabled));
 
       wrapper.appendChild(footer);

@@ -129,6 +129,120 @@ describe("Phase 6 — TableNode pagination", () => {
   });
 });
 
+const pagedWithJump = (page: number, totalRows: number): ViewNode => ({
+  type: "table",
+  columns: [{ key: "name", label: "Name" }],
+  rows: baseRows.slice(0, 3),
+  paginationBind: "page",
+  pagination: {
+    page,
+    pageSize: 3,
+    totalRows,
+    prevAction: { name: "page-prev" },
+    nextAction: { name: "page-next" },
+    jumpAction: { name: "page-jump" },
+  },
+});
+
+function getJumpInput(container: HTMLElement): HTMLInputElement {
+  return container.querySelector(".vms-table__pagination-jump-input") as HTMLInputElement;
+}
+
+function getGoButton(container: HTMLElement): HTMLButtonElement {
+  return Array.from(container.querySelectorAll("button.vms-table__pagination-btn"))
+    .find((b) => (b as HTMLButtonElement).textContent === "Go") as HTMLButtonElement;
+}
+
+describe("TableNode pagination — jump-to-page", () => {
+  it("renders Page/of-total labels, a number input pre-filled with the current page, and a Go button", () => {
+    const container = freshContainer();
+    new BrowserAdapter(container).render(pagedWithJump(2, 7), () => {}, mkSA({}));
+    const labels = Array.from(container.querySelectorAll(".vms-table__pagination-jump-label"))
+      .map((el) => el.textContent);
+    expect(labels).toEqual(["Page", "of 3"]);
+    const input = getJumpInput(container);
+    expect(input).not.toBeNull();
+    expect(input.value).toBe("2");
+    const go = getGoButton(container);
+    expect(go).not.toBeNull();
+    // Prev/Next still present alongside the jump control.
+    const btnLabels = Array.from(container.querySelectorAll("button.vms-table__pagination-btn"))
+      .map((b) => (b as HTMLButtonElement).textContent);
+    expect(btnLabels).toEqual(["‹ Prev", "Go", "Next ›"]);
+  });
+
+  it("no jumpAction → no jump control renders (existing Prev/Next-only behavior unaffected)", () => {
+    const container = freshContainer();
+    new BrowserAdapter(container).render(paged(2, 7), () => {}, mkSA({}));
+    expect(container.querySelector(".vms-table__pagination-jump")).toBeNull();
+  });
+
+  it("typing a valid in-range page and clicking Go writes it to paginationBind then dispatches jumpAction", () => {
+    const dispatched: ActionEvent[] = [];
+    const state: Record<string, unknown> = {};
+    const container = freshContainer();
+    new BrowserAdapter(container).render(pagedWithJump(2, 7), (a) => dispatched.push(a), mkSA(state));
+    const input = getJumpInput(container);
+    input.value = "3";
+    getGoButton(container).click();
+    expect(state).toEqual({ page: 3 });
+    expect(dispatched).toEqual([{ name: "page-jump" }]);
+  });
+
+  it("pressing Enter in the jump input produces the identical write+dispatch as clicking Go", () => {
+    const dispatched: ActionEvent[] = [];
+    const state: Record<string, unknown> = {};
+    const container = freshContainer();
+    new BrowserAdapter(container).render(pagedWithJump(2, 7), (a) => dispatched.push(a), mkSA(state));
+    const input = getJumpInput(container);
+    input.value = "1";
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(state).toEqual({ page: 1 });
+    expect(dispatched).toEqual([{ name: "page-jump" }]);
+  });
+
+  it("clamps an out-of-range typed page to the nearest valid boundary before writing/dispatching", () => {
+    const dispatched: ActionEvent[] = [];
+    const state: Record<string, unknown> = {};
+    const container = freshContainer();
+    new BrowserAdapter(container).render(pagedWithJump(2, 7), (a) => dispatched.push(a), mkSA(state));
+    const input = getJumpInput(container);
+
+    input.value = "99";
+    getGoButton(container).click();
+    expect(state).toEqual({ page: 3 }); // clamped to totalPages
+    expect(input.value).toBe("3");
+
+    input.value = "-5";
+    getGoButton(container).click();
+    expect(state).toEqual({ page: 1 }); // clamped to 1
+    expect(input.value).toBe("1");
+
+    input.value = "0";
+    getGoButton(container).click();
+    expect(state).toEqual({ page: 1 }); // clamped to 1
+    expect(dispatched).toEqual([{ name: "page-jump" }, { name: "page-jump" }, { name: "page-jump" }]);
+  });
+
+  it("a non-numeric or empty entry does NOT write to paginationBind and does NOT dispatch", () => {
+    const dispatched: ActionEvent[] = [];
+    const state: Record<string, unknown> = {};
+    const container = freshContainer();
+    new BrowserAdapter(container).render(pagedWithJump(2, 7), (a) => dispatched.push(a), mkSA(state));
+    const input = getJumpInput(container);
+
+    input.value = "abc";
+    getGoButton(container).click();
+    expect(state).toEqual({});
+    expect(dispatched).toEqual([]);
+
+    input.value = "";
+    getGoButton(container).click();
+    expect(state).toEqual({});
+    expect(dispatched).toEqual([]);
+  });
+});
+
 describe("Phase 6 — per-row buttons via TableRow.actions[]", () => {
   it("each row action renders as a ButtonNode and dispatches its unique action name", () => {
     const dispatched: ActionEvent[] = [];

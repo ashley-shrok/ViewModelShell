@@ -562,6 +562,11 @@ export interface TablePagination {
   /** Dispatched on the next page-control click. Carries an action name only —
    *  the renderer writes the target page to TableNode.paginationBind before dispatch. */
   nextAction?: ActionEvent;
+  /** Dispatched when the user submits a typed target page via the jump-to-page
+   *  control's Go button or Enter key. The renderer clamps the typed value into
+   *  [1, totalPages] before writing it to TableNode.paginationBind and dispatching —
+   *  same mechanism as prevAction/nextAction. Omitted = no jump control renders. */
+  jumpAction?: ActionEvent;
 }
 
 export interface TableNode {

@@ -170,6 +170,7 @@ describe("validateActionNames", () => {
         totalRows: 100,
         prevAction: { name: "page-prev" },
         nextAction: { name: "page-next" },
+        jumpAction: { name: "page-jump" },
       },
     };
     const tree = page(table);

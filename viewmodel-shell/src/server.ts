@@ -200,6 +200,9 @@ function collectActions(
       if (table.pagination?.nextAction) {
         recordAction(table.pagination.nextAction, enclosingForm, out);
       }
+      if (table.pagination?.jumpAction) {
+        recordAction(table.pagination.jumpAction, enclosingForm, out);
+      }
       for (const row of table.rows) {
         if (row.actions) {
           // row.actions is ViewNode[] — it can include bind-only nodes (e.g. a
