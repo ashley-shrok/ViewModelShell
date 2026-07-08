@@ -112,7 +112,7 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
   4. `blocking` is absent-when-default on BOTH backends (F2), the wire token stays `viewmodel-shell/1.0`, and `bun run parity/run.ts` is green with fixtures for non-blocking dispatch + coalesced rapid fire + out-of-order discard (NBA-04).
 **Plans**: 3 plans
 - [x] 14-01-PLAN.md — `ActionEvent.blocking` + two-lane dispatch loop (mutex replacement, coalescing, epoch) in `index.ts` + full `browser.ts` propagation fix + vitest coverage for NBA-01/02/03 (wave 1)
-- [ ] 14-02-PLAN.md — .NET `ActionDescriptor.Blocking` (`bool?` + `WhenWritingNull`) + serialization tests (wave 1, independent of 14-01)
+- [x] 14-02-PLAN.md — .NET `ActionDescriptor.Blocking` (`bool?` + `WhenWritingNull`) + serialization tests (wave 1, independent of 14-01)
 - [ ] 14-03-PLAN.md — FeatureProbe parity fixture proving `blocking` is byte-identical/absent-when-default across backends (NBA-04) + full Phase 14 green-tree gate (wave 2, depends on 14-01 + 14-02)
 **UI hint**: no
 
