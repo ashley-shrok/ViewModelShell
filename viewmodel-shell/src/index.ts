@@ -3,6 +3,21 @@
 export interface ActionEvent {
   name: string;
   files?: Record<string, File>;
+  /**
+   * Phase 14 (NBA-01..04) — optional dispatch-scheduling hint, read PURELY
+   * client-side to pick a dispatch lane. Omitted = `true`, the framework's
+   * pre-Phase-14 behavior: byte-identical for every existing app. `false` =
+   * a non-blocking round trip that coexists with a blocking dispatch instead
+   * of contending for the client's single dispatch mutex (see
+   * `.planning/design/non-blocking-actions.md`).
+   *
+   * This field never rides inside the `_action` POST payload — the wire shape
+   * stays `{name}` only (the Phase 6 shape). `blocking` travels on the SAME
+   * ActionEvent object already embedded on a triggering node's
+   * `action`/`dismissAction`/`sortActions[...]`/`filterAction`/`prevAction`/
+   * `nextAction`/tab `action` field; the server never needs to see it.
+   */
+  blocking?: boolean;
 }
 
 // ─── Bind-path state access (Phase 6) ────────────────────────────────────────
@@ -899,7 +914,30 @@ export interface ShellResponse {
 export class ViewModelShell {
   private currentVm: ViewNode | null = null;
   private currentState: unknown = null;
-  private dispatching = false;
+  // Phase 14 (NBA-01..03) — the single `dispatching` mutex is replaced by two
+  // independent in-flight lanes so a non-blocking (silent/blocking:false)
+  // round trip coexists with a blocking one instead of contending for one
+  // shared slot. See `.planning/design/non-blocking-actions.md`.
+  /** Guards ONLY the blocking lane — renamed 1:1 from `dispatching`. Today's
+   *  rapid-click-during-a-round-trip protection, byte-identical. */
+  private blockingInFlight = false;
+  /** Guards the non-blocking lane so at most one non-blocking round trip is
+   *  ever in flight at once. */
+  private nonBlockingInFlight = false;
+  /** NBA-02 coalescing slot. Holds the LATEST non-blocking ActionEvent
+   *  requested while one is already in flight; each subsequent trigger
+   *  OVERWRITES it (never appended/queued — "latest wins"), so at most one
+   *  extra round trip fires once the in-flight one resolves. */
+  private pendingNonBlockingRefire: ActionEvent | null = null;
+  /** Monotonic counter incremented once per ACTUAL network dispatch attempt,
+   *  shared across both lanes, assigned at the moment the request is fired
+   *  (not at trigger/coalesce time) so it reflects real fire order. */
+  private dispatchSeq = 0;
+  /** The highest dispatchSeq whose response has been applied (rendered) so
+   *  far. NBA-03: a response is applied only when its seq >= appliedSeq; a
+   *  lower seq means a strictly newer dispatch already applied and this
+   *  response is stale — discard it rather than clobber the newer render. */
+  private appliedSeq = 0;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   // 0.16.0 — busy = serverBusy OR a user-initiated dispatch is in flight.
   // Polls (silent=true dispatches) don't flip userDispatching so they never
@@ -966,32 +1004,21 @@ export class ViewModelShell {
     }
   }
 
-  async dispatch(action: ActionEvent, silent = false): Promise<void> {
-    // 0.16.0 — drop user-initiated dispatches while server-busy. Polls (silent)
-    // bypass so the server can clear the busy state.
-    if (!silent && this.serverBusy) return;
-    if (this.dispatching) return;
-    const { actionEndpoint, onError, onLoading } = this.options;
-    if (this.currentState === null) {
-      const err = new Error(
-        `Cannot dispatch '${action.name}' before initial load completes. ` +
-        `Call shell.load() and wait for it before allowing user interaction.`
-      );
-      onError ? onError(err) : console.error("[ViewModelShell]", err);
-      return;
-    }
+  /**
+   * The actual network round trip for a single dispatch: builds the
+   * multipart body, fires the request, parses/validates the response, and
+   * (Phase 14 / NBA-03) applies it only if no strictly-newer dispatch has
+   * already been applied. Never throws to its caller — every error path is
+   * swallowed here exactly as it was in pre-Phase-14 `dispatch()`, so lane
+   * call sites need only a bare `try { await this.performRoundTrip(action); }
+   * finally { ... }` with no `catch` of their own.
+   */
+  private async performRoundTrip(action: ActionEvent): Promise<void> {
+    // Phase 14 (NBA-03) — assigned at the moment the request actually fires
+    // (not at trigger/coalesce time) so it reflects real fire order.
+    const seq = ++this.dispatchSeq;
+    const { actionEndpoint, onError } = this.options;
     try {
-      this.dispatching = true;
-      if (!silent) {
-        // 0.16.0 — flag a user dispatch as in-flight + apply .vms-busy. This
-        // is what kills the "rapid clicks during a round-trip silently flip the
-        // checkbox" UX bug: by the time the user's second click arrives, the
-        // container has pointer-events: none and the click never reaches the
-        // input.
-        this.userDispatching = true;
-        this.syncBusy();
-        onLoading?.(true);
-      }
       const form = new FormData();
       // Phase 6 — wire-shape break: `_action` carries the action name only.
       // The state at the input's bind path holds whatever value the previous
@@ -1045,7 +1072,13 @@ export class ViewModelShell {
           res.status,
         );
       }
-      this.processResponse(body);
+      // Phase 14 (NBA-03) — epoch gate: apply only if no strictly-newer
+      // dispatch has already been applied. Purely client-side; no wire
+      // field (see .planning/design/non-blocking-actions.md — "Epoch").
+      if (seq >= this.appliedSeq) {
+        this.appliedSeq = seq;
+        this.processResponse(body);
+      }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       onError ? onError(error) : console.error("[ViewModelShell]", error);
@@ -1069,19 +1102,89 @@ export class ViewModelShell {
       if (this.currentVm !== null) {
         this.options.adapter.render(this.currentVm, (a) => this.dispatch(a), this.stateAccessForAdapter());
       }
-    } finally {
-      this.dispatching = false;
-      if (!silent) {
+    }
+  }
+
+  async dispatch(action: ActionEvent, silent = false): Promise<void> {
+    // Phase 14 (NBA-01) — unifies the existing poll-only `silent` flag with
+    // the new `blocking:false` field under one "non-blocking lane" concept
+    // (design doc: "Poll = a non-blocking action on a timer").
+    const nonBlocking = silent || action.blocking === false;
+
+    if (!nonBlocking) {
+      // ─── Blocking lane — byte-identical guard order/behavior to the
+      // pre-Phase-14 single `dispatching` mutex, renamed to `blockingInFlight`. ───
+      // 0.16.0 — drop user-initiated dispatches while server-busy.
+      if (this.serverBusy) return;
+      if (this.blockingInFlight) return;
+      if (this.currentState === null) {
+        const err = new Error(
+          `Cannot dispatch '${action.name}' before initial load completes. ` +
+          `Call shell.load() and wait for it before allowing user interaction.`
+        );
+        const { onError } = this.options;
+        onError ? onError(err) : console.error("[ViewModelShell]", err);
+        return;
+      }
+      // 0.16.0 — flag a user dispatch as in-flight + apply .vms-busy. This
+      // is what kills the "rapid clicks during a round-trip silently flip the
+      // checkbox" UX bug: by the time the user's second click arrives, the
+      // container has pointer-events: none and the click never reaches the
+      // input.
+      this.blockingInFlight = true;
+      this.userDispatching = true;
+      this.syncBusy();
+      this.options.onLoading?.(true);
+      try {
+        await this.performRoundTrip(action);
+      } finally {
+        this.blockingInFlight = false;
         this.userDispatching = false;
         this.syncBusy();
-        onLoading?.(false);
+        this.options.onLoading?.(false);
       }
+      return;
+    }
+
+    // ─── Non-blocking lane — covers BOTH silent===true (poll) and
+    // action.blocking===false (NBA-01). Deliberately does NOT set
+    // userDispatching / call onLoading / toggle .vms-busy — that is what
+    // "does not trip the busy-lock" means; only the blocking lane does.
+    if (this.nonBlockingInFlight) {
+      // NBA-02 — coalesce; do NOT fire a second concurrent request. Overwrite
+      // (never append/queue) so at most one extra round trip fires once the
+      // in-flight one resolves, carrying the LATEST trigger.
+      this.pendingNonBlockingRefire = action;
+      return;
+    }
+    // Mirrors the blocking lane's pre-load guard, identical error message.
+    if (this.currentState === null) {
+      const err = new Error(
+        `Cannot dispatch '${action.name}' before initial load completes. ` +
+        `Call shell.load() and wait for it before allowing user interaction.`
+      );
+      const { onError } = this.options;
+      onError ? onError(err) : console.error("[ViewModelShell]", err);
+      return;
+    }
+    this.nonBlockingInFlight = true;
+    try {
+      await this.performRoundTrip(action);
+    } finally {
+      this.nonBlockingInFlight = false;
+      const refire = this.pendingNonBlockingRefire;
+      this.pendingNonBlockingRefire = null;
+      // The coalesced re-fire recurses into dispatch() with the SAME `silent`
+      // value this invocation was entered with (a poll's coalesced refire
+      // stays silent; a blocking:false action's coalesced refire re-enters
+      // the non-blocking branch again via its own action.blocking===false).
+      if (refire) void this.dispatch(refire, silent);
     }
   }
 
   /** Feed a pre-parsed ShellResponse into the shell — for SSE/WebSocket integrations. */
   push(response: ShellResponse): void {
-    if (this.dispatching) return;
+    if (this.blockingInFlight || this.nonBlockingInFlight) return;
     // 1.0.0 — parse-then-branch for push. External push consumers (SSE, WebSocket)
     // may feed ok:false responses (e.g. a server-pushed error notification). Route
     // them to onError WITHOUT calling processResponse — currentVm/currentState
