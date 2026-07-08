@@ -135,6 +135,16 @@ The wire does not mandate an auth shape. If the app needs credentials, the app p
 
 If a response carries `nextPollIn: N`, schedule a POST `{ "name": "poll", "state": <last state> }` against the same `actionEndpoint` after `N` milliseconds. The server may continue returning `nextPollIn` until the workflow reaches a terminal state, at which point the field will be absent. Polls run silently — they are not user-initiated.
 
+## Non-blocking actions (`blocking:false`)
+
+Some node action descriptors in the `vm` tree (a `CheckboxNode.action`, `ButtonNode.action`, a `TableRow.action`, etc.) may carry `"blocking": false` alongside the action's `name`. This is a CLIENT-SIDE scheduling hint for the browser `ViewModelShell` instance: it selects a non-blocking dispatch lane that coexists with an in-flight blocking action instead of queuing behind it, and coalesces rapid repeated triggers of the same action to "latest wins."
+
+It never appears in the `_action` POST payload you send. The request body shape stays `{"name": "<action-name>"}` (JSON form) or `{"name":"<action-name>"}` (multipart `_action` field) regardless of whether the descriptor you read it from said `blocking:true` (the default, typically omitted) or `blocking:false`.
+
+**For you (a wire-driving agent with no client-side dispatch loop): `blocking` is INFORMATIONAL ONLY. Dispatch the action exactly the same way regardless of its value** — POST `_action`/`_state` (or the JSON form) as normal and read the response per the existing rules in this manual (`ok`, `rejected`, `errors[]`). You do not need to implement coalescing, an epoch, or any dispatch-lane concept to drive the wire correctly.
+
+This connects to the polling section above: the `{"name": "poll"}` dispatch this manual already documents is itself an instance of a non-blocking action — a poll always rides the non-blocking lane client-side — so nothing about how you send a poll dispatch changes either.
+
 ## Files
 
 File uploads use the multipart form above. One form entry per file input, keyed by the input's `name` attribute (from the corresponding node's `name` field in the tree). The file's binary content is the entry's value. JSON-body dispatch cannot carry files; use multipart.
