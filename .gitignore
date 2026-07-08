@@ -27,3 +27,6 @@ demo/HelpDesk/AspNetCore/helpdesk.db
 demo/HelpDesk/AspNetCore/helpdesk-parity-dotnet.db
 demo/HelpDesk-bun/helpdesk.db
 demo/HelpDesk-bun/helpdesk-parity-bun.db
+
+# GSD auto-generated state scratch — AGENTS.md forbids a committed state ledger
+.planning/STATE.md
