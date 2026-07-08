@@ -99,3 +99,7 @@ None - no external service configuration required. The demo is a local/tailnet-o
 ---
 *Phase: 16-test-apps-human-verification-release*
 *Completed: 2026-07-08*
+
+## Self-Check: PASSED
+
+All 8 claimed files verified present on disk; all 3 commit hashes (`560571e`, `47a30a7`, `5759857`) verified present in `git log --oneline --all`.
