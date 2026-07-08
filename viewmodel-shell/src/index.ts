@@ -924,19 +924,35 @@ export class ViewModelShell {
   /** Guards the non-blocking lane so at most one non-blocking round trip is
    *  ever in flight at once. */
   private nonBlockingInFlight = false;
-  /** NBA-02 coalescing slot. Holds the LATEST non-blocking ActionEvent
-   *  requested while one is already in flight; each subsequent trigger
-   *  OVERWRITES it (never appended/queued — "latest wins"), so at most one
-   *  extra round trip fires once the in-flight one resolves. */
-  private pendingNonBlockingRefire: ActionEvent | null = null;
+  /** NBA-02 coalescing slot. Holds the LATEST non-blocking dispatch requested
+   *  while one is already in flight; each subsequent trigger OVERWRITES it
+   *  (never appended/queued — "latest wins"), so at most one extra round
+   *  trip fires once the in-flight one resolves. Stores the pending trigger's
+   *  OWN `silent` classification alongside its action (CR-01 fix, Phase 14
+   *  gap closure) — the refire must replay with the classification the
+   *  coalesced trigger was ORIGINALLY dispatched with, never with whichever
+   *  invocation happens to resolve first and run the refire. Without this, a
+   *  bare `poll` action (silent=true, no `blocking` field of its own)
+   *  coalescing behind an in-flight `blocking:false` action would refire
+   *  through the resolving action's `silent=false`, misrouting the poll into
+   *  the blocking lane. See `.planning/design/non-blocking-actions.md`. */
+  private pendingNonBlockingRefire: { action: ActionEvent; silent: boolean } | null = null;
   /** Monotonic counter incremented once per ACTUAL network dispatch attempt,
    *  shared across both lanes, assigned at the moment the request is fired
    *  (not at trigger/coalesce time) so it reflects real fire order. */
   private dispatchSeq = 0;
   /** The highest dispatchSeq whose response has been applied (rendered) so
-   *  far. NBA-03: a response is applied only when its seq >= appliedSeq; a
-   *  lower seq means a strictly newer dispatch already applied and this
-   *  response is stale — discard it rather than clobber the newer render. */
+   *  far. NBA-03: a NON-BLOCKING response is applied only when its seq >=
+   *  appliedSeq; a lower seq means a strictly newer dispatch already applied
+   *  and this response is stale — discard it rather than clobber the newer
+   *  render. A BLOCKING response is authoritative and always applies
+   *  unconditionally (CR-02 fix, Phase 14 gap closure): `blockingInFlight`
+   *  guarantees at most one blocking dispatch is ever in flight, so a
+   *  blocking response can never be superseded by another blocking one —
+   *  gating it against a faster-resolving, later-fired NON-blocking response
+   *  would silently discard the user's own action with no signal. Always
+   *  advanced via `Math.max` (never lowered) regardless of which lane
+   *  applied. See `.planning/design/non-blocking-actions.md` — "Epoch". */
   private appliedSeq = 0;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   // 0.16.0 — busy = serverBusy OR a user-initiated dispatch is in flight.
@@ -1007,13 +1023,19 @@ export class ViewModelShell {
   /**
    * The actual network round trip for a single dispatch: builds the
    * multipart body, fires the request, parses/validates the response, and
-   * (Phase 14 / NBA-03) applies it only if no strictly-newer dispatch has
-   * already been applied. Never throws to its caller — every error path is
-   * swallowed here exactly as it was in pre-Phase-14 `dispatch()`, so lane
-   * call sites need only a bare `try { await this.performRoundTrip(action); }
-   * finally { ... }` with no `catch` of their own.
+   * applies it per the lane-aware epoch rule (Phase 14 / NBA-03, refined by
+   * the CR-02 gap closure — see the `appliedSeq` field doc). Never throws to
+   * its caller — every error path is swallowed here exactly as it was in
+   * pre-Phase-14 `dispatch()`, so lane call sites need only a bare
+   * `try { await this.performRoundTrip(action, nonBlocking); } finally { ... }`
+   * with no `catch` of their own.
+   *
+   * @param nonBlocking whether THIS dispatch is on the non-blocking lane
+   *   (silent=true or action.blocking===false). Determines whether the
+   *   response is subject to the staleness-discard (non-blocking) or always
+   *   applies unconditionally (blocking — see the `appliedSeq` field doc).
    */
-  private async performRoundTrip(action: ActionEvent): Promise<void> {
+  private async performRoundTrip(action: ActionEvent, nonBlocking: boolean): Promise<void> {
     // Phase 14 (NBA-03) — assigned at the moment the request actually fires
     // (not at trigger/coalesce time) so it reflects real fire order.
     const seq = ++this.dispatchSeq;
@@ -1072,11 +1094,26 @@ export class ViewModelShell {
           res.status,
         );
       }
-      // Phase 14 (NBA-03) — epoch gate: apply only if no strictly-newer
-      // dispatch has already been applied. Purely client-side; no wire
-      // field (see .planning/design/non-blocking-actions.md — "Epoch").
-      if (seq >= this.appliedSeq) {
-        this.appliedSeq = seq;
+      // Phase 14 (NBA-03, refined by the CR-02 gap closure) — lane-aware
+      // epoch gate. Purely client-side; no wire field (see
+      // .planning/design/non-blocking-actions.md — "Epoch").
+      if (nonBlocking) {
+        // Non-blocking (background) response: apply only if no strictly-newer
+        // dispatch (of either lane) has already been applied — this is the
+        // staleness-discard NBA-03 exists for.
+        if (seq >= this.appliedSeq) {
+          this.appliedSeq = Math.max(this.appliedSeq, seq);
+          this.processResponse(body);
+        }
+      } else {
+        // Blocking (user) response: authoritative — ALWAYS applies. At most
+        // one blocking dispatch is ever in flight (blockingInFlight guards
+        // it), so it can never be superseded by another blocking response;
+        // gating it against a faster non-blocking response would silently
+        // discard the user's own action. appliedSeq still advances (via max,
+        // never lowered) so a later-arriving stale non-blocking response is
+        // correctly discarded against this newer high-water mark.
+        this.appliedSeq = Math.max(this.appliedSeq, seq);
         this.processResponse(body);
       }
     } catch (err) {
@@ -1136,7 +1173,7 @@ export class ViewModelShell {
       this.syncBusy();
       this.options.onLoading?.(true);
       try {
-        await this.performRoundTrip(action);
+        await this.performRoundTrip(action, false);
       } finally {
         this.blockingInFlight = false;
         this.userDispatching = false;
@@ -1153,8 +1190,10 @@ export class ViewModelShell {
     if (this.nonBlockingInFlight) {
       // NBA-02 — coalesce; do NOT fire a second concurrent request. Overwrite
       // (never append/queue) so at most one extra round trip fires once the
-      // in-flight one resolves, carrying the LATEST trigger.
-      this.pendingNonBlockingRefire = action;
+      // in-flight one resolves, carrying the LATEST trigger. CR-01 fix: store
+      // this trigger's OWN `silent` alongside its action — see the field doc
+      // on `pendingNonBlockingRefire`.
+      this.pendingNonBlockingRefire = { action, silent };
       return;
     }
     // Mirrors the blocking lane's pre-load guard, identical error message.
@@ -1169,16 +1208,20 @@ export class ViewModelShell {
     }
     this.nonBlockingInFlight = true;
     try {
-      await this.performRoundTrip(action);
+      await this.performRoundTrip(action, true);
     } finally {
       this.nonBlockingInFlight = false;
       const refire = this.pendingNonBlockingRefire;
       this.pendingNonBlockingRefire = null;
-      // The coalesced re-fire recurses into dispatch() with the SAME `silent`
-      // value this invocation was entered with (a poll's coalesced refire
-      // stays silent; a blocking:false action's coalesced refire re-enters
-      // the non-blocking branch again via its own action.blocking===false).
-      if (refire) void this.dispatch(refire, silent);
+      // CR-01 fix — the coalesced re-fire recurses into dispatch() with the
+      // PENDING TRIGGER'S OWN `silent` classification (stored alongside its
+      // action in the slot), never with the value THIS (resolving)
+      // invocation happened to be entered with. A poll's coalesced refire
+      // always stays silent regardless of what resolved first; a
+      // blocking:false action's coalesced refire always re-enters the
+      // non-blocking branch via its own action.blocking===false. See the
+      // field doc on `pendingNonBlockingRefire`.
+      if (refire) void this.dispatch(refire.action, refire.silent);
     }
   }
 
