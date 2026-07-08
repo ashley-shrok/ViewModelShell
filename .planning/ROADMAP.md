@@ -137,7 +137,13 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
 **Success Criteria** (what must be TRUE):
   1. The 3 demo apps + their trigger scripts exist, are served over the tailnet, and the operator signs off that rapid-toggle, poll-coexistence, and staleness all behave as specified (NBA-08).
   2. The aligned minor is published on npm + NuGet, tagged, `main` advanced, and `#vms-changelog` announced (NBA-09).
-**Plans**: TBD (set by `/gsd:plan-phase 16`)
+**Plans**: 6 plans
+- [ ] 16-01-PLAN.md — Demo: selection -> live server-computed action bar (NonBlockingActionBar-bun, port 3008)
+- [ ] 16-02-PLAN.md — Demo: poll + user-action coexistence (NonBlockingPoll-bun, port 3009)
+- [ ] 16-03-PLAN.md — Demo: out-of-order staleness discard (NonBlockingStaleness-bun, port 3010)
+- [ ] 16-04-PLAN.md — Combined verification script + operator sign-off checkpoint (NBA-08 gate)
+- [ ] 16-05-PLAN.md — Release prep: ChartNode agent-skill.md doc (CHART-06) + CHANGELOG/MIGRATION for 4.1.0+4.2.0 + green-tree gate
+- [ ] 16-06-PLAN.md — Release execution: version bump, npm+NuGet publish, tag, advance main, announce, close issue #6 (CHART-07, NBA-09)
 **UI hint**: yes
 
 ### Phase 17: Admission barrier (Stage 2) — CONDITIONAL
