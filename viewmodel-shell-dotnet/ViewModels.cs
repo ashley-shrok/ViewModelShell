@@ -24,7 +24,35 @@ namespace ViewModelShell;
 
 // ─── Action types ─────────────────────────────────────────────────────────────
 
-public record ActionDescriptor(string Name);
+public record ActionDescriptor(
+    string Name,
+    // Phase 14 (NBA-01/NBA-04, non-blocking dispatch — see
+    // .planning/design/non-blocking-actions.md). Optional; semantic default
+    // is TRUE (blocking) — the framework's pre-Phase-14 behavior, where a
+    // dispatch holds the client's dispatch mutex until it resolves. Omitted
+    // = byte-identical to every existing app. `false` opts this specific
+    // action into the non-blocking round trip, which coexists with a
+    // blocking dispatch on the client instead of contending for its
+    // dispatch mutex.
+    //
+    // DELIBERATELY `bool?` + `WhenWritingNull`, NOT `bool` + `WhenWritingDefault`
+    // like PageNode/SectionNode `Fill`, `LinkNode`/`SectionLink` `External`, or
+    // `TableColumn` `FollowTail` (see those fields' comments elsewhere in this
+    // file). Those fields' semantic "unset" value (`false`) happens to equal
+    // the CLR `default(bool)`, so `WhenWritingDefault` (which always compares
+    // against `default(bool)` = `false`) drops them correctly. `Blocking`'s
+    // semantic "unset" value is `true` — the OPPOSITE of the CLR default — so
+    // `WhenWritingDefault` would invert the polarity here: it would drop
+    // explicit `false` writes (the one value that matters on the wire) and
+    // always emit `true`. `bool?` + `WhenWritingNull` is therefore the only
+    // correct mechanism, exactly as already used for `SectionNode.Collapsible`
+    // (also nullable+`WhenWritingNull`, for the identical
+    // true-is-incompatible-with-WhenWritingDefault reason — even though
+    // Collapsible's OWN semantic default happens to be false; the point is
+    // the mechanism is unconditionally correct for ANY optional bool
+    // regardless of which value is "unset", not that polarity must match).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Blocking = null
+);
 
 public record ActionPayload<TState>(
     string Name,
