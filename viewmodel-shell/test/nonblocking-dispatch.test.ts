@@ -197,3 +197,95 @@ describe("Phase 14 (NBA-03) — epoch: a stale/out-of-order response is discarde
     expect(shell.getCurrentState()).toEqual({ tag: "blocking" });
   });
 });
+
+describe("Phase 14 gap closure (CR-01) — a poll coalescing behind an in-flight blocking:false action refires SILENT", () => {
+  it("does not trip setBusy and does not misroute the coalesced poll into the blocking lane", async () => {
+    const { adapter, calls: busyCalls } = (() => {
+      const calls: boolean[] = [];
+      const a: Adapter = {
+        render: () => {},
+        setBusy: (active: boolean) => { calls.push(active); },
+      };
+      return { adapter: a, calls };
+    })();
+    const { fetchMock, deferreds } = makeControllableFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    const shell = new ViewModelShell({ endpoint: "/api/x", actionEndpoint: "/api/x/action", adapter });
+    await shell.load();
+    busyCalls.length = 0; // ignore the load's setBusy(false)
+
+    // A blocking:false user action fires (default silent=false at the call
+    // site — mirrors a real ButtonNode dispatch, NOT a poll's own `dispatch(action, true)`).
+    const p1 = shell.dispatch({ name: "live-refresh", blocking: false } as ActionEvent);
+    expect(fetchMock.mock.calls.length).toBe(2);
+
+    // While it is in flight, the poll timer fires — `schedulePoll` always
+    // calls `dispatch({name:"poll"}, true)`. It coalesces (nonBlockingInFlight
+    // is already true) rather than firing a second concurrent request.
+    const p2 = shell.dispatch({ name: "poll" }, true);
+    expect(fetchMock.mock.calls.length).toBe(2); // still coalesced, no new fetch yet
+
+    // Resolve the in-flight live-refresh — this runs live-refresh's OWN
+    // `finally` block, which performs the coalesced refire.
+    resolveDeferred(deferreds[0]!, { tag: "live-refresh-applied" });
+    await p1;
+
+    // The coalesced refire must have fired as its OWN classification
+    // (silent=true, a poll) — a THIRD fetch call, carrying the poll action.
+    expect(fetchMock.mock.calls.length).toBe(3);
+    expect(actionNameOf(fetchMock.mock.calls[2]!)).toBe("poll");
+
+    // CR-01: the coalesced poll refire must NOT have tripped the busy lock —
+    // it must have gone through the non-blocking lane (silent=true, exactly
+    // as it was originally triggered), not the blocking lane. Before the fix,
+    // it replayed with the RESOLVING call's `silent=false` and tripped
+    // setBusy(true) for what should be an invisible background poll. (Both
+    // live-refresh's and the poll's own `processResponse` unconditionally
+    // call `syncBusy()` too, which is legitimate — server-busy tracking is
+    // orthogonal to the lane — so we assert no `true` ever appears, not that
+    // setBusy is never called at all.)
+    expect(busyCalls).not.toContain(true);
+
+    // Resolve the coalesced poll refire so nothing is left dangling.
+    resolveDeferred(deferreds[1]!, { tag: "poll-applied" });
+    await p2;
+
+    // Still no busy toggling (true) for the whole interleaving.
+    expect(busyCalls).not.toContain(true);
+  });
+});
+
+describe("Phase 14 gap closure (CR-02) — a slow blocking dispatch's response is never dropped by a faster later non-blocking one", () => {
+  it("applies the blocking response even though a later-fired non-blocking one resolved first", async () => {
+    const { adapter } = makeAdapter();
+    const { fetchMock, deferreds } = makeControllableFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    const onError = vi.fn();
+    const shell = new ViewModelShell({ endpoint: "/api/x", actionEndpoint: "/api/x/action", adapter, onError });
+    await shell.load();
+
+    // Fire the BLOCKING one first (seq N) — slow, still in flight.
+    const p1 = shell.dispatch({ name: "save" } as ActionEvent);
+    expect(fetchMock.mock.calls.length).toBe(2);
+
+    // Fire a NON-blocking one second (seq N+1, e.g. a poll tick) — also in flight.
+    const p2 = shell.dispatch({ name: "poll" }, true);
+    expect(fetchMock.mock.calls.length).toBe(3);
+
+    // The non-blocking one (later seq) resolves FIRST, being faster.
+    resolveDeferred(deferreds[1]!, { tag: "poll-applied" });
+    await p2;
+    expect(shell.getCurrentState()).toEqual({ tag: "poll-applied" });
+
+    // The blocking one (earlier seq) resolves SECOND. It must still apply —
+    // a blocking (user-initiated) response is authoritative; it must never
+    // be discarded just because a later-fired non-blocking one resolved
+    // first and advanced the epoch.
+    resolveDeferred(deferreds[0]!, { tag: "save-applied" });
+    await p1;
+
+    expect(shell.getCurrentState()).toEqual({ tag: "save-applied" });
+    // And if it HAD been (incorrectly) dropped, it must not have been silent.
+    expect(onError).not.toHaveBeenCalled();
+  });
+});
