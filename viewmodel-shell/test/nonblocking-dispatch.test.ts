@@ -289,3 +289,48 @@ describe("Phase 14 gap closure (CR-02) — a slow blocking dispatch's response i
     expect(onError).not.toHaveBeenCalled();
   });
 });
+
+describe("Phase 15 (NBA-06) — a response is discarded when a coalesced refire is already queued, preventing a rapid-toggle revert", () => {
+  it("a rapid double-toggle of the same control never lets the first (stale) response apply, and the coalesced refire's own response wins", async () => {
+    const { adapter } = makeAdapter();
+    const { fetchMock, deferreds } = makeControllableFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    const shell = new ViewModelShell({ endpoint: "/api/x", actionEndpoint: "/api/x/action", adapter });
+    await shell.load();
+    expect(fetchMock.mock.calls.length).toBe(1);
+
+    // Toggle A: request fires (seq N), in flight.
+    const pA = shell.dispatch({ name: "toggle", blocking: false } as ActionEvent);
+    expect(fetchMock.mock.calls.length).toBe(2);
+
+    // Toggle B: the user's very next click, un-toggling A. Coalesces into
+    // pendingNonBlockingRefire — no new fetch call. NOTE: this dispatch()
+    // call resolves its OWN promise immediately (the coalescing branch
+    // returns synchronously without firing a request) — it is NOT a handle
+    // on the eventual coalesced refire's round trip, so it isn't useful to
+    // await for that purpose. The refire's completion is instead observed
+    // below via a microtask-drain wait after resolving its deferred.
+    void shell.dispatch({ name: "toggle", blocking: false } as ActionEvent);
+    expect(fetchMock.mock.calls.length).toBe(2);
+
+    // Resolve request A's response. Without the NBA-06 fix this would apply
+    // (it's not stale by seq alone — it's the only response outstanding) and
+    // clobber the user's second toggle with A's own stale echo.
+    resolveDeferred(deferreds[0]!, { tag: "stale-A" });
+    await pA;
+
+    // A's response must NOT have applied.
+    expect(shell.getCurrentState()).not.toEqual({ tag: "stale-A" });
+    expect(shell.getCurrentState()).toEqual({});
+    // The coalesced refire (B) must have fired as a THIRD fetch call.
+    expect(fetchMock.mock.calls.length).toBe(3);
+    expect(actionNameOf(fetchMock.mock.calls[2]!)).toBe("toggle");
+
+    // Resolve request B's response — it must apply (the user's actual last
+    // toggle). Drain a microtask tick for the coalesced refire's own
+    // performRoundTrip to finish applying it.
+    resolveDeferred(deferreds[1]!, { tag: "applied-B" });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(shell.getCurrentState()).toEqual({ tag: "applied-B" });
+  });
+});
