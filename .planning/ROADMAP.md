@@ -140,7 +140,7 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
 **Plans**: 6 plans
 - [x] 16-01-PLAN.md — Demo: selection -> live server-computed action bar (NonBlockingActionBar-bun, port 3008)
 - [x] 16-02-PLAN.md — Demo: poll + user-action coexistence (NonBlockingPoll-bun, port 3009)
-- [ ] 16-03-PLAN.md — Demo: out-of-order staleness discard (NonBlockingStaleness-bun, port 3010)
+- [x] 16-03-PLAN.md — Demo: out-of-order staleness discard (NonBlockingStaleness-bun, port 3010)
 - [ ] 16-04-PLAN.md — Combined verification script + operator sign-off checkpoint (NBA-08 gate)
 - [ ] 16-05-PLAN.md — Release prep: ChartNode agent-skill.md doc (CHART-06) + CHANGELOG/MIGRATION for 4.1.0+4.2.0 + green-tree gate
 - [ ] 16-06-PLAN.md — Release execution: version bump, npm+NuGet publish, tag, advance main, announce, close issue #6 (CHART-07, NBA-09)
