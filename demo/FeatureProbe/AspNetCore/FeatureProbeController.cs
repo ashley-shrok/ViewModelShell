@@ -204,6 +204,10 @@ public class FeatureProbeController : ControllerBase
         {
             // Renderer wrote target page to state.TablePage before dispatch.
         }
+        else if (name == "table-page-jump")
+        {
+            // Renderer wrote the clamped target page to state.TablePage before dispatch.
+        }
         else if (name == "select-card")
         {
             // 1.3.0 — SectionNode.Action click. Increment counter; BuildVm reflects it.
@@ -789,7 +793,8 @@ public class FeatureProbeController : ControllerBase
             Pagination: new TablePagination(
                 clampedPage, PageSize, total,
                 PrevAction: new ActionDescriptor("table-page-prev"),
-                NextAction: new ActionDescriptor("table-page-next")));
+                NextAction: new ActionDescriptor("table-page-next"),
+                JumpAction: new ActionDescriptor("table-page-jump")));
 
         return new SectionNode("Table matrix",
             new List<ViewNode> { table },

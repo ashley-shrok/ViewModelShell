@@ -873,7 +873,12 @@ public record TablePagination(
     int PageSize,
     int TotalRows,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? PrevAction = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? NextAction = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? NextAction = null,
+    /// <summary>Dispatched when the user submits a typed target page via the jump-to-page
+    /// control's Go button or Enter key. The renderer clamps the typed value into
+    /// [1, totalPages] before writing it to TableNode.PaginationBind and dispatching —
+    /// same mechanism as PrevAction/NextAction. Null = no jump control renders.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? JumpAction = null
 );
 
 public record TableNode(
@@ -1221,6 +1226,7 @@ public static class ViewTreeValidation
                 if (table.FilterAction is { } filter) Record(filter, enclosingForm, sink);
                 if (table.Pagination?.PrevAction is { } prev) Record(prev, enclosingForm, sink);
                 if (table.Pagination?.NextAction is { } next) Record(next, enclosingForm, sink);
+                if (table.Pagination?.JumpAction is { } jump) Record(jump, enclosingForm, sink);
                 foreach (var row in table.Rows)
                 {
                     if (row.Actions is { } rowActions)

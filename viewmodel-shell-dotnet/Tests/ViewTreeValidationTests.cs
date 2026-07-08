@@ -171,7 +171,8 @@ public class ViewTreeValidationTests
                 PageSize: 20,
                 TotalRows: 100,
                 PrevAction: new ActionDescriptor("page-prev"),
-                NextAction: new ActionDescriptor("page-next")));
+                NextAction: new ActionDescriptor("page-next"),
+                JumpAction: new ActionDescriptor("page-jump")));
         var tree = Page(table);
         var ex = Record.Exception(() => ViewTreeValidation.ValidateActionNames(tree));
         Assert.Null(ex);

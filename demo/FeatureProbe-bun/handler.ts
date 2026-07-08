@@ -133,6 +133,7 @@ function buildTableSection(state: FeatureProbeState): ViewNode {
       totalRows: total,
       prevAction: { name: "table-page-prev" },
       nextAction: { name: "table-page-next" },
+      jumpAction: { name: "table-page-jump" },
     },
   };
   return {
@@ -781,6 +782,8 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
     // (Server just re-renders the slice for the new page.)
   } else if (name === "table-page-next") {
     // Same as prev.
+  } else if (name === "table-page-jump") {
+    // Renderer wrote the clamped page to tablePage; server re-renders the slice.
   } else if (name === "select-card") {
     // 1.4.0 — SectionNode.action click. Increment counter; BuildVm reflects it.
     state = { ...state, cardClickCount: state.cardClickCount + 1 };
