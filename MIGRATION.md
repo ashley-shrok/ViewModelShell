@@ -6,6 +6,31 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `4.2.0` / `4.2.0` (npm + NuGet) — additive, opt-in, no forced action
+
+**Nothing to do to keep working.** `blocking` defaults to `true` on every existing action — byte-identical behavior. Opt into a non-blocking round trip only where you want one (a live-selection refresh, a polling view) by adding `blocking: false` to that specific action's `ActionEvent`. `pollInterval` behavior is unchanged from your point of view (it already existed) — this release only proves/fixes its underlying contention-free implementation (a poll no longer contends with, or gets dropped by, a user action, and vice versa).
+
+```ts
+// opt in per-action — e.g. a live-refreshing selection checkbox
+{ type: "checkbox", bind: "selected.42", action: { name: "toggle-42", blocking: false } }
+```
+
+Everything else — the wire shape, `_action`/`_state`, the response envelope — is unchanged.
+
+---
+
+## Upgrading to `4.1.0` / `4.1.0` (npm + NuGet) — additive, opt-in, no forced action
+
+**Nothing to do to keep working.** `ChartNode` is a new optional leaf node — existing trees and agents are unaffected by its addition. **Consumers who want to RENDER a chart must install the optional `chart.js` peer dependency:**
+
+```bash
+npm install chart.js
+```
+
+Everyone else needs nothing — a tree with no `ChartNode` loads zero chart.js bytes.
+
+---
+
 ## Upgrading to `4.0.0` / `4.0.0` (npm + NuGet) — file uploads must declare `uploadOn` **(BREAKING)**
 
 **What breaks:** file-upload forms stop sending their file until you declare where it rides. Previously a form's submit button and any `FormNode.buttons[]` entry auto-swept every `<input type=file>` and attached it to the dispatch. As of `4.0.0` that positional sweep is **removed** — a file rides an action **only** if that action's name is listed in the file input's new `uploadOn` array. A file input with no `uploadOn` sends nothing (the browser warns `[vms:orphan-file]` in the dev console when a file is picked into it).
