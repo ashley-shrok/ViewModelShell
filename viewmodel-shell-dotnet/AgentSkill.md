@@ -151,6 +151,23 @@ File uploads use the multipart form above. One form entry per file input, keyed 
 
 **A file rides only the action(s) its input declares.** Each file `FieldNode` carries an `uploadOn` array of action names. Send a file's binary entry **only** when the action you are dispatching (`_action.name`) is listed in that file input's `uploadOn`; if you dispatch any other action, do **not** include the file. A file input with no `uploadOn` (absent or empty) rides **nothing** — its binary is never sent. This mirrors the browser, where the same declaration decides which click sends the file: an agent should not attach a file to an action a human's click could not have sent it with. (There is no positional/implicit rule — the file's own `uploadOn` is the whole contract.)
 
+## Chart data (`type:"chart"`)
+
+A `ChartNode` in the `vm` tree carries bounded, agent-legible declared data — it is read-only structured data like any other node, with no dispatch-bearing fields of its own:
+
+```json
+{ "type": "chart", "kind": "bar", "title": "Weekly visits",
+  "points": [ { "label": "Mon", "value": 12 }, { "label": "Tue", "value": 19 } ],
+  "tone": "info" }
+```
+
+- `kind` — optional. Omitted means `"bar"`, the only value in `viewmodel-shell/1.0`.
+- `points` — an array of self-contained `{label, value}` pairs. No parallel-array index alignment is needed (unlike some other frameworks' chart data shapes) — read each point directly.
+- `title` — optional chart title.
+- `tone` — optional (`danger|warning|success|info`). This only affects rendered COLOR in a browser client. A wire-driving agent with no renderer can simply read `points`/`title` directly and ignore `tone`.
+
+There is nothing else to do to "drive" a chart over the wire.
+
 ## Versioning
 
 This manual applies to protocol token `viewmodel-shell/1.0` — the value of the `protocol` field on the discoverability meta tag. The protocol token tracks the wire shape, NOT the package version: a 1.5.x or 1.6.x package release may still carry protocol `viewmodel-shell/1.0` because the wire has not undergone a breaking change. A future major-version bump (`viewmodel-shell/2.0`) signals a breaking change and invalidates this manual; expect a new skill at the same `/.well-known/vms-skill.md` URL.
