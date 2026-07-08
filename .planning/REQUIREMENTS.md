@@ -22,7 +22,7 @@ This milestone adds VMS's first data-visualization primitive: a **structured `Ch
 - [ ] **CHART-05**: The `ChartNode` lands byte-identically in TS (`src/index.ts` + `browser.ts`) and .NET (`ViewModels.cs` record + `[JsonDerivedType]` discriminator, every nullable wire field carrying `[JsonIgnore(WhenWritingNull)]`); **both** tree-validators descend into it (no fits-node-style blind spot); a `parity/` fixture (FeatureProbe) exercises it and `bun run parity/run.ts` is byte-identical green (data diffed, not pixels). The TUI adapter has a defined legible degradation (e.g. printed series / ASCII bars) so it doesn't break the non-browser target.
 
 ### Verification & release
-- [ ] **CHART-06**: The operator personally reviews the rendered chart in a browser (served over the tailnet) and signs off — a chart is visual, so verification is by human review, not assumed. `agent-skill.md` documents the `ChartNode` for wire-driving agents, byte-copied to the .NET `AgentSkill.md` (the parity gate diffs both).
+- [x] **CHART-06**: The operator personally reviews the rendered chart in a browser (served over the tailnet) and signs off — a chart is visual, so verification is by human review, not assumed. `agent-skill.md` documents the `ChartNode` for wire-driving agents, byte-copied to the .NET `AgentSkill.md` (the parity gate diffs both).
 - [ ] **CHART-07**: Aligned additive **minor** release on both packages (npm + NuGet `4.1.0`) with CHANGELOG + MIGRATION, git tag, `main` advanced (verified `git merge-base --is-ancestor`), full green-tree gate at release time, `#vms-changelog` announcement, and GitHub issue #6 closed. Wire protocol token stays `viewmodel-shell/1.0`.
 
 ### Non-blocking actions (v4.2) — design of record `.planning/design/non-blocking-actions.md`
