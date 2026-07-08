@@ -809,7 +809,7 @@ export class BrowserAdapter implements Adapter {
     // TableRow.action (1.1.0). Containment via stopPropagation on nested
     // interactive controls AFTER kids() has rendered them.
     if (n.action) {
-      const actionName = n.action.name;
+      const action = n.action;
       el.tabIndex = 0;
       el.setAttribute("role", "button");
       // aria-label derivation: heading > flattened descendant text (capped) > "Card".
@@ -825,13 +825,13 @@ export class BrowserAdapter implements Adapter {
         ariaLabel = text.length > 0 ? text.slice(0, 200) : "Card";
       }
       el.setAttribute("aria-label", ariaLabel);
-      el.addEventListener("click", () => { on({ name: actionName }); });
+      el.addEventListener("click", () => { on(action); });
       el.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
-          on({ name: actionName });
+          on(action);
         } else if (e.key === " " || e.key === "Spacebar") {
           e.preventDefault(); // suppress page scroll
-          on({ name: actionName });
+          on(action);
         }
       });
       // Containment: clicks on nested interactive controls must NOT bubble to
@@ -1094,7 +1094,7 @@ export class BrowserAdapter implements Adapter {
         } else {
           this.writeBind(n.bind, sel.value);
         }
-        if (n.action) on({ name: n.action.name });
+        if (n.action) on(n.action);
       });
       wrapper.appendChild(sel);
     } else if (n.inputType === "file") {
@@ -1218,7 +1218,7 @@ export class BrowserAdapter implements Adapter {
             // dispatching, in case the browser hasn't fired `input` yet
             // (e.g. an autofill that lands then submits).
             this.writeBind(n.bind, inp.value);
-            on({ name: action.name });
+            on(action);
           }
         });
       }
@@ -1307,7 +1307,7 @@ export class BrowserAdapter implements Adapter {
     }
     inp.addEventListener("change", () => {
       this.sa.write(n.bind, inp.checked);
-      if (n.action) on({ name: n.action.name });
+      if (n.action) on(n.action);
     });
     parent.appendChild(lbl);
   }
@@ -1410,7 +1410,7 @@ export class BrowserAdapter implements Adapter {
       btn.setAttribute("aria-selected", String(tab.value === n.selected));
       btn.addEventListener("click", () => {
         this.sa.write(n.bind, tab.value);
-        on({ name: tab.action.name });
+        on(tab.action);
       });
       nav.appendChild(btn);
     });
@@ -1564,7 +1564,7 @@ export class BrowserAdapter implements Adapter {
           const nextDir: "asc" | "desc" =
             cur?.column === col.key && cur?.direction === "asc" ? "desc" : "asc";
           this.sa.write(sortBind, { column: col.key, direction: nextDir });
-          on({ name: sortAction.name });
+          on(sortAction);
         });
       }
       headerRow.appendChild(th);
@@ -1604,7 +1604,7 @@ export class BrowserAdapter implements Adapter {
           inp.addEventListener("keydown", (e) => {
             if (e.key === "Enter") {
               if (bindPath != null) this.sa.write(bindPath, inp.value);
-              on({ name: filterAction.name });
+              on(filterAction);
             }
           });
           th.appendChild(inp);
@@ -1628,7 +1628,7 @@ export class BrowserAdapter implements Adapter {
       // row.action — click-anywhere + keyboard + ARIA. Per-row controls and
       // cell linkLabel anchors stopPropagation below so they don't double-fire.
       if (row.action) {
-        const rowActionName = row.action.name;
+        const rowAction = row.action;
         tr.tabIndex = 0;
         tr.setAttribute("role", "button");
         const labelParts = Object.values(row.cells)
@@ -1638,13 +1638,13 @@ export class BrowserAdapter implements Adapter {
           ? labelParts.join(" · ")
           : (row.id ? `Row ${row.id}` : "");
         if (ariaLabel) tr.setAttribute("aria-label", ariaLabel);
-        tr.addEventListener("click", () => { on({ name: rowActionName }); });
+        tr.addEventListener("click", () => { on(rowAction); });
         tr.addEventListener("keydown", (e) => {
           if (e.key === "Enter") {
-            on({ name: rowActionName });
+            on(rowAction);
           } else if (e.key === " " || e.key === "Spacebar") {
             e.preventDefault(); // suppress page scroll
-            on({ name: rowActionName });
+            on(rowAction);
           }
         });
       }
@@ -1735,7 +1735,7 @@ export class BrowserAdapter implements Adapter {
         if (!disabled && action) {
           b.addEventListener("click", () => {
             if (paginationBind != null) this.sa.write(paginationBind, targetPage);
-            on({ name: action.name });
+            on(action);
           });
         }
         return b;
