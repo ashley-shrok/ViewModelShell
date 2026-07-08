@@ -966,7 +966,10 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   flex-wrap: wrap;
   align-items: center;
   gap: var(--vms-space-sm);
-  padding-top: var(--vms-space-sm);
+  /* Inset to match the cell padding (space-md horizontal) so the footer content
+     aligns with the table cells above it, with breathing room below; the
+     border-top hairline still spans the full width. */
+  padding: var(--vms-space-sm) var(--vms-space-md);
   margin-top: var(--vms-space-xs);
   border-top: 1px solid var(--vms-border);
 }
