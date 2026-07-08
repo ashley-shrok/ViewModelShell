@@ -126,7 +126,7 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
   3. `agent-skill.md` documents `blocking:false` and is byte-identical to `.NET AgentSkill.md` (parity gate green) (NBA-07).
 **Plans**: 3 plans
 - [x] 15-01-PLAN.md — TS dispatch-loop: NBA-06 coalesce-pending discard fix + NBA-05 real-pollInterval-timer docs/tests + adapter-level rapid-toggle proof (wave 1)
-- [ ] 15-02-PLAN.md — agent-skill.md `blocking:false` section + byte-copy to .NET AgentSkill.md + skill parity check (wave 1)
+- [x] 15-02-PLAN.md — agent-skill.md `blocking:false` section + byte-copy to .NET AgentSkill.md + skill parity check (wave 1)
 - [ ] 15-03-PLAN.md — full green-tree gate re-run + NBA-05/06/07 requirement-to-artifact cross-check (wave 2, depends on 15-01 + 15-02)
 **UI hint**: yes
 
