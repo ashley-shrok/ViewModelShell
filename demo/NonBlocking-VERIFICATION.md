@@ -98,6 +98,22 @@ box the servers run on.)
    between an old and a new behavior.
 5. Click "Reset Demo" to zero both counters for a repeat run.
 
+> **Note — expected behavior under *continuous* clicking (not a bug).** If you
+> hold down a rapid stream of clicks, "Poll ticks" will appear to *stall* until
+> you pause. That is correct: both counters live in the same round-tripped state
+> snapshot, and a click is the authoritative user action — so a poll answer
+> already in flight (carrying a snapshot that predates your click) is *discarded*
+> rather than allowed to revert your click (the same rule as Scenario 3). The
+> poll tick resumes the instant you stop clicking. **This is a property of where
+> this demo puts its state, not of the non-blocking machinery:** the poll count
+> here is an *independent running total* only the poll action feeds, so a
+> superseding action drops its in-flight increment. A value *derived* from state
+> (like Scenario 1's action bar, recomputed from the selection on every render)
+> can never stall this way — any action's response regenerates it fresh.
+> Rule of thumb: **derived-from-state = always correct after any action;
+> independent-accumulator-in-the-snapshot = keep it server-side as authoritative
+> data** if you don't want it to yield to a racing user action.
+
 ## Scenario 3 — Out-of-Order Staleness (`:3010`)
 
 1. Open `http://100.113.23.63:3010/`. Confirm the large value line reads
@@ -125,5 +141,5 @@ box the servers run on.)
 Operator: record the date and outcome below (pass, or the specific scenario/step
 where an expected outcome did not hold and what was observed instead).
 
-- **Date:**
-- **Outcome:**
+- **Date:** 2026-07-08
+- **Outcome:** PASS — operator (Ashley) verified all three scenarios over the tailnet (`:3008`/`:3009`/`:3010`); every expected outcome held (no checkbox revert, no dropped clicks, action bar recomputed server-side, locked-row approval rejected with a message, poll + clicks coexist without contention, stale background response discarded in favor of the newer user result).
