@@ -573,8 +573,21 @@ export class BrowserAdapter implements Adapter {
       success: "--vms-success",
       info: "--vms-info",
     };
+    const cs = getComputedStyle(this.container);
     const token = (n.tone && toneToken[n.tone]) || "--vms-accent";
-    const color = getComputedStyle(this.container).getPropertyValue(token).trim();
+    const color = cs.getPropertyValue(token).trim();
+    // Grid/tick/axis colors track the theme so the chart reads consistently in
+    // light AND dark. Chart.js's default grid is a FIXED faint-black
+    // (rgba(0,0,0,0.1)) — visible on a light background but ~invisible on a dark
+    // one — so wire the grid + axis border to `--vms-border` (subtle in every
+    // theme) and the tick labels to `--vms-text-muted`.
+    const gridColor = cs.getPropertyValue("--vms-border").trim();
+    const tickColor = cs.getPropertyValue("--vms-text-muted").trim();
+    const scaleOpts = {
+      grid:   { color: gridColor },
+      border: { color: gridColor },
+      ticks:  { color: tickColor },
+    };
 
     const config = {
       type: "bar" as const,
@@ -589,6 +602,7 @@ export class BrowserAdapter implements Adapter {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        scales: { x: scaleOpts, y: scaleOpts },
         plugins: {
           title: n.title ? { display: true, text: n.title } : { display: false },
           legend: { display: false }, // single series — no legend
