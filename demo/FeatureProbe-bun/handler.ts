@@ -641,6 +641,29 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // Phase 14 (NBA-04) — non-blocking dispatch, the `blocking` field on
+  // ActionEvent. Static view-shape captured by the existing GET step, no new
+  // POST step: a button whose action OMITS `blocking` (proves the default
+  // stays absent on the wire) and a button whose action sets `blocking:false`
+  // (proves it serializes as the literal JSON boolean false). Neither
+  // "nba-blocking-default" nor "nba-non-blocking" is ever POSTed by any
+  // fixture step — same convention as the "axes-noop-*" buttons above, which
+  // exist purely as static wire-shape proof. The CLIENT-SIDE coalescing
+  // (NBA-02) / out-of-order-discard (NBA-03) behavior this field enables is
+  // NOT parity-tested (pure client-only mechanics — no wire epoch, no
+  // server-side reconciliation state, per .planning/design/non-blocking-actions.md);
+  // that is covered instead by viewmodel-shell/test/nonblocking-dispatch.test.ts
+  // and blocking-propagation.test.ts (Plan 14-01). Byte-identical to the .NET
+  // twin (FeatureProbeController.cs blockingSection).
+  const blockingSection: ViewNode = {
+    type: "section",
+    heading: "Non-blocking actions (blocking field)",
+    children: [
+      { type: "button", label: "Blocking (default)", action: { name: "nba-blocking-default" } },
+      { type: "button", label: "Non-blocking", action: { name: "nba-non-blocking", blocking: false } },
+    ],
+  };
+
   return {
     type: "page",
     title: "Feature Probe",
@@ -660,6 +683,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       feedbackSection,
       fillSection,
       followTailSection,
+      blockingSection,
       probeModal,
     ],
   };

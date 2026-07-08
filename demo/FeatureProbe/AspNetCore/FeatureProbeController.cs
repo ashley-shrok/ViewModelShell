@@ -697,6 +697,30 @@ public class FeatureProbeController : ControllerBase
             {
                 new TextNode("An append-only feed (chat transcript, log tail, activity stream) that keeps its newest content in view unless the user scrolls up.", null),
             }));
+        // Phase 14 (NBA-04) — non-blocking dispatch, the Blocking field on
+        // ActionDescriptor. Static view-shape captured by the existing GET
+        // step, no new POST step: a button whose action OMITS Blocking
+        // (proves the default stays absent on the wire) and a button whose
+        // action sets Blocking:false (proves it serializes as the literal
+        // JSON boolean false). Neither "nba-blocking-default" nor
+        // "nba-non-blocking" is ever POSTed by any fixture step — same
+        // convention as the "axes-noop-*" buttons elsewhere in this file,
+        // which exist purely as static wire-shape proof. The CLIENT-SIDE
+        // coalescing (NBA-02) / out-of-order-discard (NBA-03) behavior this
+        // field enables is NOT parity-tested (pure client-only mechanics —
+        // no wire epoch, no server-side reconciliation state, per
+        // .planning/design/non-blocking-actions.md); that is covered instead
+        // by viewmodel-shell/test/nonblocking-dispatch.test.ts and
+        // blocking-propagation.test.ts (Plan 14-01). Byte-identical to the
+        // bun twin (handler.ts blockingSection).
+        var blockingSection = new SectionNode(
+            Heading: "Non-blocking actions (blocking field)",
+            Children: new ViewNode[]
+            {
+                new ButtonNode("Blocking (default)", new ActionDescriptor("nba-blocking-default")),
+                new ButtonNode("Non-blocking", new ActionDescriptor("nba-non-blocking", Blocking: false)),
+            });
+        pageChildren.Add(blockingSection);
         pageChildren.Add(new ModalNode(
             Title: "Probe modal",
             Children: new ViewNode[] { new TextNode("Modal body for parity coverage.", null) },
