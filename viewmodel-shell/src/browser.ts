@@ -535,21 +535,22 @@ export class BrowserAdapter implements Adapter {
   }
 
   /**
-   * ChartNode (CHART-01/02/03/04) — a single-series BAR chart drawn by Chart.js,
-   * loaded as a PRIVATE, LAZY, OPTIONAL adapter dependency: the dynamic
-   * `import("chart.js")` in loadChart() is reached ONLY when a ChartNode renders,
-   * and it registers ONLY the bar pieces so the bundle tree-shakes (an app that
-   * renders no chart loads zero chart.js bytes; the core + .NET/bun backends gain
-   * no dependency). tone→theme-token color (CHART-02) is read via getComputedStyle
-   * — NO raw CSS crosses the wire.
+   * ChartNode (CHARTBASE-02/03) — the multi-series base set (bar/line/area/
+   * pie/donut) drawn by Chart.js, loaded as a PRIVATE, LAZY, OPTIONAL adapter
+   * dependency: the dynamic `import("chart.js")` in loadChart() is reached
+   * ONLY when a ChartNode renders, and it registers the base-set pieces so an
+   * app that renders no chart loads zero chart.js bytes (the core + .NET/bun
+   * backends gain no dependency). Every color is read via getComputedStyle
+   * from the `--vms-chart-1..8` categorical palette (18-02) or, when a series
+   * carries a `tone`, from the theme's tone token — NO raw CSS crosses the wire.
    *
    * The canvas + Chart instance are keyed by a stable per-render ordinal and kept
    * in `chartInstances` ACROSS renders, so a re-render with changed data reuses
    * the SAME canvas (detached, not destroyed, by render()'s innerHTML wipe — its
-   * 2D context + bitmap survive) and redraws IN PLACE via `.update()` (CHART-03)
-   * rather than reconstructing. render() mark-sweeps + destroy()s any instance the
-   * new tree dropped (leak prevention). getComputedStyle / canvas / Chart.js live
-   * ONLY here in browser.ts — the core (index.ts) stays platform-agnostic.
+   * 2D context + bitmap survive) and redraws IN PLACE via `.update()` rather than
+   * reconstructing. render() mark-sweeps + destroy()s any instance the new tree
+   * dropped (leak prevention). getComputedStyle / canvas / Chart.js live ONLY
+   * here in browser.ts — the core (index.ts) stays platform-agnostic.
    */
   private chart(n: ChartNode, parent: HTMLElement): void {
     // Stable key: title-derived base disambiguated by a per-render ordinal so
@@ -566,7 +567,8 @@ export class BrowserAdapter implements Adapter {
     parent.appendChild(wrapper);
 
     // tone → theme token, NOT `--vms-${tone}`: `danger` maps to `--vms-error`
-    // (matching .vms-section--danger); omitted → the neutral `--vms-accent`.
+    // (matching .vms-section--danger). Used ONLY when a series declares a
+    // `tone` — otherwise a series/slice gets the next categorical palette slot.
     const toneToken: Record<string, string> = {
       danger: "--vms-error",
       warning: "--vms-warning",
@@ -574,8 +576,12 @@ export class BrowserAdapter implements Adapter {
       info: "--vms-info",
     };
     const cs = getComputedStyle(this.container);
-    const token = (n.tone && toneToken[n.tone]) || "--vms-accent";
-    const color = cs.getPropertyValue(token).trim();
+    // Categorical palette slot i (0-based) → --vms-chart-1..8, cycling.
+    const paletteColor = (i: number): string =>
+      cs.getPropertyValue(`--vms-chart-${(i % 8) + 1}`).trim();
+    // A series' resolved color: its tone token if set, else the next palette slot.
+    const seriesColor = (i: number, tone?: string): string =>
+      (tone && toneToken[tone]) ? cs.getPropertyValue(toneToken[tone]).trim() : paletteColor(i);
     // Grid/tick/axis colors track the theme so the chart reads consistently in
     // light AND dark. Chart.js's default grid is a FIXED faint-black
     // (rgba(0,0,0,0.1)) — visible on a light background but ~invisible on a dark
@@ -589,23 +595,69 @@ export class BrowserAdapter implements Adapter {
       ticks:  { color: tickColor },
     };
 
-    const config = {
-      type: "bar" as const,
-      data: {
-        labels: n.points.map(p => p.label),
-        datasets: [{
-          data: n.points.map(p => p.value),
+    const kind = n.kind ?? "bar";
+    const isPie = kind === "pie" || kind === "donut";
+
+    let type: string;
+    let datasets: any[];
+
+    if (isPie) {
+      // pie/donut are single-series (LOCKED design): render series[0] only,
+      // colored PER SLICE from the palette (tone is a per-series concept and
+      // doesn't apply to a per-slice pie). Extra series are lenient — one dev
+      // warning, series[0] still renders — never a crash.
+      if (n.series.length > 1) {
+        console.warn(
+          `[ViewModelShell] ChartNode kind "${kind}" renders a single series; ` +
+          `${n.series.length - 1} extra series ignored.`
+        );
+      }
+      const primary = n.series[0];
+      type = kind === "donut" ? "doughnut" : "pie";
+      datasets = [{
+        data: primary ? primary.data : [],
+        backgroundColor: n.labels.map((_, j) => paletteColor(j)),
+      }];
+    } else {
+      // bar/line/area — one dataset per series, sharing the `labels` x-axis.
+      type = (kind === "line" || kind === "area") ? "line" : "bar";
+      datasets = n.series.map((s, i) => {
+        const color = seriesColor(i, s.tone);
+        const dataset: any = {
+          label: s.name,
+          data: s.data,
           backgroundColor: color,
           borderColor: color,
-        }],
-      },
+        };
+        if (kind === "line" || kind === "area") {
+          // area = line + fill; the fill is token-derived (same resolved color
+          // as the stroke) — no raw color literal introduced for the fill.
+          dataset.fill = kind === "area";
+        }
+        return dataset;
+      });
+    }
+
+    // `stacked` applies to bar/area only (LOCKED design); ignored for line/pie/donut.
+    const stacked = (kind === "bar" || kind === "area") && !!n.stacked;
+    // Legend: multi-series always, OR pie/donut (always multi-slice).
+    const legendDisplay = n.series.length > 1 || isPie;
+
+    const config = {
+      type,
+      data: { labels: n.labels, datasets },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        scales: { x: scaleOpts, y: scaleOpts },
+        ...(isPie ? {} : {
+          scales: {
+            x: { ...scaleOpts, stacked },
+            y: { ...scaleOpts, stacked },
+          },
+        }),
         plugins: {
           title: n.title ? { display: true, text: n.title } : { display: false },
-          legend: { display: false }, // single series — no legend
+          legend: { display: legendDisplay },
         },
       },
     };
@@ -616,7 +668,7 @@ export class BrowserAdapter implements Adapter {
       // destroyed) — its 2D context + drawn bitmap survive.
       wrapper.appendChild(existing.canvas);
       if (existing.chart) {
-        // Redraw in place (CHART-03).
+        // Redraw in place (CHARTBASE-03).
         existing.chart.data = config.data;
         existing.chart.options = config.options;
         existing.chart.update();
@@ -637,11 +689,12 @@ export class BrowserAdapter implements Adapter {
 
   /**
    * Lazily import chart.js and construct the Chart for `key`. The dynamic import
-   * is what keeps chart.js zero-bytes-when-absent; registering ONLY the bar
-   * controller/elements/scales/tooltip is what keeps CHART-04 small (tree-shaken).
-   * Fire-and-forget from chart() (`void this.loadChart(...)`), so a missing
-   * dependency is surfaced through the fail-loud seam (chartFailLoud), NEVER a
-   * floating unhandled rejection.
+   * is what keeps chart.js zero-bytes-when-absent; registering the base-set
+   * controllers/elements/scales/plugins (bar, line+fill, pie/doughnut, plus the
+   * shared category/linear scales, tooltip, and legend) covers every kind the
+   * widened chart() config can construct. Fire-and-forget from chart()
+   * (`void this.loadChart(...)`), so a missing dependency is surfaced through the
+   * fail-loud seam (chartFailLoud), NEVER a floating unhandled rejection.
    */
   private async loadChart(key: string, config: any): Promise<void> {
     let mod: any;
@@ -654,9 +707,23 @@ export class BrowserAdapter implements Adapter {
       );
       return;
     }
-    const { Chart, BarController, BarElement, CategoryScale, LinearScale, Tooltip } = mod;
-    // Tree-shaken registration — ONLY the bar pieces.
-    Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip);
+    const {
+      Chart,
+      BarController, BarElement,
+      LineController, LineElement, PointElement, Filler,
+      PieController, DoughnutController, ArcElement,
+      CategoryScale, LinearScale,
+      Tooltip, Legend,
+    } = mod;
+    // Base-set registration — bar, line/area (+ Filler for the area fill),
+    // pie/donut (+ Arc element), the shared scales, tooltip, and the legend.
+    Chart.register(
+      BarController, BarElement,
+      LineController, LineElement, PointElement, Filler,
+      PieController, DoughnutController, ArcElement,
+      CategoryScale, LinearScale,
+      Tooltip, Legend,
+    );
     const entry = this.chartInstances.get(key);
     // A later render may have mark-swept this key before the import resolved.
     if (!entry) return;
