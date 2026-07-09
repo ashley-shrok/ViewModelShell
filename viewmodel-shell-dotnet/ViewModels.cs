@@ -782,8 +782,9 @@ public record StatBarNode(IReadOnlyList<StatItem> Stats) : ViewNode;
 // ChartNode (CHARTBASE-01..06) — VMS's multi-series-native data-visualization
 // primitive, drawn by the BrowserAdapter via Chart.js (a private, lazy,
 // optional adapter dependency — the wire carries only data). Reshaped from the
-// 4.1 single-series `{Points}` shape (ChartPoint retired for category charts)
-// to a shared category axis (`Labels`) + one-or-more `Series`, each series'
+// 4.1 single-series `{Points}` shape (the old per-point label/value record is
+// fully retired for category charts) to a shared category axis (`Labels`) +
+// one-or-more `Series`, each series'
 // `Data[i]` aligned by index to `Labels[i]` — the honest encoding of "these
 // series share one x-axis," and the shape every charting library uses.
 // `Data` is `IReadOnlyList<double>` to mirror TS `number[]` (ProgressNode uses
