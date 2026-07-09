@@ -8,7 +8,7 @@
 - ✅ **v1.12 Layout System Completeness** — Phases 8–11 (shipped 2026-06-24; npm 1.12.0 / NuGet 1.10.0)
 - ✅ **v4.1 Data Visualization** — Phases 12–13 (shipped 2026-07-08; npm + NuGet `4.1.0`) — `ChartNode` primitive, closed issue #6
 - ✅ **v4.2 Non-Blocking Actions** — Phases 14–16 (shipped 2026-07-08; npm + NuGet `4.2.0`) — `blocking:false` dispatch + client-side lane-aware epoch; fixed the single-mutex poll/user contention; resurrected `selection.action` correctly; human-verified via 3 tailnet demo apps. Phase 17 (admission barrier) stays CONDITIONAL/unbuilt (design of record: [non-blocking-actions.md](./design/non-blocking-actions.md))
-- 🚧 **v5.0 Chart Base Set** — Phases 18–19 (PLANNED; breaking major `5.0.0`) — reshape `ChartNode` to multi-series-native (`labels[]` + `series[]`), kinds `bar|line|area|pie|donut`, `--vms-chart-1..8` theme palette, optional semantic per-series `tone`; scatter deferred. Free reshape (zero consumers). Design of record: [chart-base-set.md](./design/chart-base-set.md)
+- ✅ **v5.0 Chart Base Set + batch** — Phases 18–19 (shipped 2026-07-09; npm + NuGet `5.0.0`, tag `v5.0.0`) — multi-series `ChartNode` (kinds `bar|line|area|pie|donut`, `--vms-chart-1..8` palette + per-series `tone`; **BREAKING** reshape, `points`→`labels`+`series`, taken while zero chart consumers) + `ButtonNode.confirm` (native destructive guard) + canonical reorder demo (up/down + move-to-group modal; DnD stays rejected) + `TablePagination.jumpAction`. Verified via a combined tailnet run-through (Ashley sign-off) incl. a chart legend/title contrast fix. Design of record: [chart-base-set.md](./design/chart-base-set.md)
 
 **Post-v1.12 interstitial releases** (not phased milestones — direct feature commits + CHANGELOG, the same cadence as the 1.7–1.11 interstitials): **2.0.0** remove `SectionNode.flyout` (BREAKING), **2.1.0** `LinkNode.active`, **3.0.0** unified appearance axes (BREAKING — `variant` split into `tone`/`emphasis`/`size`/`state`/`style`), **3.0.1**/**3.0.2** CSS-only fixes, **3.1.0** admin-shell primitives (`ButtonNode.width`, `DividerNode`, `FormNode.submitButton`). Both registries currently at **3.1.0** (2026-06-26). See [CHANGELOG.md](../CHANGELOG.md) for the authoritative per-version history.
 
@@ -156,7 +156,7 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
 **Plans**: TBD — do NOT plan until a concrete intent-drift case is reported
 **UI hint**: yes
 
-## 🚧 v5.0 Chart Base Set (Phases 18–19) — PLANNED
+## ✅ v5.0 Chart Base Set (Phases 18–19) — SHIPPED 2026-07-09 (npm + NuGet `5.0.0`, tag `v5.0.0`)
 
 **Milestone Goal:** Widen VMS's data-visualization primitive from the 4.1 single-series bar to a coherent, multi-series-native **base set** — `kind` ∈ `bar | line | area | pie | donut` over shared `labels[]` + `series[]`. This is a **breaking reshape of the published `ChartNode`** (removes `points`/`ChartPoint` for category charts), which we take now because **zero consumers have implemented a chart yet** — the free-reshape window closes on first adoption. Color stays framework-owned (`--vms-chart-1..8` theme-token palette) with an optional semantic per-series `tone`; **zero raw color on the wire**. Scatter (correlation, `{x,y}` shape) is **deferred** as the designed-for additive-next `kind`. Ships as an aligned **breaking major `5.0.0`** (npm + NuGet). Design of record: [design/chart-base-set.md](./design/chart-base-set.md).
 
@@ -189,4 +189,4 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
 **Plans:** 0 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 19 to break down)
+- [x] Release closeout done manually 2026-07-09 — combined tailnet verification (Ashley sign-off) + legend contrast fix; CHANGELOG/MIGRATION; npm+NuGet 5.0.0 published; tag v5.0.0; main advanced; CI green; announced #vms-changelog.
