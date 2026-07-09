@@ -145,14 +145,39 @@ describe("ChartNode — multi-series bar config (mocked)", () => {
     expect(h.constructed[0].config.options.plugins.legend.display).toBe(false);
   });
 
-  it("renders the title into the chart title config when provided", async () => {
+  it("renders the title into the chart title config, colored by --vms-text (prominent, not Chart.js default grey)", async () => {
     const container = freshContainer();
+    const getPropSpy = vi.spyOn(CSSStyleDeclaration.prototype, "getPropertyValue")
+      .mockImplementation(function (this: CSSStyleDeclaration, prop: string) {
+        if (prop === "--vms-text") return "#0a0a0a";
+        return "";
+      });
     new BrowserAdapter(container).render(
       { type: "chart", title: "Sales", labels: ["A"], series: [{ name: "S", data: [1] }] },
       () => {},
     );
     await flush();
-    expect(h.constructed[0].config.options.plugins.title).toEqual({ display: true, text: "Sales" });
+    // title text is NAMED information → full-contrast --vms-text, not the fixed #666 default.
+    expect(h.constructed[0].config.options.plugins.title).toEqual({ display: true, text: "Sales", color: "#0a0a0a" });
+    getPropSpy.mockRestore();
+  });
+
+  it("colors the legend labels with --vms-text so series names read prominently (not the Chart.js default grey)", async () => {
+    const container = freshContainer();
+    const getPropSpy = vi.spyOn(CSSStyleDeclaration.prototype, "getPropertyValue")
+      .mockImplementation(function (this: CSSStyleDeclaration, prop: string) {
+        if (prop === "--vms-text") return "#0a0a0a";
+        return "";
+      });
+    new BrowserAdapter(container).render(
+      { type: "chart", labels: ["A"], series: [{ name: "S1", data: [1] }, { name: "S2", data: [2] }] },
+      () => {},
+    );
+    await flush();
+    const legend = h.constructed[0].config.options.plugins.legend;
+    expect(legend.display).toBe(true);
+    expect(legend.labels.color).toBe("#0a0a0a");
+    getPropSpy.mockRestore();
   });
 });
 

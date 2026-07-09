@@ -586,13 +586,17 @@ export class BrowserAdapter implements Adapter {
     // A series' resolved color: its tone token if set, else the next palette slot.
     const seriesColor = (i: number, tone?: string): string =>
       (tone && toneToken[tone]) ? cs.getPropertyValue(toneToken[tone]).trim() : paletteColor(i);
-    // Grid/tick/axis colors track the theme so the chart reads consistently in
-    // light AND dark. Chart.js's default grid is a FIXED faint-black
-    // (rgba(0,0,0,0.1)) — visible on a light background but ~invisible on a dark
-    // one — so wire the grid + axis border to `--vms-border` (subtle in every
-    // theme) and the tick labels to `--vms-text-muted`.
+    // Grid/tick/axis/text colors track the theme so the chart reads consistently
+    // in light AND dark. Chart.js's defaults are FIXED near-black — its grid is
+    // rgba(0,0,0,0.1) and its text (legend labels + title) is #666 — visible on a
+    // light background but low-contrast/~invisible on a dark one. So wire the grid
+    // + axis border to `--vms-border` (subtle in every theme), the tick labels
+    // (secondary) to `--vms-text-muted`, and the legend labels + title (the text
+    // that NAMES the series/chart — primary information) to the full-contrast
+    // `--vms-text` so they read prominently, not washed out.
     const gridColor = cs.getPropertyValue("--vms-border").trim();
     const tickColor = cs.getPropertyValue("--vms-text-muted").trim();
+    const textColor = cs.getPropertyValue("--vms-text").trim();
     const scaleOpts = {
       grid:   { color: gridColor },
       border: { color: gridColor },
@@ -662,8 +666,8 @@ export class BrowserAdapter implements Adapter {
           },
         }),
         plugins: {
-          title: n.title ? { display: true, text: n.title } : { display: false },
-          legend: { display: legendDisplay },
+          title: n.title ? { display: true, text: n.title, color: textColor } : { display: false },
+          legend: { display: legendDisplay, labels: { color: textColor } },
         },
       },
     };
