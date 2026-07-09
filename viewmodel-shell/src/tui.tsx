@@ -1560,7 +1560,10 @@ function StatBarView({ node }: { node: StatBarNode }) {
 // series[0]'s label/value slices (no bars; a "share of whole" reads oddly as
 // a bar anyway). Empty series / empty labels / an all-zero or non-positive
 // max render names/labels/values with no bars — every division is guarded by
-// `maxValue > 0`, never throws. ChartNode is a LEAF (no children) → no
+// `maxValue > 0`, and the resulting length is additionally clamped to >= 0
+// before `.repeat()`, since an individual value can be negative even while
+// the GLOBAL max (across all series) is positive (e.g. a "Net" series with
+// mixed-sign entries) — never throws. ChartNode is a LEAF (no children) → no
 // container-walk arm is needed (mirrors StatBarView / ProgressView).
 
 const CHART_BAR_WIDTH = 20;
@@ -1602,7 +1605,10 @@ function ChartView({ node }: { node: ChartNode }) {
           <text attributes={1 /* BOLD */}>{s.name}</text>
           {labels.map((label, li) => {
             const value = s.data?.[li] ?? 0;
-            const barLen = maxValue > 0 ? Math.round((value / maxValue) * CHART_BAR_WIDTH) : 0;
+            // Clamped to >= 0: `value` can be negative even while `maxValue`
+            // (the global max across ALL series) is positive — an unclamped
+            // negative length would throw on "█".repeat() below.
+            const barLen = maxValue > 0 ? Math.max(0, Math.round((value / maxValue) * CHART_BAR_WIDTH)) : 0;
             return (
               <box key={li} flexDirection="row" gap={1}>
                 <text fg="#888888">{label.padEnd(labelWidth)}</text>

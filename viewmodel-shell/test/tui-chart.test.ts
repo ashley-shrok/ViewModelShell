@@ -117,6 +117,25 @@ describe("TUI ChartView — reshaped multi-series degradation (CHARTBASE-05)", (
     expect(text).not.toContain("Infinity");
   });
 
+  it("renders a mixed-sign series (positive value elsewhere driving maxValue up, some values negative) without throwing (CR-01 regression)", () => {
+    const node: ChartNode = {
+      type: "chart",
+      title: "Net Change",
+      labels: ["A", "B", "C"],
+      series: [
+        { name: "Net", data: [5, -3, 8] },
+        { name: "Other", data: [1, 2, 3] },
+      ],
+    };
+    let text = "";
+    expect(() => { text = renderedText(node); }).not.toThrow();
+    expect(text).toContain("Net Change");
+    expect(text).toContain("Net");
+    expect(text).toContain("Other");
+    expect(text).not.toContain("NaN");
+    expect(text).not.toContain("Infinity");
+  });
+
   it("renders a pie ChartNode's series[0] slice labels without throwing", () => {
     const node: ChartNode = {
       type: "chart",
