@@ -498,24 +498,36 @@ public class FeatureProbeController : ControllerBase
                 }, Axis: "both"),
             });
         // 12.x (Phase 12) — chart node vocabulary (parity coverage for CHART-05).
-        // Static view-shape captured by the existing GET step: a ChartNode bar
-        // chart with WHOLE-NUMBER points so double/number serialize byte-identically
-        // (12 not 12.0). Kind omitted → absent on the wire (proves omitted = absent).
-        // Client-side Chart.js pixels are NOT parity-tested; parity proves only
-        // identical serialization. Byte-identical to the bun twin (handler.ts).
+        // Reshaped Phase 18 (CHARTBASE-04) — multi-series + tone + stacked, over
+        // WHOLE-NUMBER data so double/number serialize byte-identically (12 not
+        // 12.0). First ChartNode: `kind` OMITTED (proves omitted = absent, default
+        // "bar"); two series sharing `labels` — "Visits" carries no tone
+        // (framework-assigned palette slot), "Errors" carries tone:"danger"
+        // (semantic override); stacked:true. Second ChartNode: `kind:"line"` set
+        // explicitly (proves the literal string crosses the wire), single series,
+        // kind/stacked/title all otherwise omitted. Client-side Chart.js pixels are
+        // NOT parity-tested; parity proves only identical serialization.
+        // Byte-identical to the bun twin (handler.ts).
         var chartSection = new SectionNode(
             Heading: "chart (bar)",
             Children: new ViewNode[]
             {
                 new ChartNode(
-                    Points: new ChartPoint[]
+                    Labels: new[] { "Mon", "Tue", "Wed" },
+                    Series: new[]
                     {
-                        new("Mon", 12),
-                        new("Tue", 19),
-                        new("Wed", 7),
+                        new ChartSeries("Visits", new double[] { 12, 19, 7 }),
+                        new ChartSeries("Errors", new double[] { 1, 3, 2 }, Tone: "danger"),
                     },
-                    Title: "Weekly visits",
-                    Tone: "info"),
+                    Stacked: true,
+                    Title: "Weekly visits"),
+                new ChartNode(
+                    Labels: new[] { "Mon", "Tue", "Wed" },
+                    Series: new[]
+                    {
+                        new ChartSeries("Trend", new double[] { 5, 10, 15 }),
+                    },
+                    Kind: "line"),
             });
         // 3.0.0 — appearance axes (parity coverage for the unified vocabulary:
         // button emphasis × tone × size, section tone, text tone, list-item/row

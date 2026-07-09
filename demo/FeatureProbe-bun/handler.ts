@@ -433,10 +433,14 @@ function buildVm(state: FeatureProbeState): ViewNode {
   };
 
   // 12.x (Phase 12) — chart node vocabulary (parity coverage for CHART-05).
-  // Static view-shape captured by the existing GET step: a {type:"chart",
-  // points, title?, tone?} bar chart with WHOLE-NUMBER values so double/number
-  // serialize byte-identically (12 not 12.0). `kind` OMITTED → absent on the
-  // wire (proves omitted = absent). The client-side Chart.js pixels are NOT
+  // Reshaped Phase 18 (CHARTBASE-04) — multi-series + tone + stacked, over
+  // WHOLE-NUMBER data so double/number serialize byte-identically (12 not
+  // 12.0). First chart: `kind` OMITTED (proves omitted = absent, default
+  // "bar"); two series sharing `labels` — "Visits" carries no tone
+  // (framework-assigned palette slot), "Errors" carries tone:"danger"
+  // (semantic override); stacked:true. Second chart: `kind:"line"` set
+  // explicitly (proves the literal string crosses the wire), single series,
+  // stacked/title omitted. The client-side Chart.js pixels are NOT
   // parity-tested (browser-only); parity proves only identical serialization.
   // Byte-identical to the .NET twin (FeatureProbeController.cs chartSection).
   const chartSection: ViewNode = {
@@ -445,13 +449,21 @@ function buildVm(state: FeatureProbeState): ViewNode {
     children: [
       {
         type: "chart",
-        points: [
-          { label: "Mon", value: 12 },
-          { label: "Tue", value: 19 },
-          { label: "Wed", value: 7 },
+        labels: ["Mon", "Tue", "Wed"],
+        series: [
+          { name: "Visits", data: [12, 19, 7] },
+          { name: "Errors", data: [1, 3, 2], tone: "danger" },
         ],
+        stacked: true,
         title: "Weekly visits",
-        tone: "info",
+      },
+      {
+        type: "chart",
+        labels: ["Mon", "Tue", "Wed"],
+        series: [
+          { name: "Trend", data: [5, 10, 15] },
+        ],
+        kind: "line",
       },
     ],
   };
