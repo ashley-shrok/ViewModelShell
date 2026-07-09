@@ -559,20 +559,31 @@ function layoutsView(): ViewNode[] {
       ]},
     ]},
 
-    // ── chart (bar) — VMS's first data-viz primitive ─────────────────────
-    // A ChartNode is STRUCTURED data (labelled categories × numeric values)
-    // drawn as a single-series bar chart by Chart.js — a PRIVATE, lazy, optional
-    // dep of the browser adapter (apps NEVER touch Chart.js). The app ships only
-    // the data: `points` + an optional `title` + a `tone` from the tone axis. No
-    // chart library import, no CSS. Real bars/colors are the Phase-13 pixel review.
-    { type: "section", heading: "Chart (bar)", children: [
-      { type: "text", value: "A `chart` node is bounded declared data — labelled categories × numeric values — an agent reads directly. The browser adapter draws it as a single-series bar chart via Chart.js loaded LAZILY as a private optional dependency; the app ships only the data (`points`), a `title`, and a `tone` from the existing tone axis — no chart library and no CSS.", style: "muted" },
-      { type: "chart", points: [
-        { label: "Jan", value: 30 },
-        { label: "Feb", value: 45 },
-        { label: "Mar", value: 28 },
-        { label: "Apr", value: 52 },
-      ], title: "Signups", tone: "success" },
+    // ── chart (base set) — VMS's multi-series data-viz primitive ──────────
+    // A ChartNode is STRUCTURED data (a shared `labels` category axis + one or
+    // more `series`) drawn by Chart.js — a PRIVATE, lazy, optional dep of the
+    // browser adapter (apps NEVER touch Chart.js). The app ships only the data:
+    // `labels` + `series` (each with `name`/`data`/optional `tone`), an optional
+    // `kind` (bar/line/area/pie/donut), and `stacked`/`title`. Colors come from
+    // the theme's --vms-chart-1..8 palette by default, or a series' `tone`
+    // token when set. No chart library import, no CSS. Real pixels are the
+    // Phase-19 operator review.
+    { type: "section", heading: "Chart (base set)", children: [
+      { type: "text", value: "A `chart` node is bounded declared data — a shared `labels` category axis plus one or more `series` (`name`, `data`, optional `tone`) — an agent reads directly. The browser adapter draws it via Chart.js loaded LAZILY as a private optional dependency: `kind` picks bar/line/area/pie/donut (omitted = bar), `stacked` groups or stacks bar/area series, and colors come from the theme's chart palette by default or a series' `tone` when set — no chart library and no CSS.", style: "muted" },
+      { type: "chart",
+        title: "Signups vs. Churn",
+        labels: ["Jan", "Feb", "Mar", "Apr"],
+        series: [
+          { name: "Signups", data: [30, 45, 28, 52], tone: "success" },
+          { name: "Churn", data: [8, 12, 6, 10], tone: "danger" },
+        ],
+      },
+      { type: "chart",
+        kind: "donut",
+        title: "Traffic by channel",
+        labels: ["Organic", "Referral", "Direct", "Social"],
+        series: [{ name: "Sessions", data: [42, 18, 25, 15] }],
+      },
     ]},
 
     // ── child-side modifiers (alignSelf + maxWidth) — the chat-bubble case ─
