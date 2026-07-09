@@ -6,6 +6,39 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 5.0.0 / 5.0.0 — Chart base set (multi-series, **BREAKING** `ChartNode` reshape) + destructive-action confirm + canonical reorder (npm + NuGet)
+
+**npm:** `5.0.0` (MAJOR, from `4.2.0`) · **NuGet:** `5.0.0` (MAJOR, from `4.2.0`). Three features, one breaking reshape. The wire protocol token stays `viewmodel-shell/1.0` (the change is a node's shape, not the envelope). **The only breaking change is `ChartNode`**, and it was taken deliberately as a major while it is safe: **zero consumers had implemented a chart** (the 4.1 single-series `ChartNode` was the sole break surface), so the free reshape window was still open. If you never rendered a 4.1 chart, this is effectively additive for you — see MIGRATION.md.
+
+### Changed (BREAKING) — `ChartNode` reshaped to multi-series-native
+
+- `ChartNode` no longer carries `points: ChartPoint[]` (single-series). It now carries **shared `labels: string[]` + `series: ChartSeries[]`** where `ChartSeries = { name: string; data: number[]; tone? }`, plus `kind?`, `stacked?`, `title?`. `ChartPoint` is **removed**. The aligned `labels[]` + `series[].data[]` shape is the honest encoding of "these series share one x-axis." See MIGRATION.md for the one-shape rewrite (only needed if you adopted the 4.1 chart).
+
+### Added — chart base set
+
+- **Five chart kinds** via the closed `kind?` union: `bar | line | area | pie | donut` (omitted = `bar`). `line`/`area` (area = line + fill), `pie`/`donut` (single-series, per-slice palette) join the original bar. `stacked?` applies to bar/area.
+- **Multi-series** everywhere it applies (grouped/stacked bars, multi-line overlays); single-series is just one `series` entry.
+- **A framework-owned categorical palette** — new theme tokens **`--vms-chart-1 … --vms-chart-8`** in `default.css` and every theme; the browser adapter assigns the next slot per series (per slice for pie/donut). A series may set an optional **semantic `tone`** to use a theme status token instead. **Zero raw color crosses the wire** — brand palettes are a `--vms-chart-*` theme-token retune, same as any reskin.
+- Chart.js remains a **private, lazy, optional** browser-adapter dependency — an app with no `ChartNode` still ships zero Chart.js bytes; core, the .NET backend, and the bun backend stay dependency-free.
+
+### Added — `ButtonNode.confirm` (destructive-action guard)
+
+- **`confirm?: string`** on `ButtonNode` (both backends). When set, the BrowserAdapter shows a **native** browser `confirm()` with the message before dispatch; Cancel suppresses the dispatch entirely (no action, no `pendingLabel` swap). Deliberately native, not a framework-drawn dialog: it adds **zero app/framework state** (no modal in the tree, nothing to round-trip) and is **client-only** — an agent dispatches the action name directly over the wire and is never gated. The TUI dispatches as normal.
+
+### Added — canonical reorder pattern (demo + doc, no new framework code)
+
+- The `demo/Reorder` demo is rewritten to the **blessed** reordering patterns, both composed from existing primitives (buttons + modal + named actions): **Up/Down** buttons reorder within a group (first-row Up / last-row Down `disabled`; the server **clamps** out-of-range moves to no-ops, since `disabled` is a client-only hint an agent can bypass), and a **Move…** button opens a modal to relocate an item to another group. `demo/Reorder/README.md` documents the pattern and restates that **pointer drag-and-drop is rejected** (mouse-only → not agent/keyboard-drivable); if ever added it could only be sugar over these same actions. Retires the old janky select-then-place prototype.
+
+### Fixed
+
+- **Chart legend labels + titles now use the `--vms-text` theme token** (full contrast) instead of Chart.js's fixed default grey (`#666`) — the old grey was washed-out on light and near-invisible on dark themes. Axis ticks stay `--vms-text-muted` (secondary). Browser-only.
+
+### Migration
+
+- **Only if you adopted the 4.1 single-series `ChartNode`:** rewrite `points: [{label,value}…]` → `labels: [...]` + `series: [{ name, data: [...] }]`. Full recipe in **MIGRATION.md**. `ButtonNode.confirm` and the reorder rewrite are additive — nothing to do.
+
+---
+
 ## 4.2.0 / 4.2.0 — Non-blocking actions: `blocking:false` dispatch lane + poll-fold + selection.action resurrection (npm + NuGet)
 
 **npm:** `4.2.0` (MINOR, from `4.1.0`) · **NuGet:** `4.2.0` (MINOR, from `4.1.0`). A real concurrency model for the dispatch loop: non-blocking round trips that coexist with user actions instead of contending for a single global mutex. Fully additive — wire protocol token stays `viewmodel-shell/1.0`. `ActionEvent.blocking?` / `ActionDescriptor.Blocking` is the only new wire-adjacent field, and it never actually rides the `_action` payload (it is a purely client-side dispatch-lane hint). **Migration: none** — `blocking` defaults to `true`, byte-identical to every existing app's behavior until it opts in.

@@ -6,6 +6,39 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `5.0.0` / `5.0.0` (npm + NuGet) — one breaking change, only if you rendered a chart
+
+**If you never used `ChartNode` (the 4.1 chart primitive), there is nothing to do — this release is effectively additive for you.** The major bump is honest semver for a reshaped published type, but the reshape's only break surface is the 4.1 single-series chart, and no released consumer had adopted it.
+
+### The one break: `ChartNode` is now multi-series
+
+The 4.1 single-series shape is gone. Rewrite each chart from `points` to `labels` + `series`:
+
+```ts
+// BEFORE (4.1) — single series, self-contained points
+{ type: "chart", kind: "bar", title: "Visits",
+  points: [ { label: "Mon", value: 12 }, { label: "Tue", value: 19 } ] }
+
+// AFTER (5.0) — shared labels + one-or-more named series
+{ type: "chart", kind: "bar", title: "Visits",
+  labels: ["Mon", "Tue"],
+  series: [ { name: "Visits", data: [12, 19] } ] }
+```
+
+- `ChartPoint` is removed. A single-series chart is just `series` with one entry.
+- New kinds are available: `kind` ∈ `"bar" | "line" | "area" | "pie" | "donut"` (omitted = `"bar"`). `stacked?: true` works on bar/area.
+- **Color:** don't set colors on the wire. Series get a framework palette (`--vms-chart-1..8`) automatically; add `tone: "danger" | "warning" | "success" | "info"` to a series for a semantic status color. To brand the palette, retune the `--vms-chart-*` theme tokens in your app stylesheet (same as any reskin) — never inline color.
+- **.NET:** the old `ChartPoint` record and the `Points` parameter are gone; construct `ChartNode(Labels, Series, Kind, Stacked, Title)` with `ChartSeries(Name, Data, Tone)`.
+
+### Additive, nothing to do
+
+- **`ButtonNode.confirm?: string`** — new optional destructive-action guard. Set it to a question string and the browser shows a native confirm before dispatching. Omit = unchanged instant-click behavior.
+- **Reorder** — the `demo/Reorder` rewrite + `demo/Reorder/README.md` document the canonical up/down + move-to-group-modal pattern. No framework API changed; nothing to adopt.
+
+Everything else — the wire shape, `_action`/`_state`, the response envelope, every other node — is unchanged.
+
+---
+
 ## Upgrading to `4.2.0` / `4.2.0` (npm + NuGet) — additive, opt-in, no forced action
 
 **Nothing to do to keep working.** `blocking` defaults to `true` on every existing action — byte-identical behavior. Opt into a non-blocking round trip only where you want one (a live-selection refresh, a polling view) by adding `blocking: false` to that specific action's `ActionEvent`. `pollInterval` behavior is unchanged from your point of view (it already existed) — this release only proves/fixes its underlying contention-free implementation (a poll no longer contends with, or gets dropped by, a user action, and vice versa).
