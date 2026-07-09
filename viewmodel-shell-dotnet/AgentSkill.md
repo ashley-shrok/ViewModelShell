@@ -156,15 +156,24 @@ File uploads use the multipart form above. One form entry per file input, keyed 
 A `ChartNode` in the `vm` tree carries bounded, agent-legible declared data — it is read-only structured data like any other node, with no dispatch-bearing fields of its own:
 
 ```json
-{ "type": "chart", "kind": "bar", "title": "Weekly visits",
-  "points": [ { "label": "Mon", "value": 12 }, { "label": "Tue", "value": 19 } ],
-  "tone": "info" }
+{ "type": "chart", "title": "Weekly visits",
+  "labels": [ "Mon", "Tue", "Wed" ],
+  "series": [
+    { "name": "Visits", "data": [ 12, 19, 7 ] },
+    { "name": "Errors", "data": [ 1, 3, 2 ], "tone": "danger" }
+  ],
+  "stacked": true }
 ```
 
-- `kind` — optional. Omitted means `"bar"`, the only value in `viewmodel-shell/1.0`.
-- `points` — an array of self-contained `{label, value}` pairs. No parallel-array index alignment is needed (unlike some other frameworks' chart data shapes) — read each point directly.
+(`kind` is omitted above, so this renders as the default `"bar"`, grouped→stacked via `stacked:true`.)
+
+- `kind` — optional, a closed union: `bar | line | area | pie | donut`. Omitted means `"bar"`. Widened additively over time — key off the value you see, never assume a fixed set.
+- `labels` — the shared category (x-)axis. `labels[i]` is the category every series' `data[i]` refers to.
+- `series` — one or more `{ name, data, tone? }` entries over the shared `labels`. `data[i]` aligns by index to `labels[i]`. A single-series chart is just one entry in this array — there is no separate "simple" shape. `name` is the series label (rendered in a browser legend); a wire-driving agent reads it to identify which series is which.
+- `series[].tone` — optional (`danger|warning|success|info`), set PER SERIES. When present, that series is drawn in the theme's semantic color instead of the next categorical palette slot (a loss/error series tagged `danger`, for example). Omitted → the browser client assigns the next palette slot; this only affects rendered COLOR. A wire-driving agent with no renderer can simply read `series[].data`/`name`/`labels`/`title` directly and ignore `tone`.
+- `stacked` — optional boolean, applies to `bar`/`area` only (ignored for `line`/`pie`/`donut`). Omitted/`false` means series are grouped side-by-side; `true` stacks them.
 - `title` — optional chart title.
-- `tone` — optional (`danger|warning|success|info`). This only affects rendered COLOR in a browser client. A wire-driving agent with no renderer can simply read `points`/`title` directly and ignore `tone`.
+- **pie/donut note:** these kinds are single-series — only `series[0]` is rendered (per-slice palette), any additional entries are ignored by the renderer. Not shown in the example above.
 
 There is nothing else to do to "drive" a chart over the wire.
 
