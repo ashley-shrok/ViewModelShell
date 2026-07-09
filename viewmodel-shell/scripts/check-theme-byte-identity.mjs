@@ -54,22 +54,28 @@ const DEFAULT_DARKPURPLE = resolve(THEMES_DIR, "dark-purple.css");
 // here — NEW file (D-02), asserted byte-exact separately in (2); its
 // --vms-warning (#e0a823, light amber on dark) already clears the text bar,
 // so #8 left it untouched and the byte-exact capture in (2) still holds.
+// Re-baselined 2026-07-09 (CHARTBASE-02, Phase 18 Plan 02): all 11 files gained
+// the 8-token --vms-chart-1..8 categorical palette (a deliberate, recorded
+// addition — same D-26 precedent as the #8 warning-AA re-baseline). SHAs below
+// reflect the files WITH the chart palette added; the addition is otherwise
+// identical to each file's prior content (verified via the check-aa-contrast /
+// check-theme-function guards, which stay green across this change).
 const THEME_SHA256 = {
   // dark-* (5): D-26 — corrected from broken accent-only partials to
   // self-sufficient full dark overrides (the D-01 light re-base removed the
   // dark default they used to inherit). SHAs baseline the CORRECTED files;
   // functional dark/light correctness is enforced by check-theme-function.mjs.
-  "dark-blue.css":    "580be9a7ecc715d7ae47632ebe81e56c046a74973c7dcebd9643a156c9561f6e",
-  "dark-green.css":   "1c28ae63c34b53f5e3b1a4ff32c119c1c94a95e49398fdec9efc19d20d8082ea",
-  "dark-rose.css":    "1df08e356a902d562172572810388893f1bd762148ffc66144f99b8f15f85f6c",
-  "dark-amber.css":   "99f2015f8393d38ff2f80c66b721fad4075be829cf695ccf01c96e8260d8cc63",
-  "dark-teal.css":    "7eda81edc92a3968f21e96f256a32e59e4bb71918f2077e6ae99b4c70e125244",
-  "light-purple.css": "af04feaee8fec3f00ac076f9a1afc00c13dbab1ebe6a7d8bf1dbf28c901609a6",
-  "light-blue.css":   "9bf3cf660a1c726a5304eddd4b7fdc4261fd796aaf3af1c0265198a406cec13c",
-  "light-green.css":  "a136b91b79027f0f64df2d77d1b8eb096a272527e1052eb87c73c9ae00e63356",
-  "light-rose.css":   "8641db1213b3d7c134af01ea512966a6c951b31d7c321e3bcaf3d71dd6497bb8",
-  "light-amber.css":  "fdb45eb2e16a1fa1553913c76c00b586c95331365d42e717946d90c5be2b32bb",
-  "light-teal.css":   "c26cc9c804e58f42691af8d816e620c32a68cbd9836193a2638137341e840a13",
+  "dark-blue.css":    "b868cc97c858ae0c7acb71d0eada74588e624db5779f5fd5cef5eb609d3e3cea",
+  "dark-green.css":   "f768680ec43a6010d775fdc01467af46b1982895c3a5a9a66d2d6178d477f21e",
+  "dark-rose.css":    "b28d809da1ee8b46d36a621fe07f40a29d7dc9150395acf903f8a8a2071ea4d7",
+  "dark-amber.css":   "50030388ef370853a010539a0301f799f62b400b95fa464f45195781e810c62b",
+  "dark-teal.css":    "687ae6ed3b8bdf1833ae1adff16d02939a492e7cda82ceaf779daf5273e635cd",
+  "light-purple.css": "de897eded85654e7c12ac5d8fd0a8654f755b64c28c1e89ad1c9896c138eb649",
+  "light-blue.css":   "8868ac3f89474d11021a53f0bf11ca51c389b0205b669c4f9abaa906538a2b50",
+  "light-green.css":  "7c664f32395100ffd09353aa1e31746daa0bd4ff2543e1c6e3c8f15e443d99e7",
+  "light-rose.css":   "106c22e5c6f26fe11f7187ceab3597bb1ef8ccaeca2747afb771fcab23a37c13",
+  "light-amber.css":  "1d5310d81d83cb8b062443e96064e0516394eb0e8c84e874e5513b2f57f46318",
+  "light-teal.css":   "228cbf8438d3262ef89e1685d9e93fcc683f1b385936217796b7cd401e8c403d",
 };
 
 // ── (2) The prior default.css :root dark COLOR block (frozen-by-D-02) ─────
@@ -154,7 +160,14 @@ if (!existsSync(DEFAULT_DARKPURPLE)) {
     }
     for (const n of actualNames) {
       if (!(n in PRIOR_DEFAULT_DARK)) {
-        violations.push(`dark-purple.css: unexpected extra declaration ${n} = "${actual[n]}" — D-02 capture is exactly the prior dark COLOR block (no extra tokens)`);
+        // CHARTBASE-02 (Phase 18 Plan 02) deliberately adds the 8-token
+        // --vms-chart-1..8 categorical palette to EVERY theme file, including
+        // dark-purple.css — an explicitly allowed addition alongside the
+        // otherwise-frozen D-02 byte-exact capture (same D-26 "re-baseline
+        // deliberately + recorded" precedent, scoped to exactly this token set
+        // so the historical 18-declaration capture below stays provably intact).
+        if (/^--vms-chart-[1-8]$/.test(n)) continue;
+        violations.push(`dark-purple.css: unexpected extra declaration ${n} = "${actual[n]}" — D-02 capture is exactly the prior dark COLOR block plus the CHARTBASE-02 chart palette (no other extra tokens)`);
       }
     }
   }

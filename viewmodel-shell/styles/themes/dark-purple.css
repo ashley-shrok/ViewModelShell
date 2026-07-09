@@ -20,5 +20,16 @@
   --vms-priority-high: #e07015;
   --vms-success:       #4dd17a;
   --vms-info:          #4a9eff;
+  /* Chart palette (CHARTBASE-02) — added on top of the byte-exact prior-default
+     capture (D-02); check-theme-byte-identity.mjs allows exactly this 8-token
+     addition alongside the frozen color block, see its comments. */
+  --vms-chart-1: #6fa8ff;
+  --vms-chart-2: #ffa552;
+  --vms-chart-3: #5ed19a;
+  --vms-chart-4: #ff7a90;
+  --vms-chart-5: #b79bfa;
+  --vms-chart-6: #5cd6e8;
+  --vms-chart-7: #d0d661;
+  --vms-chart-8: #ef8fd6;
   --vms-color-scheme: dark;
 }

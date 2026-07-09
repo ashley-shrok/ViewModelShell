@@ -17,5 +17,14 @@
   --vms-priority-high:#d76410;
   --vms-success:      #2da359;
   --vms-info:         #2277dd;
+  /* Chart palette (CHARTBASE-02) — same light-family palette as default.css. */
+  --vms-chart-1: #3366cc;
+  --vms-chart-2: #cc6b1c;
+  --vms-chart-3: #1f8a5f;
+  --vms-chart-4: #b3314d;
+  --vms-chart-5: #7a4fc9;
+  --vms-chart-6: #1f8fa3;
+  --vms-chart-7: #767a1f;
+  --vms-chart-8: #c23fa0;
   --vms-color-scheme: light;
 }

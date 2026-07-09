@@ -32,6 +32,22 @@
   --vms-priority-high: #d76410;
   --vms-success:       #2da359;
   --vms-info:          #2277dd;
+  /* Chart palette (CHARTBASE-02) — 8-slot categorical palette the browser
+     adapter cycles per series (per slice for pie/donut). Framework-owned,
+     theme-token-driven: zero raw color crosses the wire. Every theme file
+     re-tunes these 8 for its own surface/bg (light themes get this set;
+     dark themes get a lighter/more-saturated set — see styles/themes/*.css).
+     Hand-checked (not CI-gated — check:aa-contrast covers a fixed pair-set
+     by design) for ~3:1 non-text contrast against --vms-surface/--vms-bg
+     and mutual distinguishability; see 18-02-SUMMARY.md for the ratio table. */
+  --vms-chart-1: #3366cc;
+  --vms-chart-2: #cc6b1c;
+  --vms-chart-3: #1f8a5f;
+  --vms-chart-4: #b3314d;
+  --vms-chart-5: #7a4fc9;
+  --vms-chart-6: #1f8fa3;
+  --vms-chart-7: #767a1f;
+  --vms-chart-8: #c23fa0;
   --vms-radius:      10px;
   --vms-radius-sm:   6px;
   --vms-image-small:   4rem;
