@@ -8,6 +8,7 @@
 - ✅ **v1.12 Layout System Completeness** — Phases 8–11 (shipped 2026-06-24; npm 1.12.0 / NuGet 1.10.0)
 - ✅ **v4.1 Data Visualization** — Phases 12–13 (shipped 2026-07-08; npm + NuGet `4.1.0`) — `ChartNode` primitive, closed issue #6
 - ✅ **v4.2 Non-Blocking Actions** — Phases 14–16 (shipped 2026-07-08; npm + NuGet `4.2.0`) — `blocking:false` dispatch + client-side lane-aware epoch; fixed the single-mutex poll/user contention; resurrected `selection.action` correctly; human-verified via 3 tailnet demo apps. Phase 17 (admission barrier) stays CONDITIONAL/unbuilt (design of record: [non-blocking-actions.md](./design/non-blocking-actions.md))
+- 🚧 **v5.0 Chart Base Set** — Phases 18–19 (PLANNED; breaking major `5.0.0`) — reshape `ChartNode` to multi-series-native (`labels[]` + `series[]`), kinds `bar|line|area|pie|donut`, `--vms-chart-1..8` theme palette, optional semantic per-series `tone`; scatter deferred. Free reshape (zero consumers). Design of record: [chart-base-set.md](./design/chart-base-set.md)
 
 **Post-v1.12 interstitial releases** (not phased milestones — direct feature commits + CHANGELOG, the same cadence as the 1.7–1.11 interstitials): **2.0.0** remove `SectionNode.flyout` (BREAKING), **2.1.0** `LinkNode.active`, **3.0.0** unified appearance axes (BREAKING — `variant` split into `tone`/`emphasis`/`size`/`state`/`style`), **3.0.1**/**3.0.2** CSS-only fixes, **3.1.0** admin-shell primitives (`ButtonNode.width`, `DividerNode`, `FormNode.submitButton`). Both registries currently at **3.1.0** (2026-06-26). See [CHANGELOG.md](../CHANGELOG.md) for the authoritative per-version history.
 
@@ -154,3 +155,35 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
   1. A blocking action whose target node changed under an in-flight non-blocking round-trip is not dispatched with stale intent; the outcome is surfaced to the user, not silently swallowed (NBA-10).
 **Plans**: TBD — do NOT plan until a concrete intent-drift case is reported
 **UI hint**: yes
+
+## 🚧 v5.0 Chart Base Set (Phases 18–19) — PLANNED
+
+**Milestone Goal:** Widen VMS's data-visualization primitive from the 4.1 single-series bar to a coherent, multi-series-native **base set** — `kind` ∈ `bar | line | area | pie | donut` over shared `labels[]` + `series[]`. This is a **breaking reshape of the published `ChartNode`** (removes `points`/`ChartPoint` for category charts), which we take now because **zero consumers have implemented a chart yet** — the free-reshape window closes on first adoption. Color stays framework-owned (`--vms-chart-1..8` theme-token palette) with an optional semantic per-series `tone`; **zero raw color on the wire**. Scatter (correlation, `{x,y}` shape) is **deferred** as the designed-for additive-next `kind`. Ships as an aligned **breaking major `5.0.0`** (npm + NuGet). Design of record: [design/chart-base-set.md](./design/chart-base-set.md).
+
+### Phase 18: Chart Base Set primitive — multi-series-native ChartNode
+
+**Goal:** A reshaped `ChartNode` (`kind` ∈ `bar|line|area|pie|donut`; shared `labels: string[]` + `series: [{name, data: number[], tone?}]`; `stacked?` for bar/area; `title?`) renders every base-set chart type from structured wire data — multi-series where it applies, single-series as one entry — drawn by the existing lazy/optional Chart.js browser-adapter binding (core + .NET/bun stay dependency-free), colored by a framework-owned `--vms-chart-1..8` theme palette with optional semantic per-series `tone`, byte-identical across TS/.NET with both tree-validators descending into it and parity green. Zero raw color/CSS on the wire.
+**Requirements**: CHARTBASE-01, CHARTBASE-02, CHARTBASE-03, CHARTBASE-04, CHARTBASE-05, CHARTBASE-06
+**Depends on:** Phase 16 (v4.2 baseline — parity green; current release 4.2.0). NOT Phase 17 (conditional/unbuilt).
+**Success Criteria** (what must be TRUE):
+  1. A `ChartNode` with `kind` `bar`/`line`/`area`/`pie`/`donut` and one-or-more `series` over shared `labels` renders correctly in the browser; multi-series bar groups (or stacks when `stacked`), multi-line overlays, pie/donut draw `series[0]` as slices.
+  2. Series colors come from the `--vms-chart-1..8` theme palette by default; a series with `tone` uses the theme tone token; **no raw color crosses the wire**; the palette tokens exist in `default.css` + every theme and each slot's contrast is hand-checked.
+  3. `ChartPoint` is retired for category charts; `ChartNode`/`ChartSeries` round-trip byte-identically across TS + .NET (optional-field rules honored: `WhenWritingNull` / `stacked` `WhenWritingDefault`), both tree-validators descend into the leaf, and `bun run parity/run.ts` is green with a multi-series + tone + stacked fixture.
+  4. An app that renders no `ChartNode` ships zero Chart.js bytes; core (`src/index.ts`) + the .NET/bun backends gain no dependency. TUI degrades legibly.
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 18 to break down)
+
+### Phase 19: Chart verification page + 5.0.0 release closeout
+
+**Goal:** A human-runnable tailnet verification page (real shipped CSS + real renderer/bundle) renders every kind × single- and multi-series × a tone-bearing series × a stacked case with a "confirm these" checklist for Ashley to run through — the in-question publish gate (charts are a visual change → **do NOT publish 5.0.0 until she confirms**). Then CHANGELOG + MIGRATION (the `ChartNode` reshape), aligned **breaking `5.0.0`** npm + NuGet release, tag `v5.0.0`, advance `main`, watch CI green, announce `#vms-changelog`.
+**Requirements**: TBD (set in plan-phase)
+**Depends on:** Phase 18
+**Success Criteria** (what must be TRUE):
+  1. The verification page exercises every base-set kind and the multi-series/tone/stacked cases, served over the tailnet; Ashley runs through it and confirms before any publish.
+  2. `5.0.0` is published to npm + NuGet (aligned), tagged `v5.0.0`, `main` advanced to the release commit (`git merge-base --is-ancestor v5.0.0 main`), CI green, and a release line posted to `#vms-changelog`; MIGRATION documents the reshape (only break = the unused 4.1 single-series ChartNode).
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 19 to break down)
