@@ -1548,35 +1548,71 @@ function StatBarView({ node }: { node: StatBarNode }) {
 }
 
 // ── chart ─────────────────────────────────────────────────────────────────
-// CHART-05 — DELIBERATE degradation. A terminal has no canvas, but a ChartNode
-// is STRUCTURED data, so it prints as a legible label/value/ASCII-bar series:
-// the title (if any) on its own line, then per point `<label padded>  <value>
-// <bar>` where <bar> is a run of "█" scaled to value/max × CHART_BAR_WIDTH.
-// Empty points render just the title (or nothing); an all-zero / non-positive
-// max renders labels+values with no bars (guarded, never throws / divides).
-// The TUI is @experimental; the requirement is only that ChartNode does not
-// break it and degrades legibly. ChartNode is a LEAF (no children) → no
+// CHARTBASE-05 — DELIBERATE degradation for the reshaped multi-series
+// ChartNode { kind?; labels: string[]; series: ChartSeries[]; stacked?;
+// title? }. A terminal has no canvas, but a ChartNode is STRUCTURED data, so
+// it prints legibly: the title (if any) on its own line, then GROUPED BY
+// SERIES — each series' name as a sub-header, followed by one row per label
+// `<label padded>  <value>  <bar>` where <bar> is a run of "█" scaled to
+// value / the GLOBAL max across ALL series (so multi-series bars are
+// comparable to each other, not just within their own series). pie/donut are
+// single-series by design (CHARTBASE-03) — they degrade to printing
+// series[0]'s label/value slices (no bars; a "share of whole" reads oddly as
+// a bar anyway). Empty series / empty labels / an all-zero or non-positive
+// max render names/labels/values with no bars — every division is guarded by
+// `maxValue > 0`, never throws. ChartNode is a LEAF (no children) → no
 // container-walk arm is needed (mirrors StatBarView / ProgressView).
 
 const CHART_BAR_WIDTH = 20;
 
 function ChartView({ node }: { node: ChartNode }) {
-  const points = node.points ?? [];
-  const maxValue = points.length ? Math.max(0, ...points.map((p) => p.value)) : 0;
-  const labelWidth = points.reduce((w, p) => Math.max(w, p.label.length), 0);
+  const labels = node.labels ?? [];
+  const series = node.series ?? [];
+  const labelWidth = labels.reduce((w, l) => Math.max(w, l.length), 0);
+  const isPie = node.kind === "pie" || node.kind === "donut";
+
+  if (isPie) {
+    // Single-series degrade: series[0]'s slices as label/value rows.
+    const slice = series[0];
+    const data = slice?.data ?? [];
+    return (
+      <box flexDirection="column">
+        {node.title ? <text attributes={1 /* BOLD */}>{node.title}</text> : null}
+        {slice ? <text attributes={1 /* BOLD */} fg="#888888">{slice.name}</text> : null}
+        {labels.map((label, i) => (
+          <box key={i} flexDirection="row" gap={1}>
+            <text fg="#888888">{label.padEnd(labelWidth)}</text>
+            <text>{String(data[i] ?? 0)}</text>
+          </box>
+        ))}
+      </box>
+    );
+  }
+
+  // bar/line/area: scale every series' bars against the GLOBAL max so
+  // multiple series are visually comparable to one another.
+  const allValues = series.flatMap((s) => s.data ?? []);
+  const maxValue = allValues.length ? Math.max(0, ...allValues) : 0;
+
   return (
     <box flexDirection="column">
       {node.title ? <text attributes={1 /* BOLD */}>{node.title}</text> : null}
-      {points.map((p, i) => {
-        const barLen = maxValue > 0 ? Math.round((p.value / maxValue) * CHART_BAR_WIDTH) : 0;
-        return (
-          <box key={i} flexDirection="row" gap={1}>
-            <text fg="#888888">{p.label.padEnd(labelWidth)}</text>
-            <text>{String(p.value).padStart(4)}</text>
-            <text fg="#4a9eff">{"█".repeat(barLen)}</text>
-          </box>
-        );
-      })}
+      {series.map((s, si) => (
+        <box key={si} flexDirection="column">
+          <text attributes={1 /* BOLD */}>{s.name}</text>
+          {labels.map((label, li) => {
+            const value = s.data?.[li] ?? 0;
+            const barLen = maxValue > 0 ? Math.round((value / maxValue) * CHART_BAR_WIDTH) : 0;
+            return (
+              <box key={li} flexDirection="row" gap={1}>
+                <text fg="#888888">{label.padEnd(labelWidth)}</text>
+                <text>{String(value).padStart(4)}</text>
+                <text fg="#4a9eff">{"█".repeat(barLen)}</text>
+              </box>
+            );
+          })}
+        </box>
+      ))}
     </box>
   );
 }
