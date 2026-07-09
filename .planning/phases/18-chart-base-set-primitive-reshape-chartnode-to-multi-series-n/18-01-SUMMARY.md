@@ -95,3 +95,7 @@ None - no external service configuration required.
 ---
 *Phase: 18-chart-base-set-primitive-reshape-chartnode-to-multi-series-n*
 *Completed: 2026-07-09*
+
+## Self-Check: PASSED
+
+All created/modified files verified present on disk; all 4 commit hashes (d732f3b, 9bbe01f, a42154c, 906a783) verified present in `git log`.
