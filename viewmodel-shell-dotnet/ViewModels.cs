@@ -779,28 +779,41 @@ public record TextNode(
 public record StatItem(string Label, string Value);
 public record StatBarNode(IReadOnlyList<StatItem> Stats) : ViewNode;
 
-// ChartNode (CHART-01..05) — VMS's first data-visualization primitive: a
-// single-series bar chart drawn by the BrowserAdapter via Chart.js (a private,
-// lazy, optional adapter dependency — the wire carries only data). ChartPoint
-// mirrors StatItem: a self-contained {Label, Value} pair per datum so an agent
-// reads each category→value directly with no parallel-array index alignment.
-// Value is `double` to mirror TS `number` (ProgressNode uses `int` only because
-// it's a 0–100 integer; chart values are real magnitudes) — whole-number
-// fixtures keep the wire byte-identical across TS/.NET (System.Text.Json emits a
-// whole double as `12`, JSON.stringify emits `12`). Kind/Tone are free-form
-// `string?` mirroring the TS CLOSED unions ("bar"; "danger"|"warning"|"success"|
-// "info") — the closed set is enforced TS-side + validated by parity. Points is
-// required + first; Kind/Title/Tone are trailing nullable, omitted = absent on
-// the wire per the file-header rule. ChartNode is a childless/action-free LEAF —
-// both validators (WalkForSectionAction / Collect) fall through it with no
-// recursion (no fits-style blind spot).
-public record ChartPoint(string Label, double Value);
+// ChartNode (CHARTBASE-01..06) — VMS's multi-series-native data-visualization
+// primitive, drawn by the BrowserAdapter via Chart.js (a private, lazy,
+// optional adapter dependency — the wire carries only data). Reshaped from the
+// 4.1 single-series `{Points}` shape (ChartPoint retired for category charts)
+// to a shared category axis (`Labels`) + one-or-more `Series`, each series'
+// `Data[i]` aligned by index to `Labels[i]` — the honest encoding of "these
+// series share one x-axis," and the shape every charting library uses.
+// `Data` is `IReadOnlyList<double>` to mirror TS `number[]` (ProgressNode uses
+// `int` only because it's a 0–100 integer; chart values are real magnitudes) —
+// whole-number fixtures keep the wire byte-identical across TS/.NET
+// (System.Text.Json emits a whole double as `12`, JSON.stringify emits `12`).
+// Kind/Tone are free-form `string?` mirroring the TS CLOSED unions
+// ("bar"|"line"|"area"|"pie"|"donut"; "danger"|"warning"|"success"|"info") —
+// the closed set is enforced TS-side + validated by parity. Labels/Series are
+// required + leading (no ignore); Kind/Title are trailing nullable +
+// WhenWritingNull (absent when unset); Stacked is a `bool` default `false` +
+// WhenWritingDefault so `false` (= grouped, the TS optional `stacked?` omit
+// default) is ABSENT from the wire per the file-header rule — this is the
+// "optional non-nullable bool whose false means absent/unset" case, not the
+// "must always serialize" case. ChartNode/ChartSeries are childless/action-free
+// LEAVES — both validators (WalkForSectionAction / Collect) fall through them
+// with no recursion (no fits-style blind spot); the reshape adds no children,
+// so neither validator gained a chart arm.
+public record ChartSeries(
+    string Name,
+    IReadOnlyList<double> Data,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null
+);
 
 public record ChartNode(
-    IReadOnlyList<ChartPoint> Points,
+    IReadOnlyList<string> Labels,
+    IReadOnlyList<ChartSeries> Series,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Kind = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Title = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Stacked = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Title = null
 ) : ViewNode;
 
 public record TabItem(string Value, string Label, ActionDescriptor Action);
