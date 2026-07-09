@@ -154,3 +154,10 @@ None - no external service configuration required.
 ---
 *Phase: 18-chart-base-set-primitive-reshape-chartnode-to-multi-series-n*
 *Completed: 2026-07-09*
+
+## Self-Check: PASSED
+
+- FOUND: `viewmodel-shell-dotnet/ViewModels.cs`
+- FOUND: `.planning/phases/18-chart-base-set-primitive-reshape-chartnode-to-multi-series-n/18-06-SUMMARY.md`
+- FOUND commit `db26f89` (Task 1 fix)
+- FOUND commit `ee88f1b` (this SUMMARY)
