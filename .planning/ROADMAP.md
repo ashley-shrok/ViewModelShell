@@ -170,8 +170,8 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
   2. Series colors come from the `--vms-chart-1..8` theme palette by default; a series with `tone` uses the theme tone token; **no raw color crosses the wire**; the palette tokens exist in `default.css` + every theme and each slot's contrast is hand-checked.
   3. `ChartPoint` is retired for category charts; `ChartNode`/`ChartSeries` round-trip byte-identically across TS + .NET (optional-field rules honored: `WhenWritingNull` / `stacked` `WhenWritingDefault`), both tree-validators descend into the leaf, and `bun run parity/run.ts` is green with a multi-series + tone + stacked fixture.
   4. An app that renders no `ChartNode` ships zero Chart.js bytes; core (`src/index.ts`) + the .NET/bun backends gain no dependency. TUI degrades legibly.
-**Plans:** 6 plans (3 waves)
-- [ ] 18-01-PLAN.md — Reshape ChartNode + ChartSeries wire type (both backends) + .NET serialization test; retire ChartPoint (wave 1)
+**Plans:** 1/6 plans executed
+- [x] 18-01-PLAN.md — Reshape ChartNode + ChartSeries wire type (both backends) + .NET serialization test; retire ChartPoint (wave 1)
 - [ ] 18-02-PLAN.md — --vms-chart-1..8 categorical palette in default.css + all 12 themes + contrast hand-check (wave 1)
 - [ ] 18-03-PLAN.md — Browser adapter: widen chart()/loadChart() to bar/line/area/pie/donut + multi-series + stacked + palette/tone; update chart tests + Showcase (wave 2)
 - [ ] 18-04-PLAN.md — TUI ChartView degradation for the reshaped multi-series node + TUI test (wave 2)
