@@ -356,6 +356,34 @@ describe("ChartNode — pie/donut single-series + extra-series dev warn", () => 
     expect(cfg.data.datasets[0].data).toEqual([3, 7]);
     warnSpy.mockRestore();
   });
+
+  it("does NOT re-warn on a re-render of the same mis-shaped pie/donut chart (WR-02 regression — no poll spam)", async () => {
+    const container = freshContainer();
+    const adapter = new BrowserAdapter(container);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const node: ViewNode = {
+      type: "chart",
+      kind: "donut",
+      title: "T",
+      labels: ["A", "B"],
+      series: [
+        { name: "Primary", data: [3, 7] },
+        { name: "Extra", data: [1, 1] },
+      ],
+    };
+    adapter.render(node, () => {});
+    await flush();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+
+    // Simulate several poll re-renders of the SAME (still mis-shaped) chart —
+    // the warning must not fire again.
+    adapter.render(node, () => {});
+    await flush();
+    adapter.render(node, () => {});
+    await flush();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockRestore();
+  });
 });
 
 describe("ChartNode — redraw-in-place via .update()", () => {

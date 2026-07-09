@@ -609,8 +609,10 @@ export class BrowserAdapter implements Adapter {
       // pie/donut are single-series (LOCKED design): render series[0] only,
       // colored PER SLICE from the palette (tone is a per-series concept and
       // doesn't apply to a per-slice pie). Extra series are lenient — one dev
-      // warning, series[0] still renders — never a crash.
-      if (n.series.length > 1) {
+      // warning, series[0] still renders — never a crash. Gated to the FIRST
+      // render of this chart key (chartInstances doesn't have it yet) so a
+      // mis-shaped pie/donut in a polling view warns once, not once per poll.
+      if (n.series.length > 1 && !this.chartInstances.has(key)) {
         console.warn(
           `[ViewModelShell] ChartNode kind "${kind}" renders a single series; ` +
           `${n.series.length - 1} extra series ignored.`
