@@ -1,4 +1,4 @@
-// Phase 12 (CHART-04) — ChartNode FAIL-LOUD on a missing optional chart.js.
+// Phase 18 (CHARTBASE-03) — ChartNode FAIL-LOUD on a missing optional chart.js.
 //
 // The capability-seam rule (AGENTS.md): a capability with no safe default that
 // is invoked without its means FAILS LOUD, never a silent no-op. For ChartNode
@@ -40,7 +40,7 @@ describe("ChartNode — fail-loud on missing chart.js", () => {
     document.body.appendChild(container);
 
     new BrowserAdapter(container).render(
-      { type: "chart", points: [{ label: "A", value: 3 }] },
+      { type: "chart", labels: ["A"], series: [{ name: "S", data: [3] }] },
       () => {},
     );
     // The wrapper + canvas still render synchronously; the FAILURE is the async

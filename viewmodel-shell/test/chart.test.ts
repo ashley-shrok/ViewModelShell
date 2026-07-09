@@ -1,25 +1,34 @@
-// Phase 12 (CHART-01..05) — ChartNode jsdom coverage.
+// Phase 18 (CHARTBASE-02/03) — ChartNode jsdom coverage for the reshaped
+// multi-series base set: { kind?, labels: string[], series: ChartSeries[],
+// stacked?, title? }.
 //
 // ⚠️ jsdom has NO canvas 2D context, so a REAL Chart.js instance cannot be
 // created under jsdom. These tests MOCK chart.js (vi.mock) and assert on the
 // INTEGRATION SEAM, not on rendered pixels:
 //   - STRUCTURE: a ChartNode renders a `.vms-chart` wrapper containing a <canvas>
-//   - BAR CONFIG: the mocked Chart is constructed ONCE with type:"bar",
-//     data.labels + data.datasets[0].data derived from `points`, and the
-//     tree-shaken `register` is called (only the bar pieces)
-//   - REDRAW-IN-PLACE (CHART-03): a re-render with CHANGED data reuses the SAME
-//     instance — `.update()` is called and Chart is NOT re-constructed
+//   - BAR CONFIG (multi-series): the mocked Chart is constructed ONCE with
+//     type:"bar", one dataset per series (label/data mapped 1:1), and the
+//     tree-shaken `register` is called
+//   - STACKED: `stacked:true` sets both axis `stacked` flags; omitted → not stacked
+//   - KIND MAPPING: line/area → Chart type "line" (area sets fill:true per
+//     dataset); pie → "pie"; donut → "doughnut"
+//   - PALETTE / TONE: a tone-less series resolves a --vms-chart-N palette slot;
+//     a tone-bearing series resolves its tone token instead
+//   - PIE/DONUT EXTRA SERIES: >1 series triggers exactly one console.warn and
+//     still renders series[0] with a per-slice color array
+//   - REDRAW-IN-PLACE: a re-render with CHANGED data reuses the SAME instance —
+//     `.update()` is called and Chart is NOT re-constructed
 //   - REMOVAL MARK-SWEEP: dropping the ChartNode from the next tree calls the
 //     prior instance's `.destroy()` and removes it from the registry (no leak)
-//   - VALIDATOR NO-BLIND-SPOT (CHART-05): a tree containing a ChartNode passes
-//     BOTH validateActionNames + validateSectionAction without throwing
+//   - VALIDATOR NO-BLIND-SPOT: a tree containing a ChartNode passes BOTH
+//     validateActionNames + validateSectionAction without throwing
 //
 // The FAIL-LOUD-on-missing-chart.js path lives in the sibling file
 // `chart-missing-dep.test.ts` — it needs the `import("chart.js")` to REJECT,
 // which is cleanest in its own module registry (vitest isolates mocks per file).
 //
-// The REAL rendered chart (bars, colors, title) is verified by the Phase 13
-// operator BROWSER REVIEW (CHART-06), not by this suite.
+// The REAL rendered chart (bars, colors, title) is verified by the operator
+// BROWSER REVIEW (Phase 19), not by this suite.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { ViewNode } from "../src/index.js";
 import { BrowserAdapter } from "../src/browser.js";
@@ -53,11 +62,11 @@ const h = vi.hoisted(() => {
 
 vi.mock("chart.js", () => ({
   Chart: h.FakeChart,
-  BarController: {},
-  BarElement: {},
-  CategoryScale: {},
-  LinearScale: {},
-  Tooltip: {},
+  BarController: {}, BarElement: {},
+  LineController: {}, LineElement: {}, PointElement: {}, Filler: {},
+  PieController: {}, DoughnutController: {}, ArcElement: {},
+  CategoryScale: {}, LinearScale: {},
+  Tooltip: {}, Legend: {},
 }));
 
 function freshContainer(): HTMLElement {
@@ -87,7 +96,7 @@ describe("ChartNode — structure", () => {
   it("renders a .vms-chart wrapper containing a <canvas>", async () => {
     const container = freshContainer();
     new BrowserAdapter(container).render(
-      { type: "chart", points: [{ label: "A", value: 3 }] },
+      { type: "chart", labels: ["A"], series: [{ name: "S1", data: [3] }] },
       () => {},
     );
     const wrap = container.querySelector(".vms-chart");
@@ -97,28 +106,49 @@ describe("ChartNode — structure", () => {
   });
 });
 
-describe("ChartNode — Chart.js bar config (mocked)", () => {
-  it("constructs exactly one bar Chart with labels + data from points, and registers", async () => {
+describe("ChartNode — multi-series bar config (mocked)", () => {
+  it("constructs one bar Chart with a dataset per series (label/data 1:1), and registers", async () => {
     const container = freshContainer();
     new BrowserAdapter(container).render(
-      { type: "chart", points: [{ label: "A", value: 3 }, { label: "B", value: 7 }], tone: "success" },
+      {
+        type: "chart",
+        labels: ["Jan", "Feb"],
+        series: [
+          { name: "Revenue", data: [30, 45] },
+          { name: "Costs", data: [10, 15] },
+        ],
+      },
       () => {},
     );
     await flush();
     expect(h.constructed.length).toBe(1);
     const cfg = h.constructed[0].config;
     expect(cfg.type).toBe("bar");
-    expect(cfg.data.labels).toEqual(["A", "B"]);
-    expect(cfg.data.datasets[0].data).toEqual([3, 7]);
-    // Single-series → no legend; tree-shaken registration ran.
-    expect(cfg.options.plugins.legend.display).toBe(false);
+    expect(cfg.data.labels).toEqual(["Jan", "Feb"]);
+    expect(cfg.data.datasets.length).toBe(2);
+    expect(cfg.data.datasets[0].label).toBe("Revenue");
+    expect(cfg.data.datasets[0].data).toEqual([30, 45]);
+    expect(cfg.data.datasets[1].label).toBe("Costs");
+    expect(cfg.data.datasets[1].data).toEqual([10, 15]);
+    // Multi-series → legend shown.
+    expect(cfg.options.plugins.legend.display).toBe(true);
     expect(h.registerCalls).toBeGreaterThanOrEqual(1);
+  });
+
+  it("hides the legend for a single-series bar (matches prior behavior)", async () => {
+    const container = freshContainer();
+    new BrowserAdapter(container).render(
+      { type: "chart", labels: ["A", "B"], series: [{ name: "Only", data: [3, 7] }] },
+      () => {},
+    );
+    await flush();
+    expect(h.constructed[0].config.options.plugins.legend.display).toBe(false);
   });
 
   it("renders the title into the chart title config when provided", async () => {
     const container = freshContainer();
     new BrowserAdapter(container).render(
-      { type: "chart", title: "Sales", points: [{ label: "A", value: 1 }] },
+      { type: "chart", title: "Sales", labels: ["A"], series: [{ name: "S", data: [1] }] },
       () => {},
     );
     await flush();
@@ -126,12 +156,190 @@ describe("ChartNode — Chart.js bar config (mocked)", () => {
   });
 });
 
-describe("ChartNode — redraw-in-place via .update() (CHART-03)", () => {
+describe("ChartNode — stacked (bar/area)", () => {
+  it("sets scales.x.stacked and scales.y.stacked true when stacked:true", async () => {
+    const container = freshContainer();
+    new BrowserAdapter(container).render(
+      {
+        type: "chart",
+        labels: ["A", "B"],
+        series: [{ name: "S1", data: [1, 2] }, { name: "S2", data: [3, 4] }],
+        stacked: true,
+      },
+      () => {},
+    );
+    await flush();
+    const cfg = h.constructed[0].config;
+    expect(cfg.options.scales.x.stacked).toBe(true);
+    expect(cfg.options.scales.y.stacked).toBe(true);
+  });
+
+  it("leaves stacked unset (falsy) when omitted", async () => {
+    const container = freshContainer();
+    new BrowserAdapter(container).render(
+      { type: "chart", labels: ["A"], series: [{ name: "S1", data: [1] }] },
+      () => {},
+    );
+    await flush();
+    const cfg = h.constructed[0].config;
+    expect(cfg.options.scales.x.stacked).toBeFalsy();
+    expect(cfg.options.scales.y.stacked).toBeFalsy();
+  });
+});
+
+describe("ChartNode — kind → Chart.js type mapping", () => {
+  it('kind "line" maps to Chart type "line" with fill:false', async () => {
+    const container = freshContainer();
+    new BrowserAdapter(container).render(
+      { type: "chart", kind: "line", labels: ["A", "B"], series: [{ name: "S", data: [1, 2] }] },
+      () => {},
+    );
+    await flush();
+    const cfg = h.constructed[0].config;
+    expect(cfg.type).toBe("line");
+    expect(cfg.data.datasets[0].fill).toBe(false);
+  });
+
+  it('kind "area" maps to Chart type "line" with fill:true', async () => {
+    const container = freshContainer();
+    new BrowserAdapter(container).render(
+      { type: "chart", kind: "area", labels: ["A", "B"], series: [{ name: "S", data: [1, 2] }] },
+      () => {},
+    );
+    await flush();
+    const cfg = h.constructed[0].config;
+    expect(cfg.type).toBe("line");
+    expect(cfg.data.datasets[0].fill).toBe(true);
+  });
+
+  it('kind "pie" maps to Chart type "pie"', async () => {
+    const container = freshContainer();
+    new BrowserAdapter(container).render(
+      { type: "chart", kind: "pie", labels: ["A", "B"], series: [{ name: "S", data: [1, 2] }] },
+      () => {},
+    );
+    await flush();
+    expect(h.constructed[0].config.type).toBe("pie");
+  });
+
+  it('kind "donut" maps to Chart type "doughnut"', async () => {
+    const container = freshContainer();
+    new BrowserAdapter(container).render(
+      { type: "chart", kind: "donut", labels: ["A", "B"], series: [{ name: "S", data: [1, 2] }] },
+      () => {},
+    );
+    await flush();
+    expect(h.constructed[0].config.type).toBe("doughnut");
+  });
+
+  it('omitted kind defaults to "bar"', async () => {
+    const container = freshContainer();
+    new BrowserAdapter(container).render(
+      { type: "chart", labels: ["A"], series: [{ name: "S", data: [1] }] },
+      () => {},
+    );
+    await flush();
+    expect(h.constructed[0].config.type).toBe("bar");
+  });
+});
+
+describe("ChartNode — palette vs tone color resolution", () => {
+  it("a tone-less series resolves a --vms-chart-N palette slot via getComputedStyle", async () => {
+    const container = freshContainer();
+    const getPropSpy = vi.spyOn(CSSStyleDeclaration.prototype, "getPropertyValue")
+      .mockImplementation(function (this: CSSStyleDeclaration, prop: string) {
+        if (prop === "--vms-chart-1") return "#111111";
+        if (prop === "--vms-chart-2") return "#222222";
+        return "";
+      });
+    new BrowserAdapter(container).render(
+      {
+        type: "chart",
+        labels: ["A"],
+        series: [{ name: "S1", data: [1] }, { name: "S2", data: [2] }],
+      },
+      () => {},
+    );
+    await flush();
+    const cfg = h.constructed[0].config;
+    expect(cfg.data.datasets[0].backgroundColor).toBe("#111111");
+    expect(cfg.data.datasets[1].backgroundColor).toBe("#222222");
+    getPropSpy.mockRestore();
+  });
+
+  it("a tone-bearing series resolves its tone token (--vms-error for danger) instead of the palette slot", async () => {
+    const container = freshContainer();
+    const getPropSpy = vi.spyOn(CSSStyleDeclaration.prototype, "getPropertyValue")
+      .mockImplementation(function (this: CSSStyleDeclaration, prop: string) {
+        if (prop === "--vms-chart-1") return "#111111";
+        if (prop === "--vms-error") return "#dc2626";
+        return "";
+      });
+    new BrowserAdapter(container).render(
+      { type: "chart", labels: ["A"], series: [{ name: "Losses", data: [1], tone: "danger" }] },
+      () => {},
+    );
+    await flush();
+    const cfg = h.constructed[0].config;
+    expect(cfg.data.datasets[0].backgroundColor).toBe("#dc2626");
+    getPropSpy.mockRestore();
+  });
+});
+
+describe("ChartNode — pie/donut single-series + extra-series dev warn", () => {
+  it("renders series[0] with a per-slice palette color array", async () => {
+    const container = freshContainer();
+    const getPropSpy = vi.spyOn(CSSStyleDeclaration.prototype, "getPropertyValue")
+      .mockImplementation(function (this: CSSStyleDeclaration, prop: string) {
+        if (prop === "--vms-chart-1") return "#111111";
+        if (prop === "--vms-chart-2") return "#222222";
+        return "";
+      });
+    new BrowserAdapter(container).render(
+      { type: "chart", kind: "pie", labels: ["A", "B"], series: [{ name: "S", data: [3, 7] }] },
+      () => {},
+    );
+    await flush();
+    const cfg = h.constructed[0].config;
+    expect(cfg.data.datasets.length).toBe(1);
+    expect(cfg.data.datasets[0].data).toEqual([3, 7]);
+    expect(cfg.data.datasets[0].backgroundColor).toEqual(["#111111", "#222222"]);
+    // pie/donut are always considered multi-slice → legend shown.
+    expect(cfg.options.plugins.legend.display).toBe(true);
+    getPropSpy.mockRestore();
+  });
+
+  it("warns exactly once when a pie/donut ChartNode has more than one series, and still renders series[0]", async () => {
+    const container = freshContainer();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    new BrowserAdapter(container).render(
+      {
+        type: "chart",
+        kind: "donut",
+        labels: ["A", "B"],
+        series: [
+          { name: "Primary", data: [3, 7] },
+          { name: "Extra", data: [1, 1] },
+        ],
+      },
+      () => {},
+    );
+    await flush();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toMatch(/single series/);
+    const cfg = h.constructed[0].config;
+    expect(cfg.data.datasets.length).toBe(1);
+    expect(cfg.data.datasets[0].data).toEqual([3, 7]);
+    warnSpy.mockRestore();
+  });
+});
+
+describe("ChartNode — redraw-in-place via .update()", () => {
   it("reuses the instance and calls .update() on a re-render with changed data (no reconstruct)", async () => {
     const container = freshContainer();
     const adapter = new BrowserAdapter(container);
     adapter.render(
-      { type: "chart", title: "T", points: [{ label: "A", value: 3 }, { label: "B", value: 7 }] },
+      { type: "chart", title: "T", labels: ["A", "B"], series: [{ name: "S", data: [3, 7] }] },
       () => {},
     );
     await flush();
@@ -141,7 +349,7 @@ describe("ChartNode — redraw-in-place via .update() (CHART-03)", () => {
 
     // Re-render the SAME chart (same stable key) with CHANGED values.
     adapter.render(
-      { type: "chart", title: "T", points: [{ label: "A", value: 5 }, { label: "B", value: 9 }] },
+      { type: "chart", title: "T", labels: ["A", "B"], series: [{ name: "S", data: [5, 9] }] },
       () => {},
     );
     await flush();
@@ -157,7 +365,7 @@ describe("ChartNode — removal mark-sweep (.destroy())", () => {
     const container = freshContainer();
     const adapter = new BrowserAdapter(container);
     adapter.render(
-      { type: "chart", title: "T", points: [{ label: "A", value: 3 }] },
+      { type: "chart", title: "T", labels: ["A"], series: [{ name: "S", data: [3] }] },
       () => {},
     );
     await flush();
@@ -172,7 +380,7 @@ describe("ChartNode — removal mark-sweep (.destroy())", () => {
 
     // Re-adding the SAME-keyed chart constructs a FRESH instance (old was swept).
     adapter.render(
-      { type: "chart", title: "T", points: [{ label: "A", value: 3 }] },
+      { type: "chart", title: "T", labels: ["A"], series: [{ name: "S", data: [3] }] },
       () => {},
     );
     await flush();
@@ -180,12 +388,12 @@ describe("ChartNode — removal mark-sweep (.destroy())", () => {
   });
 });
 
-describe("ChartNode — validator no-blind-spot (CHART-05)", () => {
+describe("ChartNode — validator no-blind-spot", () => {
   it("passes validateActionNames + validateSectionAction (childless action-free leaf)", () => {
     const tree: ViewNode = {
       type: "page",
       children: [
-        { type: "chart", title: "T", points: [{ label: "A", value: 3 }] },
+        { type: "chart", title: "T", labels: ["A"], series: [{ name: "S", data: [3] }] },
         { type: "button", label: "Go", action: { name: "go" } },
       ],
     };
@@ -197,8 +405,8 @@ describe("ChartNode — validator no-blind-spot (CHART-05)", () => {
     const tree: ViewNode = {
       type: "page",
       children: [
-        { type: "chart", points: [{ label: "A", value: 1 }] },
-        { type: "chart", points: [{ label: "B", value: 2 }] },
+        { type: "chart", labels: ["A"], series: [{ name: "S", data: [1] }] },
+        { type: "chart", labels: ["B"], series: [{ name: "S", data: [2] }] },
         { type: "button", label: "Only", action: { name: "only" } },
       ],
     };
