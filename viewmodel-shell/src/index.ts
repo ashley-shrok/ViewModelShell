@@ -719,31 +719,35 @@ export interface FitsNode {
   children: ViewNode[];
 }
 
-export interface ChartPoint {
-  /** Category label (x-axis tick). */
-  label: string;
-  /** Numeric magnitude (bar height). */
-  value: number;
+export interface ChartSeries {
+  /** Series name — rendered in the legend and read by agents to identify the series. */
+  name: string;
+  /** Values aligned by index to the chart's `labels`: data[i] is the value at labels[i]. */
+  data: number[];
+  /** OPTIONAL semantic tone from the existing closed tone axis. When set, this series is
+   *  drawn in the theme's tone token (danger→--vms-error, etc.) instead of the next
+   *  categorical-palette slot. For MEANING (a loss series → danger), not decoration.
+   *  Omitted → framework assigns the next --vms-chart-N slot. NO raw color crosses the wire. */
+  tone?: "danger" | "warning" | "success" | "info";
 }
 
 export interface ChartNode {
   type: "chart";
-  /** Chart type. CLOSED union; OMITTED = "bar". "bar" is the only value in v4.1;
-   *  `line` is an ADDITIVE future value (CHART-LINE), NOT a new node — so
-   *  consumers/agents key off `kind`, and a later milestone widens the union
-   *  without a wire break. The renderer treats an absent `kind` as "bar". */
-  kind?: "bar";
-  /** Ordered category→value data. Each point is a SELF-CONTAINED {label, value}
-   *  pair (mirroring StatItem) so an agent reads the series DIRECTLY with no
-   *  parallel-array index alignment. Bars render in array order. */
-  points: ChartPoint[];
+  /** Chart type. CLOSED union; OMITTED = "bar". Widened additively later (e.g. scatter) —
+   *  consumers/agents key off `kind`, never assume a fixed set. The renderer treats an
+   *  absent `kind` as "bar". */
+  kind?: "bar" | "line" | "area" | "pie" | "donut";
+  /** Shared category axis. labels[i] is the category for every series' data[i]. */
+  labels: string[];
+  /** One or more series over the shared `labels`. Single-series charts are just one entry.
+   *  Multi-series charts share ONE x-axis (labels) — this is the honest encoding of that
+   *  shared axis, and the shape every charting library uses. */
+  series: ChartSeries[];
+  /** bar/area only: stack series instead of grouping side-by-side. Omitted/false = grouped
+   *  (ignored for line/pie/donut). */
+  stacked?: boolean;
   /** Optional chart title rendered above the plot. */
   title?: string;
-  /** Optional appearance tone from the existing tone axis, mapped to the theme's
-   *  --vms-* tone tokens (danger→--vms-error, warning→--vms-warning,
-   *  success→--vms-success, info→--vms-info; omitted → --vms-accent). NO raw
-   *  color/CSS crosses the wire (D3) — only the closed tone token. */
-  tone?: "danger" | "warning" | "success" | "info";
 }
 
 // ─── Shell ────────────────────────────────────────────────────────────────────
