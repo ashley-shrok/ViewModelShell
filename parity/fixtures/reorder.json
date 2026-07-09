@@ -2,18 +2,21 @@
   "name": "reorder",
   "endpoint": "/api/reorder",
   "actionEndpoint": "/api/reorder/action",
-  "$comment": "Phase 6 wire shape: _action carries {name} only. Per-item move actions encode the id in the action name (move-start-${id} / move-before-${id}). No bind paths in this demo — no input fields.",
+  "$comment": "Canonical reorder demo (v5.0 rewrite — replaces the old select-then-place 'move-start/move-before/move-to-end' prototype). Items live in groups (backlog/active/archive; archive starts empty). Per-row identity is encoded in the action name (Phase 6 / WIRE-07); no bind paths (no input fields). Two blessed patterns, both from existing primitives: (1) Up/Down buttons reorder WITHIN a group — first row's Up + last row's Down are disabled:true; (2) a Move… button opens a ModalNode (dismissAction:'move-close', no same-named footer per the AGENTS.md gotcha) listing the OTHER groups, and move-to-<folderKey>-<id> RELOCATES the item (append to the target group). Drag-and-drop is rejected (mouse-only → not agent/keyboard-drivable). The steps exercise: normal Up/Down, the server-side CLAMP when an agent dispatches a disabled Up/Down directly (move-up on a first item / single-item group = no-op — disabled is a client-only hint, the server must be safe), move-open→move-to relocation, move-close cancel, and populating the initially-empty archive group. Every step's response (grouped view-shape + disabled flags + optional modal) is byte-diffed across dotnet-reorder / bun-reorder / node.",
   "steps": [
-    { "id": "initial",        "method": "GET" },
-    { "id": "pick-a",         "method": "POST", "action": { "name": "move-start-a" } },
-    { "id": "a-before-d",     "method": "POST", "action": { "name": "move-before-d" } },
-    { "id": "pick-e",         "method": "POST", "action": { "name": "move-start-e" } },
-    { "id": "e-before-b",     "method": "POST", "action": { "name": "move-before-b" } },
-    { "id": "pick-c",         "method": "POST", "action": { "name": "move-start-c" } },
-    { "id": "c-to-end",       "method": "POST", "action": { "name": "move-to-end" } },
-    { "id": "pick-b",         "method": "POST", "action": { "name": "move-start-b" } },
-    { "id": "cancel",         "method": "POST", "action": { "name": "move-cancel" } },
-    { "id": "pick-d",         "method": "POST", "action": { "name": "move-start-d" } },
-    { "id": "d-before-self",  "method": "POST", "action": { "name": "move-before-d" } }
+    { "id": "initial",          "method": "GET" },
+    { "id": "down-a",           "method": "POST", "action": { "name": "move-down-a" } },
+    { "id": "up-c",             "method": "POST", "action": { "name": "move-up-c" } },
+    { "id": "up-first-clamp",   "method": "POST", "action": { "name": "move-up-b" } },
+    { "id": "open-b",           "method": "POST", "action": { "name": "move-open-b" } },
+    { "id": "relocate-b-active","method": "POST", "action": { "name": "move-to-active-b" } },
+    { "id": "down-d",           "method": "POST", "action": { "name": "move-down-d" } },
+    { "id": "open-e",           "method": "POST", "action": { "name": "move-open-e" } },
+    { "id": "cancel-modal",     "method": "POST", "action": { "name": "move-close" } },
+    { "id": "relocate-c-archive","method": "POST", "action": { "name": "move-to-archive-c" } },
+    { "id": "up-single-clamp",  "method": "POST", "action": { "name": "move-up-c" } },
+    { "id": "down-single-clamp","method": "POST", "action": { "name": "move-down-c" } },
+    { "id": "open-c",           "method": "POST", "action": { "name": "move-open-c" } },
+    { "id": "relocate-c-back",  "method": "POST", "action": { "name": "move-to-backlog-c" } }
   ]
 }
