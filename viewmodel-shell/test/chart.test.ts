@@ -267,6 +267,30 @@ describe("ChartNode — palette vs tone color resolution", () => {
     getPropSpy.mockRestore();
   });
 
+  it("falls back to --vms-accent when the theme has no --vms-chart-N token defined (WR-01 regression)", async () => {
+    const container = freshContainer();
+    const getPropSpy = vi.spyOn(CSSStyleDeclaration.prototype, "getPropertyValue")
+      .mockImplementation(function (this: CSSStyleDeclaration, prop: string) {
+        // A theme that predates the chart palette: no --vms-chart-* tokens,
+        // but the pre-existing --vms-accent token is still defined.
+        if (prop === "--vms-accent") return "#7c3aed";
+        return "";
+      });
+    new BrowserAdapter(container).render(
+      {
+        type: "chart",
+        labels: ["A"],
+        series: [{ name: "S1", data: [1] }, { name: "S2", data: [2] }],
+      },
+      () => {},
+    );
+    await flush();
+    const cfg = h.constructed[0].config;
+    expect(cfg.data.datasets[0].backgroundColor).toBe("#7c3aed");
+    expect(cfg.data.datasets[1].backgroundColor).toBe("#7c3aed");
+    getPropSpy.mockRestore();
+  });
+
   it("a tone-bearing series resolves its tone token (--vms-error for danger) instead of the palette slot", async () => {
     const container = freshContainer();
     const getPropSpy = vi.spyOn(CSSStyleDeclaration.prototype, "getPropertyValue")

@@ -576,9 +576,13 @@ export class BrowserAdapter implements Adapter {
       info: "--vms-info",
     };
     const cs = getComputedStyle(this.container);
-    // Categorical palette slot i (0-based) → --vms-chart-1..8, cycling.
+    // Categorical palette slot i (0-based) → --vms-chart-1..8, cycling. Falls
+    // back to --vms-accent (the pre-reshape safety net) when a consumer's
+    // custom theme (built via the sanctioned --vms-* override seam) predates
+    // this phase and doesn't define the chart tokens — every SHIPPED theme
+    // does, so this only matters for external reskins.
     const paletteColor = (i: number): string =>
-      cs.getPropertyValue(`--vms-chart-${(i % 8) + 1}`).trim();
+      cs.getPropertyValue(`--vms-chart-${(i % 8) + 1}`).trim() || cs.getPropertyValue("--vms-accent").trim();
     // A series' resolved color: its tone token if set, else the next palette slot.
     const seriesColor = (i: number, tone?: string): string =>
       (tone && toneToken[tone]) ? cs.getPropertyValue(toneToken[tone]).trim() : paletteColor(i);
