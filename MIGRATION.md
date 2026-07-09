@@ -34,6 +34,7 @@ The 4.1 single-series shape is gone. Rewrite each chart from `points` to `labels
 
 - **`ButtonNode.confirm?: string`** — new optional destructive-action guard. Set it to a question string and the browser shows a native confirm before dispatching. Omit = unchanged instant-click behavior.
 - **Reorder** — the `demo/Reorder` rewrite + `demo/Reorder/README.md` document the canonical up/down + move-to-group-modal pattern. No framework API changed; nothing to adopt.
+- **`TablePagination.jumpAction` / `JumpAction`** — new optional action for typing a page number to jump to (with server-side clamp). Omit = unchanged prev/next-only pagination.
 
 Everything else — the wire shape, `_action`/`_state`, the response envelope, every other node — is unchanged.
 

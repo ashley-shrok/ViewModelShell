@@ -29,6 +29,10 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 - The `demo/Reorder` demo is rewritten to the **blessed** reordering patterns, both composed from existing primitives (buttons + modal + named actions): **Up/Down** buttons reorder within a group (first-row Up / last-row Down `disabled`; the server **clamps** out-of-range moves to no-ops, since `disabled` is a client-only hint an agent can bypass), and a **Move…** button opens a modal to relocate an item to another group. `demo/Reorder/README.md` documents the pattern and restates that **pointer drag-and-drop is rejected** (mouse-only → not agent/keyboard-drivable); if ever added it could only be sugar over these same actions. Retires the old janky select-then-place prototype.
 
+### Added — table jump-to-page
+
+- **`TablePagination.jumpAction` / `JumpAction`** (both backends) — an optional action that lets a paginated table jump directly to a typed page number (alongside the existing prev/next), with the server-side page clamp applied. Built + verified before this release but not previously published; it ships here in 5.0.0. Additive — omit it for unchanged prev/next-only pagination.
+
 ### Fixed
 
 - **Chart legend labels + titles now use the `--vms-text` theme token** (full contrast) instead of Chart.js's fixed default grey (`#666`) — the old grey was washed-out on light and near-invisible on dark themes. Axis ticks stay `--vms-text-muted` (secondary). Browser-only.
