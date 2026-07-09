@@ -439,6 +439,18 @@ export interface ButtonNode {
    *  while in this state so the button visibly disables (cursor + opacity).
    *  Omitted = no pending feedback (existing instant-click behavior). */
   pendingLabel?: string;
+  /** Optional confirmation question for a destructive/irreversible action
+   *  (delete, reset, archive). When set, the BrowserAdapter shows a NATIVE
+   *  browser confirm dialog with this message on click; the action dispatches
+   *  only if the user accepts, and Cancel suppresses it entirely (no dispatch,
+   *  no pendingLabel swap). Deliberately NATIVE, not a framework-drawn dialog:
+   *  it adds ZERO app or framework state (no modal in the tree, nothing to
+   *  round-trip or tear down) and its OS-native, deliberately-jarring look
+   *  reinforces "this one is serious — stop." It is a CLIENT-ONLY human
+   *  affordance: an agent dispatches the action directly over the wire and is
+   *  never gated by it (the confirm exists only at browser render time). The
+   *  TUI has no confirm() and dispatches as normal. Omitted = instant dispatch. */
+  confirm?: string;
 }
 
 export interface TextNode {

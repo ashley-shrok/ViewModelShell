@@ -484,6 +484,8 @@ function buildVm(state: FeatureProbeState): ViewNode {
       { type: "button", label: "S-sm",        action: { name: "axes-noop-7" }, size: "sm" },
       { type: "button", label: "S-lg",        action: { name: "axes-noop-8" }, size: "lg" },
       { type: "button", label: "combo",       action: { name: "axes-noop-9" }, emphasis: "primary", tone: "danger", size: "lg" },
+      // Destructive-action guard: confirm carries a native-confirm question.
+      { type: "button", label: "confirm-guard", action: { name: "axes-noop-confirm" }, tone: "danger", confirm: "Delete this? This cannot be undone." },
       { type: "copy-button", text: "axes-clip", label: "Copy", emphasis: "secondary", tone: "info", size: "sm" },
       { type: "text", value: "tone text", tone: "warning" },
       { type: "text", value: "heading + tone", style: "heading", tone: "danger" },

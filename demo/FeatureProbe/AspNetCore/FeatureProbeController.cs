@@ -546,6 +546,8 @@ public class FeatureProbeController : ControllerBase
                 new ButtonNode("S-sm",        new ActionDescriptor("axes-noop-7"), Size: "sm"),
                 new ButtonNode("S-lg",        new ActionDescriptor("axes-noop-8"), Size: "lg"),
                 new ButtonNode("combo",       new ActionDescriptor("axes-noop-9"), Emphasis: "primary", Tone: "danger", Size: "lg"),
+                // Destructive-action guard: Confirm carries a native-confirm question.
+                new ButtonNode("confirm-guard", new ActionDescriptor("axes-noop-confirm"), Tone: "danger", Confirm: "Delete this? This cannot be undone."),
                 new CopyButtonNode("axes-clip", Label: "Copy", Emphasis: "secondary", Tone: "info", Size: "sm"),
                 new TextNode("tone text", Tone: "warning"),
                 new TextNode("heading + tone", "heading", "danger"),

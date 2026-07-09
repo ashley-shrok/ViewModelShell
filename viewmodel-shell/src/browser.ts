@@ -1403,6 +1403,12 @@ export class BrowserAdapter implements Adapter {
       // `disabled` already suppresses the click, but guard anyway in case the
       // attribute was cleared out-of-band.)
       if (n.disabled) return;
+      // confirm: a destructive-action guard. Show the NATIVE browser confirm
+      // BEFORE any pendingLabel swap or dispatch; Cancel suppresses everything
+      // (no dispatch, no visual change). Native by design — zero app/framework
+      // state, and it's a client-only human affordance (an agent never reaches
+      // this click handler; it dispatches the action directly over the wire).
+      if (n.confirm && !window.confirm(n.confirm)) return;
       // pendingLabel: instant client-side feedback. Swap text + add
       // .vms-button--pending BEFORE handing off to the dispatcher. On
       // success the next render replaces the button entirely. On dispatch

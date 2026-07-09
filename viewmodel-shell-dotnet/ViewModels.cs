@@ -763,7 +763,15 @@ public record ButtonNode(
     // Transient label shown from click until dispatch resolves (issue #11).
     // Adapter additionally adds `.vms-button--pending` while pending so the
     // button visibly disables. Null = instant-click behavior (pre-0.8.0).
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? PendingLabel = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? PendingLabel = null,
+    // Optional confirmation question for a destructive/irreversible action. When
+    // set, the BrowserAdapter shows a NATIVE browser confirm() with this message
+    // on click; the action dispatches only on accept, Cancel suppresses it (no
+    // dispatch, no pendingLabel swap). Deliberately native (zero app/framework
+    // state — no modal node, nothing to round-trip) + client-only: an agent
+    // dispatches the action directly and is never gated. TUI dispatches as normal.
+    // Null = instant dispatch.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Confirm = null
 ) : ViewNode;
 
 public record TextNode(
