@@ -6,6 +6,16 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 5.0.1 — Fixed: `FormNode.submitButton` now honors `pendingLabel` / `disabled` / `confirm` (npm)
+
+**npm:** `5.0.1` (patch, from `5.0.0`) · **NuGet:** unchanged at `5.0.0`. Client-renderer-only fix — the .NET package has no renderer, so it does not move. The wire protocol token stays `viewmodel-shell/1.0`; there is **no wire or type change** (the types already promised this behavior).
+
+### Fixed
+
+- A **form-level `submitButton`** (the consumer-provided submit button, from 3.1.0) rendered its cosmetic props (`label`/`emphasis`/`tone`/`size`/`width`) but silently **dropped `pendingLabel`, `disabled`, and `confirm`** on the submit path — it wired only the form's submit event and never ran the click behavior a standalone `ButtonNode` runs. So a submit button with a `pendingLabel` never swapped (no `.vms-button--pending`), a `disabled` submit button lacked the class/attr/dispatch-guard, and a `confirm` destructive-action guard never fired. Both paths now share one code path (the submit button's activation runs on the form's submit event — native Enter-to-submit preserved), so they can't diverge again. **No consumer action needed beyond bumping to `5.0.1`** — any `submitButton` already carrying those props starts working. Reported by a consumer (Hecate).
+
+---
+
 ## 5.0.0 / 5.0.0 — Chart base set (multi-series, **BREAKING** `ChartNode` reshape) + destructive-action confirm + canonical reorder (npm + NuGet)
 
 **npm:** `5.0.0` (MAJOR, from `4.2.0`) · **NuGet:** `5.0.0` (MAJOR, from `4.2.0`). Three features, one breaking reshape. The wire protocol token stays `viewmodel-shell/1.0` (the change is a node's shape, not the envelope). **The only breaking change is `ChartNode`**, and it was taken deliberately as a major while it is safe: **zero consumers had implemented a chart** (the 4.1 single-series `ChartNode` was the sole break surface), so the free reshape window was still open. If you never rendered a 4.1 chart, this is effectively additive for you — see MIGRATION.md.
