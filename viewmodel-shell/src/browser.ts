@@ -980,17 +980,17 @@ export class BrowserAdapter implements Adapter {
     const sb = n.submitButton;
     const effectiveSubmit = sb ? sb.action : n.submitAction;
     if (sb) {
-      const submitAction = sb.action;
       const submit = document.createElement("button");
       submit.type = "submit";
-      submit.className = `vms-button${sb.emphasis ? ` vms-button--${sb.emphasis}` : ""}${
-        sb.tone ? ` vms-button--${sb.tone}` : ""}${sb.size ? ` vms-button--${sb.size}` : ""}${
-        sb.width === "full" ? " vms-button--full" : ""}`;
-      submit.textContent = sb.label;
+      // Same appearance + activation as a standalone button — disabled/confirm/
+      // pendingLabel included. The form's submit event is the single dispatch
+      // point (keeps native Enter-to-submit for text fields working); activate()
+      // carries the disabled guard, confirm guard, and pendingLabel swap.
+      const activate = this.applyButtonBehavior(submit, sb, dispatchWithFiles);
       form.appendChild(submit);
       form.addEventListener("submit", (e) => {
         e.preventDefault();
-        dispatchWithFiles(submitAction);
+        activate();
       });
     } else if (n.submitAction) {
       const submitAction = n.submitAction;
@@ -1389,25 +1389,35 @@ export class BrowserAdapter implements Adapter {
     parent.appendChild(lbl);
   }
 
-  private button(n: ButtonNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
-    const btn = document.createElement("button");
-    btn.type = "button";
+  /** Shared button appearance + activation behavior, applied to a <button> element
+   *  (a standalone ButtonNode's button, OR a form's submitButton). Sets the full
+   *  className (emphasis/tone/size/width/disabled), label, and the `disabled` attr,
+   *  and returns a guarded `activate()` that runs disabled -> confirm -> pendingLabel
+   *  swap -> dispatch. Both the standalone button() renderer and the FormNode
+   *  submitButton branch use this so the two can NEVER diverge — the divergence WAS
+   *  the bug (a form-level submit button silently dropped pendingLabel/disabled/
+   *  confirm because it re-implemented rendering without the click behavior). */
+  private applyButtonBehavior(
+    btn: HTMLButtonElement,
+    n: ButtonNode,
+    dispatch: (a: ActionEvent) => void,
+  ): () => void {
     btn.className = `vms-button${n.emphasis ? ` vms-button--${n.emphasis}` : ""}${
       n.tone ? ` vms-button--${n.tone}` : ""}${n.size ? ` vms-button--${n.size}` : ""}${
       n.width === "full" ? " vms-button--full" : ""}${
       n.disabled ? " vms-button--disabled" : ""}`;
     btn.textContent = n.label;
     if (n.disabled) btn.disabled = true;
-    btn.addEventListener("click", () => {
+    return () => {
       // Forms-completeness (3.4.0): a disabled button never dispatches. (Native
-      // `disabled` already suppresses the click, but guard anyway in case the
-      // attribute was cleared out-of-band.)
+      // `disabled` already suppresses a click, but guard anyway — a form submit
+      // isn't a native button click, and the attribute could be cleared out-of-band.)
       if (n.disabled) return;
       // confirm: a destructive-action guard. Show the NATIVE browser confirm
       // BEFORE any pendingLabel swap or dispatch; Cancel suppresses everything
       // (no dispatch, no visual change). Native by design — zero app/framework
       // state, and it's a client-only human affordance (an agent never reaches
-      // this click handler; it dispatches the action directly over the wire).
+      // this handler; it dispatches the action directly over the wire).
       if (n.confirm && !window.confirm(n.confirm)) return;
       // pendingLabel: instant client-side feedback. Swap text + add
       // .vms-button--pending BEFORE handing off to the dispatcher. On
@@ -1417,8 +1427,15 @@ export class BrowserAdapter implements Adapter {
         btn.textContent = n.pendingLabel;
         btn.classList.add("vms-button--pending");
       }
-      on(n.action);
-    });
+      dispatch(n.action);
+    };
+  }
+
+  private button(n: ButtonNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    const activate = this.applyButtonBehavior(btn, n, on);
+    btn.addEventListener("click", activate);
     parent.appendChild(btn);
   }
 
