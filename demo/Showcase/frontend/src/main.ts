@@ -412,6 +412,34 @@ function componentsView(): ViewNode[] {
       },
     ]},
 
+    { type: "section", heading: "Breadcrumb", children: [
+      { type: "text", value: "An ordered root→current trail. The last crumb is auto-rendered as the current page (non-clickable, aria-current). Earlier crumbs navigate via href or a server action. The separator is framework-drawn — no appearance on the wire.", style: "muted" },
+      { type: "breadcrumb", items: [
+        { label: "Home", href: "#" },
+        { label: "Reports", href: "#" },
+        { label: "Regenerate", action: { name: "noop-crumb" } },
+        { label: "Q3 Summary" },
+      ]},
+    ]},
+
+    { type: "section", heading: "Steps", children: [
+      { type: "text", value: "An ordered progression with a single 0-based current index — per-step status (done / current / upcoming) DERIVES from it. Horizontal auto-stacks to vertical when the container is narrow; vertical is a deliberate wizard with descriptions beside each step.", style: "muted" },
+      { type: "text", value: "horizontal (default orientation)", style: "subheading" },
+      { type: "steps", current: 1, steps: [
+        { label: "Cart" },
+        { label: "Shipping" },
+        { label: "Payment" },
+        { label: "Confirm" },
+      ]},
+      { type: "text", value: "vertical (with per-step descriptions)", style: "subheading" },
+      { type: "steps", current: 2, orientation: "vertical", steps: [
+        { label: "Account", description: "Create your login" },
+        { label: "Profile", description: "Add your details" },
+        { label: "Verify", description: "Confirm your email" },
+        { label: "Done", description: "You're all set" },
+      ]},
+    ]},
+
     { type: "section", heading: "Modal", children: [
       { type: "text", value: "Cancel/Delete forever/the X all dismiss it. Use the button below to reopen.", style: "muted" },
       { type: "button", label: "Open modal", action: { name: "modal:open" }, emphasis: "primary" },
