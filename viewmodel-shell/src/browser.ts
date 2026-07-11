@@ -18,6 +18,7 @@ import type {
   TextNode, LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
   ModalNode, TableNode, CopyButtonNode, DividerNode, FitsNode,
   EmptyStateNode, BadgeNode, ChartNode,
+  BreadcrumbNode, StepsNode,
 } from "./index.js";
 
 function legacyCopy(text: string): boolean {
@@ -396,6 +397,8 @@ export class BrowserAdapter implements Adapter {
       case "empty-state":  return this.emptyState(n, parent, on);
       case "badge":        return this.badge(n, parent);
       case "chart":        return this.chart(n, parent);
+      case "breadcrumb":   return this.breadcrumb(n, parent, on);
+      case "steps":        return this.steps(n, parent);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -1960,5 +1963,125 @@ export class BrowserAdapter implements Adapter {
       n.emphasis ? ` vms-badge--${n.emphasis}` : ""}`;
     span.textContent = n.label;
     parent.appendChild(span);
+  }
+
+  /** BreadcrumbNode — a `<nav aria-label="breadcrumb">` landmark wrapping an
+   *  `<ol>`. Every crumb but the last navigates (href → `<a>`, action →
+   *  dispatching `<button>`); the LAST crumb is the current page, rendered as
+   *  plain text with `aria-current="page"` on its `<li>` (position is the
+   *  signal — no per-item flag). A framework-drawn, `aria-hidden` separator
+   *  sits between items (its glyph is CSS-owned — see default.css). All text is
+   *  set via textContent (never innerHTML). */
+  private breadcrumb(n: BreadcrumbNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const nav = document.createElement("nav");
+    nav.setAttribute("aria-label", "breadcrumb");
+    const ol = document.createElement("ol");
+    ol.className = "vms-breadcrumb";
+    n.items.forEach((item, i) => {
+      const isLast = i === n.items.length - 1;
+      const li = document.createElement("li");
+      li.className = "vms-breadcrumb__item";
+      if (isLast) {
+        // Current page: plain, non-clickable, aria-current on the <li>.
+        li.setAttribute("aria-current", "page");
+        const span = document.createElement("span");
+        span.className = "vms-breadcrumb__current";
+        span.textContent = item.label;
+        li.appendChild(span);
+      } else if (item.href != null) {
+        // URL navigation — reuse LinkNode's external target/rel handling.
+        const a = document.createElement("a");
+        a.className = "vms-breadcrumb__link";
+        a.href = item.href;
+        a.textContent = item.label;
+        if (item.external) {
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+        }
+        li.appendChild(a);
+      } else if (item.action) {
+        // Server dispatch — a button that fires the action name only.
+        const action = item.action;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "vms-breadcrumb__link vms-breadcrumb__link--action";
+        btn.textContent = item.label;
+        btn.addEventListener("click", () => { on({ name: action.name }); });
+        li.appendChild(btn);
+      } else {
+        // Non-last crumb with neither href nor action — inert label.
+        const span = document.createElement("span");
+        span.className = "vms-breadcrumb__link";
+        span.textContent = item.label;
+        li.appendChild(span);
+      }
+      // Framework-drawn separator after every non-last crumb (glyph via CSS).
+      if (!isLast) {
+        const sep = document.createElement("span");
+        sep.className = "vms-breadcrumb__separator";
+        sep.setAttribute("aria-hidden", "true");
+        li.appendChild(sep);
+      }
+      ol.appendChild(li);
+    });
+    nav.appendChild(ol);
+    parent.appendChild(nav);
+  }
+
+  /** StepsNode — a discrete stepper. Per-step status DERIVES from `current`
+   *  (index < current = done, === current = current, > current = upcoming);
+   *  there is NO per-step status field. The framework draws numbered markers
+   *  (a check glyph for done), the connector lines, and the intrinsic
+   *  horizontal→vertical collapse (CSS). a11y: the group carries an accessible
+   *  name; the current step's `<li>` gets `aria-current="step"`; each marker's
+   *  state (complete/current/upcoming) rides an `aria-label` so it's never
+   *  conveyed by color alone. The stepper is NOT focusable and is NOT
+   *  `role="progressbar"` (that's a continuous %). All text via textContent. */
+  private steps(n: StepsNode, parent: HTMLElement): void {
+    const ol = document.createElement("ol");
+    ol.className = n.orientation === "vertical"
+      ? "vms-steps vms-steps--vertical"
+      : "vms-steps";
+    ol.setAttribute("aria-label", "progress");
+    n.steps.forEach((step, i) => {
+      const state = i < n.current ? "done" : i === n.current ? "current" : "upcoming";
+      const li = document.createElement("li");
+      li.className = `vms-steps__step vms-steps__step--${state}`;
+      if (state === "current") li.setAttribute("aria-current", "step");
+
+      // Connector — CSS-drawn line marker-center to marker-center, behind the
+      // opaque marker (hidden on the first step via CSS).
+      const connector = document.createElement("span");
+      connector.className = "vms-steps__connector";
+      connector.setAttribute("aria-hidden", "true");
+      li.appendChild(connector);
+
+      // Marker — number, or a check glyph for done. State rides aria-label so
+      // it's not color-only (the aria-label overrides the visual glyph name).
+      const marker = document.createElement("span");
+      marker.className = "vms-steps__marker";
+      marker.setAttribute("aria-label",
+        state === "done" ? "complete" : state === "current" ? "current" : "upcoming");
+      marker.textContent = state === "done" ? "✓" : String(i + 1);
+      li.appendChild(marker);
+
+      // Body — label + optional one-line description.
+      const body = document.createElement("span");
+      body.className = "vms-steps__body";
+      const label = document.createElement("span");
+      label.className = "vms-steps__label";
+      label.textContent = step.label;
+      body.appendChild(label);
+      if (step.description != null && step.description !== "") {
+        const desc = document.createElement("span");
+        desc.className = "vms-steps__description";
+        desc.textContent = step.description;
+        body.appendChild(desc);
+      }
+      li.appendChild(body);
+
+      ol.appendChild(li);
+    });
+    parent.appendChild(ol);
   }
 }
