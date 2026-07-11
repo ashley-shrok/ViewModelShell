@@ -559,3 +559,93 @@ describe("v5.1 — StepsNode derives per-step state from current + marks the cur
     expect((currents[0] as HTMLElement).classList.contains("vms-steps__step--current")).toBe(true);
   });
 });
+
+describe("v5.1 — BreadcrumbNode external crumb hardens the link (T-20-06)", () => {
+  it("external:true sets target=_blank + rel=noopener noreferrer", () => {
+    const { container, render } = setup({});
+    render({
+      type: "breadcrumb",
+      items: [
+        { label: "Docs", href: "https://example.com", external: true },
+        { label: "Here" },
+      ],
+    });
+    const a = container.querySelector("a.vms-breadcrumb__link") as HTMLAnchorElement;
+    expect(a.target).toBe("_blank");
+    expect(a.rel).toBe("noopener noreferrer");
+  });
+});
+
+describe("v5.1 — StepsNode a11y: markers carry state labels, stepper is inert", () => {
+  it("each marker has a state aria-label, done shows a check glyph, root is not a progressbar and not focusable", () => {
+    const { container, render } = setup({});
+    render({
+      type: "steps",
+      steps: [{ label: "Cart" }, { label: "Shipping" }, { label: "Payment" }],
+      current: 1,
+    });
+    const ol = container.querySelector("ol.vms-steps") as HTMLElement;
+    // Discrete stepper — NOT role=progressbar, NOT in the tab order.
+    expect(ol.getAttribute("role")).toBeNull();
+    expect(ol.getAttribute("aria-label")).not.toBeNull();
+    expect(ol.hasAttribute("tabindex")).toBe(false);
+    for (const step of Array.from(ol.querySelectorAll("li.vms-steps__step"))) {
+      expect(step.hasAttribute("tabindex")).toBe(false);
+    }
+
+    const markers = Array.from(ol.querySelectorAll(".vms-steps__marker"));
+    expect(markers.map((m) => m.getAttribute("aria-label"))).toEqual([
+      "complete", "current", "upcoming",
+    ]);
+    // Done marker shows a check glyph; the others show their 1-based number.
+    expect(markers[0]!.textContent).toBe("✓");
+    expect(markers[1]!.textContent).toBe("2");
+    expect(markers[2]!.textContent).toBe("3");
+  });
+});
+
+describe("v5.1 — StepsNode orientation modifier is present only when vertical", () => {
+  it("orientation:vertical adds vms-steps--vertical; omitted/horizontal does not", () => {
+    const vertical = setup({});
+    vertical.render({
+      type: "steps",
+      steps: [{ label: "One" }, { label: "Two" }],
+      current: 0,
+      orientation: "vertical",
+    });
+    expect(
+      (vertical.container.querySelector("ol.vms-steps") as HTMLElement)
+        .classList.contains("vms-steps--vertical"),
+    ).toBe(true);
+
+    const horizontal = setup({});
+    horizontal.render({
+      type: "steps",
+      steps: [{ label: "One" }, { label: "Two" }],
+      current: 0,
+    });
+    expect(
+      (horizontal.container.querySelector("ol.vms-steps") as HTMLElement)
+        .classList.contains("vms-steps--vertical"),
+    ).toBe(false);
+  });
+});
+
+describe("v5.1 — StepsNode renders an optional description only when present", () => {
+  it("emits .vms-steps__description for steps that carry one, omits it otherwise", () => {
+    const { container, render } = setup({});
+    render({
+      type: "steps",
+      steps: [
+        { label: "Cart", description: "Review items" },
+        { label: "Pay" },
+      ],
+      current: 0,
+    });
+    const steps = Array.from(container.querySelectorAll("li.vms-steps__step"));
+    const desc0 = steps[0]!.querySelector(".vms-steps__description");
+    expect(desc0).not.toBeNull();
+    expect(desc0!.textContent).toBe("Review items");
+    expect(steps[1]!.querySelector(".vms-steps__description")).toBeNull();
+  });
+});
