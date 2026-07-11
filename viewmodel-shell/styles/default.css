@@ -1162,3 +1162,187 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   border-color: var(--_badge-tone);
   color: var(--_badge-tone);
 }
+
+/* ── Breadcrumb ──
+   <nav aria-label="breadcrumb"> > <ol.vms-breadcrumb> trail. Earlier crumbs are
+   accent links (or dispatching buttons reset to read as links); the current
+   (last) crumb is bold --vms-text; a fixed, muted, framework-drawn separator
+   (glyph via ::before — off the wire) sits after each non-last crumb. All
+   spacing/colour is token-driven. */
+.vms-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--vms-space-xs);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--vms-text-sm);
+}
+.vms-breadcrumb__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--vms-space-xs);
+}
+.vms-breadcrumb__link {
+  color: var(--vms-accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--vms-t);
+}
+.vms-breadcrumb__link:hover { border-bottom-color: var(--vms-accent); }
+/* Action crumbs render as <button> — strip native chrome so they read as links. */
+button.vms-breadcrumb__link {
+  background: none;
+  padding: 0;
+  border-top: none;
+  border-right: none;
+  border-left: none;
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+.vms-breadcrumb__current {
+  color: var(--vms-text);
+  font-weight: 600;
+}
+/* One fixed framework-drawn separator (the glyph is CSS-owned, never on the wire). */
+.vms-breadcrumb__separator {
+  color: var(--vms-text-muted);
+  user-select: none;
+}
+.vms-breadcrumb__separator::before { content: "/"; }
+
+/* ── Steps ──
+   A discrete stepper. Numbered markers (a check glyph for done) joined by
+   connector lines the framework draws marker-CENTER to marker-CENTER behind the
+   opaque markers (so the line reads bubble-edge to bubble-edge). Per-step state
+   (done/current/upcoming) derives from the node's `current` index; done/current
+   markers fill --vms-accent, current gets an --vms-accent-glow ring, upcoming is
+   an outlined --vms-text-muted marker. Horizontal by default; it auto-collapses
+   to the stacked/vertical form INTRINSICALLY via a container query (ZERO
+   viewport breakpoints — P1); the deliberate .vms-steps--vertical wizard always
+   uses that stacked form. Marker/line widths use small px like .vms-link /
+   .vms-badge (no width token exists); every colour + gap is a --vms-* token. */
+.vms-steps {
+  --_step-marker: var(--vms-space-xl);   /* marker diameter (2.25rem) */
+  container-type: inline-size;
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--vms-text-sm);
+}
+/* Horizontal (default): equal columns, centered marker over centered label. */
+.vms-steps__step {
+  flex: 1 1 0;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--vms-space-xs);
+}
+.vms-steps__marker {
+  position: relative;
+  z-index: 1;                            /* opaque marker sits ON the connector */
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: var(--_step-marker);
+  height: var(--_step-marker);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--vms-text-xs);
+  font-weight: 600;
+  line-height: 1;
+  /* upcoming (default): outlined muted marker on the surface. */
+  background: var(--vms-surface);
+  border: 2px solid var(--vms-text-muted);
+  color: var(--vms-text-muted);
+}
+/* done + current: filled accent marker. The glyph uses --vms-surface so it
+   auto-adapts polarity (light theme → light glyph, dark → dark) and clears the
+   WCAG-AA graphical-object bar (>=3:1) on every shipped theme — the marker is a
+   graphical state indicator, its semantic state also rides an aria-label. */
+.vms-steps__step--done .vms-steps__marker,
+.vms-steps__step--current .vms-steps__marker {
+  background: var(--vms-accent);
+  border-color: var(--vms-accent);
+  color: var(--vms-surface);
+}
+.vms-steps__step--current .vms-steps__marker {
+  box-shadow: 0 0 0 4px var(--vms-accent-glow);
+}
+.vms-steps__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vms-space-2xs);
+}
+.vms-steps__label { color: var(--vms-text); font-weight: 600; }
+.vms-steps__description { color: var(--vms-text-muted); font-size: var(--vms-text-xs); }
+
+/* Connector — the OUTGOING segment from this marker toward the next (hidden on
+   the last step). Colored by the step's own state: accent once the step is done,
+   muted otherwise. z-index 0 so the opaque markers cover it edge-to-edge. */
+.vms-steps__connector {
+  position: absolute;
+  z-index: 0;
+  top: calc(var(--_step-marker) / 2);
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  transform: translateY(-1px);
+}
+.vms-steps__step:last-child .vms-steps__connector { display: none; }
+.vms-steps__step--done .vms-steps__connector { background: var(--vms-accent); }
+.vms-steps__step--current .vms-steps__connector,
+.vms-steps__step--upcoming .vms-steps__connector { background: var(--vms-text-muted); }
+
+/* ── Stacked form — shared by the deliberate vertical wizard AND the intrinsic
+   narrow-container collapse: marker on the left, label + description beside it,
+   the connector becomes a vertical line down the marker's center. ── */
+.vms-steps--vertical .vms-steps__step {
+  flex: 1 1 100%;
+  flex-direction: row;
+  align-items: flex-start;
+  text-align: left;
+  gap: var(--vms-space-sm);
+  padding-bottom: var(--vms-space-md);
+}
+.vms-steps--vertical .vms-steps__body {
+  padding-top: calc((var(--_step-marker) - var(--vms-text-sm)) / 2);
+}
+.vms-steps--vertical .vms-steps__connector {
+  top: calc(var(--_step-marker) / 2);
+  left: calc(var(--_step-marker) / 2);
+  bottom: 0;
+  width: 2px;
+  height: auto;
+  transform: translateX(-1px);
+}
+
+@container (max-width: 30rem) {
+  .vms-steps:not(.vms-steps--vertical) .vms-steps__step {
+    flex: 1 1 100%;
+    flex-direction: row;
+    align-items: flex-start;
+    text-align: left;
+    gap: var(--vms-space-sm);
+    padding-bottom: var(--vms-space-md);
+  }
+  .vms-steps:not(.vms-steps--vertical) .vms-steps__body {
+    padding-top: calc((var(--_step-marker) - var(--vms-text-sm)) / 2);
+  }
+  .vms-steps:not(.vms-steps--vertical) .vms-steps__connector {
+    top: calc(var(--_step-marker) / 2);
+    left: calc(var(--_step-marker) / 2);
+    bottom: 0;
+    width: 2px;
+    height: auto;
+    transform: translateX(-1px);
+  }
+}
