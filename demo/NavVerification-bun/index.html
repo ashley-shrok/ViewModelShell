@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Agent discoverability — this is a ViewModel Shell app: agents can drive it via the JSON wire
+       (GET endpoint → {vm, state}; POST actionEndpoint multipart {_action, _state}). Docs: https://github.com/ashley-shrok/ViewModelShell -->
+  <meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/1.0","endpoint":"/api/nav","actionEndpoint":"/api/nav/action"}'>
+  <title>Nav Primitives — Tailnet Verification</title>
+
+  <!-- The REAL shipped CSS, served verbatim from viewmodel-shell/styles by
+       server.ts. default.css is the light baseline; #vms-theme overrides :root
+       and is swapped at runtime (light ↔ dark) by the tiny toggle below. This is
+       host-chrome for the verification harness (outside the VMS view tree) —
+       the only hand-written markup on the page; everything inside #app is drawn
+       by the shipped renderer. -->
+  <link rel="stylesheet" href="/vms/default.css" />
+  <link rel="stylesheet" id="vms-theme" href="/vms/themes/light-purple.css" />
+</head>
+<body>
+  <!-- Theme toggle (host-chrome, not part of the view tree). Swaps the real
+       shipped theme file so the reviewer can confirm marker/connector/text
+       contrast in BOTH light and dark. -->
+  <div style="display:flex;gap:.5rem;align-items:center;padding:.5rem .75rem;font:14px system-ui,sans-serif;border-bottom:1px solid #8884">
+    <strong style="margin-right:.5rem">Theme:</strong>
+    <button type="button" data-theme="light-purple">Light</button>
+    <button type="button" data-theme="dark-purple">Dark</button>
+    <span id="theme-name" style="opacity:.7">light-purple</span>
+  </div>
+
+  <div id="app"></div>
+
+  <script>
+    (function () {
+      var link = document.getElementById("vms-theme");
+      var name = document.getElementById("theme-name");
+      document.querySelectorAll("button[data-theme]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var t = b.getAttribute("data-theme");
+          link.setAttribute("href", "/vms/themes/" + t + ".css");
+          name.textContent = t;
+        });
+      });
+    })();
+  </script>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
