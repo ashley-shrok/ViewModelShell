@@ -679,6 +679,58 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // Navigation primitives (NAV-01/NAV-02) — BreadcrumbNode + StepsNode as static
+  // view-shape captured by every GET step; byte-identical to the .NET twin
+  // navSection. The breadcrumb exercises the full omitted-vs-present crumb matrix:
+  // an href-only crumb (external OMITTED => absent on the wire), an external:true
+  // crumb (present as the literal boolean), an action crumb whose UNIQUE name
+  // nav-crumb-probe proves the action-name uniqueness walk DESCENDS into
+  // breadcrumb items (never POSTed by any step — pure static wire-shape proof,
+  // same convention as the axes-noop-* / nba-* buttons), and a final label-only
+  // crumb (no href/action) that the framework auto-renders as the current page.
+  // The steps exercise both orientations: the first OMITS orientation (proves
+  // absent = default horizontal) and mixes a description-bearing step with two
+  // bare ones (description omitted => absent); the second sets
+  // orientation:"vertical" (proves the literal string crosses). Both carry a mid
+  // current:1 (0 is meaningful, so current always crosses). The CLIENT-SIDE
+  // appearance/a11y (separators, markers, connector lines, aria-current) is
+  // browser-only and NOT part of parity — parity proves only the wire shape.
+  const navSection: ViewNode = {
+    type: "section",
+    heading: "Navigation primitives",
+    variant: "card",
+    children: [
+      {
+        type: "breadcrumb",
+        items: [
+          { label: "Home", href: "/" },
+          { label: "Docs", href: "https://example.com/docs", external: true },
+          { label: "Reports", action: { name: "nav-crumb-probe" } },
+          { label: "Q3 Summary" },
+        ],
+      },
+      {
+        type: "steps",
+        steps: [
+          { label: "Cart", description: "Review items" },
+          { label: "Shipping" },
+          { label: "Payment" },
+        ],
+        current: 1,
+      },
+      {
+        type: "steps",
+        steps: [
+          { label: "Draft", description: "Compose the post" },
+          { label: "Review" },
+          { label: "Publish" },
+        ],
+        current: 1,
+        orientation: "vertical",
+      },
+    ],
+  };
+
   return {
     type: "page",
     title: "Feature Probe",
@@ -699,6 +751,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       fillSection,
       followTailSection,
       blockingSection,
+      navSection,
       probeModal,
     ],
   };

@@ -739,6 +739,47 @@ public class FeatureProbeController : ControllerBase
                 new ButtonNode("Non-blocking", new ActionDescriptor("nba-non-blocking", Blocking: false)),
             });
         pageChildren.Add(blockingSection);
+        // Navigation primitives (NAV-01/NAV-02) — BreadcrumbNode + StepsNode as
+        // static view-shape captured by every GET step; byte-identical to the bun
+        // twin navSection. The breadcrumb exercises the full omitted-vs-present
+        // crumb matrix: an Href-only crumb (External OMITTED => absent on the
+        // wire via WhenWritingDefault), an External:true crumb (present as the
+        // literal boolean), an action crumb whose UNIQUE name nav-crumb-probe
+        // proves the Collect action-name uniqueness walk DESCENDS into breadcrumb
+        // items (never POSTed by any step — pure static wire-shape proof, same
+        // convention as the axes-noop-* / nba-* buttons), and a final label-only
+        // crumb (no Href/Action) that the framework auto-renders as the current
+        // page. The steps exercise both orientations: the first OMITS Orientation
+        // (proves absent = default horizontal) and mixes a description-bearing
+        // step with two bare ones (Description omitted => absent); the second sets
+        // Orientation:"vertical" (proves the literal string crosses). Both carry a
+        // mid Current:1 (0 is meaningful, so Current always crosses). The
+        // CLIENT-SIDE appearance/a11y is browser-only and NOT part of parity.
+        pageChildren.Add(new SectionNode(
+            Heading: "Navigation primitives",
+            Variant: "card",
+            Children: new ViewNode[]
+            {
+                new BreadcrumbNode(new BreadcrumbItem[]
+                {
+                    new BreadcrumbItem("Home", Href: "/"),
+                    new BreadcrumbItem("Docs", Href: "https://example.com/docs", External: true),
+                    new BreadcrumbItem("Reports", Action: new ActionDescriptor("nav-crumb-probe")),
+                    new BreadcrumbItem("Q3 Summary"),
+                }),
+                new StepsNode(new StepItem[]
+                {
+                    new StepItem("Cart", Description: "Review items"),
+                    new StepItem("Shipping"),
+                    new StepItem("Payment"),
+                }, Current: 1),
+                new StepsNode(new StepItem[]
+                {
+                    new StepItem("Draft", Description: "Compose the post"),
+                    new StepItem("Review"),
+                    new StepItem("Publish"),
+                }, Current: 1, Orientation: "vertical"),
+            }));
         pageChildren.Add(new ModalNode(
             Title: "Probe modal",
             Children: new ViewNode[] { new TextNode("Modal body for parity coverage.", null) },
