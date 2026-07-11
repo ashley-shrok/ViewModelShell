@@ -208,7 +208,7 @@ Plans:
 **Plans:** 7 plans
 
 Plans:
-- [ ] 20-01-PLAN.md — TS wire types (BreadcrumbNode + StepsNode) + both TS tree-validators (wave 1)
+- [x] 20-01-PLAN.md — TS wire types (BreadcrumbNode + StepsNode) + both TS tree-validators (wave 1) ✅ 2026-07-11
 - [ ] 20-02-PLAN.md — .NET byte-identical twin records + discriminators + validators + serialization test (wave 1)
 - [ ] 20-03-PLAN.md — browser.ts renderers + default.css (tokens only, intrinsic collapse, a11y) + jsdom tests + white-on-accent aa-contrast hand-check (wave 2)
 - [ ] 20-04-PLAN.md — TUI legible degradation for both nodes (wave 2)
