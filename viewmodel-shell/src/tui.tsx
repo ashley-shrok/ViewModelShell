@@ -964,6 +964,30 @@ function renderNode(node: ViewNode, ctx: RCtx, key?: string | number): React.Rea
     case "modal":        return <ModalView        key={key} node={node} ctx={ctx} />;
     case "copy-button":  return <CopyButtonView   key={key} node={node} ctx={ctx} />;
     case "divider":      return <text key={key} fg="#555555">{node.orientation === "vertical" ? "│" : "─".repeat(40)}</text>;
+    case "breadcrumb":
+      // NAV-03 — @experimental TUI degrade. A terminal has no breadcrumb chrome,
+      // so we render the trail inline as labels joined by a separator glyph (the
+      // LAST item is the current page — rendered plainly, no interactivity). The
+      // framework-owned separator becomes a text " › ". Bar is "doesn't break +
+      // degrades sensibly" (see the `fits` case). No DOM.
+      return <text key={key} fg="#888888">{node.items.map((i) => i.label).join(" › ")}</text>;
+    case "steps": {
+      // NAV-03 — @experimental TUI degrade. No stepper chrome in a terminal, so
+      // each step renders on its own line with a state marker DERIVED from
+      // `current` (index < current = done ✓, === current = ▸, > current = ·),
+      // mirroring the browser renderer's derive-from-current rule. `description`
+      // is appended when present. No DOM.
+      return (
+        <box key={key} flexDirection="column">
+          {node.steps.map((step, i) => {
+            const marker = i < node.current ? "✓" : i === node.current ? "▸" : "·";
+            const fg = i === node.current ? "#88aaff" : i < node.current ? "#aaaaaa" : "#666666";
+            const line = step.description ? `${marker} ${step.label} — ${step.description}` : `${marker} ${step.label}`;
+            return <text key={i} fg={fg}>{line}</text>;
+          })}
+        </box>
+      );
+    }
     case "form":         return <FormView         key={key} node={node} ctx={ctx} />;
     case "field":        return <FieldView        key={key} node={node} ctx={ctx} />;
     case "fits": {
