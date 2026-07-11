@@ -6,6 +6,19 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 5.1.0 / 5.1.0 — Navigation primitives: `BreadcrumbNode` + `StepsNode` (npm + NuGet)
+
+**npm:** `5.1.0` (minor, from `5.0.1`) · **NuGet:** `5.1.0` (minor, from `5.0.0`). **Additive** — the wire protocol token stays `viewmodel-shell/1.0`; existing apps and wire-driving agents are byte-unchanged. Both packages gain two new optional `ViewNode` types.
+
+### Added
+
+- **`BreadcrumbNode`** — a hierarchical "you are here" navigation trail. Wire shape: `{ type: "breadcrumb", items: [{ label, href?, external?, action? }] }`. The framework renders a `<nav aria-label="breadcrumb">` landmark + `<ol>`, marks the **last item as the current page** (auto non-clickable, `aria-current="page"` — position is the signal, no per-item flag), and draws a **fixed separator** (never on the wire). Crumbs navigate by `href` (`external: true` ⇒ new tab) or dispatch an `action`, matching `LinkNode`'s model.
+- **`StepsNode`** — a multi-step / wizard progress indicator. Wire shape: `{ type: "steps", steps: [{ label, description? }], current, orientation? }`. Per-step **done / current / upcoming state is derived from the 0-based `current` index** (no per-step status field). `orientation` is a closed-enum intent: the default responsive **horizontal** strip auto-collapses to a vertical stack **intrinsically** by container width (zero viewport breakpoints), and an explicit `"vertical"` renders a deliberate wizard layout where per-step descriptions sit beside each step. The framework draws all markers, connectors (marker-center to marker-center, behind the markers), and the full accessibility layer (`aria-current="step"`, an accessible group name, marker state via `aria-label` — never color alone; non-interactive, so not focusable; not `role="progressbar"`).
+
+Both nodes are pure structured data — the framework owns 100% of appearance and accessibility, nothing decorative crosses the wire. Both backends emit them byte-identically (parity-gated), both tree-validators descend into them (a breadcrumb crumb's `action` participates in action-name uniqueness), the TUI degrades them legibly, and the step marker glyph uses a surface-knockout that clears WCAG contrast across the default + all 12 themes. `agent-skill.md` is unchanged (new node types, not new wire verbs/side-effects).
+
+---
+
 ## 5.0.1 — Fixed: `FormNode.submitButton` now honors `pendingLabel` / `disabled` / `confirm` (npm)
 
 **npm:** `5.0.1` (patch, from `5.0.0`) · **NuGet:** unchanged at `5.0.0`. Client-renderer-only fix — the .NET package has no renderer, so it does not move. The wire protocol token stays `viewmodel-shell/1.0`; there is **no wire or type change** (the types already promised this behavior).

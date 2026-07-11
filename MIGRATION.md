@@ -6,6 +6,17 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to `5.1.0` / `5.1.0` (npm + NuGet) — additive, no action required
+
+Two new optional `ViewNode` types — **`BreadcrumbNode`** and **`StepsNode`** — plus their renderers and styling. This release is **purely additive**: the wire protocol token stays `viewmodel-shell/1.0`, no existing type changed shape, and existing apps and wire-driving agents are byte-unchanged. Bump the packages and the new nodes are available; there is nothing else to do.
+
+- npm: `npm install @ashley-shrok/viewmodel-shell@5.1.0`
+- NuGet: `dotnet add package AshleyShrok.ViewModelShell --version 5.1.0`
+
+To use them, emit a `{ type: "breadcrumb", items: [...] }` or `{ type: "steps", steps: [...], current: N }` node from your server (full shapes in CHANGELOG `5.1.0`). The framework draws all appearance + accessibility — you send only structured data.
+
+---
+
 ## Upgrading to `5.0.0` / `5.0.0` (npm + NuGet) — one breaking change, only if you rendered a chart
 
 **If you never used `ChartNode` (the 4.1 chart primitive), there is nothing to do — this release is effectively additive for you.** The major bump is honest semver for a reshaped published type, but the reshape's only break surface is the 4.1 single-series chart, and no released consumer had adopted it.

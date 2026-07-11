@@ -191,7 +191,7 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
 Plans:
 - [x] Release closeout done manually 2026-07-09 — combined tailnet verification (Ashley sign-off) + legend contrast fix; CHANGELOG/MIGRATION; npm+NuGet 5.0.0 published; tag v5.0.0; main advanced; CI green; announced #vms-changelog.
 
-## 🚧 v5.1 Navigation Primitives (Phase 20) — PLANNED
+## ✅ v5.1 Navigation Primitives (Phase 20) — SHIPPED 2026-07-11 (npm + NuGet `5.1.0`, tag `v5.1.0`)
 
 **Milestone Goal:** Add the two orientation/navigation primitives VMS lacks — **BreadcrumbNode** (a "you are here" trail: ordered `items:[{label, href?}]`, last item = current page / non-clickable) and **StepsNode** (a stepper: `steps:[{label, description?}]` + a 0-based `current` index, per-step done/current/upcoming DERIVED from `current`; orientation = a closed-enum INTENT — default responsive-horizontal that auto-stacks to vertical intrinsically, plus an explicit `vertical` deliberate-wizard mode [A+C, Ashley 2026-07-11]) — plus the pointer-cursor-on-clickable-table-rows CSS finish. Both nodes were **surveyed against the mature frameworks** (MUI/Ant/Chakra/Bootstrap + WAI-ARIA APG) and confirmed standard + pure structured data: the framework owns separators/connectors/intrinsic reflow/all a11y, **zero appearance on the wire**. Additive → wire token stays `viewmodel-shell/1.0`. Aligned **npm + NuGet `5.1.0`** minor, batched into ONE verification page + ONE publish. Design of record: [design/nav-primitives.md](./design/nav-primitives.md).
 
@@ -213,5 +213,5 @@ Plans:
 - [x] 20-03-PLAN.md — browser.ts renderers + default.css (tokens only, intrinsic collapse, a11y) + jsdom tests + white-on-accent aa-contrast hand-check (wave 2) ✅ 2026-07-11
 - [x] 20-04-PLAN.md — TUI legible degradation for both nodes (wave 2) ✅ 2026-07-11
 - [x] 20-05-PLAN.md — FeatureProbe parity fixtures (both backends) + fixture doc + Showcase gallery entries; parity green (wave 2) ✅ 2026-07-11
-- [ ] 20-06-PLAN.md — Full green-tree gate + combined tailnet verification page + Ashley pre-publish sign-off (wave 3) — gate GREEN + `demo/NavVerification-bun/` page built (Tasks 1–2 ✅ 2026-07-11); awaiting operator sign-off (Task 3)
-- [ ] 20-07-PLAN.md — CHANGELOG/MIGRATION + agent-skill no-change + version bump 5.1.0 + operator publish/tag/advance-main/announce (wave 4)
+- [x] 20-06-PLAN.md — Full green-tree gate + combined tailnet verification page + Ashley pre-publish sign-off (wave 3) — gate GREEN, `demo/NavVerification-bun/` page served over the tailnet, Ashley signed off ✅ 2026-07-11
+- [x] 20-07-PLAN.md — CHANGELOG/MIGRATION + agent-skill no-change + version bump 5.1.0 + publish/tag/advance-main/announce (wave 4) ✅ 2026-07-11
