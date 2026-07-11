@@ -395,6 +395,8 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(EmptyStateNode), "empty-state")]
 [JsonDerivedType(typeof(BadgeNode),      "badge")]
 [JsonDerivedType(typeof(ChartNode),      "chart")]
+[JsonDerivedType(typeof(BreadcrumbNode), "breadcrumb")]
+[JsonDerivedType(typeof(StepsNode),      "steps")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -825,6 +827,26 @@ public record ChartNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Title = null
 ) : ViewNode;
 
+// Steps / stepper (NAV-02) — .NET byte-identical twin of the TS StepItem/
+// StepsNode. StepItem carries only display data; per-step status (done/current/
+// upcoming) is NEVER on the item — it DERIVES from the node's Current index.
+// Current is a plain required int with NO ignore condition (0 is a meaningful
+// value — the first step is current — so it ALWAYS crosses the wire; precedent
+// ProgressNode.Value). Orientation is a string? closed-enum INTENT (NOT a C#
+// enum — the closed set is enforced TS-side + validated by parity, per the
+// ChartNode.Kind rule); WhenWritingNull → omitted = horizontal. StepsNode is a
+// childless/action-free LEAF — both validators fall through it with no recursion.
+public record StepItem(
+    string Label,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Description = null
+);
+
+public record StepsNode(
+    IReadOnlyList<StepItem> Steps,
+    int Current,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Orientation = null
+) : ViewNode;
+
 public record TabItem(string Value, string Label, ActionDescriptor Action);
 public record TabsNode(
     string Selected,
@@ -929,6 +951,24 @@ public record LinkNode(
     /// matches the TS `active?: boolean` posture (absent = not active).</summary>
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Active = null
 ) : ViewNode;
+
+// Breadcrumb (NAV-01) — .NET byte-identical twin of the TS BreadcrumbItem/
+// BreadcrumbNode. One crumb mirrors LinkNode's nav model: Href = browser
+// navigation (External ⇒ new tab + noopener, exactly like LinkNode.External,
+// so it carries WhenWritingDefault to drop false → absent); Action = a server
+// dispatch instead of a URL (the VMS navigate-by-state path, nullable +
+// WhenWritingNull → absent when unset). There is NO per-item current flag —
+// position is the signal (the LAST item is auto-rendered as the current page).
+// A crumb that carries Action is a dispatch-bearing descendant, so the Collect
+// action-name walk descends into it (see the BreadcrumbNode arm in Collect).
+public record BreadcrumbItem(
+    string Label,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Href = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool External = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null
+);
+
+public record BreadcrumbNode(IReadOnlyList<BreadcrumbItem> Items) : ViewNode;
 
 // Image / media (issue #5). Src is required; Alt/Size/Shape are nullable wire
 // optionals (the maintainer null-omission rule applies — absent, never null).
@@ -1170,10 +1210,13 @@ public static class ViewTreeValidation
 
             // Leaf-like nodes (FieldNode, CheckboxNode, ButtonNode, TextNode,
             // LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
-            // TableNode, CopyButtonNode, BadgeNode, ChartNode) carry no SectionNode
-            // descendants. No recursion needed — TableNode rows hold strings +
-            // per-row controls, not sections, so a section can never sit inside a
-            // table row; ChartNode (CHART-05) is a childless/action-free data leaf.
+            // TableNode, CopyButtonNode, BadgeNode, ChartNode, BreadcrumbNode,
+            // StepsNode) carry no SectionNode descendants. No recursion needed —
+            // TableNode rows hold strings + per-row controls, not sections, so a
+            // section can never sit inside a table row; ChartNode (CHART-05) is a
+            // childless/action-free data leaf; BreadcrumbNode/StepsNode (NAV-01/
+            // NAV-02) hold only crumb/step sub-records (no ViewNode children), so
+            // neither node gained a WalkForSectionAction arm.
         }
     }
 
@@ -1280,11 +1323,23 @@ public static class ViewTreeValidation
                 if (emptyState.Action is { } esAction) Collect(esAction, enclosingForm, sink);
                 break;
 
+            case BreadcrumbNode bc:
+                // A crumb's optional Action is a dispatch-bearing descendant
+                // (navigate-by-state), so the uniqueness collector MUST descend
+                // into it — otherwise crumb dispatch names are silently exempt
+                // from the one-name-one-operation rule (the missed-walk failure
+                // class). Href-only crumbs record nothing. Mirrors the TabsNode arm.
+                foreach (var item in bc.Items)
+                    if (item.Action is { } a) Record(a, enclosingForm, sink);
+                break;
+
             // No dispatch-bearing actions of their own:
             //   TextNode, LinkNode, ImageNode, StatBarNode, ProgressNode,
-            //   CopyButtonNode, BadgeNode, ChartNode.
-            // ChartNode (CHART-05) is a DELIBERATE childless/action-free data
-            // leaf — it falls through here with no recursion (no fits-style blind spot).
+            //   CopyButtonNode, BadgeNode, ChartNode, StepsNode.
+            // ChartNode (CHART-05) and StepsNode (NAV-02) are DELIBERATE
+            // childless/action-free data/nav leaves — they fall through here with
+            // no recursion (no fits-style blind spot). BreadcrumbNode is handled
+            // above (its crumbs carry dispatch actions).
         }
     }
 
