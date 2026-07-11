@@ -23,6 +23,7 @@ import type {
   ListItemNode,
   FitsNode,
   EmptyStateNode,
+  BreadcrumbNode,
 } from "./index.js";
 
 // Re-export the ViewNode hierarchy and wire types so a backend can import
@@ -246,11 +247,26 @@ function collectActions(
       if (es.action) collectActions(es.action, enclosingForm, out);
       return;
     }
+    case "breadcrumb": {
+      // A breadcrumb crumb can navigate by DISPATCHING AN ACTION instead of an
+      // href (the VMS navigate-by-state model). Each such action is a
+      // dispatch-bearing descendant, so the uniqueness collector MUST descend
+      // into it — modeled on the `tabs` arm, with the optional guard the
+      // empty-state arm uses (not every crumb carries an action; the last/current
+      // crumb and href-only crumbs carry none). Skipping this would silently
+      // exempt crumb actions from the one-name-one-operation rule.
+      const bc = node as BreadcrumbNode;
+      for (const item of bc.items) {
+        if (item.action) recordAction(item.action, enclosingForm, out);
+      }
+      return;
+    }
     // Nodes with no dispatch-bearing actions of their own:
-    //   text, link, image, stat-bar, progress, copy-button, badge, chart
-    // ChartNode (CHART-05) is a DELIBERATE childless/action-free leaf — it
-    // carries only data points, so it falls through here with no recursion (no
-    // fits-style blind spot).
+    //   text, link, image, stat-bar, progress, copy-button, badge, chart, steps
+    //   (breadcrumb crumb actions ARE recorded above via the "breadcrumb" arm)
+    // ChartNode (CHART-05) and StepsNode (NAV-02) are DELIBERATE
+    // childless/action-free leaves — they carry only data, so they fall through
+    // here with no recursion (no fits-style blind spot).
     default:
       return;
   }
@@ -429,9 +445,12 @@ function walkForSectionAction(
       return;
     }
     // Leaf-like nodes (field, checkbox, button, text, link, image, stat-bar,
-    // tabs, progress, table, copy-button, badge, chart) carry no SectionNode
-    // descendants — TableNode rows hold strings + per-row controls, not sections;
-    // ChartNode (CHART-05) is a childless/action-free data leaf.
+    // tabs, progress, table, copy-button, badge, chart, breadcrumb, steps) carry
+    // no SectionNode descendants — TableNode rows hold strings + per-row controls,
+    // not sections; ChartNode (CHART-05) is a childless/action-free data leaf;
+    // BreadcrumbNode/StepsNode (NAV-01..03) hold plain { label, ... } records,
+    // not ViewNode children, so no recursion is needed here (deliberate, not a
+    // missed walk).
     default:
       return;
   }

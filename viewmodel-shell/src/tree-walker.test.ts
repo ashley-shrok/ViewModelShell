@@ -240,4 +240,67 @@ describe("validateActionNames", () => {
     const tree = page(fits, button("delete"));
     expect(() => validateActionNames(tree)).toThrow(/Duplicate action name 'delete'/);
   });
+
+  // ─── BreadcrumbNode / StepsNode (NAV-01..03) ──────────────────────────────
+  // A crumb can navigate by DISPATCHING AN ACTION (not just an href). Those
+  // action names must be uniqueness-checked or we reintroduce the
+  // "silently-exempt dispatch-bearing descendant" bug the empty-state/fits arms
+  // exist to prevent. StepsNode carries NO actions → action-free leaf.
+
+  it("collects: a breadcrumb crumb action collides with a top-level button", () => {
+    const crumbs: ViewNode = {
+      type: "breadcrumb",
+      items: [
+        { label: "Home", action: { name: "go-home" } },
+        { label: "Products", href: "/products" },
+        { label: "Widget" /* current — no href/action */ },
+      ],
+    };
+    // Proves the walk DESCENDS into crumb actions: `go-home` is recorded, so a
+    // top-level button with the same name is caught as a duplicate.
+    const tree = page(crumbs, button("go-home"));
+    expect(() => validateActionNames(tree)).toThrow(/Duplicate action name 'go-home'/);
+  });
+
+  it("throws: two breadcrumb crumbs share an action name", () => {
+    const crumbs: ViewNode = {
+      type: "breadcrumb",
+      items: [
+        { label: "Home", action: { name: "nav-crumb" } },
+        { label: "Section", action: { name: "nav-crumb" } },
+        { label: "Page" },
+      ],
+    };
+    const tree = page(crumbs);
+    expect(() => validateActionNames(tree)).toThrow(/Duplicate action name 'nav-crumb'/);
+  });
+
+  it("passes: href-only breadcrumb crumbs record no actions", () => {
+    const crumbs: ViewNode = {
+      type: "breadcrumb",
+      items: [
+        { label: "Home", href: "/" },
+        { label: "Docs", href: "/docs", external: true },
+        { label: "Guide" },
+      ],
+    };
+    const tree = page(crumbs);
+    expect(() => validateActionNames(tree)).not.toThrow();
+  });
+
+  it("passes: StepsNode carries no actions (action-free leaf, does not throw)", () => {
+    const steps: ViewNode = {
+      type: "steps",
+      current: 1,
+      steps: [
+        { label: "Cart" },
+        { label: "Shipping", description: "Address + method" },
+        { label: "Payment" },
+      ],
+    };
+    // Two identical step labels + a same-named button must NOT collide — steps
+    // record nothing into the action sink.
+    const tree = page(steps, button("Cart"));
+    expect(() => validateActionNames(tree)).not.toThrow();
+  });
 });
