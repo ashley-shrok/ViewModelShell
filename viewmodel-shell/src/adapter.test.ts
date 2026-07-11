@@ -493,3 +493,69 @@ describe("Phase 6 — context never appears in dispatched actions", () => {
     }
   });
 });
+
+// ── v5.1 Navigation primitives ────────────────────────────────────────────
+
+describe("v5.1 — BreadcrumbNode renders a nav landmark with an auto-current last item", () => {
+  it("renders <nav aria-label> > <ol.vms-breadcrumb>, last crumb non-clickable + aria-current=page, href/action crumbs distinct, action dispatches", () => {
+    const { container, render, dispatched } = setup({});
+    render({
+      type: "breadcrumb",
+      items: [
+        { label: "Home", href: "/" },
+        { label: "Products", action: { name: "go-products" } },
+        { label: "Widget" },
+      ],
+    });
+    const nav = container.querySelector("nav");
+    expect(nav).not.toBeNull();
+    expect(nav!.getAttribute("aria-label")).toBe("breadcrumb");
+    const ol = nav!.querySelector("ol.vms-breadcrumb");
+    expect(ol).not.toBeNull();
+    const items = Array.from(ol!.querySelectorAll("li.vms-breadcrumb__item"));
+    expect(items).toHaveLength(3);
+
+    // Crumb 1: an href link.
+    const link = items[0]!.querySelector("a.vms-breadcrumb__link") as HTMLAnchorElement;
+    expect(link).not.toBeNull();
+    expect(link.getAttribute("href")).toBe("/");
+    expect(link.textContent).toBe("Home");
+
+    // Crumb 2: an action button (NOT an anchor) that dispatches by name.
+    expect(items[1]!.querySelector("a")).toBeNull();
+    const actionBtn = items[1]!.querySelector("button.vms-breadcrumb__link") as HTMLButtonElement;
+    expect(actionBtn).not.toBeNull();
+    actionBtn.click();
+    expect(dispatched).toEqual([{ name: "go-products" }]);
+
+    // Crumb 3 (last): current page — plain text, aria-current on the <li>, no link/button.
+    expect(items[2]!.getAttribute("aria-current")).toBe("page");
+    expect(items[2]!.querySelector("a")).toBeNull();
+    expect(items[2]!.querySelector("button")).toBeNull();
+    const current = items[2]!.querySelector("span.vms-breadcrumb__current");
+    expect(current).not.toBeNull();
+    expect(current!.textContent).toBe("Widget");
+  });
+});
+
+describe("v5.1 — StepsNode derives per-step state from current + marks the current step", () => {
+  it("renders done/current/upcoming classes in order with exactly one aria-current=step", () => {
+    const { container, render } = setup({});
+    render({
+      type: "steps",
+      steps: [{ label: "Cart" }, { label: "Shipping" }, { label: "Payment" }],
+      current: 1,
+    });
+    const ol = container.querySelector("ol.vms-steps");
+    expect(ol).not.toBeNull();
+    const steps = Array.from(ol!.querySelectorAll("li.vms-steps__step"));
+    expect(steps).toHaveLength(3);
+    expect(steps[0]!.classList.contains("vms-steps__step--done")).toBe(true);
+    expect(steps[1]!.classList.contains("vms-steps__step--current")).toBe(true);
+    expect(steps[2]!.classList.contains("vms-steps__step--upcoming")).toBe(true);
+
+    const currents = ol!.querySelectorAll('[aria-current="step"]');
+    expect(currents).toHaveLength(1);
+    expect((currents[0] as HTMLElement).classList.contains("vms-steps__step--current")).toBe(true);
+  });
+});
