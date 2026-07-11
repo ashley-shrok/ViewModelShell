@@ -190,3 +190,28 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
 
 Plans:
 - [x] Release closeout done manually 2026-07-09 — combined tailnet verification (Ashley sign-off) + legend contrast fix; CHANGELOG/MIGRATION; npm+NuGet 5.0.0 published; tag v5.0.0; main advanced; CI green; announced #vms-changelog.
+
+## 🚧 v5.1 Navigation Primitives (Phase 20) — PLANNED
+
+**Milestone Goal:** Add the two orientation/navigation primitives VMS lacks — **BreadcrumbNode** (a "you are here" trail: ordered `items:[{label, href?}]`, last item = current page / non-clickable) and **StepsNode** (a stepper: `steps:[{label, description?}]` + a 0-based `current` index, per-step done/current/upcoming DERIVED from `current`; orientation = a closed-enum INTENT — default responsive-horizontal that auto-stacks to vertical intrinsically, plus an explicit `vertical` deliberate-wizard mode [A+C, Ashley 2026-07-11]) — plus the pointer-cursor-on-clickable-table-rows CSS finish. Both nodes were **surveyed against the mature frameworks** (MUI/Ant/Chakra/Bootstrap + WAI-ARIA APG) and confirmed standard + pure structured data: the framework owns separators/connectors/intrinsic reflow/all a11y, **zero appearance on the wire**. Additive → wire token stays `viewmodel-shell/1.0`. Aligned **npm + NuGet `5.1.0`** minor, batched into ONE verification page + ONE publish. Design of record: [design/nav-primitives.md](./design/nav-primitives.md).
+
+### Phase 20: v5.1 Navigation Primitives — BreadcrumbNode + StepsNode + pointer-cursor fix
+
+**Goal:** BreadcrumbNode + StepsNode ship across both backends as pure-structured-data nodes (framework draws all appearance + a11y), StepsNode supporting A+C orientation (responsive-horizontal default that auto-collapses vertical + a deliberate-vertical wizard intent), plus clickable table rows showing `cursor:pointer`; both tree-validators descend into the new nodes and parity is green with new FeatureProbe fixtures for each; then an aligned npm+NuGet `5.1.0` release gated on a tailnet verification page Ashley signs off.
+**Requirements**: NAV-01, NAV-02, NAV-03, NAV-04
+**Depends on:** Phase 19 (v5.0 baseline — parity green; current release npm `5.0.1` / NuGet `5.0.0`). Design of record: [design/nav-primitives.md](./design/nav-primitives.md).
+**Success Criteria** (what must be TRUE):
+  1. A BreadcrumbNode (`items:[{label, href? / action?}]`) renders a nav trail with the last item as the current page (`aria-current="page"`), a framework-drawn fixed separator inside a `<nav>` landmark + `<ol>`; byte-identical across TS/.NET, both tree-validators descend, parity green with a new FeatureProbe fixture.
+  2. A StepsNode (`steps:[{label, description?}]` + `current`) renders done/current/upcoming purely from the current index in BOTH orientations — responsive-horizontal (auto-collapses to vertical intrinsically, no breakpoint) and the deliberate-vertical wizard — with correct a11y (`aria-current="step"`, non-interactive not focusable, NOT `role=progressbar`); byte-identical across backends; parity green with a new fixture.
+  3. Clickable table rows (`TableRow.action`) show `cursor:pointer` on hover; CSS-only, no wire/type change.
+  4. Aligned npm + NuGet `5.1.0` published (batched), tagged `v5.1.0`, `main` advanced to the release commit (`git merge-base --is-ancestor v5.1.0 main`), CI green, a release line posted to `#vms-changelog` — after a tailnet verification page (both nodes, both step orientations, a clickable-row cursor check, light + dark) Ashley confirms.
+**Plans:** 7 plans
+
+Plans:
+- [ ] 20-01-PLAN.md — TS wire types (BreadcrumbNode + StepsNode) + both TS tree-validators (wave 1)
+- [ ] 20-02-PLAN.md — .NET byte-identical twin records + discriminators + validators + serialization test (wave 1)
+- [ ] 20-03-PLAN.md — browser.ts renderers + default.css (tokens only, intrinsic collapse, a11y) + jsdom tests + white-on-accent aa-contrast hand-check (wave 2)
+- [ ] 20-04-PLAN.md — TUI legible degradation for both nodes (wave 2)
+- [ ] 20-05-PLAN.md — FeatureProbe parity fixtures (both backends) + fixture doc + Showcase gallery entries; parity green (wave 2)
+- [ ] 20-06-PLAN.md — Full green-tree gate + combined tailnet verification page + Ashley pre-publish sign-off (wave 3)
+- [ ] 20-07-PLAN.md — CHANGELOG/MIGRATION + agent-skill no-change + version bump 5.1.0 + operator publish/tag/advance-main/announce (wave 4)

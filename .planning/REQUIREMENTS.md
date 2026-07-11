@@ -79,3 +79,27 @@ This milestone adds VMS's first data-visualization primitive: a **structured `Ch
 
 *Milestone: v4.1 Data Visualization*
 *Requirements defined: 2026-07-04*
+
+---
+
+## Milestone v5.1 — Navigation Primitives (Phase 20)
+
+**Defined:** 2026-07-11
+**Design of record:** `.planning/design/nav-primitives.md` (survey-confirmed standard + Ashley tailnet-sketch sign-off). Additive, wire token stays `viewmodel-shell/1.0`. Aligned npm + NuGet `5.1.0`.
+
+- [ ] **NAV-01**: A **BreadcrumbNode** (`items:[{label, href?, external?, action?}]`) renders a nav trail across both backends — framework draws a `<nav aria-label>` landmark + `<ol>`, the LAST item is the current page (auto non-clickable, `aria-current="page"`), and a FIXED separator (off the wire). Crumbs support both `href` navigation (external ⇒ new tab) and `action` dispatch, per LinkNode's precedent.
+- [ ] **NAV-02**: A **StepsNode** (`steps:[{label, description?}]` + a 0-based `current` index, `orientation?:"horizontal"|"vertical"`) renders per-step done/current/upcoming DERIVED from `current` (no per-step status field) in both orientations — default responsive-horizontal that auto-collapses to vertical INTRINSICALLY (zero viewport breakpoints) and a deliberate `vertical` wizard — with correct a11y (`aria-current="step"`, accessible group name, marker state via `aria-label` not color alone, non-interactive stepper not focusable, NOT `role=progressbar`).
+- [ ] **NAV-03**: Both nodes land BYTE-IDENTICALLY in TS (`src/index.ts` + `browser.ts`) and .NET (`ViewModels.cs` record + `[JsonDerivedType]`; optional-field attributes exact; `current` a required plain `int`); BOTH tree-validators descend into them (breadcrumb action-name uniqueness where crumbs carry `action`); a new FeatureProbe parity fixture per node keeps `bun run parity/run.ts` green; the TUI adapter degrades legibly for both.
+- [ ] **NAV-04**: Gated **5.1.0** release — `agent-skill.md` verified no-change (byte-identical .NET twin), a Showcase demo (both orientations), a combined tailnet verification page (both nodes, both step orientations, light + dark) for Ashley's pre-publish sign-off (visual change = in-question gate); then CHANGELOG + MIGRATION, aligned npm + NuGet `5.1.0` (npm 5.0.1→5.1.0, .NET 5.0.0→5.1.0), tag `v5.1.0`, `main` advanced (`git merge-base --is-ancestor v5.1.0 main`), CI green, `#vms-changelog` announced.
+
+| Requirement | Phase |
+|---|---|
+| NAV-01 | 20 |
+| NAV-02 | 20 |
+| NAV-03 | 20 |
+| NAV-04 | 20 |
+
+---
+
+*Milestone: v5.1 Navigation Primitives*
+*Requirements defined: 2026-07-11*
