@@ -151,7 +151,9 @@ export type ViewNode =
   | FitsNode
   | EmptyStateNode
   | BadgeNode
-  | ChartNode;
+  | ChartNode
+  | BreadcrumbNode
+  | StepsNode;
 
 export interface PageNode {
   type: "page";
@@ -475,6 +477,41 @@ export interface LinkNode {
   active?: boolean;
 }
 
+/** One crumb in a BreadcrumbNode trail. Mirrors LinkNode's nav model:
+ *  `href` = browser navigation (`external` ⇒ new tab + noopener, exactly like
+ *  LinkNode); `action` = a server dispatch instead of a URL (the VMS-native
+ *  navigate-by-state path). There is NO per-item "current" flag — position is
+ *  the signal: the LAST item in `items` is auto-rendered as the current page
+ *  (non-clickable, `aria-current="page"`), so it needs neither `href` nor
+ *  `action`. A crumb that carries `action` is a dispatch-bearing descendant, so
+ *  the action-name uniqueness walk descends into it (see collectActions). */
+export interface BreadcrumbItem {
+  /** Visible crumb text (required). */
+  label: string;
+  /** Browser navigation target. Omit on the last (current) crumb. */
+  href?: string;
+  /** true = open outside the current app context (browser: new tab + noopener),
+   *  exactly like LinkNode.external. Only meaningful alongside `href`. */
+  external?: boolean;
+  /** Server dispatch instead of a URL — the VMS navigate-by-state alternative to
+   *  `href`. Its name is uniqueness-checked by the tree validator. */
+  action?: ActionEvent;
+}
+
+/** A breadcrumb trail — an ordered list of labelled positions from the site/app
+ *  root to the current page. The framework owns ALL appearance and a11y (never
+ *  on the wire): it draws the `<nav aria-label="breadcrumb">` landmark, the
+ *  `<ol>`, `aria-current="page"` on the last item, and a FIXED separator between
+ *  items (the one appearance knob other frameworks expose stays framework-drawn
+ *  here — cf. DividerNode's framework-drawn separator). The wire carries only the
+ *  ordered labels + their nav targets. */
+export interface BreadcrumbNode {
+  type: "breadcrumb";
+  /** Ordered root→current list. The LAST entry is the current page (auto
+   *  non-clickable); earlier entries navigate via `href` or `action`. */
+  items: BreadcrumbItem[];
+}
+
 export interface ImageNode {
   type: "image";
   /** Image source URL (required). */
@@ -760,6 +797,41 @@ export interface ChartNode {
   stacked?: boolean;
   /** Optional chart title rendered above the plot. */
   title?: string;
+}
+
+/** One stage in a StepsNode progression. Carries only display data — status
+ *  (done/current/upcoming) is NEVER on the item; it DERIVES from the node's
+ *  `current` index. */
+export interface StepItem {
+  /** Stage name (required). */
+  label: string;
+  /** Optional one-line supporting text shown beside/under the label. */
+  description?: string;
+}
+
+/** A discrete step / stepper / wizard progress indicator — an ordered list of
+ *  stages with a single 0-based `current` index. Per-step status DERIVES from
+ *  `current` (index < current = done, index === current = current, index >
+ *  current = upcoming); there is NO per-step status field. The framework owns
+ *  ALL appearance and a11y (never on the wire): numbered markers (check glyph
+ *  for done), connector lines drawn marker-center to marker-center, the
+ *  intrinsic horizontal→vertical reflow, and the discrete `aria-current="step"`
+ *  a11y pattern (it is NOT `role="progressbar"`). The wire carries only the
+ *  ordered labels + which one is current. */
+export interface StepsNode {
+  type: "steps";
+  /** Ordered stages. */
+  steps: StepItem[];
+  /** 0-based index of the active step. Required — `0` is a meaningful value
+   *  (the first step is current), so it always crosses the wire. */
+  current: number;
+  /** Layout INTENT (a closed enum, not a raw directive — the framework owns the
+   *  actual layout + reflow). OMITTED = `"horizontal"`: the renderer treats an
+   *  absent `orientation` as horizontal — a responsive strip that auto-stacks to
+   *  vertical INTRINSICALLY when the container is narrow (zero viewport
+   *  breakpoints). `"vertical"` = a deliberate vertical wizard (markers down the
+   *  left, connector running down, descriptions beside each step). */
+  orientation?: "horizontal" | "vertical";
 }
 
 // ─── Shell ────────────────────────────────────────────────────────────────────
