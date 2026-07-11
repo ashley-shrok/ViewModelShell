@@ -213,5 +213,5 @@ Plans:
 - [x] 20-03-PLAN.md — browser.ts renderers + default.css (tokens only, intrinsic collapse, a11y) + jsdom tests + white-on-accent aa-contrast hand-check (wave 2) ✅ 2026-07-11
 - [x] 20-04-PLAN.md — TUI legible degradation for both nodes (wave 2) ✅ 2026-07-11
 - [x] 20-05-PLAN.md — FeatureProbe parity fixtures (both backends) + fixture doc + Showcase gallery entries; parity green (wave 2) ✅ 2026-07-11
-- [ ] 20-06-PLAN.md — Full green-tree gate + combined tailnet verification page + Ashley pre-publish sign-off (wave 3)
+- [ ] 20-06-PLAN.md — Full green-tree gate + combined tailnet verification page + Ashley pre-publish sign-off (wave 3) — gate GREEN + `demo/NavVerification-bun/` page built (Tasks 1–2 ✅ 2026-07-11); awaiting operator sign-off (Task 3)
 - [ ] 20-07-PLAN.md — CHANGELOG/MIGRATION + agent-skill no-change + version bump 5.1.0 + operator publish/tag/advance-main/announce (wave 4)
