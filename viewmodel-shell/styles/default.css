@@ -938,11 +938,16 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   outline-offset: -2px;
 }
 /* Row STATE (lifecycle) — done/disabled/running framework-styled; apps can add
-   more .vms-table__row--{state} rules. */
+   more .vms-table__row--{state} rules. `state` is an APPEARANCE axis ONLY — it
+   dims/tints the row and NEVER affects clickability or cursor. Clickability is
+   governed solely by `row.action` (→ .vms-table__row--clickable → pointer +
+   hover + role=button). So a `state:"disabled"` row that ALSO has `row.action`
+   is dimmed AND still clickable, and correctly shows the pointer cursor — the
+   dim is a visual cue (e.g. an already-paid invoice line you can still open to
+   view details), not a behavioral disable. To make a row literally NOT
+   clickable, omit `row.action` (optionally still dim it with `state`). */
 .vms-table__row--done     { opacity: 0.6; }
 .vms-table__row--disabled { opacity: 0.55; color: var(--vms-text-muted); }
-.vms-table__row--disabled.vms-table__row--clickable { cursor: default; }
-.vms-table__row--disabled.vms-table__row--clickable:hover { background: transparent; }
 .vms-table__row--running  { background: color-mix(in srgb, var(--vms-accent) 8%, transparent); }
 /* Row TONE (severity) — the universal status axis (was the old critical/danger;
    critical → danger). Tints derive from theme vars (color-mix), so a custom

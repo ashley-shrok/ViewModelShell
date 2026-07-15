@@ -6,6 +6,18 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 5.1.1 — Fixed: dimmed (`state:"disabled"`) table rows that are still clickable now show the pointer cursor (npm)
+
+**npm:** `5.1.1` (patch, from `5.1.0`) · **NuGet:** unchanged at `5.1.0`. Client-CSS-only fix — no renderer logic, no wire or type change; the .NET package has no CSS, so it does not move. The wire protocol token stays `viewmodel-shell/1.0`.
+
+### Fixed
+
+- **`TableRow` cursor now follows actual clickability.** `default.css` carried an override — `.vms-table__row--disabled.vms-table__row--clickable { cursor: default }` (+ hover neutralized) — that baked in a false *"disabled ⇒ not clickable"* assumption. But `state` is an **appearance axis only**: a `state:"disabled"` row that also sets `row.action` is dimmed **and still clickable** (e.g. an already-paid invoice line shown muted but still openable for details), so it should show the **pointer cursor + hover highlight** like any clickable row. Removed the override; the cursor is now a pure function of `--clickable` (i.e. whether `row.action` is set). To make a row literally non-clickable, omit `row.action` (optionally still dim it with `state`) — that path is unchanged (default cursor, no dispatch).
+
+**Consumers:** no action needed. Purely corrects the cursor/hover on dimmed-but-clickable rows; appearance, dispatch behavior, and non-clickable rows are all unchanged. The `TableRow.state` doc (TS + .NET) now states explicitly that `state` never affects clickability or the cursor.
+
+---
+
 ## 5.1.0 / 5.1.0 — Navigation primitives: `BreadcrumbNode` + `StepsNode` (npm + NuGet)
 
 **npm:** `5.1.0` (minor, from `5.0.1`) · **NuGet:** `5.1.0` (minor, from `5.0.0`). **Additive** — the wire protocol token stays `viewmodel-shell/1.0`; existing apps and wire-driving agents are byte-unchanged. Both packages gain two new optional `ViewNode` types.

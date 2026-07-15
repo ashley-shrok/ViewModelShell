@@ -892,6 +892,11 @@ public record TableRow(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Actions = null,
     // Row lifecycle STATE (NOT severity — that's Tone). Freeform, app-extensible;
     // framework-styled set: done/disabled/running. Emits .vms-table__row--{state}.
+    // APPEARANCE ONLY — State dims/tints the row and NEVER affects clickability or
+    // the cursor. Clickability is governed solely by Action: a State:"disabled" row
+    // that ALSO sets Action is dimmed AND still clickable (pointer + hover +
+    // role=button), e.g. an already-paid invoice line shown muted but still openable.
+    // To make a row literally non-clickable, omit Action (optionally still dim via State).
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? State = null,
     // Semantic intent/severity — universal tone axis ("danger"|"warning"|"success"|"info").
     // Emits .vms-table__row--{tone} (subtle tinted row background).

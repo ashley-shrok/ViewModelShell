@@ -217,4 +217,36 @@ describe("TableRow.action — click-anywhere primitive (260613-qmh)", () => {
     expect(tr.getAttribute("role")).toBeNull();
     expect(tr.getAttribute("aria-label")).toBeNull();
   });
+
+  // K. `state` is an APPEARANCE axis only — it must NEVER suppress clickability.
+  // A `state:"disabled"` row that ALSO sets `action` stays fully clickable: it
+  // keeps --clickable (which drives the pointer cursor + hover in CSS), keeps
+  // role/tabindex, AND still dispatches. (Regression guard for the CSS override
+  // that used to force cursor:default on disabled+clickable rows — an
+  // already-paid-but-still-openable invoice line.)
+  it("K. a state:'disabled' row WITH row.action stays clickable (dim is appearance-only)", () => {
+    const onAction = vi.fn();
+    const view: ViewNode = {
+      type: "table",
+      columns: [{ key: "line", label: "Line" }],
+      rows: [
+        {
+          id: "paid1",
+          cells: { line: "Invoice line — PAID" },
+          state: "disabled",
+          action: { name: "view-line-paid1" },
+        },
+      ],
+    };
+    const container = render(view, onAction);
+    const tr = container.querySelector('tr[data-id="paid1"]') as HTMLTableRowElement;
+    // Dimmed (appearance) AND clickable (behavior) at the same time.
+    expect(tr.className).toContain("vms-table__row--disabled");
+    expect(tr.className).toContain("vms-table__row--clickable");
+    expect(tr.getAttribute("role")).toBe("button");
+    expect(tr.getAttribute("tabindex")).toBe("0");
+    // And it actually dispatches — the dim never disabled the action.
+    tr.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onAction).toHaveBeenCalledWith({ name: "view-line-paid1" });
+  });
 });

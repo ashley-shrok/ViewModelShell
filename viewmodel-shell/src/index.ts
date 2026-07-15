@@ -591,7 +591,8 @@ export interface TableRow {
    *  cell (right). A previous version typed this as `ButtonNode[]` and called
    *  the button renderer blindly, silently dropping non-button entries. */
   actions?: (ButtonNode | CheckboxNode)[];
-  /** Row lifecycle STATE (NOT severity — that's `tone`). A freeform, app-extensible token; the framework ships styling for `done`, `disabled`, `running`. Emits .vms-table__row--{state}. Orthogonal to `tone`. */
+  /** Row lifecycle STATE (NOT severity — that's `tone`). A freeform, app-extensible token; the framework ships styling for `done`, `disabled`, `running`. Emits .vms-table__row--{state}. Orthogonal to `tone`.
+   *  APPEARANCE ONLY — `state` dims/tints the row and NEVER affects clickability or the cursor. Clickability is governed solely by `action`: a `state:"disabled"` row that ALSO sets `action` is dimmed AND still clickable (pointer cursor + hover + role=button), e.g. an already-paid invoice line shown muted but still openable for details. To make a row literally non-clickable, omit `action` (optionally still dim it with `state`). */
   state?: string;
   /** Semantic intent/severity — the universal status tone axis (closed). Emits .vms-table__row--{tone} (subtle tinted row background, reusing the shared tokens). Omitted = neutral. */
   tone?: "danger" | "warning" | "success" | "info";
