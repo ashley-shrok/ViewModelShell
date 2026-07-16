@@ -646,6 +646,103 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   color: var(--vms-text);
 }
 
+/* ── the single-select SELECTED PILL (Phase 21, 21-13) ──
+   In single-select the input does DOUBLE DUTY: it shows the SELECTION and it
+   accepts the QUERY. Until 21-13 there was ZERO visual difference between them —
+   "Sally Omer" in the box could be a chosen record or text the user typed, and
+   the user could not tell. The operator found it: "the Sally that's in the box
+   is not, like, a chip or anything, it's just text".
+
+   🚨 THE INPUT ITSELF IS THE PILL — there is deliberately NO pill ELEMENT here,
+   and that is SLDS's shape rather than a shortcut: Salesforce renders
+   single-select's selection INSIDE the input and no pill element exists for it
+   at all, while MULTI's pills live outside (that is .vms-field__chips above,
+   D2's separate widget). Appearance + a clear control; no new node, nothing on
+   the wire, and the input keeps role="combobox" and stays typeable.
+
+   Toggled by .vms-field--lookup-selected on the WRAPPER, which browser.ts sets
+   from `labelShown` — selection present AND no active query. Typing drops it
+   instantly, which is the whole point: the two states must be distinguishable at
+   a glance. */
+.vms-field--lookup-selected {
+  /* The chip's private-tone technique, reused VERBATIM (--_chip-tone + the 12%
+     polarity-adaptive knockout, mixing toward --vms-surface). NO new theme var:
+     every theme recolors this for free, exactly as it does the chips.
+
+     🚨 Declared on the WRAPPER, not on the input, and that is load-bearing: the
+     clear ✕ is the input's SIBLING, so a token set on the input would not reach
+     it and the button would silently fall back to an untoned color. One
+     declaration, inherited by both halves of the pill.
+
+     ⚠️ This fg/bg pair is NOT covered by the fixed 13-pair check:aa-contrast
+     gate, so it was hand-computed across the default + all 12 themes (21-13).
+     Because it reuses --_chip-tone it is LITERALLY the chip's measured pair:
+     10.63:1 worst (dark-*), 13.60:1 (light-*), vs a 4.5:1 text bar. That reuse
+     is also what avoids 21-09's trap — the chip's focus ring failed 3:1 on
+     light-amber/green/teal while it derived from --vms-accent, and deriving from
+     --_chip-tone is what fixed it. Re-measure if --_chip-tone stops being
+     --vms-text. */
+  --_chip-tone: var(--vms-text);
+}
+.vms-field--lookup-selected .vms-field__input {
+  background: color-mix(in srgb, var(--_chip-tone) 12%, var(--vms-surface));
+  color: var(--_chip-tone);
+  /* Toned rather than transparent: an input still needs a boundary. Mixing tone
+     INTO --vms-border only ever raises contrast against the page (tone is
+     --vms-text), so this cannot regress the shipped input border — measured
+     2.16:1 (light) / 2.85:1 (dark) vs the bare --vms-border's 1.32 / 1.43. */
+  border-color: color-mix(in srgb, var(--_chip-tone) 24%, var(--vms-border));
+  /* The chip's weight + radius: this is what actually makes it read as a CHOSEN
+     THING rather than as typed text at a glance. The fill alone is too quiet. */
+  font-weight: 600;
+  border-radius: 999px;
+  /* Room for the clear ✕, which is overlaid on the right edge. */
+  padding-right: var(--vms-space-xl);
+}
+/* The clear ✕ — a REAL <button> (never an icon-only div), overlaid on the
+   input's right edge. Only rendered for single-select, and `hidden` whenever the
+   box holds a query rather than a selection: an affordance to dismiss something
+   that isn't there would be a lie. Anchored to .vms-field--lookup's positioning
+   context, the same one the popup uses. */
+.vms-field__clear {
+  position: absolute;
+  right: var(--vms-space-xs);
+  /* Pinned to the INPUT's vertical centre, not the wrapper's: the wrapper also
+     holds the <label> above and the help/error text below, so centring on it
+     would drift with every one of those. The input's own line box is the only
+     stable anchor, and it is why this is bottom-anchored rather than centred. */
+  bottom: var(--vms-space-2xs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6em;
+  height: 1.6em;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  /* Inherit the pill's tone from the wrapper, exactly as the chip's remove
+     button inherits the chip's — one tone, one place to change it. The fallback
+     covers the hidden state, where no --lookup-selected wrapper declares it. */
+  color: var(--_chip-tone, var(--vms-text));
+  font-family: inherit;
+  font-size: 1.1em;
+  line-height: 1;
+  cursor: pointer;
+}
+.vms-field__clear[hidden] { display: none; }
+.vms-field__clear:hover {
+  background: color-mix(in srgb, var(--_chip-tone, var(--vms-text)) 22%, transparent);
+}
+/* 🚨 --_chip-tone, NOT --vms-accent — see the chip remove button's focus ring
+   (below) for the measurement that settled this: the accent ring falls to
+   2.63/2.54/2.58:1 against a tinted fill on light-amber/green/teal, and the mix
+   ratio is not the lever. Same fill here, same failure, same structural fix. */
+.vms-field--lookup-selected .vms-field__clear:focus-visible {
+  outline: 2px solid var(--_chip-tone, var(--vms-text));
+  outline-offset: 1px;
+}
+
 /* ── lookup-multiple chips (Phase 21, LOOK-03) ──
    The selected set, rendered OUTSIDE the combobox per SLDS's precedent (D2):
    single-select renders its selection INSIDE the input and no chip element

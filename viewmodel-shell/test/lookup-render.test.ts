@@ -554,3 +554,124 @@ describe("committing a candidate writes the ID and displays the LABEL", () => {
     expect(input().value).toBe("urgent");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🚨 THE SELECTED-STATE PILL (21-13)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("🚨 21-13 — a single-select's SELECTION must LOOK selected", () => {
+  // THE GAP, IN THE OPERATOR'S WORDS: "the Sally that's in the box is not, like,
+  // a chip or anything, it's just text, so in order to type the new name, I
+  // would have to get rid of Sally, which seems to defeat the purpose."
+  //
+  // In single-select the input does DOUBLE DUTY — it shows the SELECTION and it
+  // accepts the QUERY — and there was ZERO visual difference between them. Two
+  // meanings rendered identically is a comprehension failure. The fix is SLDS's:
+  // style THE INPUT ITSELF as a pill when a record is selected (no separate pill
+  // element exists for single-select at all), plus a clear affordance.
+  //
+  // These tests hold the PREDICATE, which is the part that can silently rot:
+  // pill ⟺ selection present AND no active query.
+  const pillNode = (extra: Record<string, unknown> = {}): ViewNode => ({
+    type: "field", name: "owner", inputType: "lookup", bind: "f.owner",
+    label: "Ticket owner", searchBind: "f.q",
+    selected: [{ value: "u-1", label: "Sally Omer" }],
+    candidates: [],
+    searchAction: { name: "search-owner" },
+    ...extra,
+  } as ViewNode);
+  const wrapper = (c: HTMLElement) => c.querySelector<HTMLElement>(".vms-field--lookup")!;
+  const clear = (c: HTMLElement) => c.querySelector<HTMLButtonElement>(".vms-field__clear")!;
+
+  it("renders the pill when a selection is present and no query is active", () => {
+    const t = setup({ f: { owner: "u-1", q: "" } });
+    t.render(pillNode());
+    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(true);
+    expect(t.input().value).toBe("Sally Omer");
+    expect(clear(t.container).hidden).toBe(false);
+  });
+
+  it("🚨 does NOT render the pill while the user is querying", () => {
+    // The two states must be instantly distinguishable at a glance. A non-empty
+    // query means the text is the USER'S, so it must not wear the chosen-thing
+    // treatment even though the selection still exists underneath.
+    const t = setup({ f: { owner: "u-1", q: "Petrova" } });
+    t.render(pillNode());
+    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(false);
+    expect(t.input().value).toBe("Petrova");
+    expect(clear(t.container).hidden).toBe(true);
+  });
+
+  it("🚨 typing drops the pill on the very first keystroke", () => {
+    const t = setup({ f: { owner: "u-1", q: "" } });
+    t.render(pillNode());
+    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(true);
+    t.input().value = "P";
+    t.input().dispatchEvent(new Event("input", { bubbles: true }));
+    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(false);
+    expect(clear(t.container).hidden).toBe(true);
+  });
+
+  it("no selection ⇒ no pill", () => {
+    const t = setup({ f: { owner: "", q: "" } });
+    t.render(pillNode({ selected: [] }));
+    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(false);
+    expect(clear(t.container).hidden).toBe(true);
+  });
+
+  it("committing a candidate puts the box BACK into the pill state", () => {
+    const t = setup({ f: { owner: "", q: "sa" } });
+    t.render(pillNode({ selected: [], candidates: [{ value: "u-2", label: "Bob Lee" }] }));
+    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(false);
+    t.options()[0].dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(true);
+    expect(t.input().value).toBe("Bob Lee");
+  });
+
+  it("🚨 lookup-multiple NEVER wears the pill — its selection is the chips (D2/SLDS)", () => {
+    const t = setup({ f: { watchers: ["u-1"], q: "" } });
+    t.render({
+      type: "field", name: "watchers", inputType: "lookup-multiple", bind: "f.watchers",
+      label: "Watchers", searchBind: "f.q",
+      selected: [{ value: "u-1", label: "Sally Omer" }],
+      candidates: [],
+    } as ViewNode);
+    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(false);
+    // ...and no clear button at all: multi's chips carry their own remove
+    // buttons, so a second, ambiguous "clear" affordance would be a lie about
+    // which selection it clears.
+    expect(t.container.querySelector(".vms-field__clear")).toBeNull();
+  });
+
+  it("the clear ✕ clears the selection, drops the pill, and keeps the input typeable", () => {
+    const t = setup({ f: { owner: "u-1", q: "" } });
+    t.render(pillNode());
+    clear(t.container).dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    expect((t.state.f as Record<string, unknown>).owner).toBe("");
+    expect(t.input().value).toBe("");
+    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(false);
+  });
+
+  it("the clear ✕ carries a unique, item-specific accessible name and cannot submit a form", () => {
+    // §7 item 25's rule, applied to this button for the same reason it applies
+    // to the chips': "Clear" alone on a form with several lookups is a row of
+    // identically-named buttons.
+    const t = setup({ f: { owner: "u-1", q: "" } });
+    t.render(pillNode());
+    expect(clear(t.container).getAttribute("aria-label")).toBe("Clear Ticket owner");
+    expect(clear(t.container).type).toBe("button");
+  });
+
+  it("🚨 the a11y contract is intact — the pill is appearance, not a new element", () => {
+    // This is appearance + a clear control. It must NOT quietly turn the
+    // combobox into a div-with-a-pill-in-it.
+    const t = setup({ f: { owner: "u-1", q: "" } });
+    t.render(pillNode());
+    const inp = t.input();
+    expect(inp.tagName).toBe("INPUT");
+    expect(inp.getAttribute("role")).toBe("combobox");
+    expect(inp.readOnly).toBe(false);
+    expect(inp.disabled).toBe(false);
+    expect(inp.getAttribute("aria-expanded")).toBe("false");
+  });
+});

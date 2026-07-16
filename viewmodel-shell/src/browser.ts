@@ -1482,6 +1482,12 @@ export class BrowserAdapter implements Adapter {
       // the box's meaning CHANGES with use: typing makes it a query (the input
       // listener clears this), and committing makes it a label again (commit()
       // sets it). Cleared/set at exactly those three points, nowhere else.
+      //
+      // 🚨 It is ALSO the "does this read as a chosen thing?" flag (21-13) — see
+      // setLabelShown() below, which is what actually mutates it. The three
+      // points that change the box's meaning are the same three either way,
+      // which is why one flag serves both and why it must never be assigned
+      // directly.
       let labelShown = queryText === "" && !isMulti && selectedLabel !== "";
       inp.value = queryText !== ""
         ? queryText
@@ -1953,6 +1959,113 @@ export class BrowserAdapter implements Adapter {
         if (!v) { setActive(-1); setQuerying(false); }
       };
 
+      // ══ THE SELECTED-STATE PILL (21-13, single-select only) ═══════════════
+      //
+      // 🚨 THE PROBLEM, IN THE OPERATOR'S WORDS:
+      //
+      //   "the Sally that's in the box is not, like, a chip or anything, it's
+      //    just text, so in order to type the new name, I would have to get rid
+      //    of Sally, which seems to defeat the purpose."
+      //
+      // She is right, and it is a DESIGN gap, not a demo problem. In
+      // single-select the input does DOUBLE DUTY — it shows the SELECTION and it
+      // accepts the QUERY — and until now there was ZERO visual difference
+      // between them. "Sally Omer" in that box could be a chosen record or text
+      // the user typed, and the user could not tell. Two different meanings
+      // rendered identically is a comprehension failure, and it is exactly the
+      // kind of thing the honest-structured-data principle exists to prevent —
+      // the tree knew which it was the whole time; the pixels didn't say.
+      //
+      // 🚨 THE FIX WAS ALREADY IN OUR OWN SURVEY AND WE DIDN'T IMPLEMENT IT.
+      // Salesforce SLDS styles THE INPUT ITSELF to look like a pill when a
+      // record is selected — and note the detail that makes this the RIGHT shape
+      // rather than a lookalike: for single-select NO SEPARATE PILL ELEMENT
+      // EXISTS AT ALL. Multi's pills live OUTSIDE the input (that is D2's second
+      // widget, the chips layer above); single's selection IS the input. So this
+      // is APPEARANCE PLUS A CLEAR CONTROL — NOT a new element, NOT a new node,
+      // NOT anything on the wire. The a11y contract is untouched: still
+      // role="combobox" ON THE INPUT, still an <input>, still typeable.
+      //
+      // The two states must be INSTANTLY DISTINGUISHABLE AT A GLANCE:
+      //   selection present + NO active query  ⇒ pill (a chosen thing) + a clear ✕
+      //   user is typing (query non-empty)     ⇒ plain query text, no pill
+      // That predicate is EXACTLY `labelShown` — the flag that already tracked
+      // "the box is showing a label, not a query" for the search-flush bug. It
+      // is the same question, so it is deliberately NOT a second flag that could
+      // drift out of step with the first.
+      //
+      // ⚠️ CONTRAST: this is a NEW fg/bg pair that the FIXED 13-pair
+      // check:aa-contrast gate does NOT auto-cover, so it was hand-computed
+      // across the shipped default + all 12 themes (21-13). It reuses the CHIP's
+      // tokens (--_chip-tone and its 12% knockout fill) rather than inventing
+      // any theme var, so it is LITERALLY the chip's already-measured pair:
+      // 10.63:1 worst (dark-*), 13.60:1 (light-*), against a 4.5:1 text bar.
+      // That reuse is also what dodges 21-09's trap — the chip's FOCUS RING
+      // failed 3:1 on light-amber/green/teal when it derived from --vms-accent,
+      // and was fixed by deriving from --_chip-tone. Deriving from --_chip-tone
+      // here means that failure cannot recur. Re-measure if --_chip-tone ever
+      // stops being --vms-text.
+      let clearBtn: HTMLButtonElement | undefined;
+      if (!isMulti) {
+        clearBtn = document.createElement("button");
+        // MANDATORY: a lookup inside a FormNode would otherwise SUBMIT it on
+        // every clear click — <button>'s default type is "submit". Same trap the
+        // chip remove button carries.
+        clearBtn.type = "button";
+        clearBtn.className = "vms-field__clear";
+        clearBtn.id = `vms-${n.name}-clear`;
+        // A unique, item-specific accessible name — the §7 item 25 rule the
+        // chips already follow, for the same reason: "Clear" alone on a form with
+        // several lookups is a row of identically-named buttons.
+        clearBtn.setAttribute("aria-label", `Clear ${n.label ?? n.name}`);
+        // Decorative: the accessible name above is the real one.
+        clearBtn.textContent = "×";
+        clearBtn.addEventListener("mousedown", (e) => {
+          // mousedown + preventDefault, exactly as the options do: keep DOM focus
+          // in the input rather than letting the press blur it.
+          e.preventDefault();
+          e.stopPropagation();
+          const cleared = selectedLabel;
+          // The id — and ONLY the id — is what persists (D1). Clearing the
+          // SELECTION is clearing the bind; the query slot goes with it because
+          // the box is being emptied, not re-queried.
+          this.writeBind(n.bind, "");
+          this.writeBind(n.searchBind, "");
+          inp.value = "";
+          setLabelShown(false);
+          setOpen(false);
+          // §7 item 32 — the visual fact is ALSO spoken, or an AT user learns
+          // nothing from a button whose whole job is destructive.
+          announce(`${cleared} removed. Selection cleared.`);
+          inp.focus();
+        });
+      }
+
+      /**
+       * The ONE mutator of `labelShown`. 🚨 NEVER assign the flag directly: it
+       * now drives the pill treatment AND the clear button's presence, so a bare
+       * assignment renders a box that CLAIMS to hold a selection while the
+       * closure knows it holds a query (or vice versa) — the closure and the DOM
+       * must never disagree, the same rule the popup's `open` follows.
+       *
+       * Called at exactly the points where the box's MEANING changes, and
+       * nowhere else: the render sync just below (the server's answer), the input
+       * listener (typing makes the text the user's), commit()/commitCustom() (a
+       * selection makes it a label again), and the clear/Escape paths.
+       */
+      const setLabelShown = (v: boolean): void => {
+        labelShown = v;
+        // On the WRAPPER, not the input: the clear button is a sibling, and the
+        // popup/chips are too, so one class governs the whole widget's selected
+        // presentation from a single toggle.
+        wrapper.classList.toggle("vms-field--lookup-selected", v);
+        // `hidden` rather than removal — the button keeps its stable id across
+        // the state flip, so render()'s generic focus restore can still re-find
+        // it, and nothing has to be re-created on every keystroke.
+        if (clearBtn) clearBtn.hidden = !v;
+      };
+      setLabelShown(labelShown);
+
       // ── POPUP-OPEN PRESERVATION (Phase 21, LOOK-02) ──────────────────────
       //
       // 🚨 PRESERVE OPEN. DO NOT PRESERVE ACTIVE. The two lines below look like
@@ -2031,7 +2144,10 @@ export class BrowserAdapter implements Adapter {
           //      server's next response redraws the box as "sal" and the user
           //      watches their own selection turn back into their search text.
           this.writeBind(n.searchBind, "");
-          labelShown = true;
+          // ...and the box now reads as a CHOSEN THING rather than as text
+          // someone typed (21-13): same flag, same three points, see
+          // setLabelShown().
+          setLabelShown(true);
           setOpen(false);
         }
         inp.focus();
@@ -2089,7 +2205,7 @@ export class BrowserAdapter implements Adapter {
           // D5, an invented value IS — a value whose label equals itself), and
           // the query that produced it is spent. See commit() for both reasons.
           this.writeBind(n.searchBind, "");
-          labelShown = true;
+          setLabelShown(true);
           setOpen(false);
         }
         inp.focus();
@@ -2202,8 +2318,11 @@ export class BrowserAdapter implements Adapter {
         // exactly.
         //
         // The user has edited the box, so its text is now THEIRS — a query, not
-        // the label the render put there. See `labelShown`.
-        labelShown = false;
+        // the label the render put there. See `labelShown`. This is ALSO what
+        // drops the pill the instant they start typing (21-13): the selected
+        // treatment and the query treatment must be distinguishable at a glance,
+        // so the box stops LOOKING chosen the moment it stops BEING a label.
+        setLabelShown(false);
         this.writeBind(n.searchBind, inp.value);
         // 🚨 §7 items 14 + 21 — clear the active option whenever the query text
         // changes, and never let list-typeahead swallow typing. Typing is the
@@ -2425,10 +2544,20 @@ export class BrowserAdapter implements Adapter {
           // keyboard user who picked the wrong person could never undo it.
           // Multi's selection lives in chips with their own remove buttons
           // (Plan 21-05), so there Escape clears only the query text.
+          //
+          // 🚨 Escape is no longer the ONLY way out for a mouse user (21-13):
+          // single-select now renders a clear ✕ beside the pill, because
+          // "hunting for Escape" is not a discoverable affordance. This keyboard
+          // path is unchanged and still load-bearing — the ✕ is an ADDITION, not
+          // a replacement.
           e.preventDefault();
           inp.value = "";
           this.writeBind(n.searchBind, "");
           if (!isMulti) this.writeBind(n.bind, "");
+          // The selection is gone, so the box must stop reading as a chosen
+          // thing. Multi never wore the pill (its selection is the chips), and
+          // setLabelShown is a no-op there.
+          setLabelShown(false);
           setActive(-1);
           return;
         }
@@ -2521,6 +2650,14 @@ export class BrowserAdapter implements Adapter {
       // owning interactive chips would be the §7 item 24 violation.
       if (chipList) wrapper.appendChild(chipList);
       wrapper.appendChild(inp);
+      // The clear ✕ sits AFTER the input in the DOM (21-13) so it follows it in
+      // both the tab order and the reading order: the control, then the act on
+      // it. It is positioned over the input's right edge purely in CSS — SLDS's
+      // single-select shape, where the selection IS the input rather than a pill
+      // element beside it. Inside the wrapper is also what keeps the
+      // click-outside handler's containment test from treating a clear press as
+      // "the user moved on" and closing the popup out from under it.
+      if (clearBtn) wrapper.appendChild(clearBtn);
       wrapper.appendChild(popup);
       if (hintEl) wrapper.appendChild(hintEl);
       // 🚨 RE-APPEND, never rebuild. These two nodes were detached by render()'s
