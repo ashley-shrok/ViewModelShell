@@ -41,7 +41,7 @@ interface DraftForm {
 interface ContactsState {
   contacts: ContactRecord[];
   currentView: string;   // "list" | "detail" | "add"
-  selectedId: string | null;
+  selectedId?: string;
   searchQuery: string;
   // Phase 6 — typed values of the right-pane add/edit form. Lives in state so
   // the renderer's bind seam can read/write each field; the "save-contact"
@@ -71,7 +71,7 @@ function initialState(): ContactsState {
       { id: "c12", name: "Luis Romero",     email: "luis@example.com",    phone: "555-0112", notes: "Backend engineer",         createdAt: offset(1)  },
     ],
     currentView: "list",
-    selectedId: null,
+    selectedId: undefined,
     searchQuery: "",
     draftForm: emptyDraft(),
   };
@@ -247,9 +247,9 @@ const actionHandler = createAction<ContactsState>(async (payload) => {
       draftForm: { name: c.name, email: c.email, phone: c.phone, notes: c.notes },
     };
   } else if (name === "navigate-to-add") {
-    state = { ...state, currentView: "add", selectedId: null, draftForm: emptyDraft() };
+    state = { ...state, currentView: "add", selectedId: undefined, draftForm: emptyDraft() };
   } else if (name === "navigate-to-list") {
-    state = { ...state, currentView: "list", selectedId: null, draftForm: emptyDraft() };
+    state = { ...state, currentView: "list", selectedId: undefined, draftForm: emptyDraft() };
   } else if (name === "save-contact-new") {
     const draft = state.draftForm;
     const trimmedName = (draft.name ?? "").trim();
@@ -292,7 +292,7 @@ const actionHandler = createAction<ContactsState>(async (payload) => {
       ...state,
       contacts: state.contacts.filter(c => c.id !== id),
       currentView: "list",
-      selectedId: null,
+      selectedId: undefined,
       draftForm: emptyDraft(),
     };
   } else if (name === "search") {

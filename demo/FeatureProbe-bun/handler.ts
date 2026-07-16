@@ -21,13 +21,13 @@ import {
 } from "@ashley-shrok/viewmodel-shell/server";
 
 interface SortIntent {
-  column: string | null;
-  direction: string | null;
+  column?: string;
+  direction?: string;
 }
 
 interface FeatureProbeState {
   pollCount: number;
-  lastUploadName: string | null;
+  lastUploadName?: string;
   lastUploadSize: number;
   lastSubmit?: string | null;
   // Table feature-matrix state — bind targets for sort/filter/pagination.
@@ -62,9 +62,9 @@ interface FeatureProbeState {
 function initialState(): FeatureProbeState {
   return {
     pollCount: 0,
-    lastUploadName: null,
+    lastUploadName: undefined,
     lastUploadSize: 0,
-    sortIntent: { column: null, direction: null },
+    sortIntent: { column: undefined, direction: undefined },
     tableFilters: { name: "" },
     tablePage: 1,
     longActionPolls: 0,
@@ -161,7 +161,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
   const children: ViewNode[] = [
     { type: "text", value: `Poll count: ${state.pollCount}`, style: "muted" },
   ];
-  if (state.lastUploadName !== null) {
+  if (state.lastUploadName !== undefined) {
     children.push({
       type: "text",
       value: `Last upload: ${state.lastUploadName} (${state.lastUploadSize} bytes)`,
@@ -566,7 +566,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
   const probeModal: ViewNode = {
     type: "modal",
     title: "Probe modal",
-    size: "small",
+    size: "narrow",
     dismissAction: { name: "modal-dismiss" },
     children: [{ type: "text", value: "Modal body for parity coverage." }],
     footer: [{ type: "button", label: "OK", action: { name: "modal-ok" } }],

@@ -858,7 +858,7 @@ public class FeatureProbeController : ControllerBase
             Children: new ViewNode[] { new TextNode("Modal body for parity coverage.", null) },
             Footer: new ViewNode[] { new ButtonNode("OK", new ActionDescriptor("modal-ok")) },
             DismissAction: new ActionDescriptor("modal-dismiss"),
-            Size: "small"));
+            Size: "narrow"));
         return new PageNode("Feature Probe", pageChildren,
             Density: "compact", Layout: "cards");
     }

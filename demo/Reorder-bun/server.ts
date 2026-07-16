@@ -29,7 +29,7 @@ interface ReorderItem {
 
 interface ReorderState {
   items: ReorderItem[];
-  moveOpenId: string | null;
+  moveOpenId?: string;
 }
 
 // (key, display label), rendered top-to-bottom in this order.
@@ -49,7 +49,7 @@ function initialState(): ReorderState {
       { id: "e", label: "Echo",    folder: "active" },
       // "archive" starts empty (shows the empty-group rendering).
     ],
-    moveOpenId: null,
+    moveOpenId: undefined,
   };
 }
 
@@ -108,7 +108,7 @@ function buildVm(state: ReorderState): ViewNode {
   }
 
   // "Move to another group" modal (relocation). Lists every OTHER group.
-  if (state.moveOpenId !== null) {
+  if (state.moveOpenId !== undefined) {
     const moving = state.items.find(i => i.id === state.moveOpenId) ?? null;
     if (moving) {
       const dests: ViewNode[] = FOLDERS
@@ -149,7 +149,7 @@ const actionHandler = createAction<ReorderState>(async (payload) => {
   } else if (name.startsWith("move-open-")) {
     state = { ...state, moveOpenId: name.slice("move-open-".length) };
   } else if (name === "move-close") {
-    state = { ...state, moveOpenId: null };
+    state = { ...state, moveOpenId: undefined };
   } else if (name.startsWith("move-to-")) {
     // move-to-<folderKey>-<id> — folderKey has no hyphen, split on first '-'.
     const rest = name.slice("move-to-".length);
@@ -166,7 +166,7 @@ const actionHandler = createAction<ReorderState>(async (payload) => {
         state = { ...state, items };
       }
     }
-    state = { ...state, moveOpenId: null };
+    state = { ...state, moveOpenId: undefined };
   } else {
     throw new UnknownActionError(name);
   }

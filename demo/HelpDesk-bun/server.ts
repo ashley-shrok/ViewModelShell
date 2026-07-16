@@ -58,7 +58,7 @@ interface Ticket {
 
 interface AgentState {
   view: string;
-  selectedTicketId: number | null;
+  selectedTicketId?: number;
   filter: string;
   notesSaved: boolean;
   // 0.15.1 — canonical workflow pattern: filter narrows under the cap, no
@@ -74,7 +74,7 @@ interface AgentState {
 function agentInitial(): AgentState {
   return {
     view: "queue",
-    selectedTicketId: null,
+    selectedTicketId: undefined,
     filter: "all",
     notesSaved: false,
     titleFilter: "",
@@ -85,12 +85,12 @@ function agentInitial(): AgentState {
 
 interface RequesterState {
   view: string;
-  selectedTicketId: number | null;
+  selectedTicketId?: number;
   filter: string;
   createType: string;
   createPriority: string;
   createAccessLevel: string;
-  validationError: string | null;
+  validationError?: string;
   // Phase 6 — bind slots for the create-ticket form fields.
   draftTitle: string;
   draftDescription: string;
@@ -102,12 +102,12 @@ interface RequesterState {
 function requesterInitial(): RequesterState {
   return {
     view: "list",
-    selectedTicketId: null,
+    selectedTicketId: undefined,
     filter: "all",
     createType: "hardware",
     createPriority: "medium",
     createAccessLevel: "read",
-    validationError: null,
+    validationError: undefined,
     draftTitle: "",
     draftDescription: "",
     draftDueDate: "",
@@ -616,7 +616,7 @@ const agentHandler = createAction<AgentState>(async (payload) => {
       };
     }
   } else if (name === "back-to-queue") {
-    state = { ...state, view: "queue", selectedTicketId: null, agentNotes: "" };
+    state = { ...state, view: "queue", selectedTicketId: undefined, agentNotes: "" };
   } else if (name === "start-ticket") {
     if (state.selectedTicketId != null) dbUpdateStatus(state.selectedTicketId, "in-progress");
   } else if (name === "resolve-ticket") {
@@ -783,7 +783,7 @@ function requesterBuildCreateView(state: RequesterState): ViewNode {
 function requesterBuildDetailView(state: RequesterState): ViewNode {
   const ticket = dbGetById(state.selectedTicketId!);
   if (!ticket) {
-    return requesterBuildListView({ ...state, view: "list", selectedTicketId: null });
+    return requesterBuildListView({ ...state, view: "list", selectedTicketId: undefined });
   }
 
   const info: ViewNode[] = [
@@ -840,7 +840,7 @@ const requesterHandler = createAction<RequesterState>(async (payload) => {
     const sid = Number(name.slice("select-ticket-".length));
     if (!isNaN(sid)) state = { ...state, selectedTicketId: sid, view: "detail" };
   } else if (name === "back-to-list") {
-    state = { ...state, view: "list", selectedTicketId: null, validationError: null };
+    state = { ...state, view: "list", selectedTicketId: undefined, validationError: undefined };
   } else if (name === "start-create") {
     state = {
       ...state,
@@ -848,7 +848,7 @@ const requesterHandler = createAction<RequesterState>(async (payload) => {
       createType: "hardware",
       createPriority: "medium",
       createAccessLevel: "read",
-      validationError: null,
+      validationError: undefined,
       draftTitle: "",
       draftDescription: "",
       draftDueDate: "",
@@ -857,11 +857,11 @@ const requesterHandler = createAction<RequesterState>(async (payload) => {
       draftSystemName: "",
     };
   } else if (name === "cancel-create") {
-    state = { ...state, view: "list", validationError: null };
+    state = { ...state, view: "list", validationError: undefined };
   } else if (name.startsWith("set-type-")) {
     // createType is already in state via the TabsNode bind. Clear any stale
     // validation error so the form revalidates on next submit.
-    state = { ...state, validationError: null };
+    state = { ...state, validationError: undefined };
   } else if (name.startsWith("set-priority-")) {
     // createPriority is already in state via the TabsNode bind.
   } else if (name.startsWith("set-access-level-")) {
@@ -883,7 +883,7 @@ const requesterHandler = createAction<RequesterState>(async (payload) => {
         systemName:  state.createType === "access"   ? ((state.draftSystemName  ?? "") || null) : null,
         accessLevel: state.createType === "access"   ? state.createAccessLevel : null,
       });
-      state = { ...state, validationError: null, view: "list" };
+      state = { ...state, validationError: undefined, view: "list" };
     }
   } else {
     throw new UnknownActionError(name);
