@@ -31,6 +31,7 @@
   "scripts": {
     "build": "tsc -b tsconfig.tui.json",
     "check:core-globals": "node scripts/check-core-platform-globals.mjs",
+    "check:test-types": "tsc -p tsconfig.test.json --noEmit",
     "check:aa-contrast": "node scripts/check-aa-contrast.mjs",
     "check:no-demo-style": "node scripts/check-no-demo-style.mjs",
     "check:theme-byte-identity": "node scripts/check-theme-byte-identity.mjs",

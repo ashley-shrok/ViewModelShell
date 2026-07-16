@@ -1,0 +1,34 @@
+// Type-checks the TEST sources — which NOTHING else does.
+//
+// Why this file exists: `tsconfig.json` includes `src/**/*.ts` and then
+// EXPLICITLY excludes `src/**/*.test.ts`, while the whole `test/` tree sits
+// outside `include` altogether. Vitest transpiles per-file via esbuild and does
+// not type-check at all. So before this config, all 56 test files were gated by
+// NEITHER — a type-level test could pass green while the type it asserted did
+// not exist (proven at RED). A fixed enumeration (`src/**`) cannot gate an
+// open-ended property (any file), so the fix is a config whose include IS the
+// test tree, plus a CI step that runs it (see .github/workflows/parity.yml).
+//
+// This is check-only: `noEmit` (so `composite`/`declaration` from the base are
+// turned off — they require emit), and `rootDir` widens to the package root
+// because the test tree lives beside `src`, not under it.
+//
+// The JSX/type settings mirror tsconfig.tui.json because several suites import
+// `../src/tui.js` (→ src/tui.tsx). The base config's `exclude` does NOT keep
+// tui.tsx out here: `exclude` only filters `include` globbing, it never blocks
+// a file reached through an import — so tui.tsx gets pulled in and needs its
+// JSX pragma and ambient types available.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "noEmit": true,
+    "rootDir": ".",
+    "jsx": "react-jsx",
+    "jsxImportSource": "@opentui/react",
+    "types": ["node", "react", "bun"]
+  },
+  "include": ["test/**/*.ts", "src/**/*.test.ts"],
+  "exclude": []
+}

@@ -55,6 +55,17 @@ jobs:
           cd viewmodel-shell
           npm run check:theme-function
 
+      - name: Type-check the test sources (nothing else does)
+        # tsconfig.json includes src/**/*.ts and EXPLICITLY excludes
+        # src/**/*.test.ts; the test/ tree is outside include entirely; and
+        # vitest transpiles per-file without type-checking. So every test file
+        # was gated by NEITHER -- a suite could pass green while the type it
+        # asserted did not exist. Proven at RED: a ButtonNode.variant (removed
+        # in 3.0.0) type-errors here while vitest reports 54/54 passing.
+        # Must run BEFORE the suite: a type error is a cheaper, clearer failure
+        # than whatever the untyped code does at runtime.
+        run: cd viewmodel-shell && npm run check:test-types
+
       - name: Framework adapter-seam tests (D-12.2 relocation proof)
         run: cd viewmodel-shell && npx vitest run
 
