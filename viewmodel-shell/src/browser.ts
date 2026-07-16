@@ -1365,6 +1365,28 @@ export class BrowserAdapter implements Adapter {
         );
       }
 
+      // [vms:lookup-ambiguous-enter] — D15. `allowCustom` + `searchAction` on
+      // ONE field overloads Enter: "urgent" + Enter is BOTH "invent the tag"
+      // and "search for it", and both are legitimate readings of the keystroke.
+      // There is no precedence that serves both (invent-first starves search
+      // the moment anything is typed; search-first starves invention forever) —
+      // and that there is no good ordering is the tell that the SHAPE is wrong,
+      // so v1 does not guess. A combination that silently half-works is exactly
+      // the quiet failure principle 8 forbids ⇒ loud, but NOT fatal (the
+      // [vms:orphan-file] precedent): we degrade to the searchAction reading
+      // below and render a coherent directory picker.
+      if (n.allowCustom === true && n.searchAction) {
+        this.warnOnce(
+          "lookup-ambiguous-enter:" + n.name,
+          "[vms:lookup-ambiguous-enter] lookup FieldNode '" + n.name +
+            "' declares BOTH allowCustom and searchAction — one Enter cannot both invent a value and " +
+            "run a search, so this combination is NOT supported in v1 and allowCustom is being IGNORED " +
+            "(Enter searches). Declare exactly one: searchAction WITHOUT allowCustom (a directory/reference " +
+            "picker — Enter searches, arrow+Enter accepts a candidate), or allowCustom WITHOUT searchAction " +
+            "(a free-form tags field — Enter invents). Suggestions on a tags field are deferred.",
+        );
+      }
+
       const inp = document.createElement("input");
       inp.type = "text";
       // MANDATORY: decorateField() finds the control via
@@ -2297,42 +2319,31 @@ export class BrowserAdapter implements Adapter {
             commit(activeIndex);
             return;
           }
-          // ── ENTER'S PRECEDENCE (21-11) ──────────────────────────────────
+          // ── ENTER'S PRECEDENCE (21-12, D15) ─────────────────────────────
           //
-          // ⚠️ ENTER IS OVERLOADED, AND THAT IS NEW. It is the price of the D4
-          // reversal, recorded here rather than discovered later. The table
-          // filter this cadence copies has ONE Enter act; this control can
-          // declare THREE (invent, search, submit) on one input. The order below
-          // is a decision, not an accident:
+          // ⚠️ Enter carries a dispatch because of the D4 reversal, and the
+          // table filter this copies has exactly ONE Enter act. D15 restores
+          // that precondition rather than out-clevering it: `allowCustom` +
+          // `searchAction` together is UNSUPPORTED and fails loud at render
+          // (see [vms:lookup-ambiguous-enter] above). With that combo excluded,
+          // NO TWO ARMS BELOW CAN BOTH APPLY — the order is a formality, not a
+          // tie-break, and Enter means exactly one thing in every SUPPORTED
+          // shape:
           //
-          //   1. an active option        → commit it          (§7 item 17)
-          //   2. allowCustom + typed text → invent it          (D3)
-          //   3. searchAction            → ask the server      (D4, reversed)
-          //   4. action                  → the field's own act
+          //   1. an active option → commit it     (§7 item 17; either shape)
+          //   2. searchAction     → ask the server (D4 — a directory picker)
+          //   3. allowCustom      → invent it      (D3 — a tags field)
+          //   4. action           → the field's own act
           //
-          // 🚩 WHY 2 BEFORE 3, AND THE HONEST COST. `allowCustom` + a typed value
-          // is an UNAMBIGUOUS act — "make this a tag" — and it is what the tags
-          // field's own placeholder promises ("Type a tag, press Enter…"). Search
-          // is the more general act, but ordering it first would STARVE invention
-          // entirely: Enter would search, the server would answer, and the second
-          // Enter would search the same string again, forever — the user could
-          // never create anything. The reverse starvation is milder and only
-          // bites a field that declares BOTH: there, a non-empty Enter invents
-          // and never searches, so its candidates can only arrive via the
-          // empty-query (MRU) Enter, which still fires at 3 below.
+          // 🚩 2 BEFORE 3 IS THE DEGRADE PATH, NOT A PRECEDENCE. It only ever
+          // fires for the unsupported combo, where it makes the field read as
+          // the directory picker the warning names. Do NOT reintroduce a
+          // heuristic that guesses the act from what the user typed — D3's whole
+          // point is that the act is DECLARED, never inferred. The deferred
+          // answer is already known (react-select's synthetic "Create 'urgent'"
+          // candidate, so Enter always means "accept the active option"); see
+          // D15 before building it.
           //
-          // ⇒ A field declaring `allowCustom` + `searchAction` TOGETHER is
-          // therefore partially served. Flagged, not papered over. If that combo
-          // matters, the fix is a THIRD act on the wire (or a server-supplied
-          // "create X" candidate, which is how react-select's AsyncCreatable
-          // solves it) — NOT a heuristic in here that guesses which act the user
-          // meant from what they typed. D3's whole point is that the act is
-          // DECLARED, never inferred.
-          if (n.allowCustom === true && inp.value.trim() !== "") {
-            e.preventDefault();
-            commitCustom(inp.value);
-            return;
-          }
           // 🚨 THE SEARCH. Fires with NO option active — including on an EMPTY
           // box, which is the MRU path (OPEN-6). See search().
           if (n.searchAction) {
@@ -2340,12 +2351,24 @@ export class BrowserAdapter implements Adapter {
             search();
             return;
           }
-          // No option active, nothing to invent, nothing to search: fall through
-          // to the field's own `action`. `action` and `searchAction` are
-          // independent declarations, but they now COMPETE for Enter — a lookup
-          // declaring both gets its searchAction, and `action` is reachable only
-          // when no searchAction is declared. Same flag as above; the wire lets
-          // an app declare a combination one key cannot serve.
+          if (n.allowCustom === true && inp.value.trim() !== "") {
+            e.preventDefault();
+            commitCustom(inp.value);
+            return;
+          }
+          // No option active, nothing to search, nothing to invent: fall through
+          // to the field's own `action`.
+          //
+          // ⚠️ KNOWN, DELIBERATE LIMITATION (21-12) — `action` IS UNREACHABLE ON
+          // A LOOKUP THAT DECLARES `searchAction`, and that is correct, not a
+          // bug. Enter is this control's ONLY dispatch key, `searchAction` owns
+          // it, and there is no second Enter to hand `action`. This is NOT the
+          // D15 ambiguity (two acts fighting over one key); it is one act
+          // OCCUPYING the key, which is what declaring a search means. Fixing it
+          // would require inventing a second submit gesture — a new key binding
+          // no APG pattern sanctions — so the honest answer is: on a searching
+          // lookup, put the submit on a ButtonNode. Documented on the node's
+          // TSDoc; do NOT "fix" it by re-ordering the arms above.
           if (n.action) {
             e.preventDefault();
             this.writeBind(n.searchBind, inp.value);

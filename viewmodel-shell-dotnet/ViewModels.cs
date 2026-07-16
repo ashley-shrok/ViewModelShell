@@ -872,9 +872,16 @@ public record FieldNode(
     /// Blocking:false means "this response may be discarded, may arrive out of order, and
     /// may coexist with another in flight"; that is yours to choose, and yours to handle.
     ///
-    /// ⚠️ Enter is shared. If the field also declares AllowCustom, a non-empty Enter INVENTS
-    /// that value instead of searching (an empty Enter still searches); if it also declares
-    /// Action, SearchAction wins. Declare the combination you actually want.
+    /// 🚨 Do NOT combine with AllowCustom — it is UNSUPPORTED in v1 and warns
+    /// [vms:lookup-ambiguous-enter] in the browser. One Enter cannot both invent a value and
+    /// run a search. The two supported shapes are: SearchAction WITHOUT AllowCustom (a
+    /// directory/reference picker — Enter searches, arrow+Enter accepts a candidate), or
+    /// AllowCustom WITHOUT SearchAction (a free-form tags field — Enter invents). Declaring
+    /// both ignores AllowCustom in favour of the search, loudly.
+    ///
+    /// ⚠️ SearchAction OCCUPIES Enter, so Action is unreachable on a lookup that declares
+    /// one. Deliberate limitation, not a bug: Enter is this control's only dispatch key and
+    /// the search owns it. On a searching lookup, put the submit on a ButtonNode.
     ///
     /// There is NO minimum-character gate, deliberately. An EMPTY query is a legitimate
     /// query and IS dispatched, so an app may answer it with most-recently-used candidates
@@ -890,6 +897,12 @@ public record FieldNode(
     /// An invented value stays a homogeneous LookupItem, never a bare string, so no
     /// union ever arises. AllowCustom:true + no Candidates + labels omitted IS a free-form
     /// tags input, with NO special case in the renderer.
+    ///
+    /// 🚨 Do NOT combine with SearchAction — UNSUPPORTED in v1, warns
+    /// [vms:lookup-ambiguous-enter]. Type "urgent", press Enter: invent the tag, or search
+    /// for it? No precedence serves both (invent-first starves the search; search-first
+    /// starves invention forever), and that there is no good ordering is the tell that the
+    /// shape is wrong — so v1 does not guess. Suggestions on a tags field are deferred.
     ///
     /// Whether a value was picked or invented is SERVER-DECIDABLE (the server produced
     /// every candidate it ever offered, so it tests the id against its own id space).

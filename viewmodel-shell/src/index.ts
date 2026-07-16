@@ -579,10 +579,20 @@ export interface FieldNode {
    * discarded, may arrive out of order, and may coexist with another in flight*;
    * that is yours to choose, and yours to handle.
    *
-   * ⚠️ **Enter is shared.** If the field also declares `allowCustom`, a non-empty
-   * Enter INVENTS that value instead of searching (an empty Enter still
-   * searches); if it also declares `action`, `searchAction` wins. Declare the
-   * combination you actually want.
+   * 🚨 **Do NOT combine with {@link FieldNode.allowCustom} — it is UNSUPPORTED
+   * in v1 and warns `[vms:lookup-ambiguous-enter]`.** One Enter cannot both
+   * invent a value and run a search. The two supported shapes are: this field
+   * WITHOUT `allowCustom` (a directory/reference picker — Enter searches,
+   * arrow+Enter accepts a candidate), or `allowCustom` WITHOUT `searchAction`
+   * (a free-form tags field — Enter invents). Declaring both is ignored in
+   * favour of the search, loudly.
+   *
+   * ⚠️ **`searchAction` OCCUPIES Enter, so {@link FieldNode.action} is
+   * unreachable on a lookup that declares one.** This is a deliberate
+   * limitation, not a bug: Enter is this control's only dispatch key and the
+   * search owns it — there is no second Enter to give `action`, and inventing a
+   * second submit gesture is a keybinding no combobox pattern sanctions. **On a
+   * searching lookup, put the submit on a `ButtonNode`.**
    *
    * **There is NO minimum-character gate**, deliberately. **An EMPTY query is a
    * legitimate query and IS dispatched**, so an app may answer it with
@@ -612,6 +622,15 @@ export interface FieldNode {
    * ⇒ `allowCustom: true` + no `candidates` + labels omitted **is a free-form
    * tags input, with NO special case in the renderer.** This supersedes the
    * separately-designed `inputType: "tags"` proposal.
+   *
+   * 🚨 **Do NOT combine with {@link FieldNode.searchAction} — it is UNSUPPORTED
+   * in v1 and warns `[vms:lookup-ambiguous-enter]`.** Type "urgent", press
+   * Enter: invent the tag, or search for it? Both are legitimate readings of the
+   * same keystroke, and no precedence serves both (invent-first starves the
+   * search; search-first starves invention forever) — that there is no good
+   * ordering is the tell that the shape is wrong, so v1 does not guess.
+   * Suggestions on a tags field are deferred, exactly as the parked `tags`
+   * design already deferred them. Declaring both ignores `allowCustom`.
    *
    * Whether a given value was picked or invented is **server-decidable** — the
    * server produced every candidate it ever offered, so it can test the id

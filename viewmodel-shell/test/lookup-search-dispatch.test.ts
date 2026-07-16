@@ -305,27 +305,127 @@ describe("Enter's precedence among the acts a lookup can declare", () => {
     expect(t.actions[0].blocking).toBeUndefined();
   });
 
-  it("⚠️ allowCustom + a typed value INVENTS rather than searching (the documented, flagged cost)", () => {
-    // Ordering search first would starve invention forever: Enter would search,
-    // the server would answer, and the next Enter would search the same string
-    // again. The reverse only bites a field declaring BOTH, and only for
-    // non-empty text — the empty (MRU) Enter below still searches.
+  it("🚨 `action` is UNREACHABLE when searchAction is declared — deliberate, documented", () => {
+    // 21-12: NOT the D15 ambiguity (two acts fighting over one key) — this is
+    // one act OCCUPYING the key, which is what declaring a search MEANS. Enter
+    // is the lookup's only dispatch key and the search owns it; there is no
+    // second Enter to hand `action`. Documented on the node's TSDoc: on a
+    // searching lookup, put the submit on a ButtonNode. This test pins the
+    // limitation so it stays a DECISION and is not silently "fixed" by
+    // re-ordering the arms.
+    const t = setup({ ownerQuery: "" });
+    t.render(lookupVm({ action: { name: "submit-owner" } }));
+    const inp = t.input();
+    type(inp, "sal");
+    enter(inp);
+
+    expect(t.actions).toHaveLength(1);
+    expect(t.actions[0].name).toBe("search-owner");
+    expect(t.actions.some(a => a.name === "submit-owner")).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// D15 — `allowCustom` + `searchAction` together is UNSUPPORTED and FAILS LOUD
+//
+// 🚨 THE POINT: with the combo EXCLUDED, Enter means exactly ONE thing in every
+// SUPPORTED shape. The old precedence (invent-before-search) is gone — it never
+// searched once anything was typed; ordering search first was rejected in turn
+// because it starves invention forever. That there is NO good ordering is the
+// tell that the SHAPE is wrong, so v1 does not guess: it warns and degrades.
+// Loud, NOT fatal — the [vms:orphan-file] precedent.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("D15 — allowCustom + searchAction fails loud", () => {
+  const warnSpy = () => vi.spyOn(console, "warn").mockImplementation(() => {});
+  const ambiguous = (w: ReturnType<typeof warnSpy>) =>
+    w.mock.calls.filter(c => String(c[0]).includes("[vms:lookup-ambiguous-enter]"));
+
+  it("🚨 the combo WARNS, names both supported shapes, and does NOT throw", () => {
+    const w = warnSpy();
+    const t = setup({ ownerQuery: "" });
+    expect(() => t.render(lookupVm({ allowCustom: true }))).not.toThrow();
+
+    const calls = ambiguous(w);
+    expect(calls).toHaveLength(1);
+    const msg = String(calls[0][0]);
+    expect(msg).toContain("allowCustom");
+    expect(msg).toContain("searchAction");
+    // It must say what to DO, not just what is wrong.
+    expect(msg).toContain("directory");
+    expect(msg).toContain("tags");
+    w.mockRestore();
+  });
+
+  it("the combo still renders a COHERENT control (degrades to the directory picker)", () => {
+    const w = warnSpy();
     const t = setup({ ownerQuery: "" });
     t.render(lookupVm({ allowCustom: true }));
+    const inp = t.input();
+    // The input exists and is a working combobox, not a wreck.
+    expect(inp).toBeTruthy();
+    expect(inp.getAttribute("role")).toBe("combobox");
+
+    // Enter SEARCHES (allowCustom ignored) — one act, as the warning promises.
+    type(inp, "brand-new");
+    enter(inp);
+    expect(t.actions).toHaveLength(1);
+    expect(t.actions[0].name).toBe("search-owner");
+    expect(t.state.ownerId).toBeUndefined();
+    w.mockRestore();
+  });
+
+  it("SUPPORTED shape 1 — searchAction WITHOUT allowCustom: Enter searches, and does NOT warn", () => {
+    const w = warnSpy();
+    const t = setup({ ownerQuery: "" });
+    t.render(lookupVm({}));
+    const inp = t.input();
+    type(inp, "sal");
+    enter(inp);
+
+    expect(t.actions).toHaveLength(1);
+    expect(t.actions[0].name).toBe("search-owner");
+    expect(t.state.ownerId).toBeUndefined();
+    expect(ambiguous(w)).toHaveLength(0);
+    w.mockRestore();
+  });
+
+  it("SUPPORTED shape 1 — arrow+Enter accepts a candidate rather than searching", () => {
+    const w = warnSpy();
+    const t = setup({ ownerQuery: "" });
+    t.render(lookupVm({ candidates: [{ value: "u1", label: "Sally Omer" }] }));
+    const inp = t.input();
+    inp.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    enter(inp);
+
+    expect(t.state.ownerId).toBe("u1");
+    expect(t.actions.some(a => a.name === "search-owner")).toBe(false);
+    expect(ambiguous(w)).toHaveLength(0);
+    w.mockRestore();
+  });
+
+  it("SUPPORTED shape 2 — allowCustom WITHOUT searchAction: Enter invents, and does NOT warn", () => {
+    const w = warnSpy();
+    const t = setup({ ownerQuery: "" });
+    t.render(lookupVm({ allowCustom: true, searchAction: undefined }));
     const inp = t.input();
     type(inp, "brand-new");
     enter(inp);
 
     expect(t.state.ownerId).toBe("brand-new");
     expect(t.actions).toHaveLength(0);
+    expect(ambiguous(w)).toHaveLength(0);
+    w.mockRestore();
   });
 
-  it("allowCustom + an EMPTY box still searches (the MRU path survives the precedence)", () => {
+  it("the warning is deduped per field across re-renders (warnOnce)", () => {
+    const w = warnSpy();
     const t = setup({ ownerQuery: "" });
     t.render(lookupVm({ allowCustom: true }));
-    enter(t.input());
-    expect(t.actions).toHaveLength(1);
-    expect(t.actions[0].name).toBe("search-owner");
+    t.render(lookupVm({ allowCustom: true }));
+    t.render(lookupVm({ allowCustom: true }));
+    expect(ambiguous(w)).toHaveLength(1);
+    w.mockRestore();
   });
 });
 
