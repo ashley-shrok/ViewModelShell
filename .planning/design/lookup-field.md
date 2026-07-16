@@ -119,6 +119,53 @@ our existing pattern, not a new one.
 > to protect the shape; ship single first, because multi is where the second-widget cost and
 > essentially all of the accessibility risk live.
 
+### D2a — **Single-select renders its selection as a chip OUTSIDE the input, exactly like multi. Picking REPLACES.**
+
+> 🚨 **Operator decision, 2026-07-16, made at the live page — and it OVERRIDES the survey.** This
+> supersedes the SLDS-derived "the input itself is the pill" treatment that D2 originally implied.
+
+**What she hit:** with the input *being* the pill, there is **nowhere to click to type** — the pill is
+the entire input, so clicking into it just appends to "Sally Omer".
+
+> *"maybe we should just make the pill separate from the input like the tag setup, even if it is a
+> little awkward. so you always have a place to type. but instead of adding a pill like with tags, it
+> replaces."*
+
+**The rule:** `lookup` and `lookup-multiple` render selections **identically** — chip(s) **outside**
+the input. The ONLY difference is arity: **single REPLACES on pick; multi APPENDS.** The input, in
+both modes, **holds nothing but the query.**
+
+### Why this is better than the model it replaces — three things, and the second is the real prize
+
+1. **There is always somewhere to type.** SLDS's model assumes *clear-then-search*; the operator
+   demonstrated that clear-then-search has no click target. Our divergence is downstream of a real
+   failure, not taste.
+
+2. ⭐ **It DISSOLVES the headline bug's entire root cause rather than patching it.** That bug
+   (`ownerQuery: ""` beating the label ⇒ the placeholder rendering instead of "Sally Omer") existed
+   because **the input answered two questions at once** — *is this the selection or the query?* —
+   arbitrated by a fragile `query != null` test that also had to not break OPEN-6's empty-query
+   dispatch. Two correct decisions collided **in one field**. Move the selection to a chip and
+   `inp.value` is **unconditionally the query**. There is no precedence rule left to get wrong,
+   because there is no longer a question to arbitrate. **The class of bug is gone, not fixed.**
+
+3. **It makes the anti-trap OBSERVABLE on both nodes.** The trap the whole design exists to prevent
+   was only demonstrable on multi, because a chip and a candidate list can be seen at once while a
+   selection *inside* the input cannot. Now single shows it too: chip unmoved, candidate list
+   excluding it, both on screen.
+
+**The honest divergence from the survey:** SLDS renders single-select's selection **inside** the input
+and ships **no `slds-pill` element for single-select at all** — multi's pills live outside, single's
+doesn't. We are deliberately not doing that. Their model is coherent *given* clear-then-search; ours
+is coherent given always-typeable, and it buys the unification and the bug-class deletion above.
+**Recording this so a future reader doesn't "correct" us back toward SLDS on the strength of §2's
+citation.**
+
+**Watch for:** a chip on a single-select could imply "you can add more." Mitigated by replace-on-pick
+being immediately self-evident in use, and by there never being two chips. If a real user reads it as
+additive, that's a signal worth hearing — but it is not a reason to go back to a control with nowhere
+to type.
+
 ### D3 — Custom entries are an **explicit, declared axis**
 
 *Ashley's framing is the rationale: "choosing somebody to mention is very different from inventing a
