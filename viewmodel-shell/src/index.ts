@@ -334,6 +334,44 @@ export interface FormNode {
   children: ViewNode[];
 }
 
+/**
+ * Phase 21 (LOOK-01) — one reference in a `lookup` / `lookup-multiple` field:
+ * an id, optionally the label to show for it, optionally what KIND of thing it
+ * is. Used by BOTH `FieldNode.selected` (what is currently chosen) and
+ * `FieldNode.candidates` (the current search results) — the same shape in both
+ * places, which is what lets a picked value and an invented one stay
+ * homogeneous (see `allowCustom`).
+ *
+ * `value` is the id and the only thing that ever round-trips. It is typed as a
+ * `string` deliberately — not `string | number` — so the wire stays
+ * byte-identical across backends (the same rationale as `min`/`max`/`step`
+ * above): a numeric id serialized by System.Text.Json and by `JSON.stringify`
+ * must produce the same bytes, and a union invites exactly that drift.
+ *
+ * `label` is OPTIONAL and MUST be **omitted when it equals `value`** — an
+ * option not set is simply absent, and a label that merely repeats the id
+ * carries no information. This is exactly the free-form-tag case: a tag is a
+ * value whose label is itself, so the label is absent. (Salesforce models the
+ * same rule: `displayValue` is null for a plain string field and populated
+ * only when it carries something `value` doesn't — a localization, a format,
+ * or a related record's name.)
+ *
+ * `type` is the polymorphic-reference tag, and it exists because an id alone is
+ * not an identity. Microsoft, on Dataverse's `_ownerid_value`, verbatim: the
+ * GUID *"doesn't tell you whether the owner of the record is a user or a
+ * team."* Set it when one field can reference more than one kind of record;
+ * **omit it for monomorphic references**, where it would say nothing the field
+ * doesn't already say.
+ */
+export interface LookupItem {
+  /** The id. The only half that round-trips. */
+  value: string;
+  /** Display text for `value`. Omitted = the label equals the value. */
+  label?: string;
+  /** What KIND of record `value` names. Omitted = a monomorphic reference. */
+  type?: string;
+}
+
 export interface FieldNode {
   type: "field";
   name: string;
@@ -342,15 +380,23 @@ export interface FieldNode {
     | "date" | "time" | "datetime-local"
     | "textarea" | "hidden" | "file"
     | "select" | "select-multiple" | "checkbox"
+    | "lookup" | "lookup-multiple"
     | "code";
   /** Path into state where this input reads its current value and writes user
    *  changes (e.g. `fields.title`). REQUIRED for value-bearing inputs
    *  (text/email/password/number/date/time/datetime-local/textarea/select/
-   *  select-multiple/checkbox/code) and OPTIONAL for `file` inputs — a file
+   *  select-multiple/checkbox/lookup/lookup-multiple/code) and OPTIONAL for
+   *  `file` inputs — a file
    *  input's binary rides the multipart side channel (fileRegistry keyed on
    *  `name`), so omit `bind` on a file input to avoid writing a
    *  `{filename,size}` placeholder object into state (which breaks a
-   *  string/string-map state slot on round-trip). */
+   *  string/string-map state slot on round-trip).
+   *
+   *  For the lookup inputTypes this path holds the ID and NOTHING ELSE:
+   *  `lookup` binds a `string` (one id), `lookup-multiple` binds a `string[]`
+   *  (the ids). The human-readable label never lives here — it travels on
+   *  `selected`, server→client only (see the `selected` doc). The id is state;
+   *  the label is view. */
   bind?: string;
   label?: string;
   placeholder?: string;
@@ -385,6 +431,177 @@ export interface FieldNode {
    *  native `maxlength`. Integer. Omitted = no cap. */
   maxLength?: number;
   options?: Array<{ value: string; label: string }>;
+  /**
+   * LOOKUP INPUTS ONLY (Phase 21, LOOK-01). What is currently chosen, resolved
+   * to display text by the server.
+   *
+   * 🚨 **THE LOAD-BEARING INVARIANT: `selected` is VIEW, not STATE.** It travels
+   * **server→client ONLY**, is recomputed on every render, and is **NEVER
+   * authoritative and NEVER trusted coming back from the client.** `bind` holds
+   * the id and is the only authoritative thing. **Direction is the entire safety
+   * argument** — a client cannot forge a label into a handler because a client
+   * never sends one. Why, from our own principles: the view is a pure function
+   * of state; the id persists and round-trips (state), while the label is
+   * derived, server-owned, and recomputed every render (view). Putting the label
+   * in the bind is putting view into state, and it manufactures a
+   * cache-invalidation problem that every mature enterprise reference field
+   * designed away by storing the id alone — rename a user and every label on
+   * every referencing record changes with zero writes.
+   *
+   * 🚨 **`selected` and `candidates` are SEPARATE FIELDS ON PURPOSE, and the
+   * selected label is NEVER resolved from `candidates`.** Fusing them is the
+   * original sin. With an id-valued field, *"filter the candidate list"* and
+   * *"forget what's selected"* are **the same operation** — so a picker that
+   * resolves its label out of the candidate list renders a raw database id the
+   * moment a form loads with a value already set and no search has occurred
+   * (the cold-start case, which is the case that matters most). Ant Design ships
+   * this failure silently (`label: ... ?? item.value`); Zag chased it across
+   * four changelog entries and two years. Read the label from `selected` and
+   * only from `selected`.
+   *
+   * **Always an array**, including for single `lookup`, where it holds 0 or 1
+   * entries. This is deliberate and there is no precedent for it elsewhere in
+   * this file, so the reasoning lives here: a `T | T[]` union drifts across
+   * backends (it does not serialize byte-identically under both
+   * System.Text.Json and `JSON.stringify`), and the banked parity lesson is to
+   * prefer the shape that cannot drift over the shape that reads nicer.
+   *
+   * `selected[].value` duplicating `bind` is **accepted, deliberate
+   * redundancy** — keying by value is robust; positional parallel arrays are
+   * not.
+   *
+   * Omitted = nothing currently selected.
+   */
+  selected?: LookupItem[];
+  /**
+   * LOOKUP INPUTS ONLY (Phase 21, LOOK-01). The current search results — what
+   * the popup listbox offers. Feeds the popup and **nothing else**. **NEVER the
+   * source of a selected label** (see `selected`).
+   *
+   * 🚨 **ORDER IS MEANINGFUL APP DATA. The renderer presents candidates AS
+   * GIVEN — it sorts nothing, dedupes nothing, and truncates nothing.** The app
+   * decides what comes back and in what order; **relevance ordering is the
+   * SERVER's judgment, never the widget's.** This is universal in mature
+   * pickers: Salesforce's picker `searchType` **defaults to `Recent`**, and
+   * Dynamics shows the five most-recently-used rows plus five favourites,
+   * explicitly NOT filtered by the search term. A renderer that "helpfully"
+   * alphabetized for tidiness would **silently destroy a server-side ranking
+   * with no way for the app to stop it** — a real consumer sorts candidates by
+   * recency-weighted mention frequency in their own provider handler, and that
+   * ranking is the whole product. (Scope: this governs the PRESENTATION of
+   * `candidates`. It is not a ban on the renderer having logic — deduping
+   * `bind` on commit in `lookup-multiple` is a state write about the user's own
+   * accumulated selection, and is correct.)
+   *
+   * 🚨 **Any cap MUST be VISIBLE in the tree. Nothing truncates silently.**
+   * There is no wire field for a cap: the app renders a `TextNode` saying so —
+   * *"Refine your filter — N matches, max is X"*, the canonical table-workflow
+   * pattern. The anti-pattern is ServiceNow's 15-result cap applied post-ACL
+   * behind a hard 250-row SQL ceiling, where **an exact-match record can be
+   * silently invisible** in a large table. A cap the user cannot see is a
+   * correctness bug wearing a performance knob's clothes.
+   *
+   * 🚨 **The picker's filter is UX, NEVER authorization.** Narrowing what is
+   * *offered* is not a security boundary, and a filter that looks like one is
+   * precisely what gets trusted by mistake. ServiceNow says it outright: *"To
+   * restrict what data specific users can access, use ACLs not reference
+   * qualifiers."* Salesforce runs two separate layers for exactly this reason —
+   * a metadata `lookupFilter` enforced server-side on save, versus the
+   * component's UI-only `filter`. **The server authorizes in the action
+   * handler, with the real auth context, exactly as every other VMS action
+   * does.** Omitting a record from `candidates` hides it from the dropdown and
+   * from nothing else — a client that already knows an id can still put it in
+   * `bind`, so the handler is the only thing standing between a user and a
+   * record they may not touch.
+   *
+   * Omitted = no results to offer.
+   */
+  candidates?: LookupItem[];
+  /**
+   * LOOKUP INPUTS ONLY (Phase 21, LOOK-04). Path into state where the typed
+   * query lives, so the server can see it and the view stays a pure function of
+   * state. Separate from `bind`, which holds the id — the query and the
+   * selection are different facts and never share a slot.
+   *
+   * Required for a working typeahead: with a `searchAction` but no
+   * `searchBind`, the query is dispatched but the server can never read what
+   * was typed — a silently dead typeahead that renders perfectly and returns
+   * nothing forever. The browser warns `[vms:lookup-no-searchbind]`.
+   *
+   * Omitted = the query is not round-tripped.
+   */
+  searchBind?: string;
+  /**
+   * LOOKUP INPUTS ONLY (Phase 21, LOOK-04). Dispatched **DEBOUNCED (~250-300ms)
+   * on keystroke** — not on Enter, unlike `action` above. This is the
+   * framework's live-query lane: the app declares where to ask, and the
+   * framework owns the cadence and the response ordering, so no consumer has to
+   * get either right.
+   *
+   * 🚨 **`blocking` is MEANINGLESS here.** The renderer FORCES this action onto
+   * the non-blocking lane regardless of what the app declares. A search query is
+   * definitionally a background question — there is no coherent app that wants a
+   * blocking one — and an app that merely forgot `blocking: false` would
+   * busy-lock the entire page on every keystroke (the framework applies
+   * `.vms-busy` for the duration of any user-initiated dispatch). That failure
+   * is severe, silent at author time, and only shows up when someone types, so
+   * the choice is not worth exposing. Setting `blocking` on a `searchAction`
+   * does nothing.
+   *
+   * **There is NO minimum-character gate**, deliberately — debounce is the real
+   * convention, not a length gate (ServiceNow has no min-chars property at all).
+   * **An EMPTY query is a legitimate query and IS dispatched**, so an app may
+   * answer it with most-recently-used candidates rather than nothing.
+   *
+   * Omitted = no live query; the field is a plain id input.
+   */
+  searchAction?: ActionEvent;
+  /**
+   * LOOKUP INPUTS ONLY (Phase 21, LOOK-06). The **declared** custom-entry axis:
+   * may the user commit a value that isn't one of the offered candidates?
+   *
+   * **Never inferred from behavior.** *Choosing somebody to mention* is very
+   * different from *inventing a new tag* — different ACTS sharing one widget —
+   * so the control DECLARES which it is doing rather than leaving it to be
+   * guessed from what the user typed.
+   *
+   * An invented value stays a homogeneous {@link LookupItem}, **never a bare
+   * string**, so no `LookupItem | string` union ever arises. MUI's `multiple +
+   * freeSolo` yields exactly that heterogeneous union — forcing every consumer
+   * to branch on `typeof`, and their own docs warn it *"may cause type
+   * mismatch."* We never admit a bare string, so it cannot happen here. A
+   * free-form tag is simply a value whose label equals itself (and is therefore
+   * omitted — see {@link LookupItem}).
+   *
+   * ⇒ `allowCustom: true` + no `candidates` + labels omitted **is a free-form
+   * tags input, with NO special case in the renderer.** This supersedes the
+   * separately-designed `inputType: "tags"` proposal.
+   *
+   * Whether a given value was picked or invented is **server-decidable** — the
+   * server produced every candidate it ever offered, so it can test the id
+   * against its own id space. There is deliberately no wire marker for
+   * provenance (no `__isNew__`): react-select needs one because it is
+   * client-only and has no server to ask; we have a server. The explicitness
+   * this decision demands is satisfied by `allowCustom` being a declared axis on
+   * the node — the app declares the act — not by a per-value flag.
+   *
+   * Omitted = false (custom entries rejected; only offered candidates commit).
+   */
+  allowCustom?: boolean;
+  // DESIGNED AND DELIBERATELY DEFERRED (Phase 21, OPEN-1) — `textArrangement`,
+  // a closed `"text" | "text-id" | "id-text"` enum adopted from SAP's
+  // `UI.TextArrangement`, answering "does the user see 'Sally Omer', the raw
+  // id, or both?" (default `"text"` = label only; SAP annotates its equivalent
+  // "e.g. for UUIDs", i.e. when the id is noise). It is NOT an oversight and it
+  // is NOT unresolved: the enum is fully designed, and it is purely additive, so
+  // shipping it later costs nothing and breaks nothing. It is out of v1 because
+  // v1's surface is already large (two inputTypes, five fields, a new dispatch
+  // cadence, a chips a11y contract) and no v1 proof needs the id rendered beside
+  // the label. Add it when an app actually needs to surface a meaningful id (an
+  // order number, a SKU, a ticket ref) — not before.
+  // SAP's `TextSeparate` (code here, text rendered somewhere else entirely) is
+  // permanently out of scope: it is a layout intent no {label,value} pair can
+  // carry.
   /** Optional language hint for `inputType: "code"`. Emitted as a class
    *  (`vms-field--code-{language}`) so apps can attach a syntax-highlighter
    *  library (CodeMirror, Monaco, etc.) — the framework only ships
