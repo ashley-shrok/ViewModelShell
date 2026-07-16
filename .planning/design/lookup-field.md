@@ -293,6 +293,41 @@ feature seems to *need* forcing, that is the signal the feature's shape is wrong
 `searchAction` is a plain blocking action like every other. `blocking` on it means exactly what it
 means everywhere else.
 
+### D15 — `allowCustom` + `searchAction` **together is NOT supported in v1. It fails loud.**
+
+> **Found during execution (21-11), created by D4's reversal.** Moving the search to Enter overloaded
+> Enter: the table's `filterAction` has exactly ONE Enter act, but a lookup can declare THREE
+> (`searchAction`, `allowCustom` invention, `action`). Type "urgent", press Enter — **invent the tag,
+> or search for it?** Both are legitimate readings of the same keystroke.
+
+**The two real cases are unambiguous, and they are the ones anyone actually has:**
+- **`searchAction`, no `allowCustom`** — a directory/reference picker. Enter searches; arrow + Enter
+  accepts a candidate. (Metis's mentions field; every assign-to-one-of-5,000 case.)
+- **`allowCustom`, no `searchAction`** — a free-form tags field. Enter invents. (The TODO app's tags.)
+
+**Both together is deferred**, and note this is not new scope being dropped: *"suggestions on a tags
+field"* is precisely what the parked tags design deferred in v1 already. The same deferral has simply
+arrived from the other direction.
+
+**It FAILS LOUD** (a `[vms:lookup-ambiguous-enter]` console error, following the `[vms:orphan-file]`
+precedent), because a combination that **silently half-works is exactly the quiet failure principle 8
+forbids.** The shipped-then-rejected precedence (active option → invent → search) never searched once
+anything was typed — search-first was rejected in turn because it starves invention forever. There is
+no precedence that serves both; that is the tell that the *shape* is wrong, not the ordering.
+
+**The deferred answer is already known — record it so it isn't re-derived.** react-select's model:
+a **synthetic "Create 'urgent'" option is appended to the candidate list**, so Enter always means one
+thing — *accept the active option* — and invention is just picking a candidate. It also preserves the
+homogeneous-object model (D3): the created value stays an object, distinguishable by an explicit
+marker, never a bare string. ⚠️ It needs one D12 question answered first: **the renderer synthesizing
+an option is not "sorting, deduping, or truncating"** what the server sent, but it is adjacent enough
+to want an explicit ruling rather than an assumption.
+
+**Corollary worth keeping:** D4's reversal was right, but it was not free. Moving a dispatch onto a key
+that already means something creates ambiguity wherever a node can declare more than one act on that
+key. `TableNode.filterAction` was a safe precedent to copy **only because a table row has one Enter
+act.** Copying a pattern means copying its preconditions too.
+
 ## 4. Wire shape
 
 New `FieldNode.inputType` values: **`"lookup"`** and **`"lookup-multiple"`**.
@@ -467,9 +502,11 @@ user testing, Adobe React Aria, Adrian Roselli, TetraLogical.
    registration survives with it. Not the same mechanism. **This is the D9 test.**
 9. Politeness = **`polite`** via `role="status"`. `assertive` is wrong for counts and loading (it
    interrupts the user's own typing echo); reserve it for errors.
-10. **Debounce status updates ~1400ms** (GOV.UK's `statusDebounceMillis`) — on Safari/VoiceOver
-    *"typing echo can otherwise interrupt announcement of the aria live content."* Note this is a
-    **separate, much longer debounce than the query debounce** in D4.
+10. ~~**Debounce status updates ~1400ms**~~ — ⚠️ **VOID. Deleted with the cadence (D4 REVERSED).**
+    GOV.UK's `statusDebounceMillis` exists because *"typing echo can otherwise interrupt announcement
+    of the aria live content"* on Safari/VoiceOver — i.e. it tames a **per-keystroke firehose.**
+    Enter-to-search produces **one announcement per Enter**, so there is nothing to debounce. Kept
+    struck-through rather than deleted: if type-to-search is ever revisited, this comes back with it.
 11. Announcement strings (adopt GOV.UK's battle-tested set): `"${n} results are available."`;
     `"${option} ${i+1} of ${n} is highlighted"`; `"No search results"`; **and announce loading** —
     *"Loading results"*. An async combobox silent during the fetch leaves AT users with no signal.
@@ -480,9 +517,13 @@ user testing, Adobe React Aria, Adrian Roselli, TetraLogical.
     per-keystroke tax.
 14. **Clear the active option whenever the query text changes; do NOT auto-highlight the first option
     when results arrive.** React Aria's NVDA finding: with an option auto-focused, *"character
-    deletions and text cursor movement in the ComboBox input weren't being announced at all."* This
-    bites async hardest — the natural implementation highlights option 1 the moment results land,
-    mid-typing.
+    deletions and text cursor movement in the ComboBox input weren't being announced at all."*
+    ⚠️ **Rationale updated for D4's reversal:** the original argument was that this *"bites async
+    hardest — the natural implementation highlights option 1 the moment results land, mid-typing."*
+    Results no longer land mid-typing, so that specific pressure is gone — **but the rule STANDS on
+    its own merits.** Auto-highlighting still means a subsequent Enter accepts something the user
+    never chose, and the NVDA announcement failure still applies whenever an option is active while
+    the caret moves. **Do not relax it just because the cadence that motivated it is gone.**
 
 > 🚨 **Why the live region is load-bearing and not decorative:** a11ysupport.io's test of **the APG's
 > own reference example** found VoiceOver + Safari a complete failure — *"nothing was conveyed"* —
