@@ -959,6 +959,13 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-table__link { color: var(--vms-accent); text-decoration: none; }
 .vms-table__link:hover { text-decoration: underline; }
 
+/* Trailing per-row actions cell (row.actions[] ButtonNodes). Keep the buttons on
+   one line and give adjacent buttons breathing room — without this rule they
+   render flush against each other. Margin-adjacency (not `display:flex` on the
+   <td>) so the cell stays a proper table-cell and column widths are unaffected. */
+.vms-table__td--actions { white-space: nowrap; }
+.vms-table__td--actions .vms-button + .vms-button { margin-left: var(--vms-space-sm); }
+
 /* Selection — leading checkbox column + selected-row tint. The tint derives
    from --vms-accent via color-mix, so a custom :root theme recolors it
    automatically (same pattern as the status variants above). Selected wins
@@ -1135,6 +1142,15 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   --_badge-tone: var(--vms-text-muted);
   display: inline-flex;
   align-items: center;
+  /* Hug content in ANY parent layout. A badge is semantically inline, but as a flex
+     item it is BLOCKIFIED (inline-flex → flex) and a stack section's align-items:stretch
+     would then stretch it to full width. Giving it a definite cross-size (fit-content)
+     opts out of that stretch — align-items:stretch only stretches items whose cross size
+     is `auto`. We deliberately DON'T use align-self:start: that would top-anchor a badge
+     in a `row` section (align-items:center) since a child's align-self beats the parent's
+     align-items. width:fit-content only touches the main-axis size, so a badge hugs in a
+     stack AND stays vertically centered in a row. Inert for an inline-in-flow badge. */
+  width: fit-content;
   /* Center the pill on the surrounding text instead of baselining it (an
      inline-flex pill otherwise hangs below the baseline of adjacent text). */
   vertical-align: middle;

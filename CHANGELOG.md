@@ -6,6 +6,19 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 5.1.2 — Fixed: a lone `BadgeNode` stretched to full width in a `stack` section; per-row action buttons rendered flush together (npm)
+
+**npm:** `5.1.2` (patch, from `5.1.1`) · **NuGet:** unchanged at `5.1.0`. Client-CSS-only fixes — no renderer logic, no wire or type change; the .NET package has no CSS, so it does not move. The wire protocol token stays `viewmodel-shell/1.0`.
+
+### Fixed
+
+- **`BadgeNode` now hugs its content in every parent layout.** A lone badge placed as a direct child of a `stack` section stretched to the full width of the card instead of sizing to its label. Cause: `.vms-badge` is `inline-flex`, but a flex item is **blockified** (`inline-flex` → `flex`), and a `stack` section's `align-items: stretch` then stretched it edge-to-edge. Fixed with `width: fit-content`, which gives the badge a definite cross-size and opts it out of the stretch (`align-items: stretch` only stretches items whose cross size is `auto`). Deliberately **not** `align-self: start` — that would top-anchor a badge inside a `row` section (whose `align-items: center` a child's `align-self` would override), trading one bug for another. `width: fit-content` touches only the main-axis size, so a badge hugs in a `stack` **and** stays vertically centered in a `row`, and is inert for a badge sitting inline in flowing text.
+- **Trailing per-row action buttons no longer render flush against each other.** `TableRow.actions[]` `ButtonNode`s in the trailing actions cell had no spacing between adjacent buttons. Added `white-space: nowrap` on the cell plus a `.vms-button + .vms-button` left margin. Uses **margin-adjacency rather than `display: flex` on the `<td>`**, so the cell stays a proper table-cell and column widths are unaffected.
+
+**Consumers:** no action needed. Both are pure appearance corrections in the shipped stylesheet — no wire, type, renderer, or dispatch change. Apps that worked around the badge stretch by wrapping it in a `row` section can drop the wrapper; the wrapper is harmless if kept.
+
+---
+
 ## 5.1.1 — Fixed: dimmed (`state:"disabled"`) table rows that are still clickable now show the pointer cursor (npm)
 
 **npm:** `5.1.1` (patch, from `5.1.0`) · **NuGet:** unchanged at `5.1.0`. Client-CSS-only fix — no renderer logic, no wire or type change; the .NET package has no CSS, so it does not move. The wire protocol token stays `viewmodel-shell/1.0`.
