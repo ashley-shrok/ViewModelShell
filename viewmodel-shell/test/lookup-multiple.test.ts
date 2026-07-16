@@ -206,13 +206,28 @@ describe("§7 #24/#28 — the chip group is role=list/listitem with REAL buttons
     expect(removeButtons()[0].type).toBe("button");
   });
 
-  it("single-select `lookup` renders NO chip group at all (SLDS: no pill element exists)", () => {
-    const { render, chipList } = setup({ f: { owner: "u-1" } });
+  it("🚨 single-select `lookup` renders THE SAME chip group (D2a — reversed from SLDS)", () => {
+    // 🚨 THIS ASSERTION IS INVERTED FROM WHAT IT USED TO BE, DELIBERATELY. It
+    // used to demand `chipList()` be NULL for single-select, on SLDS's precedent
+    // (they render single's selection inside the input and ship no pill element
+    // for it at all). D2a REVERSES that, and the reason is a real failure the
+    // operator hit rather than a preference: with the input BEING the pill there
+    // is nowhere to click to type — clicking in just appends to "Sally Omer".
+    //
+    // Both nodes now render selections identically, from ONE implementation, and
+    // the only difference is arity. THE SHARED IMPLEMENTATION IS THE POINT: it
+    // is what gives single the item-specific remove names (#25), the focus rule
+    // (#29), and the list/listitem structure (#24) for free, none of which a
+    // forked single-select chip would have inherited.
+    const { render, chipList, chips } = setup({ f: { owner: "u-1" } });
     render({
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner",
       selected: [{ value: "u-1", label: "Sally Omer" }],
     } as ViewNode);
-    expect(chipList()).toBeNull();
+    expect(chipList()).not.toBeNull();
+    expect(chipList()!.getAttribute("role")).toBe("list");
+    // ...and exactly one chip, because single-select replaces rather than accrues.
+    expect(chips()).toHaveLength(1);
   });
 });
 

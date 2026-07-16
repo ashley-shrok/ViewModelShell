@@ -63,6 +63,9 @@ function setup(initial: Record<string, unknown> = {}, extra: Record<string, unkn
     isOpen: () => input.getAttribute("aria-expanded") === "true",
     active: () => input.getAttribute("aria-activedescendant"),
     owner: () => (state.f as Record<string, unknown> | undefined)?.owner,
+    // D2a — the selection is chip(s) OUTSIDE the input, in both modes.
+    chipText: () => Array.from(container.querySelectorAll<HTMLElement>(".vms-field__chip-label"))
+      .map(c => c.textContent),
     /** Open the popup with the first option highlighted (the Down path). */
     openWithActive: () => { key("ArrowDown"); },
   };
@@ -188,15 +191,17 @@ describe("🚨 §7 item 16 — Home/End are TEXT-EDITING keys (caret to start/en
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("§7 item 17 — Enter with an option active accepts it", () => {
-  it("writes the ID, displays the LABEL, closes the popup, and keeps focus in the input", () => {
+  it("writes the ID, chips the LABEL, closes the popup, and keeps focus in the input", () => {
     const h = setup({ f: { owner: "" } });
     h.input.focus();
     h.key("ArrowDown");
     h.key("ArrowDown"); // active = Bob Lee (u-3)
     const e = h.key("Enter");
     expect(e.defaultPrevented).toBe(true);
-    expect(h.owner()).toBe("u-3");          // the id — and only the id
-    expect(h.input.value).toBe("Bob Lee");  // the label — display only
+    expect(h.owner()).toBe("u-3");            // the id — and only the id
+    expect(h.chipText()).toEqual(["Bob Lee"]); // the label — display only, in the chip (D2a)
+    // 🚨 ...and the box is left EMPTY and ready to type, not holding the label.
+    expect(h.input.value).toBe("");
     expect(h.isOpen()).toBe(false);
     expect(h.active()).toBeNull();
     expect(document.activeElement).toBe(h.input);
@@ -237,7 +242,7 @@ describe("🚨 §7 item 18 — Escape is TWO-STAGE and NEVER clears while the po
     // Clearing here would silently destroy data on a keypress that meant
     // "get this out of my way".
     const h = setup({ f: { owner: "u-1" } }, { selected: [{ value: "u-1", label: "Sally Omer" }] });
-    expect(h.input.value).toBe("Sally Omer");
+    expect(h.chipText()).toEqual(["Sally Omer"]);
     h.key("ArrowDown");
     expect(h.isOpen()).toBe(true);
     const e = h.key("Escape");
@@ -245,7 +250,7 @@ describe("🚨 §7 item 18 — Escape is TWO-STAGE and NEVER clears while the po
     expect(h.isOpen()).toBe(false);
     // 🚨 THE VALUE SURVIVED.
     expect(h.owner()).toBe("u-1");
-    expect(h.input.value).toBe("Sally Omer");
+    expect(h.chipText()).toEqual(["Sally Omer"]);
   });
 
   it("STAGE ONE also abandons the highlighted option without committing it", () => {
@@ -257,26 +262,61 @@ describe("🚨 §7 item 18 — Escape is TWO-STAGE and NEVER clears while the po
     expect(h.active()).toBeNull();
   });
 
-  it("STAGE TWO (popup ALREADY CLOSED): clears — the only keyboard path to un-set a lookup", () => {
-    // Deleting the input text cannot clear the selection: the text is the
-    // LABEL, a view of the id in `bind` (D1). Without this, a keyboard user who
-    // picked the wrong person could never undo it.
-    const h = setup({ f: { owner: "u-1", q: "" } }, {
+  it("🚨 STAGE TWO (popup ALREADY CLOSED): clears THE QUERY — and NOT the selection (D2a)", () => {
+    // 🚨 THIS REVERSED IN 21-14, AND IT IS D2a FOLLOWED THROUGH RATHER THAN A
+    // DROPPED FEATURE. Escape used to clear single-select's BIND here, for a
+    // reason recorded at the time: "this is the ONLY keyboard path to un-set a
+    // single-select lookup — deleting the input text does NOT clear the
+    // selection, because the text is the LABEL, a view of the id in `bind`."
+    //
+    // BOTH HALVES OF THAT PREMISE ARE NOW FALSE:
+    //   • the text is not the label — it is the query, always;
+    //   • Escape is not the only keyboard path — the selection is a chip whose
+    //     remove ✕ is a real, focusable <button> in the tab sequence with an
+    //     item-specific name (the same path multi has always had, and far more
+    //     discoverable than "hunt for Escape").
+    //
+    // So the two modes now AGREE: Escape gets the popup and the query out of
+    // your way; the chip's ✕ removes the selection. Do not "restore" the bind
+    // clear — it would need a second chip-removal path beside removeChipAt(),
+    // which is exactly the fork D2a forbids.
+    const h = setup({ f: { owner: "u-1", q: "sal" } }, {
       selected: [{ value: "u-1", label: "Sally Omer" }], searchBind: "f.q",
     });
     expect(h.isOpen()).toBe(false);
+    expect(h.input.value).toBe("sal");
     h.key("Escape");
-    expect(h.owner()).toBe("");
+    // The QUERY is gone...
     expect(h.input.value).toBe("");
+    expect((h.state.f as Record<string, unknown>).q).toBe("");
+    // ...and the SELECTION is not.
+    expect(h.owner()).toBe("u-1");
+    expect(h.chipText()).toEqual(["Sally Omer"]);
   });
 
-  it("the two stages in sequence: first Escape keeps, second Escape clears", () => {
-    const h = setup({ f: { owner: "u-1" } }, { selected: [{ value: "u-1", label: "Sally Omer" }] });
+  it("the two stages in sequence: first Escape closes, second clears the query — the selection survives both", () => {
+    const h = setup({ f: { owner: "u-1", q: "sal" } }, {
+      selected: [{ value: "u-1", label: "Sally Omer" }], searchBind: "f.q",
+    });
     h.key("ArrowDown");
     h.key("Escape");
-    expect(h.owner()).toBe("u-1"); // stage one KEPT it
+    expect(h.isOpen()).toBe(false);   // stage one CLOSED
+    expect(h.input.value).toBe("sal"); // ...and kept the query
+    expect(h.owner()).toBe("u-1");
     h.key("Escape");
-    expect(h.owner()).toBe("");    // stage two cleared it
+    expect(h.input.value).toBe("");   // stage two cleared the QUERY
+    expect(h.owner()).toBe("u-1");    // 🚨 the selection is still there
+  });
+
+  it("🚨 Escape does not clear MULTI's selection either — the two modes agree (D2a)", () => {
+    const h = setup({ f: { watchers: ["u-1"], q: "sal" } }, {
+      name: "watchers", inputType: "lookup-multiple", bind: "f.watchers",
+      selected: [{ value: "u-1", label: "Sally Omer" }], searchBind: "f.q",
+    });
+    h.key("Escape");
+    expect(h.input.value).toBe("");
+    expect((h.state.f as Record<string, unknown>).watchers).toEqual(["u-1"]);
+    expect(h.chipText()).toEqual(["Sally Omer"]);
   });
 });
 

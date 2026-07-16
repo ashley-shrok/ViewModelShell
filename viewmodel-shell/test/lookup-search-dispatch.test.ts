@@ -250,17 +250,33 @@ describe("🚨 OPEN-6 — an EMPTY query dispatches on Enter (no minChars gate, 
     expect(t.state.ownerQuery).toBe("");
   });
 
-  it("🚨 the empty query dispatches EVEN THOUGH the display falls back to the label", () => {
-    // The two questions the old renderer fused into one `!= null` test. DISPLAY
-    // keys on non-EMPTY (so the label shows); DISPATCH keys on non-NULL (so the
-    // empty query still reaches the server). Both, at once, in one assertion —
-    // this pair is what regressed.
+  it("🚨 the empty query dispatches on a box that HAS a selection — the MRU open still works", () => {
+    // 🚨 THIS TEST USED TO GUARD A COLLISION THAT NO LONGER EXISTS (21-14/D2a).
+    // It asserted "the empty query dispatches EVEN THOUGH the display falls back
+    // to the label" — the two questions the renderer fused into one `!= null`
+    // test, and the pair that regressed and shipped the placeholder bug.
+    //
+    // There is no fallback left to be "even though" about: the label is in a
+    // chip and the box holds the query, so DISPLAY has no opinion about dispatch
+    // and cannot collide with it. What survives is the half that was always a
+    // real rule and is still worth guarding: OPEN-6 — AN EMPTY QUERY IS A
+    // LEGITIMATE QUERY and must reach the server (it is how an app serves a
+    // most-recently-used list), including on a field that already has a
+    // selection, which is precisely where the old `labelShown` flush-guard used
+    // to have to intervene to avoid sending "Sally Omer" as the search term.
     const t = setup({ ownerId: "u-1", ownerQuery: "" });
     t.render(lookupVm({ selected: [{ value: "u-1", label: "Sally Omer" }] }));
-    expect(t.input().value).toBe("Sally Omer");   // display: the label wins
+
+    // The selection is in the chip; the box is empty and means it.
+    expect(t.input().value).toBe("");
+    expect(t.container.querySelector(".vms-field__chip-label")!.textContent).toBe("Sally Omer");
 
     enter(t.input());
-    expect(t.actions).toHaveLength(1);            // dispatch: the empty query still goes
+    expect(t.actions).toHaveLength(1);   // dispatch: the empty query still goes
+    // 🚨 AND IT IS GENUINELY EMPTY — not "" because a flag pretended it was.
+    // The old code read `labelShown ? "" : inp.value` here; if that guard were
+    // ever reintroduced-and-broken, this is where "Sally Omer" would show up as
+    // the search term for the field whose owner already IS Sally Omer.
     expect(t.state.ownerQuery).toBe("");
   });
 });

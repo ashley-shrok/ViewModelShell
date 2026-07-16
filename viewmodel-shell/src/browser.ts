@@ -1412,7 +1412,8 @@ export class BrowserAdapter implements Adapter {
       //
       // 🚨 The label is VIEW, not STATE. It is read from `n.selected` and ONLY
       // from `n.selected`. It is NEVER resolved out of `n.candidates`, which
-      // feeds the popup listbox and NOTHING ELSE.
+      // feeds the popup listbox and NOTHING ELSE. In BOTH modes it is rendered
+      // as a CHIP (D2a) — it never enters `inp.value`.
       //
       // The select arm ~40 lines above resolves what it displays out of its
       // `options` (`o.textContent = opt.label`). Mirroring that instinct here
@@ -1432,78 +1433,52 @@ export class BrowserAdapter implements Adapter {
       // label that merely repeats the id carries no information, so it is
       // absent (that is exactly the free-form-tag case).
       const selectedItems = n.selected ?? [];
-      const selectedLabel = selectedItems.length > 0
-        ? (selectedItems[0].label ?? selectedItems[0].value)
-        : "";
 
-      // ── THE DISPLAY QUESTION AND THE DISPATCH QUESTION ARE DIFFERENT (21-11)
+      // ══ 🚨 `inp.value` IS THE QUERY. UNCONDITIONALLY. IN BOTH MODES. (D2a) ══
       //
-      // 🚨 THE BUG THIS PHASE EXISTS TO FIX WAS ONE `!= null` TEST ANSWERING
-      // BOTH. It looked right and it shipped a form that renders its PLACEHOLDER
-      // where the operator had already set a reference.
+      // There is NO precedence rule here, NO `query != null` vs truthiness
+      // split, and NO flag tracking "is the box showing a label or a query?".
+      // Their ABSENCE is the point of 21-14, so read why before adding one back:
       //
-      // The query round-trips (searchBind) so the server sees it and the view
-      // stays a pure function of state. Two rules collided in one expression:
+      // The headline bug (`ownerQuery: ""` beating the label ⇒ the placeholder
+      // rendering where a reference was already set) existed because THE INPUT
+      // ANSWERED TWO QUESTIONS AT ONCE — *is this the selection or the query?* —
+      // arbitrated by a fragile test that ALSO had to not break OPEN-6's
+      // empty-query dispatch. Two correct decisions colliding in one field:
       //
-      //   • OPEN-6 says DO NOT gate on truthiness — an EMPTY QUERY IS A
-      //     LEGITIMATE QUERY (it is how an app serves a most-recently-used
-      //     list), so `""` must still reach the server.
-      //   • D1 says the label comes from `selected`.
+      //   • OPEN-6 — an EMPTY QUERY IS A LEGITIMATE QUERY (it is how an app
+      //     serves a most-recently-used list), so `""` must still reach the
+      //     server ⇒ that rule is about DISPATCH.
+      //   • D1 — the label comes from `selected` ⇒ that rule is about DISPLAY.
       //
-      // Both are right. But a real state record initializes its query slot to
-      // `""` — an empty STRING, not null — so `query != null` was TRUE on a
-      // cold form load, the input rendered empty, and the placeholder won. The
-      // empty query beat the label.
+      // 21-11 fixed it by SPLITTING the two tests (display keyed on non-empty,
+      // dispatch on non-null). Correct, and still a patch: the arbitration
+      // remained, so the next reader could still get it wrong.
       //
-      // ⇒ They are separated, and each keys on what it actually needs:
+      // 🚨 D2a DISSOLVES THE ROOT CAUSE INSTEAD. The operator hit the real
+      // problem at the live page — with the input BEING the selection (the
+      // 21-13 SLDS pill), THERE IS NOWHERE TO CLICK TO TYPE; clicking in just
+      // appends to "Sally Omer":
       //
-      //   DISPLAY  keys on NON-EMPTY  — is the user typing? Only text they have
-      //            actually typed may cover the label.
-      //   DISPATCH keys on NON-NULL   — should this reach the server? Yes, even
-      //            empty (see the Enter handler; do NOT regress OPEN-6).
+      //   "maybe we should just make the pill separate from the input like the
+      //    tag setup, even if it is a little awkward. so you always have a place
+      //    to type. but instead of adding a pill like with tags, it replaces."
       //
-      // Clearing the box therefore shows the label again. That is CORRECT and is
-      // not a regression: clearing the SEARCH TEXT is not clearing the
-      // SELECTION. Escape clears the selection (21-03's recorded decision), and
-      // it is the only thing that does.
+      // So the selection MOVED OUT of the input and became a chip — the same
+      // chip multi already used. With the selection in a chip, `inp.value` is
+      // unconditionally the query: THERE IS NO QUESTION LEFT TO ARBITRATE, so
+      // there is no precedence rule left to get wrong. The class of bug is gone,
+      // not fixed.
+      //
+      // ⇒ IF YOU ARE ABOUT TO ADD A BRANCH HERE THAT DECIDES WHAT THE INPUT
+      //   SHOWS, STOP — that branch is the bug, and re-adding it re-opens the
+      //   placeholder-instead-of-label failure the operator saw on the tailnet.
+      //
+      // (OPEN-6 is untouched and lives where it always belonged: the DISPATCH
+      // question, answered in the Enter handler / search(). An empty query still
+      // dispatches — it just no longer has a display rule to fight with.)
       const query = n.searchBind != null ? this.readBind(n.searchBind) : undefined;
-      const queryText = query != null ? String(query) : "";
-      // 🚨 "THE BOX IS SHOWING A LABEL, NOT A QUERY."
-      //
-      // The display fallback above means `inp.value` is NOT always the user's
-      // query — on a cold load it is the SERVER'S LABEL for the current
-      // selection. Anything that flushes the box to `searchBind` must know the
-      // difference, or it writes "Sally Omer" into the query slot and the next
-      // search asks the directory for a person named after the person already
-      // chosen. (This is the display fix's own sharp edge: the fallback that
-      // makes the label visible is what puts non-query text in a query box.)
-      //
-      // Tracked as a closure flag rather than re-derived at flush time because
-      // the box's meaning CHANGES with use: typing makes it a query (the input
-      // listener clears this), and committing makes it a label again (commit()
-      // sets it). Cleared/set at exactly those three points, nowhere else.
-      //
-      // 🚨 It is ALSO the "does this read as a chosen thing?" flag (21-13) — see
-      // setLabelShown() below, which is what actually mutates it. The three
-      // points that change the box's meaning are the same three either way,
-      // which is why one flag serves both and why it must never be assigned
-      // directly.
-      let labelShown = queryText === "" && !isMulti && selectedLabel !== "";
-      inp.value = queryText !== ""
-        ? queryText
-        // Single-select renders its selection INSIDE the input — SLDS does the
-        // same, and no chip element exists for single-select at all. Multi's
-        // selection lives in chips OUTSIDE the input (Plan 21-05), so its input
-        // carries only the query.
-        : (isMulti ? "" : selectedLabel);
-
-      // D6 — the polymorphic type tag rides ALONGSIDE the display and never
-      // leaks into the bound value: `bind` holds the id and nothing else. An id
-      // alone is not an identity (a Dataverse owner GUID "doesn't tell you
-      // whether the owner of the record is a user or a team"), so a
-      // polymorphic reference exposes what KIND of thing it names.
-      const selectedType = !isMulti && selectedItems.length > 0 ? selectedItems[0].type : undefined;
-      if (selectedType != null) inp.dataset.vmsSelectedType = selectedType;
+      inp.value = query != null ? String(query) : "";
 
       // §7 items 1-3 — role="combobox" on the INPUT ITSELF (ARIA 1.2; the 1.0
       // wrapper + aria-owns pattern is deprecated). aria-expanded is ALWAYS
@@ -1591,6 +1566,26 @@ export class BrowserAdapter implements Adapter {
       const live = this.lookupLiveRegions(n.name);
       const announce = (message: string): void => this.announceLookup(n.name, message);
 
+      // 🚨 §7 item 27 — ANNOUNCE ADD AND REMOVE, AND ON MULTI ALWAYS WITH THE
+      // RUNNING COUNT. GOV.UK FAILED REVIEW FOR EXACTLY THIS OMISSION ("does not
+      // announce the selections effectively"): without the count an AT user
+      // cannot know the SIZE of the set they are building without abandoning the
+      // input to audit the chips one by one. If you are here to shorten the multi
+      // strings, that is what you are deleting.
+      //
+      // 🚨 SINGLE DROPS THE COUNT, AND THAT IS NOT A WEAKENING OF ITEM 27 (D2a).
+      // Item 27's count exists to convey THE SIZE OF AN ACCUMULATING SET. Single
+      // has no set: picking REPLACES, so the count is always exactly 1 and
+      // carries zero information — while "Sally Omer selected. 1 items selected."
+      // is both ungrammatical and actively misleading, because it implies an
+      // additive control the user does not have (the D2a "watch for": a chip on a
+      // single-select could read as "you can add more"). The remove string is the
+      // 21-13 clear ✕'s wording, kept verbatim: it says what actually happened.
+      const announceAdd = (label: string, count: number): void =>
+        announce(isMulti ? `${label} selected. ${count} items selected.` : `${label} selected.`);
+      const announceRemove = (label: string, count: number): void =>
+        announce(isMulti ? `${label} removed. ${count} items selected.` : `${label} removed. Selection cleared.`);
+
       // §7 item 13 — the assistive hint, wired via aria-describedby and REMOVED
       // after the first input so it is not a per-keystroke tax. `hintShown`
       // lives on the persistent entry because "the user has typed here before"
@@ -1619,7 +1614,16 @@ export class BrowserAdapter implements Adapter {
       };
       setQuerying(querying);
 
-      // ══ THE CHIPS LAYER (LOOK-03, multi only) ═══════════════════════════════
+      // ══ THE CHIPS LAYER (LOOK-03; BOTH MODES since D2a) ═════════════════════
+      //
+      // 🚨 D2a — `lookup` AND `lookup-multiple` RENDER SELECTIONS IDENTICALLY:
+      // chip(s) OUTSIDE the input, from the SAME code below. THE ONLY DIFFERENCE
+      // IS ARITY — single REPLACES on pick, multi APPENDS — and it lives in
+      // exactly one place (addValue()). Do NOT fork a parallel single-select
+      // chip: the banked "provide-your-own-X" lesson is that a divergent second
+      // implementation of the same shape is where behavior silently drops, and
+      // everything below (the item-specific remove name, the running-count
+      // announcement, the focus-after-removal rule) is what a fork would lose.
       //
       // ⚠️ READ design §7 items 23-31 BEFORE CHANGING ANYTHING BELOW. There is
       // NO APG PATTERN FOR CHIPS AT ALL — every rule here is extrapolation from
@@ -1721,12 +1725,27 @@ export class BrowserAdapter implements Adapter {
         const li = chipButtons[i]?.closest<HTMLElement>(".vms-field__chip");
         if (value == null || li == null) return;
 
-        const current = this.readBind(n.bind);
-        const ids = Array.isArray(current) ? (current as unknown[]).map(String) : [];
-        const nextIds = ids.filter(id => id !== value);
         // The id — and ONLY the id — is what persists (D1). The label was never
         // in the bind, so there is nothing to keep in sync here.
-        this.writeBind(n.bind, nextIds);
+        //
+        // 🚨 THE ARITY SPLIT, WRITE SIDE (D2a). The wire is explicit and the two
+        // shapes are NOT interchangeable: `bind` is a `string` for `lookup` and a
+        // `string[]` for `lookup-multiple`. Writing `[]` into a single-select's
+        // scalar slot would hand the server an array where its state record
+        // declares a string — a cross-backend type mismatch that System.Text.Json
+        // rejects outright on the `_state` deserialize. Removing single's one
+        // chip IS clearing the selection, so it writes the empty id.
+        let remaining: number;
+        if (isMulti) {
+          const current = this.readBind(n.bind);
+          const ids = Array.isArray(current) ? (current as unknown[]).map(String) : [];
+          const nextIds = ids.filter(id => id !== value);
+          this.writeBind(n.bind, nextIds);
+          remaining = nextIds.length;
+        } else {
+          this.writeBind(n.bind, "");
+          remaining = 0;
+        }
 
         // The chip leaves the DOM NOW, not when the server answers. A bind write
         // does not re-render — `selected` is server-owned VIEW — so without this
@@ -1743,13 +1762,29 @@ export class BrowserAdapter implements Adapter {
 
         // Focus BEFORE announcing: the user must never be left on <body>, and
         // the announcement is debounced anyway.
+        //
+        // 🚨 §7 item 29 STILL APPLIES AT ONE CHIP, and single-select is the case
+        // that exercises its LAST fallback: with one chip, `next` and `previous`
+        // are both undefined, so focus lands on the INPUT. That is exactly right
+        // (the user just cleared their selection and the next thing they want is
+        // to type), and it is why the rule is written as a structural chain
+        // rather than as conditionals someone could forget to extend to single.
         focusAfterChipRemoval(i);
-        // 🚨 §7 item 27 — WITH THE RUNNING COUNT. See addValue().
-        announce(`${label} removed. ${nextIds.length} items selected.`);
+        announceRemove(label, remaining);
       };
 
-      /** Render one chip. `label` is display-only; `value` is the id (D1). */
-      const appendChip = (value: string, label: string): void => {
+      /** Empty the chip list and the parallel DOM-local arrays. Single-select's
+       *  REPLACE is "clear, then append one" — see addValue(). */
+      const clearChips = (): void => {
+        chipList?.replaceChildren();
+        chipButtons.length = 0;
+        chipValues.length = 0;
+        chipLabels.length = 0;
+      };
+
+      /** Render one chip. `label` is display-only; `value` is the id (D1).
+       *  `type` is D6's polymorphic tag — see the dataset write below. */
+      const appendChip = (value: string, label: string, type?: string): void => {
         if (chipList == null) return;
         const i = chipValues.length;
         const li = document.createElement("li");
@@ -1758,6 +1793,20 @@ export class BrowserAdapter implements Adapter {
         // implicit list/listitem roles in Safari/VoiceOver, so a styled <ul>
         // silently stops being a list exactly where it matters most.
         li.setAttribute("role", "listitem");
+        // D6 — the polymorphic type tag rides ALONGSIDE the display and never
+        // leaks into the bound value: `bind` holds the id and nothing else. An id
+        // alone is not an identity (a Dataverse owner GUID "doesn't tell you
+        // whether the owner of the record is a user or a team"), so a polymorphic
+        // reference exposes what KIND of thing it names.
+        //
+        // 🚨 It hangs on the CHIP, which is where the selection now IS (D2a). It
+        // used to hang on the INPUT as `data-vms-selected-type`, single-select
+        // only — correct when the input WAS the selection, stale the moment the
+        // selection moved out, and it would have left a type tag on a box that
+        // holds nothing but the query. Chipping it also gives MULTI the exposure
+        // it never had (each chip tags its own reference, which is the only shape
+        // that can work for a mixed user/team set).
+        if (type != null) li.dataset.vmsType = type;
 
         const text = document.createElement("span");
         text.className = "vms-field__chip-label";
@@ -1830,9 +1879,47 @@ export class BrowserAdapter implements Adapter {
 
       /**
        * Commit `value` into the selection. The ONE path both a picked candidate
-       * and an invented (allowCustom) value take — see commitCustom().
+       * and an invented (allowCustom) value take (see commitCustom()) — and, since
+       * D2a, the ONE path BOTH MODES take.
+       *
+       * 🚨 THIS FUNCTION IS THE ONLY PLACE `lookup` AND `lookup-multiple` BEHAVE
+       * DIFFERENTLY, AND THE DIFFERENCE IS ARITY AND NOTHING ELSE:
+       *
+       *     single REPLACES  ·  multi APPENDS
+       *
+       * Everything else about the two — the chip markup, the a11y contract, the
+       * focus rules, the input holding nothing but the query — is identical by
+       * construction, because it is literally the same code. If you find yourself
+       * adding a second `isMulti` branch somewhere else in this arm, check first
+       * whether it belongs here instead.
        */
-      const addValue = (value: string, label: string): void => {
+      const addValue = (value: string, label: string, type?: string): void => {
+        if (!isMulti) {
+          // 🚨 REPLACE (D2a). The operator's words: "instead of adding a pill like
+          // with tags, it replaces." There is never a second chip, which is also
+          // what makes replace-on-pick self-evident in use — the mitigation for
+          // the one risk D2a records ("a chip on a single-select could imply you
+          // can add more").
+          //
+          // The id — and ONLY the id — is what persists (D1), and for `lookup`
+          // that id is a bare `string`, never an array — see removeChipAt() for
+          // why the two shapes are not interchangeable.
+          this.writeBind(n.bind, value);
+          // Optimistic, and the SERVER'S NEXT RENDER IS AUTHORITATIVE — the chip
+          // render path reads `n.selected` and only `n.selected`. Rebuilt rather
+          // than mutated in place so the chip's stable index-keyed id, its
+          // roving tabindex and its aria-label are all produced by the one
+          // appendChip() path instead of a second, drifting update path.
+          clearChips();
+          appendChip(value, label, type);
+          setRoving(0);
+          announceAdd(label, 1);
+          inp.value = "";
+          this.writeBind(n.searchBind, "");
+          setArmed(null);
+          return;
+        }
+
         const current = this.readBind(n.bind);
         const ids = Array.isArray(current) ? (current as unknown[]).map(String) : [];
 
@@ -1870,32 +1957,28 @@ export class BrowserAdapter implements Adapter {
           // used once, immediately, and replaced by the server's authoritative
           // `selected` on the very next render. The chip RENDER path above reads
           // `n.selected` and only `n.selected`.
-          appendChip(value, label);
+          appendChip(value, label, type);
           setRoving(roving);
         }
-        // 🚨 §7 item 27 — ANNOUNCE WITH THE RUNNING COUNT, on add AND remove.
-        //
-        // GOV.UK FAILED REVIEW FOR EXACTLY THIS OMISSION ("does not announce the
-        // selections effectively"). Without the count an AT user cannot know the
-        // SIZE of the selection they are building without abandoning the input to
-        // audit the chips one by one. The count is not decoration; it is the only
-        // thing that makes an unseen, accumulating set comprehensible. If you are
-        // here to shorten this string, that is what you are deleting.
-        //
-        // §7 item 32 — this is also the ONLY thing that actually conveys the
-        // selection: aria-selected/aria-multiselectable are "mostly not announced
-        // when true", and on Safari/VoiceOver the ARIA path conveys NOTHING. Set
-        // the attributes (correct, cheap, support improves); TELL the user here.
+        // 🚨 §7 items 27 + 32 — announce WITH THE RUNNING COUNT (see
+        // announceAdd(), which holds the rule and the reason). This is also the
+        // ONLY thing that actually conveys the selection: aria-selected /
+        // aria-multiselectable are "mostly not announced when true", and on
+        // Safari/VoiceOver the ARIA path conveys NOTHING. Set the attributes
+        // (correct, cheap, support improves); TELL the user here.
         //
         // A duplicate still announces, and the sentence stays true — the item IS
         // selected and the count IS accurate. Silence would just look broken.
-        announce(`${label} selected. ${nextIds.length} items selected.`);
+        announceAdd(label, nextIds.length);
         inp.value = "";
         this.writeBind(n.searchBind, "");
         setArmed(null);
       };
 
-      if (isMulti) {
+      // 🚨 BOTH MODES (D2a) — this used to be gated on `isMulti`. Single-select's
+      // selection is now a chip built by the SAME code, and the whole a11y
+      // contract below comes with it for free precisely BECAUSE it is not a fork.
+      {
         chipList = document.createElement("ul");
         chipList.className = "vms-field__chips";
         // §7 item 24 — role="list", NOT a listbox with option children. A chip
@@ -1908,18 +1991,29 @@ export class BrowserAdapter implements Adapter {
 
         // 🚨 THE DISPLAY PATH (D1) — chips are built from `n.selected`, and ONLY
         // from `n.selected`. `candidates` feeds the popup listbox and NOTHING
-        // else. Same trap, same rule, same reason as the single-select display
-        // path above: mid-search the candidate list routinely EXCLUDES what is
-        // already chosen, so a chip labelled out of `candidates` renders a raw
-        // database id or vanishes on the case that matters most. Per D5 an item
-        // whose label is omitted displays its value.
-        selectedItems.forEach(item => appendChip(item.value, item.label ?? item.value));
+        // else. Mid-search the candidate list routinely EXCLUDES what is already
+        // chosen, so a chip labelled out of `candidates` renders a raw database
+        // id or vanishes on the case that matters most. Per D5 an item whose
+        // label is omitted displays its value.
+        //
+        // 🚨 `selected` IS ALWAYS AN ARRAY, INCLUDING FOR SINGLE-SELECT, where it
+        // holds 0 or 1 entries — that is the wire shape (§4), chosen so a `T |
+        // T[]` union could not drift across the two backends. Which means this
+        // one line renders BOTH modes with no arity branch: single is simply the
+        // array that is never longer than one. Nothing clamps it here on purpose
+        // — `selected` is the SERVER'S answer, and if a server ever sent two
+        // entries for a `lookup`, silently hiding one would be this renderer
+        // second-guessing it (D12's instinct, if not its letter). Two chips on a
+        // single-select is a server bug, and it should look like one.
+        selectedItems.forEach(item => appendChip(item.value, item.label ?? item.value, item.type));
 
         // Restore the DOM-local chip facts the wipe destroyed. Clamped, because
         // the server may have returned fewer chips than the last render had.
         setRoving(snapshot?.roving ?? 0);
         // Only re-arm if the LAST chip is still the SAME ITEM — see the snapshot
         // declaration for why this is keyed by value and not by a boolean.
+        // Single never arms (the two-step Backspace is multi-only, D14), so this
+        // is structurally a no-op there rather than a branch.
         const armedValue = snapshot?.armed;
         if (armedValue != null && chipValues[chipValues.length - 1] === armedValue) {
           setArmed(armedValue);
@@ -1959,112 +2053,31 @@ export class BrowserAdapter implements Adapter {
         if (!v) { setActive(-1); setQuerying(false); }
       };
 
-      // ══ THE SELECTED-STATE PILL (21-13, single-select only) ═══════════════
+      // ══ THE 21-13 PILL-INPUT TREATMENT IS GONE — DO NOT BRING IT BACK ══════
       //
-      // 🚨 THE PROBLEM, IN THE OPERATOR'S WORDS:
+      // 21-13 styled THE INPUT ITSELF as a pill when a record was selected (the
+      // SLDS shape: for single-select no separate pill element exists at all),
+      // plus an inline clear ✕ overlaid on the input's right edge. Both are
+      // DELETED, along with the `labelShown` flag that drove them and the
+      // `.vms-field--lookup-selected` CSS.
       //
-      //   "the Sally that's in the box is not, like, a chip or anything, it's
-      //    just text, so in order to type the new name, I would have to get rid
-      //    of Sally, which seems to defeat the purpose."
+      // 🚨 WHY, so nobody restores it as "the missing polish": the operator drove
+      // it and found it had NOWHERE TO CLICK TO TYPE. The pill WAS the input, so
+      // clicking into it just appended to "Sally Omer". SLDS's model is coherent
+      // GIVEN clear-then-search; the operator demonstrated clear-then-search has
+      // no click target. Ours is coherent given always-typeable. That divergence
+      // from the survey is deliberate and recorded at D2a §"The honest divergence
+      // from the survey" — do not "correct" us back toward SLDS on the strength
+      // of the citation in the design doc's §2.
       //
-      // She is right, and it is a DESIGN gap, not a demo problem. In
-      // single-select the input does DOUBLE DUTY — it shows the SELECTION and it
-      // accepts the QUERY — and until now there was ZERO visual difference
-      // between them. "Sally Omer" in that box could be a chosen record or text
-      // the user typed, and the user could not tell. Two different meanings
-      // rendered identically is a comprehension failure, and it is exactly the
-      // kind of thing the honest-structured-data principle exists to prevent —
-      // the tree knew which it was the whole time; the pixels didn't say.
+      // The clear ✕ went with it because THE CHIP'S OWN ✕ now does that job, in
+      // both modes, from one implementation — a second, differently-shaped clear
+      // affordance beside a chip that already has one would be exactly the
+      // parallel-path drift D2a's "reuse the chip" rule exists to prevent.
       //
-      // 🚨 THE FIX WAS ALREADY IN OUR OWN SURVEY AND WE DIDN'T IMPLEMENT IT.
-      // Salesforce SLDS styles THE INPUT ITSELF to look like a pill when a
-      // record is selected — and note the detail that makes this the RIGHT shape
-      // rather than a lookalike: for single-select NO SEPARATE PILL ELEMENT
-      // EXISTS AT ALL. Multi's pills live OUTSIDE the input (that is D2's second
-      // widget, the chips layer above); single's selection IS the input. So this
-      // is APPEARANCE PLUS A CLEAR CONTROL — NOT a new element, NOT a new node,
-      // NOT anything on the wire. The a11y contract is untouched: still
-      // role="combobox" ON THE INPUT, still an <input>, still typeable.
-      //
-      // The two states must be INSTANTLY DISTINGUISHABLE AT A GLANCE:
-      //   selection present + NO active query  ⇒ pill (a chosen thing) + a clear ✕
-      //   user is typing (query non-empty)     ⇒ plain query text, no pill
-      // That predicate is EXACTLY `labelShown` — the flag that already tracked
-      // "the box is showing a label, not a query" for the search-flush bug. It
-      // is the same question, so it is deliberately NOT a second flag that could
-      // drift out of step with the first.
-      //
-      // ⚠️ CONTRAST: this is a NEW fg/bg pair that the FIXED 13-pair
-      // check:aa-contrast gate does NOT auto-cover, so it was hand-computed
-      // across the shipped default + all 12 themes (21-13). It reuses the CHIP's
-      // tokens (--_chip-tone and its 12% knockout fill) rather than inventing
-      // any theme var, so it is LITERALLY the chip's already-measured pair:
-      // 10.63:1 worst (dark-*), 13.60:1 (light-*), against a 4.5:1 text bar.
-      // That reuse is also what dodges 21-09's trap — the chip's FOCUS RING
-      // failed 3:1 on light-amber/green/teal when it derived from --vms-accent,
-      // and was fixed by deriving from --_chip-tone. Deriving from --_chip-tone
-      // here means that failure cannot recur. Re-measure if --_chip-tone ever
-      // stops being --vms-text.
-      let clearBtn: HTMLButtonElement | undefined;
-      if (!isMulti) {
-        clearBtn = document.createElement("button");
-        // MANDATORY: a lookup inside a FormNode would otherwise SUBMIT it on
-        // every clear click — <button>'s default type is "submit". Same trap the
-        // chip remove button carries.
-        clearBtn.type = "button";
-        clearBtn.className = "vms-field__clear";
-        clearBtn.id = `vms-${n.name}-clear`;
-        // A unique, item-specific accessible name — the §7 item 25 rule the
-        // chips already follow, for the same reason: "Clear" alone on a form with
-        // several lookups is a row of identically-named buttons.
-        clearBtn.setAttribute("aria-label", `Clear ${n.label ?? n.name}`);
-        // Decorative: the accessible name above is the real one.
-        clearBtn.textContent = "×";
-        clearBtn.addEventListener("mousedown", (e) => {
-          // mousedown + preventDefault, exactly as the options do: keep DOM focus
-          // in the input rather than letting the press blur it.
-          e.preventDefault();
-          e.stopPropagation();
-          const cleared = selectedLabel;
-          // The id — and ONLY the id — is what persists (D1). Clearing the
-          // SELECTION is clearing the bind; the query slot goes with it because
-          // the box is being emptied, not re-queried.
-          this.writeBind(n.bind, "");
-          this.writeBind(n.searchBind, "");
-          inp.value = "";
-          setLabelShown(false);
-          setOpen(false);
-          // §7 item 32 — the visual fact is ALSO spoken, or an AT user learns
-          // nothing from a button whose whole job is destructive.
-          announce(`${cleared} removed. Selection cleared.`);
-          inp.focus();
-        });
-      }
-
-      /**
-       * The ONE mutator of `labelShown`. 🚨 NEVER assign the flag directly: it
-       * now drives the pill treatment AND the clear button's presence, so a bare
-       * assignment renders a box that CLAIMS to hold a selection while the
-       * closure knows it holds a query (or vice versa) — the closure and the DOM
-       * must never disagree, the same rule the popup's `open` follows.
-       *
-       * Called at exactly the points where the box's MEANING changes, and
-       * nowhere else: the render sync just below (the server's answer), the input
-       * listener (typing makes the text the user's), commit()/commitCustom() (a
-       * selection makes it a label again), and the clear/Escape paths.
-       */
-      const setLabelShown = (v: boolean): void => {
-        labelShown = v;
-        // On the WRAPPER, not the input: the clear button is a sibling, and the
-        // popup/chips are too, so one class governs the whole widget's selected
-        // presentation from a single toggle.
-        wrapper.classList.toggle("vms-field--lookup-selected", v);
-        // `hidden` rather than removal — the button keeps its stable id across
-        // the state flip, so render()'s generic focus restore can still re-find
-        // it, and nothing has to be re-created on every keystroke.
-        if (clearBtn) clearBtn.hidden = !v;
-      };
-      setLabelShown(labelShown);
+      // And `labelShown` went with BOTH because the question it answered ("is the
+      // box showing a label or a query?") NO LONGER EXISTS. See the display path
+      // above: `inp.value` is the query, unconditionally.
 
       // ── POPUP-OPEN PRESERVATION (Phase 21, LOOK-02) ──────────────────────
       //
@@ -2119,35 +2132,25 @@ export class BrowserAdapter implements Adapter {
           : "No search results");
       }
 
-      /** Accept the candidate at `i` — the ONLY path that writes the bind. */
+      /** Accept the candidate at `i` — the ONLY path that writes the bind.
+       *
+       *  🚨 ONE PATH FOR BOTH MODES (D2a). This used to fork: multi called
+       *  addValue(), single hand-wrote its own bind write + `inp.value = label` +
+       *  query clear + pill flag, and that duplicated commit path is precisely
+       *  where the "leaving a stale query behind redraws the box as 'sal'" bug
+       *  lived. The arity difference lives in addValue() and NOWHERE ELSE. */
       const commit = (i: number): void => {
         const c = (n.candidates ?? [])[i];
         if (c == null) return;
+        // Per D5 an omitted label means the label IS the value.
+        addValue(c.value, c.label ?? c.value, c.type);
         if (isMulti) {
-          // Per D5 an omitted label means the label IS the value.
-          addValue(c.value, c.label ?? c.value);
           // §7 item 30 — do NOT close the popup on select in a multi-select;
           // the user is usually picking several.
           setActive(-1);
         } else {
-          // The id — and ONLY the id — is what persists (D1).
-          this.writeBind(n.bind, c.value);
-          // ...and the label is what is shown. Same D1/D5 rule as the display
-          // path above: an omitted label means the label IS the value.
-          inp.value = c.label ?? c.value;
-          // 🚨 The query is SPENT — clear it, exactly as addValue() does for
-          // multi. Two reasons, and the first is a real bug:
-          //   1. The box now holds a LABEL, so `labelShown` must say so or the
-          //      next Enter would flush "Sally Omer" into the query slot.
-          //   2. A stale query in state OUTRANKS the label on the next render
-          //      (display keys on non-empty), so leaving "sal" behind means the
-          //      server's next response redraws the box as "sal" and the user
-          //      watches their own selection turn back into their search text.
-          this.writeBind(n.searchBind, "");
-          // ...and the box now reads as a CHOSEN THING rather than as text
-          // someone typed (21-13): same flag, same three points, see
-          // setLabelShown().
-          setLabelShown(true);
+          // Single is done: the question was "which one?", it has been answered,
+          // and the list has nothing left to offer.
           setOpen(false);
         }
         inp.focus();
@@ -2194,20 +2197,13 @@ export class BrowserAdapter implements Adapter {
         // research per D3): a trailing space is a slip, not a distinct tag.
         const value = raw.trim();
         if (value === "") return;
-        if (isMulti) {
-          // Dedupe lives in addValue() — see the D12 SCOPE note there.
-          addValue(value, value);
-          setActive(-1);
-        } else {
-          this.writeBind(n.bind, value);
-          inp.value = value;
-          // Same as commit(): the box now holds a committed label (which, per
-          // D5, an invented value IS — a value whose label equals itself), and
-          // the query that produced it is spent. See commit() for both reasons.
-          this.writeBind(n.searchBind, "");
-          setLabelShown(true);
-          setOpen(false);
-        }
+        // An invented value is a value whose label equals itself (D5), and it
+        // takes the SAME commit path as a picked one — including D2a's arity
+        // split, so a single-select tags field replaces its one tag rather than
+        // accumulating. Dedupe lives in addValue() — see the D12 SCOPE note there.
+        addValue(value, value);
+        if (isMulti) setActive(-1);
+        else setOpen(false);
         inp.focus();
       };
 
@@ -2292,14 +2288,18 @@ export class BrowserAdapter implements Adapter {
         // ~200 lines above; conflating the two is what shipped the
         // placeholder-instead-of-label bug.
         //
-        // 🚨 ...but flush the BOX only when the box holds a QUERY. When it is
-        // showing the selected label (see `labelShown`), its text is the
-        // server's, not the user's: writing it here would send "Sally Omer" as
-        // the search term for a field whose owner already IS Sally Omer — and
-        // would silently poison the MRU open, whose whole point is an EMPTY
-        // query. Enter on an untouched, label-showing box asks the MRU question
-        // it looks like it is asking.
-        this.writeBind(n.searchBind, labelShown ? "" : inp.value);
+        // 🚨 THE BOX IS THE QUERY. FLUSH IT. NO CONDITION (D2a).
+        //
+        // This line used to read `labelShown ? "" : inp.value` — it had to know
+        // whether the box was holding the server's label or the user's query,
+        // because in single-select it could be either, and flushing a label would
+        // have sent "Sally Omer" as the search term for a field whose owner
+        // already IS Sally Omer. With the selection in a chip, the box can only
+        // ever hold a query, so there is nothing to ask and nothing to get wrong.
+        // Enter on an untouched box sends "" — the MRU question it looks like it
+        // is asking (OPEN-6) — because the box is genuinely empty, not because a
+        // flag said to pretend it was.
+        this.writeBind(n.searchBind, inp.value);
         // "The user just asked a question": lets the answer open the popup (a
         // first search has no prior options, so the input listener's own open
         // cannot fire) and gates the result announcement, so an unrelated
@@ -2317,12 +2317,11 @@ export class BrowserAdapter implements Adapter {
         // the bind and dispatch NOTHING: this is the table filter's cadence
         // exactly.
         //
-        // The user has edited the box, so its text is now THEIRS — a query, not
-        // the label the render put there. See `labelShown`. This is ALSO what
-        // drops the pill the instant they start typing (21-13): the selected
-        // treatment and the query treatment must be distinguishable at a glance,
-        // so the box stops LOOKING chosen the moment it stops BEING a label.
-        setLabelShown(false);
+        // 🚨 There is no `setLabelShown(false)` here any more and NOTHING is
+        // missing (D2a). The box was never showing a label, so typing cannot
+        // change what it means: it is the query before the keystroke and the
+        // query after it. The whole "typing drops the pill" dance existed only
+        // because the input did double duty.
         this.writeBind(n.searchBind, inp.value);
         // 🚨 §7 items 14 + 21 — clear the active option whenever the query text
         // changes, and never let list-typeahead swallow typing. Typing is the
@@ -2536,28 +2535,29 @@ export class BrowserAdapter implements Adapter {
             return;
           }
           // Stage two — the popup is ALREADY CLOSED. The design leaves clearing
-          // OPTIONAL ("optionally clear"); we clear, and ONLY here, where the
-          // intent is unambiguous. Reasoning, recorded because it is a choice:
-          // this is the ONLY keyboard path to un-set a single-select lookup.
-          // Deleting the input text does NOT clear the selection — the text is
-          // the LABEL, a view of the id in `bind` (D1) — so without this a
-          // keyboard user who picked the wrong person could never undo it.
-          // Multi's selection lives in chips with their own remove buttons
-          // (Plan 21-05), so there Escape clears only the query text.
+          // OPTIONAL ("optionally clear"), and what it clears is THE QUERY TEXT,
+          // in BOTH modes.
           //
-          // 🚨 Escape is no longer the ONLY way out for a mouse user (21-13):
-          // single-select now renders a clear ✕ beside the pill, because
-          // "hunting for Escape" is not a discoverable affordance. This keyboard
-          // path is unchanged and still load-bearing — the ✕ is an ADDITION, not
-          // a replacement.
+          // 🚨 IT NO LONGER CLEARS SINGLE-SELECT'S SELECTION, AND THAT IS D2a
+          // FOLLOWED THROUGH RATHER THAN A DROPPED FEATURE. Escape used to clear
+          // the bind on single, for a reason written down at the time: "this is
+          // the ONLY keyboard path to un-set a single-select lookup — deleting
+          // the input text does NOT clear the selection, because the text is the
+          // LABEL, a view of the id in `bind`." BOTH HALVES OF THAT PREMISE ARE
+          // NOW FALSE. The text is not the label (it is the query, always), and
+          // Escape is not the only keyboard path: single's selection is a chip
+          // whose remove ✕ is a real, focusable <button> in the tab sequence with
+          // an item-specific accessible name — the same path multi has always
+          // had, and a far more discoverable one than "hunt for Escape".
+          //
+          // Keeping the old behavior would also have required clearing the bind
+          // here AND tearing the chip out of the DOM by hand — a second removal
+          // path beside removeChipAt(), which is exactly the fork D2a forbids.
+          // So the two modes now agree: Escape gets the popup and the query out
+          // of your way; the chip's ✕ removes the selection.
           e.preventDefault();
           inp.value = "";
           this.writeBind(n.searchBind, "");
-          if (!isMulti) this.writeBind(n.bind, "");
-          // The selection is gone, so the box must stop reading as a chosen
-          // thing. Multi never wore the pill (its selection is the chips), and
-          // setLabelShown is a no-op there.
-          setLabelShown(false);
           setActive(-1);
           return;
         }
@@ -2643,21 +2643,17 @@ export class BrowserAdapter implements Adapter {
         // contract. Do not invent them; they fall through untouched.
       });
 
-      // The chip group sits OUTSIDE the combobox, BEFORE the input — SLDS's
-      // precedent (D2): Salesforce renders single-select INSIDE the input (no
-      // pill element exists at all) and multi as a separate pill listbox outside
-      // it with its own focus model. Outside is not cosmetic: a listbox popup
-      // owning interactive chips would be the §7 item 24 violation.
+      // The chip group sits OUTSIDE the combobox, BEFORE the input — in BOTH
+      // modes now (D2a). Outside is not cosmetic: a listbox popup owning
+      // interactive chips would be the §7 item 24 violation. Before the input is
+      // what gives the user somewhere to type — the failure that produced D2a was
+      // a control whose selection occupied the only place there was to click.
+      //
+      // (SLDS renders single's selection INSIDE the input and ships no pill
+      // element for single at all. We diverge deliberately; see the deleted-pill
+      // note above and D2a.)
       if (chipList) wrapper.appendChild(chipList);
       wrapper.appendChild(inp);
-      // The clear ✕ sits AFTER the input in the DOM (21-13) so it follows it in
-      // both the tab order and the reading order: the control, then the act on
-      // it. It is positioned over the input's right edge purely in CSS — SLDS's
-      // single-select shape, where the selection IS the input rather than a pill
-      // element beside it. Inside the wrapper is also what keeps the
-      // click-outside handler's containment test from treating a clear press as
-      // "the user moved on" and closing the popup out from under it.
-      if (clearBtn) wrapper.appendChild(clearBtn);
       wrapper.appendChild(popup);
       if (hintEl) wrapper.appendChild(hintEl);
       // 🚨 RE-APPEND, never rebuild. These two nodes were detached by render()'s

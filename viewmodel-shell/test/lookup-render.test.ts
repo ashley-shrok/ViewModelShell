@@ -46,6 +46,12 @@ function setup(initial: Record<string, unknown> = {}) {
     options: () => Array.from(container.querySelectorAll<HTMLElement>(".vms-field__option")),
     labels: () => Array.from(container.querySelectorAll<HTMLElement>(".vms-field__option"))
       .map(o => o.textContent),
+    // D2a — the selection lives in chip(s) OUTSIDE the input, in BOTH modes.
+    chips: () => Array.from(container.querySelectorAll<HTMLElement>(".vms-field__chip")),
+    chipText: () => Array.from(container.querySelectorAll<HTMLElement>(".vms-field__chip-label"))
+      .map(c => c.textContent),
+    chipRemove: () =>
+      Array.from(container.querySelectorAll<HTMLButtonElement>(".vms-field__chip-remove")),
   };
 }
 
@@ -77,19 +83,35 @@ describe("🚨 D1 THE HEADLINE PROOF — a preselected value renders its label w
   //
   // ⇒ If a fixture here is ever missing a field a real app always sends, this
   // suite is proving nothing. Fixtures must be REAL, not minimal.
+  //
+  // 🚨 21-14 / D2a — THE ASSERTION MOVED, THE PROOF DID NOT. The label now
+  // renders in a CHIP beside the input rather than inside it, so these tests
+  // read `chipText()` where they used to read `input().value`. What is being
+  // proved is unchanged and is still the whole reason `selected` and
+  // `candidates` are separate fields: a preselected id resolves to its NAME with
+  // no search having run.
+  //
+  // And note what the seeded `""` query now costs: NOTHING. It cannot beat the
+  // label, because it is not competing with it — the label is in a chip and the
+  // input holds the query, unconditionally. The bug this fixture rule was
+  // written to catch is not merely fixed here; it has no place left to occur.
   it("renders the label from `selected` when `candidates` is absent entirely", () => {
-    const { render, input } = setup({ f: { owner: "u-1", q: "" } });
+    const { render, input, chipText } = setup({ f: { owner: "u-1", q: "" } });
     render({
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner",
       searchBind: "f.q", searchAction: { name: "search-owners" },
       placeholder: "Search people…",
       selected: [{ value: "u-1", label: "Sally Omer" }],
     } as ViewNode);
-    expect(input().value).toBe("Sally Omer");
-    expect(input().value).not.toBe("u-1");
-    // 🚨 The exact symptom: an empty box renders the PLACEHOLDER. The empty
-    // query must never beat the label.
-    expect(input().value).not.toBe("");
+    // 🚨 THE LABEL IS IN A CHIP, NOT IN THE INPUT (D2a). Same proof, new home:
+    // "u-1" went in, "Sally Omer" came out, and no search ever ran.
+    expect(chipText()).toEqual(["Sally Omer"]);
+    expect(chipText()).not.toEqual(["u-1"]);
+    // ...and the input is EMPTY, showing its placeholder — which is now CORRECT
+    // rather than the bug. The empty query has nothing to beat: it is simply
+    // what the box holds, because the box holds nothing but the query.
+    expect(input().value).toBe("");
+    expect(input().placeholder).toBe("Search people…");
   });
 
   it("the bound state still holds the ID and only the ID — the label never enters the bind", () => {
@@ -113,26 +135,42 @@ describe("🚨 D1 THE ANTI-TRAP — the selected label survives a candidate list
   // item isn't up to date."
   // 🚨 Same fixture rule as the headline block: `searchBind` is SET and the
   // query slot is seeded `""`, because that is what a real app sends.
-  it("displays 'Sally Omer' even though `candidates` contains only Bob", () => {
-    const { render, input } = setup({ f: { owner: "u-1", q: "" } });
+  //
+  // 🚨 21-14 / D2a — THIS IS NOW OBSERVABLE ON SINGLE-SELECT, AND THAT IS THE
+  // THIRD THING THE CHIP BOUGHT. The trap is only WATCHABLE where the selection
+  // and the candidate list are on screen AT THE SAME TIME. When single's
+  // selection lived INSIDE the input, mid-search the box showed the query and
+  // there was nothing to watch survive — the demo of this on the live page was
+  // literally unperformable (21-13 moved it to the multi field for exactly that
+  // reason). Now the chip and the list that excludes it are both visible, so the
+  // fixture below is what a user can actually see with their own eyes.
+  it("keeps the 'Sally Omer' chip even though `candidates` contains only Bob", () => {
+    const { render, input, chipText, labels } = setup({ f: { owner: "u-1", q: "Bob" } });
     render({
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner",
       searchBind: "f.q", searchAction: { name: "search-owners" },
       selected: [{ value: "u-1", label: "Sally Omer" }],
       candidates: [{ value: "u-2", label: "Bob" }],
     } as ViewNode);
-    expect(input().value).toBe("Sally Omer");
+    // The chip sits unmoved...
+    expect(chipText()).toEqual(["Sally Omer"]);
+    // ...while the candidate list has nothing to do with it...
+    expect(labels()).toEqual(["Bob"]);
+    // ...and the query that excluded her is in the box. All three at once: that
+    // is the whole trap, in one assertion, on the field where it used to be
+    // invisible.
+    expect(input().value).toBe("Bob");
   });
 
-  it("an EMPTY candidate list does not erase the selected label", () => {
-    const { render, input } = setup({ f: { owner: "u-1", q: "" } });
+  it("an EMPTY candidate list does not erase the selected chip", () => {
+    const { render, chipText } = setup({ f: { owner: "u-1", q: "" } });
     render({
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner",
       searchBind: "f.q", searchAction: { name: "search-owners" },
       selected: [{ value: "u-1", label: "Sally Omer" }],
       candidates: [],
     } as ViewNode);
-    expect(input().value).toBe("Sally Omer");
+    expect(chipText()).toEqual(["Sally Omer"]);
   });
 });
 
@@ -141,35 +179,53 @@ describe("🚨 D1 THE ANTI-TRAP — the selected label survives a candidate list
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("D5 — a `selected` entry with `label` omitted displays its VALUE", () => {
-  it("renders the value as the display text (the free-form-tag case)", () => {
-    const { render, input } = setup({ f: { tag: "urgent" } });
+  it("renders the value as the chip text (the free-form-tag case)", () => {
+    const { render, chipText } = setup({ f: { tag: "urgent" } });
     render({
       type: "field", name: "tag", inputType: "lookup", bind: "f.tag",
       selected: [{ value: "urgent" }],
     } as ViewNode);
-    expect(input().value).toBe("urgent");
+    expect(chipText()).toEqual(["urgent"]);
   });
 });
 
 describe("D6 — a polymorphic `type` tag is exposed without leaking into the bound value", () => {
-  it("exposes type on the control and leaves the bind holding the id alone", () => {
-    const { render, input, writes } = setup({ f: { owner: "u-1" } });
+  // 🚨 21-14 / D2a — the tag hangs on the CHIP (`data-vms-type`), not on the
+  // input (`data-vms-selected-type`, gone). It tags THE REFERENCE, and the
+  // reference is now the chip; leaving it on the input would have left a
+  // type tag on a box that holds nothing but the query. This also gives MULTI
+  // the exposure it never had — one tag per chip is the only shape that can work
+  // for a mixed user/team set, which is D6's own motivating case.
+  it("exposes type on the chip and leaves the bind holding the id alone", () => {
+    const { render, chips, chipText, writes } = setup({ f: { owner: "u-1" } });
     render({
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner",
       selected: [{ value: "u-1", label: "Sally Omer", type: "user" }],
     } as ViewNode);
-    expect(input().dataset.vmsSelectedType).toBe("user");
-    expect(input().value).toBe("Sally Omer");
+    expect(chips()[0].dataset.vmsType).toBe("user");
+    expect(chipText()).toEqual(["Sally Omer"]);
     expect(writes).toEqual([]);
   });
 
   it("a monomorphic reference (type omitted) exposes no type tag", () => {
-    const { render, input } = setup({ f: { owner: "u-1" } });
+    const { render, chips } = setup({ f: { owner: "u-1" } });
     render({
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner",
       selected: [{ value: "u-1", label: "Sally Omer" }],
     } as ViewNode);
-    expect(input().dataset.vmsSelectedType).toBeUndefined();
+    expect(chips()[0].dataset.vmsType).toBeUndefined();
+  });
+
+  it("each chip in a MULTI carries its OWN type — a mixed user/team set (D6's case)", () => {
+    const { render, chips } = setup({ f: { owners: ["u-1", "t-9"] } });
+    render({
+      type: "field", name: "owners", inputType: "lookup-multiple", bind: "f.owners",
+      selected: [
+        { value: "u-1", label: "Sally Omer", type: "user" },
+        { value: "t-9", label: "Platform", type: "team" },
+      ],
+    } as ViewNode);
+    expect(chips().map(c => c.dataset.vmsType)).toEqual(["user", "team"]);
   });
 });
 
@@ -405,49 +461,69 @@ describe("🚨 NO SEED-WRITE — a lookup has no auto-selected default", () => {
 // The query / searchBind display split
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("the input's value: NON-EMPTY typed text, else the selected label", () => {
-  it("a query in state is what the user sees (they are typing)", () => {
-    const { render, input } = setup({ f: { owner: "u-1", q: "sal" } });
+describe("🚨 D2a — `inp.value` IS THE QUERY, UNCONDITIONALLY, IN BOTH MODES", () => {
+  // 🚨 THIS BLOCK IS THE ANTI-REGRESSION FOR THE BUG CLASS D2a DELETED, and it
+  // is deliberately blunt: THE INPUT NEVER SHOWS THE LABEL. Not on a cold load,
+  // not on an empty query, not on an undefined query slot, not in either mode.
+  //
+  // The history, because the next reader's instinct will be to "restore" the
+  // fallback: the input used to answer TWO questions — is this the selection or
+  // the query? — and the arbitration between them shipped a form that rendered
+  // its PLACEHOLDER where the operator had already set a reference (a real state
+  // record seeds its query slot to `""`, and `"" != null` was true, so the empty
+  // query beat the label). 21-11 patched it by splitting the two tests. 21-14
+  // DELETED THE QUESTION: the selection is a chip, so the box only ever holds the
+  // query and there is nothing to arbitrate.
+  //
+  // ⇒ If a future change makes ANY of these assertions read a label, the
+  // arbitration is back and so is the bug.
+  it("a query in state is what the box holds (they are typing)", () => {
+    const { render, input, chipText } = setup({ f: { owner: "u-1", q: "sal" } });
     render({
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner", searchBind: "f.q",
       selected: [{ value: "u-1", label: "Sally Omer" }],
     } as ViewNode);
     expect(input().value).toBe("sal");
+    // ...and the selection is untouched beside it.
+    expect(chipText()).toEqual(["Sally Omer"]);
   });
 
-  it("🚨 an EMPTY-STRING query does NOT beat the label — DISPLAY keys on non-EMPTY, dispatch keys on non-NULL", () => {
-    // 🚨 THIS TEST WAS INVERTED, AND IT ENSHRINED THE BUG (21-11). It used to
-    // assert `input().value === ""` — i.e. that an empty query must WIN over the
-    // label — and the renderer obliged with ONE `query != null` test answering
-    // TWO different questions.
-    //
-    // Both source rules were right; the collision was the single test:
-    //   • OPEN-6 — do NOT gate on truthiness, or the empty query never reaches
-    //     the server and the MRU list dies.  ⇒ that is about DISPATCH.
-    //   • D1     — the label comes from `selected`.  ⇒ that is about DISPLAY.
-    //
-    // A real state record initializes its query slot to `""`, so `"" != null`
-    // was true on every cold form load: the input rendered empty and the
-    // PLACEHOLDER showed where a reference was already set. The operator saw
-    // exactly this on the tailnet.
-    //
-    // The empty query still reaches the server — proved in
-    // lookup-search-dispatch.test.ts ("an EMPTY query dispatches on Enter"), NOT
-    // by starving the display here.
-    const { render, input } = setup({ f: { owner: "u-1", q: "" } });
+  it("🚨 an EMPTY-STRING query renders an EMPTY box — it has no label to beat", () => {
+    // The exact fixture that produced the headline bug: a cold load with the
+    // query slot seeded `""` and a reference already set. It renders the
+    // placeholder, and that is now CORRECT — the label is in the chip, where a
+    // query can never displace it.
+    const { render, input, chipText } = setup({ f: { owner: "u-1", q: "" } });
     render({
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner", searchBind: "f.q",
       searchAction: { name: "search-owners" }, placeholder: "Search people…",
       selected: [{ value: "u-1", label: "Sally Omer" }],
     } as ViewNode);
-    expect(input().value).toBe("Sally Omer");
+    expect(input().value).toBe("");
+    expect(chipText()).toEqual(["Sally Omer"]);
   });
 
-  it("clearing the search text shows the label again — clearing the QUERY is not clearing the SELECTION", () => {
-    // 21-03's recorded decision: Escape clears the selection, and it is the only
-    // thing that does. So a re-render with an emptied query slot is a lookup
-    // whose reference is still set — and it must say so.
-    const { render, input, state } = setup({ f: { owner: "u-1", q: "sal" } });
+  it("🚨 the box NEVER shows the label — not for single, not for multi", () => {
+    // One assertion, both modes, no arity caveat: this is what "the input, in
+    // both modes, holds nothing but the query" means, and it is the property
+    // that makes the precedence rule unnecessary.
+    for (const inputType of ["lookup", "lookup-multiple"] as const) {
+      const t = setup({ f: { v: inputType === "lookup" ? "u-1" : ["u-1"], q: "" } });
+      t.render({
+        type: "field", name: "v", inputType, bind: "f.v", searchBind: "f.q",
+        selected: [{ value: "u-1", label: "Sally Omer" }],
+      } as ViewNode);
+      expect(t.input().value).toBe("");
+      expect(t.input().value).not.toBe("Sally Omer");
+      expect(t.chipText()).toEqual(["Sally Omer"]);
+      document.body.innerHTML = "";
+    }
+  });
+
+  it("clearing the search text leaves the selection alone — the two are different things", () => {
+    // This used to be the "clearing the box shows the label again" round trip.
+    // There is nothing to come back now: the chip never left.
+    const { render, input, chipText, state } = setup({ f: { owner: "u-1", q: "sal" } });
     const vm = {
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner", searchBind: "f.q",
       searchAction: { name: "search-owners" },
@@ -455,20 +531,23 @@ describe("the input's value: NON-EMPTY typed text, else the selected label", () 
     } as ViewNode;
     render(vm);
     expect(input().value).toBe("sal");
+    expect(chipText()).toEqual(["Sally Omer"]);
 
     (state.f as Record<string, unknown>).q = "";
     render(vm);
-    expect(input().value).toBe("Sally Omer");
+    expect(input().value).toBe("");
+    expect(chipText()).toEqual(["Sally Omer"]);
     expect((state.f as Record<string, unknown>).owner).toBe("u-1");
   });
 
-  it("no query slot yet (undefined) → the selected label shows", () => {
-    const { render, input } = setup({ f: { owner: "u-1" } });
+  it("no query slot yet (undefined) → an empty box, and the chip still shows", () => {
+    const { render, input, chipText } = setup({ f: { owner: "u-1" } });
     render({
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner", searchBind: "f.q",
       selected: [{ value: "u-1", label: "Sally Omer" }],
     } as ViewNode);
-    expect(input().value).toBe("Sally Omer");
+    expect(input().value).toBe("");
+    expect(chipText()).toEqual(["Sally Omer"]);
   });
 
   it("typing writes the query to searchBind — UNCONDITIONALLY, including when cleared", () => {
@@ -531,48 +610,52 @@ describe("[vms:lookup-no-searchbind] — a searchAction with no searchBind is a 
 // Commit (mouse) — the single-select path end to end
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("committing a candidate writes the ID and displays the LABEL", () => {
-  it("clicking an option writes the id to the bind and shows its label", () => {
-    const { render, input, options, state } = setup({ f: { owner: "" } });
+describe("committing a candidate writes the ID and chips the LABEL", () => {
+  it("clicking an option writes the id to the bind and chips its label", () => {
+    const { render, input, options, chipText, state } = setup({ f: { owner: "" } });
     render({
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner",
       candidates: [{ value: "u-9", label: "Zoe Adams" }, { value: "u-3", label: "Bob Lee" }],
     } as ViewNode);
     options()[1].dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
     expect((state.f as Record<string, unknown>).owner).toBe("u-3");
-    expect(input().value).toBe("Bob Lee");
+    expect(chipText()).toEqual(["Bob Lee"]);
+    // 🚨 ...and the box is EMPTY, not holding the label. Committing does not put
+    // text in the query slot; it never has anything to "spend" there again.
+    expect(input().value).toBe("");
   });
 
-  it("committing a candidate whose label is omitted writes and displays the value", () => {
-    const { render, input, options, state } = setup({ f: { tag: "" } });
+  it("committing a candidate whose label is omitted writes and chips the value", () => {
+    const { render, options, chipText, state } = setup({ f: { tag: "" } });
     render({
       type: "field", name: "tag", inputType: "lookup", bind: "f.tag",
       candidates: [{ value: "urgent" }],
     } as ViewNode);
     options()[0].dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
     expect((state.f as Record<string, unknown>).tag).toBe("urgent");
-    expect(input().value).toBe("urgent");
+    expect(chipText()).toEqual(["urgent"]);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 🚨 THE SELECTED-STATE PILL (21-13)
+// 🚨 D2a — SINGLE'S SELECTION IS A CHIP, AND PICKING REPLACES (21-14)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("🚨 21-13 — a single-select's SELECTION must LOOK selected", () => {
-  // THE GAP, IN THE OPERATOR'S WORDS: "the Sally that's in the box is not, like,
-  // a chip or anything, it's just text, so in order to type the new name, I
-  // would have to get rid of Sally, which seems to defeat the purpose."
+describe("🚨 D2a — single-select's selection is a CHIP outside the input, and picking REPLACES", () => {
+  // THE DECISION, IN THE OPERATOR'S WORDS: "maybe we should just make the pill
+  // separate from the input like the tag setup, even if it is a little awkward.
+  // so you always have a place to type. but instead of adding a pill like with
+  // tags, it replaces."
   //
-  // In single-select the input does DOUBLE DUTY — it shows the SELECTION and it
-  // accepts the QUERY — and there was ZERO visual difference between them. Two
-  // meanings rendered identically is a comprehension failure. The fix is SLDS's:
-  // style THE INPUT ITSELF as a pill when a record is selected (no separate pill
-  // element exists for single-select at all), plus a clear affordance.
+  // 21-13 shipped SLDS's model — the input ITSELF styled as a pill. She drove it
+  // and found it has NOWHERE TO CLICK TO TYPE: the pill was the entire input, so
+  // clicking in just appended to "Sally Omer". This block holds what replaced it.
   //
-  // These tests hold the PREDICATE, which is the part that can silently rot:
-  // pill ⟺ selection present AND no active query.
-  const pillNode = (extra: Record<string, unknown> = {}): ViewNode => ({
+  // 🚨 THE INVARIANT THESE TESTS EXIST FOR: `lookup` and `lookup-multiple` render
+  // selections IDENTICALLY — chip(s) outside the input, from ONE implementation —
+  // and the ONLY difference is arity. If a future change forks a parallel
+  // single-select chip, the shared-a11y assertions below are what should catch it.
+  const node = (extra: Record<string, unknown> = {}): ViewNode => ({
     type: "field", name: "owner", inputType: "lookup", bind: "f.owner",
     label: "Ticket owner", searchBind: "f.q",
     selected: [{ value: "u-1", label: "Sally Omer" }],
@@ -580,98 +663,122 @@ describe("🚨 21-13 — a single-select's SELECTION must LOOK selected", () => 
     searchAction: { name: "search-owner" },
     ...extra,
   } as ViewNode);
-  const wrapper = (c: HTMLElement) => c.querySelector<HTMLElement>(".vms-field--lookup")!;
-  const clear = (c: HTMLElement) => c.querySelector<HTMLButtonElement>(".vms-field__clear")!;
 
-  it("renders the pill when a selection is present and no query is active", () => {
+  it("renders EXACTLY ONE chip for a single selection, outside the input", () => {
     const t = setup({ f: { owner: "u-1", q: "" } });
-    t.render(pillNode());
-    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(true);
-    expect(t.input().value).toBe("Sally Omer");
-    expect(clear(t.container).hidden).toBe(false);
+    t.render(node());
+    expect(t.chips()).toHaveLength(1);
+    expect(t.chipText()).toEqual(["Sally Omer"]);
+    // OUTSIDE: the chip is not inside the input (an <input> cannot contain
+    // elements at all) and not inside the popup — a listbox owning interactive
+    // chips would be the §7 item 24 violation.
+    expect(t.popup().querySelector(".vms-field__chip")).toBeNull();
   });
 
-  it("🚨 does NOT render the pill while the user is querying", () => {
-    // The two states must be instantly distinguishable at a glance. A non-empty
-    // query means the text is the USER'S, so it must not wear the chosen-thing
-    // treatment even though the selection still exists underneath.
-    const t = setup({ f: { owner: "u-1", q: "Petrova" } });
-    t.render(pillNode());
-    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(false);
-    expect(t.input().value).toBe("Petrova");
-    expect(clear(t.container).hidden).toBe(true);
-  });
-
-  it("🚨 typing drops the pill on the very first keystroke", () => {
+  it("🚨 there is ALWAYS somewhere to type — the input is empty and typeable with a selection set", () => {
+    // This is the failure that produced D2a, asserted directly.
     const t = setup({ f: { owner: "u-1", q: "" } });
-    t.render(pillNode());
-    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(true);
-    t.input().value = "P";
-    t.input().dispatchEvent(new Event("input", { bubbles: true }));
-    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(false);
-    expect(clear(t.container).hidden).toBe(true);
+    t.render(node({ placeholder: "Search people…" }));
+    const inp = t.input();
+    expect(inp.value).toBe("");
+    expect(inp.placeholder).toBe("Search people…");
+    expect(inp.readOnly).toBe(false);
+    expect(inp.disabled).toBe(false);
   });
 
-  it("no selection ⇒ no pill", () => {
-    const t = setup({ f: { owner: "", q: "" } });
-    t.render(pillNode({ selected: [] }));
-    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(false);
-    expect(clear(t.container).hidden).toBe(true);
-  });
+  it("🚨 picking REPLACES the existing selection — never a second chip", () => {
+    const t = setup({ f: { owner: "u-1", q: "sa" } });
+    t.render(node({ candidates: [{ value: "u-2", label: "Bob Lee" }] }));
+    expect(t.chipText()).toEqual(["Sally Omer"]);
 
-  it("committing a candidate puts the box BACK into the pill state", () => {
-    const t = setup({ f: { owner: "", q: "sa" } });
-    t.render(pillNode({ selected: [], candidates: [{ value: "u-2", label: "Bob Lee" }] }));
-    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(false);
     t.options()[0].dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
-    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(true);
-    expect(t.input().value).toBe("Bob Lee");
+
+    // ONE chip, and it is the NEW one.
+    expect(t.chips()).toHaveLength(1);
+    expect(t.chipText()).toEqual(["Bob Lee"]);
+    // The bind holds the new id ALONE — a bare string, never an array.
+    expect((t.state.f as Record<string, unknown>).owner).toBe("u-2");
+    expect(Array.isArray((t.state.f as Record<string, unknown>).owner)).toBe(false);
   });
 
-  it("🚨 lookup-multiple NEVER wears the pill — its selection is the chips (D2/SLDS)", () => {
-    const t = setup({ f: { watchers: ["u-1"], q: "" } });
+  it("🚨 multi APPENDS where single replaces — the ONE difference between the two nodes", () => {
+    // The contrast, asserted in one place, because "the only difference is arity"
+    // is the claim the whole design rests on.
+    const t = setup({ f: { watchers: ["u-1"], q: "sa" } });
     t.render({
       type: "field", name: "watchers", inputType: "lookup-multiple", bind: "f.watchers",
       label: "Watchers", searchBind: "f.q",
       selected: [{ value: "u-1", label: "Sally Omer" }],
-      candidates: [],
+      candidates: [{ value: "u-2", label: "Bob Lee" }],
     } as ViewNode);
-    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(false);
-    // ...and no clear button at all: multi's chips carry their own remove
-    // buttons, so a second, ambiguous "clear" affordance would be a lie about
-    // which selection it clears.
+    t.options()[0].dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    expect(t.chips()).toHaveLength(2);
+    expect(t.chipText()).toEqual(["Sally Omer", "Bob Lee"]);
+    expect((t.state.f as Record<string, unknown>).watchers).toEqual(["u-1", "u-2"]);
+  });
+
+  it("no selection ⇒ no chips, and the box is still typeable", () => {
+    const t = setup({ f: { owner: "", q: "" } });
+    t.render(node({ selected: [] }));
+    expect(t.chips()).toHaveLength(0);
+    expect(t.input().value).toBe("");
+  });
+
+  it("🚨 the 21-13 pill treatment is GONE — no wrapper class, no inline clear ✕", () => {
+    // The pill and its overlaid clear button are deleted, not hidden. A stray
+    // `.vms-field--lookup-selected` would mean the arbitration flag came back.
+    const t = setup({ f: { owner: "u-1", q: "" } });
+    t.render(node());
+    expect(t.container.querySelector(".vms-field--lookup-selected")).toBeNull();
     expect(t.container.querySelector(".vms-field__clear")).toBeNull();
   });
 
-  it("the clear ✕ clears the selection, drops the pill, and keeps the input typeable", () => {
+  it("🚨 the chip's ✕ clears the selection and hands focus back to the input (§7 item 29)", () => {
+    // "Remove" on a single-select IS "clear the selection", and it exercises the
+    // LAST fallback of the focus rule: no next chip, no previous chip ⇒ the
+    // input. NEVER <body>.
     const t = setup({ f: { owner: "u-1", q: "" } });
-    t.render(pillNode());
-    clear(t.container).dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    t.render(node());
+    t.chipRemove()[0].click();
     expect((t.state.f as Record<string, unknown>).owner).toBe("");
-    expect(t.input().value).toBe("");
-    expect(wrapper(t.container).classList.contains("vms-field--lookup-selected")).toBe(false);
+    expect(t.chips()).toHaveLength(0);
+    expect(document.activeElement).toBe(t.input());
+    expect(document.activeElement).not.toBe(document.body);
   });
 
-  it("the clear ✕ carries a unique, item-specific accessible name and cannot submit a form", () => {
-    // §7 item 25's rule, applied to this button for the same reason it applies
-    // to the chips': "Clear" alone on a form with several lookups is a row of
-    // identically-named buttons.
+  it("🚨 the chip's remove button keeps the §7 item 25 item-specific name (the GOV.UK killer)", () => {
+    // NOT "Remove", NOT "×". Reusing multi's chip is what makes this free — a
+    // forked single-select chip is exactly where this would have been lost.
     const t = setup({ f: { owner: "u-1", q: "" } });
-    t.render(pillNode());
-    expect(clear(t.container).getAttribute("aria-label")).toBe("Clear Ticket owner");
-    expect(clear(t.container).type).toBe("button");
+    t.render(node());
+    const btn = t.chipRemove()[0];
+    expect(btn.getAttribute("aria-label")).toBe("Remove Sally Omer");
+    expect(btn.tagName).toBe("BUTTON");
+    // MANDATORY: inside a FormNode this would otherwise submit on every click.
+    expect(btn.type).toBe("button");
   });
 
-  it("🚨 the a11y contract is intact — the pill is appearance, not a new element", () => {
-    // This is appearance + a clear control. It must NOT quietly turn the
-    // combobox into a div-with-a-pill-in-it.
+  it("🚨 the chip group keeps the §7 item 24/28 structure for single too", () => {
+    // role=list/listitem with a real <button> — NEVER listbox/option, because an
+    // interactive descendant inside `option` destroys the a11y tree.
     const t = setup({ f: { owner: "u-1", q: "" } });
-    t.render(pillNode());
+    t.render(node());
+    const list = t.container.querySelector(".vms-field__chips")!;
+    expect(list.getAttribute("role")).toBe("list");
+    expect(list.getAttribute("aria-label")).toBe("Selected items");
+    expect(t.chips()[0].getAttribute("role")).toBe("listitem");
+    expect(list.querySelector("[role='option']")).toBeNull();
+    expect(list.getAttribute("role")).not.toBe("listbox");
+  });
+
+  it("🚨 the combobox a11y contract is intact — the chip is a sibling, not a rewrite", () => {
+    const t = setup({ f: { owner: "u-1", q: "" } });
+    t.render(node());
     const inp = t.input();
     expect(inp.tagName).toBe("INPUT");
     expect(inp.getAttribute("role")).toBe("combobox");
-    expect(inp.readOnly).toBe(false);
-    expect(inp.disabled).toBe(false);
     expect(inp.getAttribute("aria-expanded")).toBe("false");
+    // The chip group must NOT have swallowed the combobox.
+    expect(t.container.querySelector(".vms-field__chips")!.contains(inp)).toBe(false);
   });
 });
