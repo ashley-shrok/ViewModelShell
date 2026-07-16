@@ -36,7 +36,16 @@ public record FeatureProbeState(
     // 1.3.0 — SectionNode.Action click-anywhere card exercised by the parity
     // fixture: select-card increments this counter, BuildVm renders a clickable
     // SectionNode that dispatches "select-card".
-    int CardClickCount
+    int CardClickCount,
+    // 5.2.0 (LOOK-06) — lookup bind slots. `lookup` binds ONE id (a string);
+    // `lookup-multiple` binds a string[] of ids. LookupQuery is the SearchBind
+    // slot (the typed query, round-tripped so the view stays a pure function of
+    // state). Seeded byte-identically to the bun/node twin — a divergent seed
+    // fails the diff for a reason that has nothing to do with the wire.
+    string LookupOwner,
+    string LookupTag,
+    IReadOnlyList<string> LookupWatchers,
+    string LookupQuery
 )
 {
     public static FeatureProbeState Initial() => new(
@@ -54,7 +63,11 @@ public record FeatureProbeState(
         SessionValue: "",
         DownloadUrl: "",
         DownloadFilename: "",
-        CardClickCount: 0
+        CardClickCount: 0,
+        LookupOwner: "u-1",
+        LookupTag: "urgent",
+        LookupWatchers: ["u-2", "t-7"],
+        LookupQuery: ""
     );
 }
 
@@ -779,6 +792,66 @@ public class FeatureProbeController : ControllerBase
                     new StepItem("Review"),
                     new StepItem("Publish"),
                 }, Current: 1, Orientation: "vertical"),
+            }));
+        // Lookup field (LOOK-01/LOOK-06) — the two lookup inputTypes as static
+        // view-shape captured by every GET step; byte-identical to the bun twin
+        // lookupSection. Covers the full omitted-vs-present matrix:
+        //   lookup-owner  — 🚨 THE HEADLINE: Selected PRESENT while Candidates is
+        //                   ABSENT. This is the preselected-value/cold-start case
+        //                   that kills naive designs — the label renders because
+        //                   it came from the NODE, never resolved out of an
+        //                   (empty) candidate list. AllowCustom is OMITTED, so
+        //                   WhenWritingDefault drops it and the wire carries NO
+        //                   "allowCustom" key (absent, not false — matching the
+        //                   TS optional bool). Its selected entry carries both
+        //                   Label and Type (the polymorphic-ref tag crosses).
+        //   lookup-tag    — AllowCustom:true (proves the literal JSON boolean
+        //                   crosses) with Candidates present, and a selected
+        //                   entry whose Label is OMITTED because it equals Value
+        //                   — the free-form-tag case, and Type omitted for a
+        //                   monomorphic ref.
+        //   lookup-watchers — lookup-multiple with TWO selected entries and a
+        //                   Bind pointing at a string[] in state; carries
+        //                   SearchBind plus a SearchAction whose UNIQUE name
+        //                   lookup-search-probe proves the Collect action-name
+        //                   uniqueness walk DESCENDS into FieldNode.SearchAction
+        //                   (never POSTed by any step — pure static wire-shape
+        //                   proof, same convention as the axes-noop-* / nba-* /
+        //                   nav-crumb-probe names).
+        // The CLIENT-SIDE debounce, popup/listbox, chips, live-region
+        // announcements, and the non-blocking lane's coalescing/epoch behavior
+        // are browser-only and NOT part of parity — parity proves only that the
+        // lookup wire serializes identically across backends.
+        pageChildren.Add(new SectionNode(
+            Heading: "Lookup field",
+            Variant: "card",
+            Children: new ViewNode[]
+            {
+                new FieldNode("lookup-owner", "lookup", Bind: "lookupOwner", Label: "Owner",
+                    Placeholder: null,
+                    Selected: new LookupItem[]
+                    {
+                        new LookupItem("u-1", Label: "Ada Lovelace", Type: "user"),
+                    }),
+                new FieldNode("lookup-tag", "lookup", Bind: "lookupTag", Label: "Tag",
+                    Placeholder: null,
+                    Selected: new LookupItem[] { new LookupItem("urgent") },
+                    Candidates: new LookupItem[]
+                    {
+                        new LookupItem("urgent"),
+                        new LookupItem("blocked"),
+                    },
+                    AllowCustom: true),
+                new FieldNode("lookup-watchers", "lookup-multiple", Bind: "lookupWatchers",
+                    Label: "Watchers",
+                    Placeholder: null,
+                    Selected: new LookupItem[]
+                    {
+                        new LookupItem("u-2", Label: "Grace Hopper", Type: "user"),
+                        new LookupItem("t-7", Label: "Platform", Type: "team"),
+                    },
+                    SearchBind: "lookupQuery",
+                    SearchAction: new ActionDescriptor("lookup-search-probe")),
             }));
         pageChildren.Add(new ModalNode(
             Title: "Probe modal",

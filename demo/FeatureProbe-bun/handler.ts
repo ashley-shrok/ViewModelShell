@@ -48,6 +48,15 @@ interface FeatureProbeState {
   // fixture: select-card increments this counter, BuildVm renders a clickable
   // SectionNode that dispatches "select-card".
   cardClickCount: number;
+  // 5.2.0 (LOOK-06) — lookup bind slots. `lookup` binds ONE id (a string);
+  // `lookup-multiple` binds a string[] of ids. lookupQuery is the searchBind
+  // slot (the typed query, round-tripped so the view stays a pure function of
+  // state). Seeded byte-identically to the .NET twin — a divergent seed fails
+  // the diff for a reason that has nothing to do with the wire.
+  lookupOwner: string;
+  lookupTag: string;
+  lookupWatchers: string[];
+  lookupQuery: string;
 }
 
 function initialState(): FeatureProbeState {
@@ -66,6 +75,10 @@ function initialState(): FeatureProbeState {
     downloadUrl: "",
     downloadFilename: "",
     cardClickCount: 0,
+    lookupOwner: "u-1",
+    lookupTag: "urgent",
+    lookupWatchers: ["u-2", "t-7"],
+    lookupQuery: "",
   };
 }
 
@@ -731,6 +744,71 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // Lookup field (LOOK-01/LOOK-06) — the two lookup inputTypes as static
+  // view-shape captured by every GET step; byte-identical to the .NET twin
+  // lookupSection. Covers the full omitted-vs-present matrix:
+  //   lookup-owner  — 🚨 THE HEADLINE: `selected` PRESENT while `candidates` is
+  //                   ABSENT. This is the preselected-value/cold-start case that
+  //                   kills naive designs — the label renders because it came
+  //                   from the NODE, never resolved out of an (empty) candidate
+  //                   list. allowCustom is OMITTED (proves the false default is
+  //                   ABSENT on the wire, not `false` — the WhenWritingDefault
+  //                   posture on the .NET side). Its selected entry carries both
+  //                   label and type (the polymorphic-ref tag crosses).
+  //   lookup-tag    — allowCustom:true (proves the literal JSON boolean crosses)
+  //                   with candidates present, and a selected entry whose `label`
+  //                   is OMITTED because it equals `value` — the free-form-tag
+  //                   case, and `type` omitted for a monomorphic ref.
+  //   lookup-watchers — lookup-multiple with TWO selected entries and a `bind`
+  //                   pointing at a string[] in state; carries searchBind plus a
+  //                   searchAction whose UNIQUE name lookup-search-probe proves
+  //                   the action-name uniqueness walk DESCENDS into
+  //                   FieldNode.searchAction (never POSTed by any step — pure
+  //                   static wire-shape proof, same convention as the
+  //                   axes-noop-* / nba-* / nav-crumb-probe names).
+  // The CLIENT-SIDE debounce, popup/listbox, chips, live-region announcements,
+  // and the non-blocking lane's coalescing/epoch behavior are browser-only and
+  // NOT part of parity — parity proves only that the lookup wire serializes
+  // identically across backends.
+  const lookupSection: ViewNode = {
+    type: "section",
+    heading: "Lookup field",
+    variant: "card",
+    children: [
+      {
+        type: "field",
+        name: "lookup-owner",
+        inputType: "lookup",
+        bind: "lookupOwner",
+        label: "Owner",
+        selected: [{ value: "u-1", label: "Ada Lovelace", type: "user" }],
+      },
+      {
+        type: "field",
+        name: "lookup-tag",
+        inputType: "lookup",
+        bind: "lookupTag",
+        label: "Tag",
+        selected: [{ value: "urgent" }],
+        candidates: [{ value: "urgent" }, { value: "blocked" }],
+        allowCustom: true,
+      },
+      {
+        type: "field",
+        name: "lookup-watchers",
+        inputType: "lookup-multiple",
+        bind: "lookupWatchers",
+        label: "Watchers",
+        selected: [
+          { value: "u-2", label: "Grace Hopper", type: "user" },
+          { value: "t-7", label: "Platform", type: "team" },
+        ],
+        searchBind: "lookupQuery",
+        searchAction: { name: "lookup-search-probe" },
+      },
+    ],
+  };
+
   return {
     type: "page",
     title: "Feature Probe",
@@ -752,6 +830,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       followTailSection,
       blockingSection,
       navSection,
+      lookupSection,
       probeModal,
     ],
   };
