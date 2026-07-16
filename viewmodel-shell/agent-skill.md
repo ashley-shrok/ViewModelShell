@@ -145,6 +145,74 @@ It never appears in the `_action` POST payload you send. The request body shape 
 
 This connects to the polling section above: the `{"name": "poll"}` dispatch this manual already documents is itself an instance of a non-blocking action — a poll always rides the non-blocking lane client-side — so nothing about how you send a poll dispatch changes either.
 
+## Lookup / reference fields (`inputType:"lookup"`, `"lookup-multiple"`)
+
+A `FieldNode` whose `inputType` is `lookup` or `lookup-multiple` is a reference to a row in some server-side set too large to enumerate into the tree (a 5,000-person directory, an 80,000-row customer table). A `select` says *"here are all the values, pick one"*; a lookup says *"the values are a database table — describe which row you mean."*
+
+**The picker's search is an ordinary action on this same public wire.** No special API, no private transport, no undocumented endpoint — you drive a lookup with the exact dispatch shape documented above. This is worth stating plainly because it is not the norm: surveyed platforms keep their reference picker's transport private and undocumented. Here it is just the wire.
+
+### The happy path: set `bind` to the id. You are done.
+
+**`bind` is the ONLY authoritative thing.** For `lookup` it holds a `string` (one id); for `lookup-multiple` a `string[]` (the ids). To set a reference, write the id at the bound path in the state blob and dispatch — exactly as with any other input (see *The round-trip rule*).
+
+🚨 **You do not need to know the label, and you must not supply one.** The label is not state. It travels on `selected`, **server→client ONLY**, is recomputed on every render, and is **never trusted coming back from the client** — a client-supplied label is meaningless. Direction is the whole safety argument: you cannot forge a label into a handler because you never send one. An agent that assumes `selected` round-trips will write labels into state and be silently wrong.
+
+If you already know the id, **skip the search entirely** — set `bind` and dispatch. This is the common agent case, and it is the whole reason the model suits agents: knowing the id but not the label is not a wrinkle here, it is the normal way in.
+
+### Reading one
+
+```json
+{ "type": "field", "name": "assignee", "inputType": "lookup",
+  "bind": "form.assigneeId",
+  "selected": [ { "value": "u-1", "label": "Sally Omer" } ],
+  "searchBind": "form.assigneeQuery",
+  "searchAction": { "name": "search-agents" },
+  "candidates": [
+    { "value": "u-7", "label": "Sam Ortiz" },
+    { "value": "u-1", "label": "Sally Omer" }
+  ] }
+```
+
+| Field | Direction | Read it as |
+|---|---|---|
+| `bind` | **round-trips — STATE** | The id (`string`, or `string[]` for `lookup-multiple`). The authoritative value. |
+| `selected` | **server→client — VIEW** | `Array<{ value, label?, type? }>` — the resolved label(s) for what is **currently chosen**. Always an array (0 or 1 entries for single `lookup`). **This is the only source of a selected label.** |
+| `candidates` | **server→client — VIEW** | `Array<{ value, label?, type? }>` — the **current search results**, i.e. what the popup offers. **Never the source of a selected label.** |
+| `searchBind` | **round-trips — STATE** | Where the typed query lives. Write your query here to search. |
+| `searchAction` | — | The action to dispatch to run a search. |
+| `allowCustom` | — | See below. Omitted = false. |
+
+**Never conflate `selected` and `candidates`.** They are separate fields on purpose. Resolving a label out of `candidates` is the classic failure: with an id-valued field, *"filter the candidate list"* and *"forget what's selected"* are the same operation, so a form that loads with a value already set and no search having occurred has an empty `candidates` and would render a raw database id. Read the label from `selected` and only from `selected`. On an item, `label` is **omitted when it equals `value`** (an option not set is simply absent) — so a missing `label` means the label *is* the id, not that it's unknown. `type` is the polymorphic-reference tag (an id alone is not an identity); it is omitted for monomorphic references.
+
+### 🚨 Candidate order is meaningful. It is preserved exactly.
+
+The renderer presents `candidates` in the order given — it **sorts nothing, dedupes nothing, truncates nothing**. This cuts both ways, and you need both directions:
+
+- **Reading a lookup:** the order **IS the server's ranking** (relevance / recency / most-recently-used). **Position 0 is the server's best answer.** Do not re-sort before choosing — re-sorting discards the server's judgment. Real adopters rank by things you cannot reconstruct client-side (e.g. recency-weighted mention frequency, computed server-side per operator).
+- **Authoring a provider handler:** the order **you return is the order the user sees.** Ranking is yours to decide and yours to get right; nothing downstream will fix it up for you.
+
+### Searching (optional — it is just an action)
+
+Write your query into the state blob at `searchBind`, then POST `searchAction`'s `name` with that state, exactly like any other dispatch. Read `candidates` off the returned `vm`, pick the item you want, then write its `value` into `bind` and dispatch your real action.
+
+```json
+{ "name": "search-agents", "state": { "form": { "assigneeQuery": "sal" } } }
+```
+
+- **An empty query is a legitimate query.** There is no minimum-length gate. An empty query may legitimately return most-recently-used candidates rather than nothing.
+- **`blocking` is meaningless on `searchAction`.** The renderer forces a search onto the non-blocking lane regardless of what the app declares, and per *Non-blocking actions* above it never rides the POST payload anyway. Setting it does nothing. Dispatch normally.
+
+### `allowCustom` — invented values are declared, never inferred
+
+`allowCustom: true` means the field accepts a value that isn't one of the offered candidates; omitted/`false` means only offered candidates commit. Choosing an existing record and inventing a new tag are different acts, so the control **declares** which it is doing rather than leaving you to infer it from behavior.
+
+An invented value is **just a value whose label equals itself** — there is no bare string and no union anywhere. `allowCustom: true` + no `candidates` + labels omitted **is** a free-form tags input, with no special case. So the shapes above are all you ever have to parse.
+
+### Two rules that will bite you if you assume otherwise
+
+- 🚨 **Any cap is VISIBLE in the tree. Nothing truncates silently.** If a server caps its results, it says so in the tree (the app renders a `TextNode`, per the canonical *"Refine your filter — N matches, max is X"* pattern). You should never be handed a silently truncated list. The anti-pattern this exists to avoid is real: a surveyed platform applies a 15-result cap *post-authorization* behind a hard 250-row SQL ceiling, so in a large table an exact-match record can be **silently invisible**. If you see a cap message, narrow the query — do not conclude the record doesn't exist.
+- 🚨 **The picker's filter is UX, never authorization.** What `candidates` offers is a search-scoping convenience, **not an access boundary** — do not infer authorization from it. The server authorizes in the action handler with the real auth context, exactly as every other VMS action does. A value absent from `candidates` is not thereby forbidden, and a value present in `candidates` is not thereby permitted.
+
 ## Files
 
 File uploads use the multipart form above. One form entry per file input, keyed by the input's `name` attribute (from the corresponding node's `name` field in the tree). The file's binary content is the entry's value. JSON-body dispatch cannot carry files; use multipart.
