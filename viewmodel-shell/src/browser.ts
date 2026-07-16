@@ -55,19 +55,6 @@ const noopStateAccess: StateAccess = {
 // up past it and the adapter respects the user reading history instead.
 const FOLLOW_TAIL_STICK_THRESHOLD_PX = 40;
 
-/**
- * Phase 21 (LOOK-05) — how long the lookup's live region waits for the user to
- * stop typing before it speaks (§7 item 10; GOV.UK's `statusDebounceMillis`).
- *
- * 🚨 NOT the query debounce. The query debounce is ~300ms and lives in field()'s
- * lookup arm; this is ~4.6x longer and has the opposite audience: the SERVER is
- * asked while the user types, the USER is told only once they pause. On
- * Safari/VoiceOver "typing echo can otherwise interrupt announcement of the aria
- * live content" — i.e. announcing too eagerly means the user hears NEITHER their
- * own keystrokes nor the status. Do not "unify" the two timers.
- */
-const LOOKUP_STATUS_DEBOUNCE_MS = 1400;
-
 export class BrowserAdapter implements Adapter {
   private fileRegistry = new Map<string, File>();
   private sa: StateAccess = noopStateAccess;
@@ -125,13 +112,19 @@ export class BrowserAdapter implements Adapter {
   // region twice is not a change and is NOT re-announced — re-highlight the
   // same option, hear silence. `next` alternates them, which is why the value
   // is an object rather than a bare element (same shape reason as the chart's
-  // {canvas, chart, latest} triple). `timer` is the ~1400ms status debounce
-  // (§7 item 10 — GOV.UK's statusDebounceMillis): a THIRD, independent timer,
-  // distinct from the 300ms query debounce AND from the dispatch lane, because
-  // on Safari/VoiceOver "typing echo can otherwise interrupt announcement of the
-  // aria live content". Do not unify the three; they have different jobs.
+  // {canvas, chart, latest} triple).
   // `hintShown` tracks §7 item 13's assistive hint, which is dropped after the
   // first input so it is not a per-keystroke tax.
+  //
+  // 🚨 NO TIMER HERE, AND THAT IS THE POINT (21-11). This map used to carry a
+  // ~1400ms status debounce (GOV.UK's `statusDebounceMillis`), which existed for
+  // ONE reason: search fired on a ~300ms type-as-you-go cadence, so the region
+  // faced a per-keystroke firehose and had to wait for the user to pause or the
+  // typing echo would eat the announcement. `searchAction` now fires on ENTER —
+  // ONE Enter, ONE announcement — so the firehose is gone and with it every
+  // reason to make an AT user wait 1.4s to hear their own answer. If you are
+  // here to re-add a debounce, first re-add the cadence that justified it; you
+  // will find you cannot (D4, reversed).
   //
   // Keyed by n.name — a deliberate, documented DIVERGENCE from the chart's
   // title+ordinal scheme (and NO ordinal counter: do not cargo-cult
@@ -146,20 +139,17 @@ export class BrowserAdapter implements Adapter {
     a: HTMLElement;
     b: HTMLElement;
     next: "a" | "b";
-    timer: ReturnType<typeof setTimeout> | undefined;
     hintShown: boolean;
   }>();
-  // Phase 21 (LOOK-02) — pending ~300ms query-debounce timers, keyed by
-  // FieldNode.name. DELIBERATELY PERSISTENT across renders (NOT reset like the
-  // per-render fields below), for a reason specific to this control: a lookup
-  // dispatches on its OWN keystrokes, so a re-render lands mid-typing on EVERY
-  // search. A timer held in the field()-closure would be unreachable from the
-  // NEXT render's closure, so a keystroke after a re-render could not cancel
-  // the debounce scheduled before it — and both would fire. Keying by name on
-  // the adapter makes cancel-across-render coherent. Mark-swept in render()
-  // (alongside chartInstances) so a lookup dropped from the tree cannot fire a
-  // search for a field that no longer exists.
-  private searchTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  // Phase 21 (21-11) — document-level "click outside closes the popup" handlers,
+  // registered by field()'s lookup arm. PER-RENDER, exactly like fitsObservers
+  // above: every entry is removed from `document` at the TOP of render(), before
+  // the innerHTML wipe, so a handler closing over a destroyed popup can never
+  // fire. The listener MUST live on `document` (an outside click is by
+  // definition not on our own subtree), and `document` outlives the wipe — so
+  // without this reset the adapter would leak one dead listener per lookup per
+  // render for the life of the page.
+  private lookupOutsideHandlers: Array<(e: Event) => void> = [];
   // Phase 21 (LOOK-02) — popup-open snapshot for the lookup combobox, keyed by
   // FieldNode.name. Captured by render() BEFORE this.container.innerHTML = ""
   // by walking [data-vms-lookup-key] popups; consumed IN field()'s lookup arm
@@ -171,8 +161,9 @@ export class BrowserAdapter implements Adapter {
   //
   // 🚨 OPEN is preserved. ACTIVE IS NOT — see the arm.
   //
-  // `querying` rides along: it marks "the user has typed and has not yet
-  // committed or dismissed" — i.e. an ACTIVE SEARCH SESSION. It is what lets
+  // `querying` rides along: it marks "this render is the answer to a search the
+  // user just asked for" — set when Enter dispatches `searchAction` (21-11; it
+  // used to be set by TYPING, when typing is what searched). It is what lets
   // results arriving from the server open the popup (a first search has no
   // prior options, so the input listener's own open cannot fire) and what gates
   // the live region's result announcements, so a lookup that merely re-renders
@@ -182,8 +173,7 @@ export class BrowserAdapter implements Adapter {
   // a fourth mechanism, exactly as 21-04's executor asked. Both are chip state,
   // and both are DOM-local: the roving tabindex POSITION and the "last chip is
   // highlighted, press again to remove" arm die in render()'s innerHTML wipe.
-  // The 300ms search cadence lands a re-render mid-interaction routinely, so
-  // neither can be left to chance.
+  // A search re-render lands mid-interaction, so neither can be left to chance.
   //
   // 🚨 `armed` is a VALUE, not a boolean, and that is load-bearing. Restoring an
   // armed FLAG by position would confirm the user's second Backspace against
@@ -204,10 +194,9 @@ export class BrowserAdapter implements Adapter {
   // (a ChartNode removed from the new tree → its Chart instance is destroyed).
   private chartKeysSeen = new Set<string>();
   // Per-render set of every lookup key rendered this pass. Reset at the TOP of
-  // every render(); render() mark-sweeps the persistent lookup maps
-  // (searchTimers, and liveRegions below) against it, so a lookup removed from
-  // the tree drops its pending timer and its live regions rather than leaking
-  // them across a long session. Same idiom as chartKeysSeen above.
+  // every render(); render() mark-sweeps the persistent liveRegions map against
+  // it, so a lookup removed from the tree drops its live regions rather than
+  // leaking them across a long session. Same idiom as chartKeysSeen above.
   private lookupKeysSeen = new Set<string>();
 
   constructor(private container: HTMLElement) {}
@@ -312,6 +301,13 @@ export class BrowserAdapter implements Adapter {
     this.fitsObservers.forEach(o => o.disconnect());
     this.fitsObservers = [];
 
+    // Phase 21 (21-11) — drop the prior render's click-outside handlers before
+    // the tree is rebuilt, for exactly the fits reason above: they live on
+    // `document`, which the innerHTML wipe does not touch, so each would
+    // otherwise outlive the popup it closes over and accumulate forever.
+    this.lookupOutsideHandlers.forEach(h => document.removeEventListener("mousedown", h));
+    this.lookupOutsideHandlers = [];
+
     // Phase 12 (CHART-01/03) — reset the per-render chart bookkeeping (NOT
     // chartInstances, which is deliberately persistent). Same per-render reset
     // model as sectionKeyCounter: keys must compute identically across the
@@ -334,29 +330,14 @@ export class BrowserAdapter implements Adapter {
       }
     }
 
-    // Phase 21 (LOOK-02) — mark-sweep the lookup's pending query-debounce
-    // timers against the keys rendered this pass, exactly as the chart sweep
-    // above does. A lookup removed from the new tree must not fire the search
-    // it had scheduled: the field is gone, so the round trip is pointless, and
-    // its response would be applied to a control that no longer exists.
-    for (const [key, timer] of this.searchTimers) {
-      if (!this.lookupKeysSeen.has(key)) {
-        clearTimeout(timer);
-        this.searchTimers.delete(key);
-      }
-    }
-
-    // Phase 21 (LOOK-05) — mark-sweep the live regions against the same key set,
-    // exactly as the chart sweep above does: a lookup removed from the new tree
-    // drops its two region nodes (and any pending status announcement) rather
-    // than leaking them for the life of the session. Swept POST-rebuild, like
-    // the charts and for the same reason — a PERSISTING lookup's regions must
-    // survive the innerHTML wipe to be re-appended by field().
-    for (const [key, entry] of this.liveRegions) {
-      if (!this.lookupKeysSeen.has(key)) {
-        if (entry.timer != null) clearTimeout(entry.timer);
-        this.liveRegions.delete(key);
-      }
+    // Phase 21 (LOOK-05) — mark-sweep the live regions against the keys rendered
+    // this pass, exactly as the chart sweep above does: a lookup removed from
+    // the new tree drops its two region nodes rather than leaking them for the
+    // life of the session. Swept POST-rebuild, like the charts and for the same
+    // reason — a PERSISTING lookup's regions must survive the innerHTML wipe to
+    // be re-appended by field().
+    for (const key of this.liveRegions.keys()) {
+      if (!this.lookupKeysSeen.has(key)) this.liveRegions.delete(key);
     }
 
     if (focusId) {
@@ -1433,15 +1414,55 @@ export class BrowserAdapter implements Adapter {
         ? (selectedItems[0].label ?? selectedItems[0].value)
         : "";
 
-      // The typed query round-trips (searchBind) so the server sees it and the
-      // view stays a pure function of state. `undefined` (no query slot yet) is
-      // NOT the same fact as `""` (the user cleared the box): an EMPTY QUERY IS
-      // A LEGITIMATE QUERY (D4/OPEN-6 — it is how an app serves a
-      // most-recently-used list), so the two must never be conflated by a
-      // truthiness check.
+      // ── THE DISPLAY QUESTION AND THE DISPATCH QUESTION ARE DIFFERENT (21-11)
+      //
+      // 🚨 THE BUG THIS PHASE EXISTS TO FIX WAS ONE `!= null` TEST ANSWERING
+      // BOTH. It looked right and it shipped a form that renders its PLACEHOLDER
+      // where the operator had already set a reference.
+      //
+      // The query round-trips (searchBind) so the server sees it and the view
+      // stays a pure function of state. Two rules collided in one expression:
+      //
+      //   • OPEN-6 says DO NOT gate on truthiness — an EMPTY QUERY IS A
+      //     LEGITIMATE QUERY (it is how an app serves a most-recently-used
+      //     list), so `""` must still reach the server.
+      //   • D1 says the label comes from `selected`.
+      //
+      // Both are right. But a real state record initializes its query slot to
+      // `""` — an empty STRING, not null — so `query != null` was TRUE on a
+      // cold form load, the input rendered empty, and the placeholder won. The
+      // empty query beat the label.
+      //
+      // ⇒ They are separated, and each keys on what it actually needs:
+      //
+      //   DISPLAY  keys on NON-EMPTY  — is the user typing? Only text they have
+      //            actually typed may cover the label.
+      //   DISPATCH keys on NON-NULL   — should this reach the server? Yes, even
+      //            empty (see the Enter handler; do NOT regress OPEN-6).
+      //
+      // Clearing the box therefore shows the label again. That is CORRECT and is
+      // not a regression: clearing the SEARCH TEXT is not clearing the
+      // SELECTION. Escape clears the selection (21-03's recorded decision), and
+      // it is the only thing that does.
       const query = n.searchBind != null ? this.readBind(n.searchBind) : undefined;
-      inp.value = query != null
-        ? String(query)
+      const queryText = query != null ? String(query) : "";
+      // 🚨 "THE BOX IS SHOWING A LABEL, NOT A QUERY."
+      //
+      // The display fallback above means `inp.value` is NOT always the user's
+      // query — on a cold load it is the SERVER'S LABEL for the current
+      // selection. Anything that flushes the box to `searchBind` must know the
+      // difference, or it writes "Sally Omer" into the query slot and the next
+      // search asks the directory for a person named after the person already
+      // chosen. (This is the display fix's own sharp edge: the fallback that
+      // makes the label visible is what puts non-query text in a query box.)
+      //
+      // Tracked as a closure flag rather than re-derived at flush time because
+      // the box's meaning CHANGES with use: typing makes it a query (the input
+      // listener clears this), and committing makes it a label again (commit()
+      // sets it). Cleared/set at exactly those three points, nowhere else.
+      let labelShown = queryText === "" && !isMulti && selectedLabel !== "";
+      inp.value = queryText !== ""
+        ? queryText
         // Single-select renders its selection INSIDE the input — SLDS does the
         // same, and no chip element exists for single-select at all. Multi's
         // selection lives in chips OUTSIDE the input (Plan 21-05), so its input
@@ -1915,13 +1936,12 @@ export class BrowserAdapter implements Adapter {
       // 🚨 PRESERVE OPEN. DO NOT PRESERVE ACTIVE. The two lines below look like
       // they are missing a third; they are not.
       //
-      // Why open is preserved: this arm's popup state is DOM-local, and the
-      // ~300ms debounced search means a re-render lands MID-TYPING on EVERY
-      // search. Without this, the popup the user is typing into snaps shut
-      // ~300ms after every keystroke and the control is unusable. (The bug was
-      // invisible before the search cadence existed, because nothing re-rendered
-      // a lookup mid-interaction — which is exactly why it had to be solved
-      // here, with the cadence that exposes it.)
+      // Why open is preserved: this arm's popup state is DOM-local, so it dies
+      // in render()'s innerHTML wipe — and the search itself CAUSES a re-render.
+      // Without this, the results of the very search the user just asked for
+      // would arrive with the popup slammed shut. (Enter-to-search makes this
+      // one re-render per question rather than one every ~300ms, but it does not
+      // make it go away: the answer still lands on a rebuilt tree.)
       //
       // Why active is NOT preserved: `activeIndex` starts at -1 on every render,
       // and that is HALF OF §7 item 14 — we never auto-highlight when results
@@ -1929,10 +1949,8 @@ export class BrowserAdapter implements Adapter {
       // of this pass and it would resurrect the exact React Aria NVDA failure
       // item 14 exists to prevent: with an option auto-focused, "character
       // deletions and text cursor movement in the ComboBox input weren't being
-      // announced at all". It bites async HARDEST — results land mid-typing, so
-      // the restore would fire on precisely the renders where the user is still
-      // editing. Restoring open costs nothing; restoring active silently breaks
-      // the announcement of the user's own typing.
+      // announced at all". Restoring open costs nothing; restoring active
+      // silently breaks the announcement of the user's own typing.
       //
       // Restored HERE rather than in a post-render DOM walk (the [data-section-key]
       // details pattern) because `open` is a CLOSURE variable: setting
@@ -1949,7 +1967,8 @@ export class BrowserAdapter implements Adapter {
       // `if (optionEls.length > 0) setOpen(true)` cannot fire and the popup was
       // never open to preserve. Without this, the results of the very first
       // search would arrive invisibly and the user would have to press ArrowDown
-      // to discover the answer they just asked for.
+      // to discover the answer they just asked for. `querying` is now set by
+      // search() — the Enter that ASKED — rather than by typing.
       if ((snapshot?.open === true || querying) && optionEls.length > 0) {
         setOpen(true);
       }
@@ -1957,8 +1976,8 @@ export class BrowserAdapter implements Adapter {
       // §7 item 11 — results arriving is a fact the user must be TOLD, not just
       // shown. Gated on `querying` so that a re-render for unrelated reasons (a
       // poll tick, another action) never narrates a candidate count out of
-      // nowhere; and debounced 1400ms, so a fast response supersedes its own
-      // pending "Loading results" and only the answer is spoken.
+      // nowhere. One Enter, one announcement — no debounce, because there is no
+      // longer a per-keystroke firehose to tame.
       if (querying) {
         announce(optionEls.length > 0
           ? `${optionEls.length} results are available.`
@@ -1981,6 +2000,16 @@ export class BrowserAdapter implements Adapter {
           // ...and the label is what is shown. Same D1/D5 rule as the display
           // path above: an omitted label means the label IS the value.
           inp.value = c.label ?? c.value;
+          // 🚨 The query is SPENT — clear it, exactly as addValue() does for
+          // multi. Two reasons, and the first is a real bug:
+          //   1. The box now holds a LABEL, so `labelShown` must say so or the
+          //      next Enter would flush "Sally Omer" into the query slot.
+          //   2. A stale query in state OUTRANKS the label on the next render
+          //      (display keys on non-empty), so leaving "sal" behind means the
+          //      server's next response redraws the box as "sal" and the user
+          //      watches their own selection turn back into their search text.
+          this.writeBind(n.searchBind, "");
+          labelShown = true;
           setOpen(false);
         }
         inp.focus();
@@ -2034,6 +2063,11 @@ export class BrowserAdapter implements Adapter {
         } else {
           this.writeBind(n.bind, value);
           inp.value = value;
+          // Same as commit(): the box now holds a committed label (which, per
+          // D5, an invented value IS — a value whose label equals itself), and
+          // the query that produced it is spent. See commit() for both reasons.
+          this.writeBind(n.searchBind, "");
+          labelShown = true;
           setOpen(false);
         }
         inp.focus();
@@ -2049,106 +2083,105 @@ export class BrowserAdapter implements Adapter {
         });
       });
 
-      // ── THE LIVE QUERY (Phase 21, LOOK-02 / D4 / D11) ─────────────────────
+      // ── THE SEARCH (Phase 21, 21-11 / D4 / D11 — BOTH REVERSED) ───────────
       //
-      // VMS's FIRST live-query dispatch cadence. Every other text field in this
-      // file dispatches on Enter ONLY (the text arm below; the table's column
-      // filter). This is the one control that asks the server a question while
-      // the user is still typing.
+      // 🚨 `searchAction` IS AN ORDINARY, BLOCKING ACTION FIRED ON ENTER. It is
+      // byte-for-byte the cadence `TableNode.filterAction` has always used
+      // (table(), below: keystrokes write the bind; ENTER dispatches) and the one
+      // the text arm uses. There is NO debounce timer, NO live-query lane, and
+      // NOTHING here touches `blocking`.
       //
-      // 🚨 300ms — the survey's convention, not a guess: ServiceNow's
-      // `glide.xmlhttp.ac_wait_time` is 250ms; PrimeReact's `delay` is 300ms.
-      // (This is the QUERY debounce. It is NOT the ~1400ms live-region status
-      // debounce, which is a separate, much longer timer with a different job —
-      // do not "unify" them.)
-      const SEARCH_DEBOUNCE_MS = 300;
-
-      const scheduleSearch = (): void => {
+      // It did not start that way. The first cut of this control searched on a
+      // ~300ms type-as-you-go debounce and FORCED `blocking: false`, and the
+      // operator drove it on the tailnet and reversed both. The reasons are
+      // recorded here because every deleted mechanism will look like a missing
+      // feature to the next reader:
+      //
+      // 1. WHY BLOCKING IS A CORRECTNESS WIN, not a UX preference. A blocking
+      //    action is SERIALIZED BY THE EXISTING DISPATCH GUARD — a second action
+      //    cannot dispatch while a round trip is in flight, and has not been able
+      //    to since long before this control existed. So the entire stale-response
+      //    race category is not MITIGATED here; it is STRUCTURALLY IMPOSSIBLE.
+      //    That is stronger than any test suite, and it is why the four
+      //    adversarial race tests that used to guard this file are GONE rather
+      //    than ported: they rigorously proved properties of a mechanism we no
+      //    longer use. Rigor inside the wrong frame is not rigor.
+      //
+      // 2. WHY THE RENDERER MUST NEVER SET `blocking` (the framework rule, which
+      //    outlives this control — see AGENTS.md):
+      //
+      //      NON-BLOCKING IS ALWAYS THE APP'S EXPLICIT, OPT-IN CHOICE. The
+      //      framework never forces, infers, or upgrades a dispatch onto the
+      //      non-blocking lane.
+      //
+      //    `blocking: false` is SEMANTIC: it means this response may be
+      //    discarded, may arrive out of order, and may coexist with another in
+      //    flight. An app that did not ask for those semantics can have its logic
+      //    broken by them, silently. That is not the framework's call to make.
+      //    The old argument for forcing it here was circular — it forced the lane
+      //    because an app that forgot the flag would busy-lock the page on every
+      //    keystroke, but that failure only existed because typing triggered round
+      //    trips in the first place. The feature invented the problem, then took a
+      //    power away from the app to paper over it.
+      //
+      //    ⇒ The spread below is `on(searchAction)` — the app's ActionEvent,
+      //    UNTOUCHED. If you find yourself wanting to force the lane here, STOP:
+      //    that urge is the exact smell the rule names, and it means the shape is
+      //    wrong, not the rule.
+      //
+      // 3. WHAT DIED WITH THE CADENCE, so nobody "restores" it piecemeal: the
+      //    300ms query debounce and its adapter-keyed timer map; the ~1400ms
+      //    announcement debounce (a firehose tamer with no firehose left); the
+      //    popup slamming shut mid-typing; the chips dying mid-interaction; and
+      //    the results jumping under the operator's cursor as she reached to click
+      //    a name. EVERY ONE of those existed to serve type-as-you-go.
+      const search = (): void => {
         const searchAction = n.searchAction;
         if (searchAction == null) return;
-
-        // Cancel the pending trip and reschedule: only the LAST keystroke in a
-        // burst fires. The timer lives on the ADAPTER (keyed by n.name), not in
-        // this closure — a re-render replaces the closure, and a timer the new
-        // closure cannot reach is a timer a subsequent keystroke cannot cancel.
-        const pending = this.searchTimers.get(n.name);
-        if (pending != null) clearTimeout(pending);
-
-        this.searchTimers.set(n.name, setTimeout(() => {
-          this.searchTimers.delete(n.name);
-          // Re-read the value FRESH at FIRE time, and flush it to state HERE —
-          // not at schedule time. Same defensive reasoning as the text arm's
-          // Enter handler: the value can move after the timer is scheduled (an
-          // autofill or IME commit that never fired `input`), and the dispatched
-          // state must be what the box actually says when the request goes out.
-          this.writeBind(n.searchBind, inp.value);
-
-          // §7 item 11 — announce LOADING. An async combobox that is silent
-          // during the fetch leaves AT users with no signal at all: they cannot
-          // tell a slow server from a dead one. A fast response supersedes this
-          // inside the 1400ms window, so it is only ever heard when the wait is
-          // actually long enough to be worth mentioning.
-          announce("Loading results");
-
-          // 🚨 D11 — THE DISPATCH. `blocking: false` is RENDERER-FORCED: the
-          // spread puts it LAST so it overrides whatever the app declared, and
-          // the app cannot opt out.
-          //
-          // Why the framework takes this decision away from the app:
-          //
-          // 1. `action.blocking === false` is the ENTIRE opt-in to the v4.2
-          //    non-blocking lane (index.ts, dispatch()). Nothing else selects it.
-          // 2. An app that forgets it — or leaves it undefined, which classifies
-          //    as BLOCKING — busy-locks the WHOLE PAGE on every keystroke: the
-          //    framework applies `.vms-busy` (pointer-events: none) for the
-          //    duration of any user-initiated dispatch. That failure is severe,
-          //    SILENT AT AUTHOR TIME, and only visible when someone types.
-          // 3. There is no coherent app that wants a blocking search. A search
-          //    query is DEFINITIONALLY a background question, so this isn't a
-          //    choice worth exposing — the same instinct as the framework owning
-          //    the debounce and the ordering rather than asking the app to.
-          // 4. Synthesizing the field here is IN-CONTRACT, not a hack:
-          //    ActionEvent.blocking's own TSDoc says it is "read PURELY
-          //    client-side" and "never rides inside the `_action` POST payload".
-          //
-          // 🚨 WHAT THIS ONE LINE BUYS, AND WHAT MUST NEVER BE RE-IMPLEMENTED
-          // HERE. The lane already guarantees all four, and this control is its
-          // first real consumer — it CALLS the lane, it does not touch it:
-          //   • Stale discard (`seq >= appliedSeq`) — a slow search response
-          //     landing after a newer one is dropped. This IS react-select's
-          //     `if (request !== lastRequest.current) return;`, already built
-          //     and already tested.
-          //   • Blocking is authoritative — the user PICKING an option is never
-          //     clobbered by a background search response that lands after it.
-          //   • Refire-queued discard — if a newer search is already queued, the
-          //     in-flight response is dropped rather than applied-then-
-          //     superseded, so stale candidates never flicker into the popup.
-          //   • Latest-wins coalescing — at most ONE extra round trip fires once
-          //     the in-flight one resolves, carrying the LATEST query. Overwrite,
-          //     never append.
-          // Any `pendingSearch` / `searchSeq` / `lastSearchRequest` field added
-          // to ViewModelShell is a parallel mechanism that will drift from the
-          // lane it duplicates. Reject on sight.
-          //
-          // The debounce belongs HERE, in browser.ts, and not in the lane:
-          // `setTimeout` is an allowed core universal so a core debounce would
-          // PASS check:core-globals — it still does not belong there. It is a
-          // DOM-input-cadence concern, it belongs with the `input` listener that
-          // owns the timer, and in core it would force the TUI to inherit a
-          // cadence it has no use for.
-          on({ ...searchAction, blocking: false });
-        }, SEARCH_DEBOUNCE_MS));
+        // Belt-and-suspenders, exactly as the text arm's Enter handler and the
+        // table filter's do: flush the box to state BEFORE dispatching, in case
+        // the browser has not fired `input` yet (an autofill or IME commit that
+        // lands then submits). The dispatched `_state` must be what the box
+        // actually says.
+        //
+        // 🚨 DISPATCHED UNCONDITIONALLY — never gated on a non-empty value. AN
+        // EMPTY QUERY IS A LEGITIMATE QUERY (OPEN-6): it is how an app serves a
+        // most-recently-used list on an empty box (Salesforce's picker
+        // `searchType` DEFAULTS to `Recent`; Dynamics shows 5 MRU + 5 favourites).
+        // An `if (inp.value)` gate here voids the MRU decision silently. This is
+        // the DISPATCH question — it keys on the query being non-null, NOT
+        // non-empty. The DISPLAY question is the other one, and it is answered
+        // ~200 lines above; conflating the two is what shipped the
+        // placeholder-instead-of-label bug.
+        //
+        // 🚨 ...but flush the BOX only when the box holds a QUERY. When it is
+        // showing the selected label (see `labelShown`), its text is the
+        // server's, not the user's: writing it here would send "Sally Omer" as
+        // the search term for a field whose owner already IS Sally Omer — and
+        // would silently poison the MRU open, whose whole point is an EMPTY
+        // query. Enter on an untouched, label-showing box asks the MRU question
+        // it looks like it is asking.
+        this.writeBind(n.searchBind, labelShown ? "" : inp.value);
+        // "The user just asked a question": lets the answer open the popup (a
+        // first search has no prior options, so the input listener's own open
+        // cannot fire) and gates the result announcement, so an unrelated
+        // re-render never narrates a candidate count out of nowhere.
+        setQuerying(true);
+        // §7 item 11 — announce LOADING. An async combobox that is silent during
+        // the fetch leaves AT users unable to tell a slow server from a dead one.
+        announce("Loading results");
+        on(searchAction);
       };
 
       inp.addEventListener("input", () => {
-        // 🚨 Written UNCONDITIONALLY — NEVER gated on a non-empty value. An
-        // EMPTY query is a legitimate query (D4/OPEN-6): it is how an app
-        // supplies a most-recently-used list on an empty box (Salesforce's
-        // picker `searchType` DEFAULTS to `Recent`; Dynamics shows 5 MRU + 5
-        // favourites). Plan 21-04 hangs the debounced searchAction dispatch off
-        // this same listener — it must NOT write `if (value) schedule(...)`
-        // either, or the empty-query path silently never reaches the server and
-        // the MRU decision is voided with nothing to show for it.
+        // 🚨 Written UNCONDITIONALLY — NEVER gated on a non-empty value; see
+        // search() above for why (OPEN-6 / the MRU decision). Keystrokes WRITE
+        // the bind and dispatch NOTHING: this is the table filter's cadence
+        // exactly.
+        //
+        // The user has edited the box, so its text is now THEIRS — a query, not
+        // the label the render put there. See `labelShown`.
+        labelShown = false;
         this.writeBind(n.searchBind, inp.value);
         // 🚨 §7 items 14 + 21 — clear the active option whenever the query text
         // changes, and never let list-typeahead swallow typing. Typing is the
@@ -2159,18 +2192,49 @@ export class BrowserAdapter implements Adapter {
         // edit and turn a later Backspace into a delete of something the user
         // was told about minutes ago.
         setArmed(null);
-        // The user is now mid-search: results that arrive should open the popup
-        // and be announced. Set BEFORE setOpen — setOpen(false) clears it, and
-        // this path never closes.
-        setQuerying(true);
+        // Any options on screen are the previous query's answer. They stay
+        // visible and pickable — the user asked for them — but this is NOT a new
+        // search session, so `querying` is left alone: only search() sets it.
         if (optionEls.length > 0) setOpen(true);
         // §7 item 13 — the assistive hint has done its job the moment the user
         // starts typing; from here on it would be a per-keystroke tax read out
         // on every visit to the field.
         live.hintShown = true;
         hintEl?.remove();
-        scheduleSearch();
       });
+
+      // ── CLICK-OUTSIDE CLOSES THE POPUP (21-11) ────────────────────────────
+      //
+      // The APG does NOT specify this, which is exactly why §7 missed it and why
+      // the operator found it by hand: every real combobox has it, and a popup
+      // that only Escape can dismiss feels broken to a mouse user who has simply
+      // moved on.
+      //
+      // 🚨 IT CLOSES. IT DOES NOT CLEAR — not the selection, not the query.
+      // setOpen(false) drops the highlight and ends the search session and
+      // touches NOTHING ELSE. Escape is the only thing that clears (see its
+      // handler); silently discarding a reference because the user clicked
+      // elsewhere would be exactly the unannounced data loss that stage one of
+      // Escape's two-stage rule exists to prevent.
+      //
+      // `mousedown`, not `click`, and `wrapper.contains()` as the test — both
+      // load-bearing for picking a candidate:
+      //   • An option commits on MOUSEDOWN (it preventDefaults to keep DOM focus
+      //     in the input). A `click`-based close would fire on the same press;
+      //     mousedown ordering plus the containment test keeps the two apart.
+      //   • The option, the chips and their remove buttons all live INSIDE the
+      //     wrapper, so every in-widget press is excluded by containment rather
+      //     than by a pile of per-element special cases.
+      // Registered on `document` (an outside click is by definition not on our
+      // subtree) and swept per-render — see lookupOutsideHandlers.
+      const onOutsideMouseDown = (e: Event): void => {
+        if (!open) return;
+        const target = e.target as Node | null;
+        if (target != null && wrapper.contains(target)) return;
+        setOpen(false);
+      };
+      document.addEventListener("mousedown", onOutsideMouseDown);
+      this.lookupOutsideHandlers.push(onOutsideMouseDown);
 
       inp.addEventListener("keydown", (e) => {
         const last = optionEls.length - 1;
@@ -2233,20 +2297,55 @@ export class BrowserAdapter implements Adapter {
             commit(activeIndex);
             return;
           }
-          // D3 (LOOK-04) — no option active + a non-empty typed value: this is
-          // the INVENTION path. Gated on the declared axis; when `allowCustom`
-          // is absent/false this falls straight through and NOTHING is
-          // committed, which is the point of declaring it.
+          // ── ENTER'S PRECEDENCE (21-11) ──────────────────────────────────
+          //
+          // ⚠️ ENTER IS OVERLOADED, AND THAT IS NEW. It is the price of the D4
+          // reversal, recorded here rather than discovered later. The table
+          // filter this cadence copies has ONE Enter act; this control can
+          // declare THREE (invent, search, submit) on one input. The order below
+          // is a decision, not an accident:
+          //
+          //   1. an active option        → commit it          (§7 item 17)
+          //   2. allowCustom + typed text → invent it          (D3)
+          //   3. searchAction            → ask the server      (D4, reversed)
+          //   4. action                  → the field's own act
+          //
+          // 🚩 WHY 2 BEFORE 3, AND THE HONEST COST. `allowCustom` + a typed value
+          // is an UNAMBIGUOUS act — "make this a tag" — and it is what the tags
+          // field's own placeholder promises ("Type a tag, press Enter…"). Search
+          // is the more general act, but ordering it first would STARVE invention
+          // entirely: Enter would search, the server would answer, and the second
+          // Enter would search the same string again, forever — the user could
+          // never create anything. The reverse starvation is milder and only
+          // bites a field that declares BOTH: there, a non-empty Enter invents
+          // and never searches, so its candidates can only arrive via the
+          // empty-query (MRU) Enter, which still fires at 3 below.
+          //
+          // ⇒ A field declaring `allowCustom` + `searchAction` TOGETHER is
+          // therefore partially served. Flagged, not papered over. If that combo
+          // matters, the fix is a THIRD act on the wire (or a server-supplied
+          // "create X" candidate, which is how react-select's AsyncCreatable
+          // solves it) — NOT a heuristic in here that guesses which act the user
+          // meant from what they typed. D3's whole point is that the act is
+          // DECLARED, never inferred.
           if (n.allowCustom === true && inp.value.trim() !== "") {
             e.preventDefault();
             commitCustom(inp.value);
             return;
           }
-          // No option active: fall through to the field's own `action`, if it
-          // declares one. `action` and `searchAction` are INDEPENDENT — a
-          // lookup may legitimately carry both — and this mirrors the text
-          // arm's Enter cadence (flush the value to state, then dispatch), so a
-          // lookup's `action` isn't silently dead.
+          // 🚨 THE SEARCH. Fires with NO option active — including on an EMPTY
+          // box, which is the MRU path (OPEN-6). See search().
+          if (n.searchAction) {
+            e.preventDefault();
+            search();
+            return;
+          }
+          // No option active, nothing to invent, nothing to search: fall through
+          // to the field's own `action`. `action` and `searchAction` are
+          // independent declarations, but they now COMPETE for Enter — a lookup
+          // declaring both gets its searchAction, and `action` is reachable only
+          // when no searchAction is declared. Same flag as above; the wire lets
+          // an app declare a combination one key cannot serve.
           if (n.action) {
             e.preventDefault();
             this.writeBind(n.searchBind, inp.value);
@@ -2532,8 +2631,7 @@ export class BrowserAdapter implements Adapter {
    * registered element to observe a change on.
    */
   private lookupLiveRegions(key: string): {
-    a: HTMLElement; b: HTMLElement; next: "a" | "b";
-    timer: ReturnType<typeof setTimeout> | undefined; hintShown: boolean;
+    a: HTMLElement; b: HTMLElement; next: "a" | "b"; hintShown: boolean;
   } {
     const existing = this.liveRegions.get(key);
     if (existing) return existing;
@@ -2550,42 +2648,40 @@ export class BrowserAdapter implements Adapter {
       el.textContent = "";
       return el;
     };
-    const entry = { a: make("a"), b: make("b"), next: "a" as "a" | "b", timer: undefined, hintShown: false };
+    const entry = { a: make("a"), b: make("b"), next: "a" as "a" | "b", hintShown: false };
     this.liveRegions.set(key, entry);
     return entry;
   }
 
   /**
-   * Announce `message` in `key`'s live region, debounced ~1400ms (§7 item 10 —
-   * GOV.UK's `statusDebounceMillis`).
+   * Announce `message` in `key`'s live region, IMMEDIATELY (§7 items 11 + 12).
    *
-   * 🚨 THIS IS A THIRD, INDEPENDENT TIMER. It is NOT the 300ms query debounce
-   * and it is NOT the dispatch lane. The three have different jobs and must not
-   * be "unified": this one exists because on Safari/VoiceOver "typing echo can
-   * otherwise interrupt announcement of the aria live content", so the status
-   * must wait for the user to stop typing. It is ~4.6x longer than the query
-   * debounce ON PURPOSE — the server is asked while the user types; the user is
-   * TOLD only once they pause.
+   * 🚨 NO DEBOUNCE, DELIBERATELY (21-11). This used to wait ~1400ms — GOV.UK's
+   * `statusDebounceMillis` — and that timer had exactly one job: the lookup
+   * searched on a ~300ms type-as-you-go cadence, so the region faced a
+   * PER-KEYSTROKE FIREHOSE, and on Safari/VoiceOver "typing echo can otherwise
+   * interrupt announcement of the aria live content". `searchAction` now fires on
+   * ENTER: one Enter, one announcement. The firehose is gone, so the tamer goes
+   * with it — and keeping it would mean an AT user waits 1.4 seconds to hear the
+   * answer to a question they explicitly asked, which is the opposite of the
+   * item-11 goal ("an async combobox silent during the fetch leaves AT users
+   * with no signal").
    *
-   * Trailing debounce: a newer message REPLACES a pending one. That is what
-   * makes a fast response supersede its own "Loading results" — the loading
-   * message is already untrue by the time it would have been spoken.
+   * ⇒ Do not re-add a debounce here without first re-adding the cadence that
+   * justified it. There isn't one.
    *
    * Alternates the two regions (§7 item 12) and clears the other, so identical
-   * consecutive messages still register as a change and are re-announced.
+   * consecutive messages still register as a change and are re-announced —
+   * writing the same text into one region twice is not a change, and is silence.
    */
   private announceLookup(key: string, message: string): void {
     const entry = this.liveRegions.get(key);
     if (entry == null) return;
-    if (entry.timer != null) clearTimeout(entry.timer);
-    entry.timer = setTimeout(() => {
-      entry.timer = undefined;
-      const target = entry.next === "a" ? entry.a : entry.b;
-      const other = entry.next === "a" ? entry.b : entry.a;
-      other.textContent = "";
-      target.textContent = message;
-      entry.next = entry.next === "a" ? "b" : "a";
-    }, LOOKUP_STATUS_DEBOUNCE_MS);
+    const target = entry.next === "a" ? entry.a : entry.b;
+    const other = entry.next === "a" ? entry.b : entry.a;
+    other.textContent = "";
+    target.textContent = message;
+    entry.next = entry.next === "a" ? "b" : "a";
   }
 
   private decorateField(wrapper: HTMLElement, n: FieldNode): void {

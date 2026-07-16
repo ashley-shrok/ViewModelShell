@@ -61,21 +61,42 @@ describe("🚨 D1 THE HEADLINE PROOF — a preselected value renders its label w
   // set: `candidates` is ABSENT (nobody has searched), `selected` carries the
   // label. A picker that resolved its label from the candidate list renders
   // "u-1" (Ant Design) or nothing. Ours renders "Sally Omer".
+  //
+  // 🚨 EVERY NODE IN THIS BLOCK SETS `searchBind`, AND EVERY STATE SEEDS THE
+  // QUERY SLOT AS `""`. THAT IS NOT INCIDENTAL — IT IS THE TEST.
+  //
+  // Phase 21-11: this suite PASSED while the feature was BROKEN in exactly this
+  // case, because its fixtures OMITTED `searchBind` — so `query` came back
+  // `undefined` and the renderer fell through to the label for a reason no real
+  // app ever enjoys. A lookup without `searchBind` CANNOT SEARCH; the
+  // configuration under test could not exist. A real app renders with
+  // `searchBind` set and its query slot initialized to `""` (an empty string is
+  // what a state record's query field IS before anyone types), and against that
+  // the renderer showed the PLACEHOLDER instead of "Sally Omer" — the operator
+  // saw it on the tailnet.
+  //
+  // ⇒ If a fixture here is ever missing a field a real app always sends, this
+  // suite is proving nothing. Fixtures must be REAL, not minimal.
   it("renders the label from `selected` when `candidates` is absent entirely", () => {
-    const { render, input } = setup({ f: { owner: "u-1" } });
+    const { render, input } = setup({ f: { owner: "u-1", q: "" } });
     render({
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner",
+      searchBind: "f.q", searchAction: { name: "search-owners" },
+      placeholder: "Search people…",
       selected: [{ value: "u-1", label: "Sally Omer" }],
     } as ViewNode);
     expect(input().value).toBe("Sally Omer");
     expect(input().value).not.toBe("u-1");
+    // 🚨 The exact symptom: an empty box renders the PLACEHOLDER. The empty
+    // query must never beat the label.
     expect(input().value).not.toBe("");
   });
 
   it("the bound state still holds the ID and only the ID — the label never enters the bind", () => {
-    const { render, state } = setup({ f: { owner: "u-1" } });
+    const { render, state } = setup({ f: { owner: "u-1", q: "" } });
     render({
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner",
+      searchBind: "f.q", searchAction: { name: "search-owners" },
       selected: [{ value: "u-1", label: "Sally Omer" }],
     } as ViewNode);
     expect((state.f as Record<string, unknown>).owner).toBe("u-1");
@@ -90,10 +111,13 @@ describe("🚨 D1 THE ANTI-TRAP — the selected label survives a candidate list
   // Zag's maintainer, on why no automatic fix is possible: "When you start
   // filtering, and the value isn't part of the filtered options, the selected
   // item isn't up to date."
+  // 🚨 Same fixture rule as the headline block: `searchBind` is SET and the
+  // query slot is seeded `""`, because that is what a real app sends.
   it("displays 'Sally Omer' even though `candidates` contains only Bob", () => {
-    const { render, input } = setup({ f: { owner: "u-1" } });
+    const { render, input } = setup({ f: { owner: "u-1", q: "" } });
     render({
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner",
+      searchBind: "f.q", searchAction: { name: "search-owners" },
       selected: [{ value: "u-1", label: "Sally Omer" }],
       candidates: [{ value: "u-2", label: "Bob" }],
     } as ViewNode);
@@ -101,9 +125,10 @@ describe("🚨 D1 THE ANTI-TRAP — the selected label survives a candidate list
   });
 
   it("an EMPTY candidate list does not erase the selected label", () => {
-    const { render, input } = setup({ f: { owner: "u-1" } });
+    const { render, input } = setup({ f: { owner: "u-1", q: "" } });
     render({
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner",
+      searchBind: "f.q", searchAction: { name: "search-owners" },
       selected: [{ value: "u-1", label: "Sally Omer" }],
       candidates: [],
     } as ViewNode);
@@ -380,7 +405,7 @@ describe("🚨 NO SEED-WRITE — a lookup has no auto-selected default", () => {
 // The query / searchBind display split
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("the input's value: the query when one is in state, else the selected label", () => {
+describe("the input's value: NON-EMPTY typed text, else the selected label", () => {
   it("a query in state is what the user sees (they are typing)", () => {
     const { render, input } = setup({ f: { owner: "u-1", q: "sal" } });
     render({
@@ -390,17 +415,51 @@ describe("the input's value: the query when one is in state, else the selected l
     expect(input().value).toBe("sal");
   });
 
-  it("🚨 an EMPTY-STRING query is a REAL query, not an absent one — it does not fall back to the label", () => {
-    // OPEN-6: an empty query is legitimate (it is how an app serves a
-    // most-recently-used list). `undefined` (no query yet) and `""` (the user
-    // cleared the box) are different facts and must not be conflated by a
-    // truthiness check.
+  it("🚨 an EMPTY-STRING query does NOT beat the label — DISPLAY keys on non-EMPTY, dispatch keys on non-NULL", () => {
+    // 🚨 THIS TEST WAS INVERTED, AND IT ENSHRINED THE BUG (21-11). It used to
+    // assert `input().value === ""` — i.e. that an empty query must WIN over the
+    // label — and the renderer obliged with ONE `query != null` test answering
+    // TWO different questions.
+    //
+    // Both source rules were right; the collision was the single test:
+    //   • OPEN-6 — do NOT gate on truthiness, or the empty query never reaches
+    //     the server and the MRU list dies.  ⇒ that is about DISPATCH.
+    //   • D1     — the label comes from `selected`.  ⇒ that is about DISPLAY.
+    //
+    // A real state record initializes its query slot to `""`, so `"" != null`
+    // was true on every cold form load: the input rendered empty and the
+    // PLACEHOLDER showed where a reference was already set. The operator saw
+    // exactly this on the tailnet.
+    //
+    // The empty query still reaches the server — proved in
+    // lookup-search-dispatch.test.ts ("an EMPTY query dispatches on Enter"), NOT
+    // by starving the display here.
     const { render, input } = setup({ f: { owner: "u-1", q: "" } });
     render({
       type: "field", name: "owner", inputType: "lookup", bind: "f.owner", searchBind: "f.q",
+      searchAction: { name: "search-owners" }, placeholder: "Search people…",
       selected: [{ value: "u-1", label: "Sally Omer" }],
     } as ViewNode);
-    expect(input().value).toBe("");
+    expect(input().value).toBe("Sally Omer");
+  });
+
+  it("clearing the search text shows the label again — clearing the QUERY is not clearing the SELECTION", () => {
+    // 21-03's recorded decision: Escape clears the selection, and it is the only
+    // thing that does. So a re-render with an emptied query slot is a lookup
+    // whose reference is still set — and it must say so.
+    const { render, input, state } = setup({ f: { owner: "u-1", q: "sal" } });
+    const vm = {
+      type: "field", name: "owner", inputType: "lookup", bind: "f.owner", searchBind: "f.q",
+      searchAction: { name: "search-owners" },
+      selected: [{ value: "u-1", label: "Sally Omer" }],
+    } as ViewNode;
+    render(vm);
+    expect(input().value).toBe("sal");
+
+    (state.f as Record<string, unknown>).q = "";
+    render(vm);
+    expect(input().value).toBe("Sally Omer");
+    expect((state.f as Record<string, unknown>).owner).toBe("u-1");
   });
 
   it("no query slot yet (undefined) → the selected label shows", () => {

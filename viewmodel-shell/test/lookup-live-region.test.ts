@@ -183,15 +183,14 @@ describe("§7 item 12 — TWO alternating regions", () => {
     const inp = t.input();
 
     key(inp, "ArrowDown");                       // Sally highlighted
-    vi.advanceTimersByTime(STATUS_DEBOUNCE);
     const firstEl = t.announced();
     expect(firstEl!.textContent).toBe("Sally 1 of 2 is highlighted");
 
-    // Move away and back — the coalesced pending message is IDENTICAL to the
-    // one already announced.
-    key(inp, "ArrowDown");                       // Sam
-    key(inp, "ArrowUp");                         // Sally again
-    vi.advanceTimersByTime(STATUS_DEBOUNCE);
+    // Dismiss and re-open onto the same option — the second announcement is
+    // IDENTICAL to the one already showing. (Escape closes and drops the
+    // highlight without announcing; ArrowDown re-opens onto Sally.)
+    key(inp, "Escape");
+    key(inp, "ArrowDown");                       // Sally again
     const secondEl = t.announced();
 
     expect(secondEl!.textContent).toBe("Sally 1 of 2 is highlighted");
@@ -201,43 +200,43 @@ describe("§7 item 12 — TWO alternating regions", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §7 item 10 — the 1400ms status debounce (a THIRD timer)
+// 🚨 21-11 — the ~1400ms status debounce is GONE. One Enter, one announcement.
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("§7 item 10 — status updates are debounced ~1400ms", () => {
-  it("does not write the announcement before 1400ms elapses", () => {
+describe("🚨 announcements are IMMEDIATE — the 1400ms status debounce is gone", () => {
+  // The debounce (GOV.UK's `statusDebounceMillis`) existed for ONE reason: the
+  // lookup searched on a ~300ms type-as-you-go cadence, so the region faced a
+  // PER-KEYSTROKE FIREHOSE and had to wait for the user to pause or the typing
+  // echo would eat the announcement (Safari/VoiceOver). `searchAction` now fires
+  // on ENTER. No firehose ⇒ no tamer — and keeping it would have meant an AT
+  // user waits 1.4s to hear the answer to a question they explicitly asked,
+  // which inverts §7 item 11's whole point.
+  it("a highlight is announced with NO timer advance at all", () => {
     const t = setup();
     t.render(lookupVm({ candidates: CANDIDATES }));
     key(t.input(), "ArrowDown");
-
-    vi.advanceTimersByTime(1399);
-    expect(t.text()).toBe("");     // still silent — typing echo must not be interrupted
-    vi.advanceTimersByTime(1);
     expect(t.text()).toBe("Sally 1 of 2 is highlighted");
   });
 
-  it("is a SEPARATE, much longer timer than the 300ms query debounce", () => {
+  it("🚨 there is NO pending timer to flush — advancing time changes nothing", () => {
+    // The anti-regression: if a debounce were re-added, the assertion ABOVE
+    // would fail. This one proves the announcement is not merely early — it is
+    // final, with no queued write landing later.
     const t = setup();
     t.render(lookupVm({ candidates: CANDIDATES }));
-    type(t.input(), "sa");
-
-    vi.advanceTimersByTime(300);
-    expect(t.actions).toHaveLength(1);   // the QUERY fired at 300ms...
-    expect(t.text()).toBe("");           // ...and the STATUS is still silent.
-    vi.advanceTimersByTime(1399);
-    expect(t.text()).toBe("");           // still silent 1.7s in — the status waits.
-    vi.advanceTimersByTime(1);
-    expect(t.text()).toBe("Loading results");
+    key(t.input(), "ArrowDown");
+    const before = t.text();
+    vi.advanceTimersByTime(5000);
+    expect(t.text()).toBe(before);
   });
 
-  it("coalesces a burst of highlight moves into ONE announcement (the last)", () => {
+  it("each highlight move announces its own option (no coalescing window)", () => {
     const t = setup();
     t.render(lookupVm({ candidates: CANDIDATES }));
     const inp = t.input();
     key(inp, "ArrowDown");
-    vi.advanceTimersByTime(100);
+    expect(t.text()).toBe("Sally 1 of 2 is highlighted");
     key(inp, "ArrowDown");
-    vi.advanceTimersByTime(STATUS_DEBOUNCE);
     expect(t.text()).toBe("Sam 2 of 2 is highlighted");
   });
 });
@@ -247,24 +246,33 @@ describe("§7 item 10 — status updates are debounced ~1400ms", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("§7 item 11 — the announcement strings", () => {
-  it('announces "Loading results" when the search dispatches', () => {
+  it('announces "Loading results" when the search dispatches on Enter', () => {
     // An async combobox that is SILENT during the fetch leaves AT users with no
     // signal at all — they cannot tell a slow server from a dead one.
     const t = setup();
     t.render(lookupVm());
     type(t.input(), "sa");
-    vi.advanceTimersByTime(300);                  // the query fires
-    vi.advanceTimersByTime(STATUS_DEBOUNCE);
+    key(t.input(), "Enter");            // ← the search; typing announces nothing
     expect(t.text()).toBe("Loading results");
+  });
+
+  it("typing announces NOTHING — only the Enter that asks does", () => {
+    const t = setup();
+    t.render(lookupVm());
+    const inp = t.input();
+    type(inp, "s");
+    type(inp, "sa");
+    type(inp, "sal");
+    expect(t.text()).toBe("");
+    expect(t.actions).toHaveLength(0);
   });
 
   it('announces "${n} results are available." when results arrive', () => {
     const t = setup();
     t.render(lookupVm());
     type(t.input(), "sa");
-    vi.advanceTimersByTime(300);
+    key(t.input(), "Enter");
     t.render(lookupVm({ candidates: CANDIDATES }));   // the response lands
-    vi.advanceTimersByTime(STATUS_DEBOUNCE);
     expect(t.text()).toBe("2 results are available.");
   });
 
@@ -272,9 +280,8 @@ describe("§7 item 11 — the announcement strings", () => {
     const t = setup();
     t.render(lookupVm());
     type(t.input(), "zzz");
-    vi.advanceTimersByTime(300);
+    key(t.input(), "Enter");
     t.render(lookupVm({ candidates: [] }));
-    vi.advanceTimersByTime(STATUS_DEBOUNCE);
     expect(t.text()).toBe("No search results");
   });
 
@@ -283,19 +290,18 @@ describe("§7 item 11 — the announcement strings", () => {
     t.render(lookupVm({ candidates: CANDIDATES }));
     key(t.input(), "ArrowDown");
     key(t.input(), "ArrowDown");
-    vi.advanceTimersByTime(STATUS_DEBOUNCE);
     expect(t.text()).toBe("Sam 2 of 2 is highlighted");
   });
 
-  it("a fast response supersedes the pending loading announcement (only the result is heard)", () => {
+  it("the answer REPLACES the loading announcement (the region ends on the result)", () => {
     const t = setup();
     t.render(lookupVm());
     type(t.input(), "sa");
-    vi.advanceTimersByTime(300);        // "Loading results" scheduled
-    t.render(lookupVm({ candidates: CANDIDATES }));   // response lands well inside 1400ms
-    vi.advanceTimersByTime(STATUS_DEBOUNCE);
-    // The user hears the ANSWER, not a stale "Loading results" that is already
-    // untrue by the time it would have been spoken.
+    key(t.input(), "Enter");
+    expect(t.text()).toBe("Loading results");         // spoken while the trip is out
+    t.render(lookupVm({ candidates: CANDIDATES }));   // the response lands
+    // Both are heard, in order, and the region ends holding the ANSWER — the
+    // loading message is not left standing as the last thing said.
     expect(t.text()).toBe("2 results are available.");
   });
 
@@ -305,7 +311,6 @@ describe("§7 item 11 — the announcement strings", () => {
     const t = setup();
     t.render(lookupVm({ candidates: CANDIDATES }));
     t.render(lookupVm({ candidates: CANDIDATES }));
-    vi.advanceTimersByTime(STATUS_DEBOUNCE);
     expect(t.text()).toBe("");
   });
 });

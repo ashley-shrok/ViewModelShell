@@ -728,28 +728,39 @@ describe("🚨 §7 #27 — add AND remove announce WITH THE RUNNING COUNT", () =
     expect(text()).toContain("2 items selected.");
   });
 
-  it("§7 #12 — two successive IDENTICAL announcements land in DIFFERENT regions", () => {
+  it("§7 #12 — a REPEATED identical announcement still registers as a CHANGE (it is re-announced)", () => {
     // Writing identical text into a live region twice is NOT a change and is NOT
     // re-announced. Committing the same item twice must still be heard.
+    //
+    // 21-11: with the ~1400ms debounce gone, every announcement is spoken rather
+    // than coalesced — so the highlight message now lands BETWEEN the two
+    // identical "selected" sentences. The invariant under test is unchanged and
+    // is what actually matters to an AT user: the repeated sentence must arrive
+    // in a region that was EMPTY immediately before it, or it is silence. The
+    // alternation is the mechanism that guarantees it; this asserts the
+    // guarantee, not the mechanism.
     const { render, input, container } = setup({ f: { tags: [] } });
     render(node({ selected: [], candidates: [{ value: "u-2", label: "Bob Lee" }] }));
     const regionOf = (t: string) =>
       Array.from(container.querySelectorAll<HTMLElement>('[data-vms-live="tags"]'))
         .find(el => el.textContent === t) ?? null;
+    const SENTENCE = "Bob Lee selected. 1 items selected.";
 
     key(input(), "ArrowDown");
     key(input(), "Enter");
-    vi.advanceTimersByTime(STATUS_DEBOUNCE);
-    const first = regionOf("Bob Lee selected. 1 items selected.");
+    const first = regionOf(SENTENCE);
     expect(first).not.toBeNull();
 
-    // Same item again — a duplicate. Same sentence, and it must still register.
+    // Same item again — a duplicate. The intervening highlight CLEARS the region
+    // holding the sentence...
     key(input(), "ArrowDown");
+    expect(regionOf(SENTENCE)).toBeNull();
+
+    // ...so re-announcing it is a genuine ""→text transition, not a silent
+    // no-op write of text that was already there.
     key(input(), "Enter");
-    vi.advanceTimersByTime(STATUS_DEBOUNCE);
-    const second = regionOf("Bob Lee selected. 1 items selected.");
+    const second = regionOf(SENTENCE);
     expect(second).not.toBeNull();
-    expect(second).not.toBe(first);
   });
 
   it("🚨 §7 #32 — a selection change produces live-region TEXT, not merely an attribute flip", () => {
@@ -775,15 +786,19 @@ describe("🚨 §7 #27 — add AND remove announce WITH THE RUNNING COUNT", () =
     expect(announced()!.getAttribute("role")).toBe("status");
   });
 
-  it("chip announcements route through the EXISTING 1400ms helper — not a second mechanism", () => {
+  it("chip announcements route through the EXISTING announce helper — not a second mechanism", () => {
+    // 21-11: the helper is now IMMEDIATE (the ~1400ms status debounce is gone
+    // with the type-as-you-go cadence that was its only justification), so a
+    // chip removal is spoken at once — and there is no pending write left to
+    // flush afterwards. The point of the test is unchanged: chips use the SAME
+    // helper as the combobox, not a parallel one.
     const { render, removeButtons, text } = setup({ f: { tags: ["u-1", "u-2"] } });
     render(node());
     removeButtons()[0].click();
-    // Nothing before the debounce elapses: same helper, same cadence.
-    vi.advanceTimersByTime(STATUS_DEBOUNCE - 1);
-    expect(text()).toBe("");
-    vi.advanceTimersByTime(1);
     expect(text()).toContain("Sally Omer removed.");
+    const spoken = text();
+    vi.advanceTimersByTime(5000);
+    expect(text()).toBe(spoken);
   });
 });
 

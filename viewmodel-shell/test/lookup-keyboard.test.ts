@@ -209,7 +209,10 @@ describe("§7 item 17 — Enter with an option active accepts it", () => {
     expect(h.owner()).toBe("");
   });
 
-  it("Enter with no option active dispatches the field's own `action` (action and searchAction are independent)", () => {
+  it("Enter with no option active dispatches the field's own `action` (when no searchAction competes for the key)", () => {
+    // 21-11: `action` and `searchAction` are independent DECLARATIONS but now
+    // COMPETE for Enter — a lookup declaring both gets its searchAction. See
+    // lookup-search-dispatch.test.ts for the full precedence.
     const h = setup({ f: { owner: "", q: "" } }, { action: { name: "submit-owner" }, searchBind: "f.q" });
     h.key("Enter");
     expect(h.actions).toEqual([{ name: "submit-owner" }]);
@@ -421,5 +424,94 @@ describe("a lookup with NO candidates survives every key", () => {
     expect(h.active()).toBeNull();
     h.key("Enter");
     expect(h.owner()).toBe("");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🚨 CLICK-OUTSIDE (21-11) — not in the APG, which is exactly why it was missed
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("🚨 click-outside CLOSES the popup — and closes it ONLY", () => {
+  // The APG does not specify this, so §7 never listed it and the control shipped
+  // Escape-only dismissal. The operator found it by hand in minutes: every real
+  // combobox closes when you click away, and one that doesn't feels broken.
+  //
+  // 🚨 The load-bearing half is what it must NOT do: closing is not clearing.
+  // Escape clears (stage two); a click elsewhere is the user moving on, and
+  // silently discarding their reference for it would be unannounced data loss.
+  const mouseDown = (el: EventTarget): void => {
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+  };
+
+  it("a mousedown outside the field closes an open popup", () => {
+    const h = setup({ f: { owner: "", q: "" } }, { searchBind: "f.q" });
+    h.key("ArrowDown");
+    expect(h.isOpen()).toBe(true);
+
+    mouseDown(document.body);
+    expect(h.isOpen()).toBe(false);
+  });
+
+  it("🚨 it does NOT clear the selection, and does NOT clear the query", () => {
+    const h = setup(
+      { f: { owner: "u-9", q: "bo" } },
+      { searchBind: "f.q", selected: [{ value: "u-9", label: "Zoe Adams" }] },
+    );
+    h.key("ArrowDown");
+    expect(h.isOpen()).toBe(true);
+
+    mouseDown(document.body);
+    expect(h.isOpen()).toBe(false);
+    expect(h.owner()).toBe("u-9");                                  // selection: kept
+    expect((h.state.f as Record<string, unknown>).q).toBe("bo");    // query: kept
+  });
+
+  it("drops the active option (the search session is over)", () => {
+    const h = setup({ f: { owner: "", q: "" } }, { searchBind: "f.q" });
+    h.key("ArrowDown");
+    expect(h.active()).not.toBeNull();
+    mouseDown(document.body);
+    expect(h.active()).toBeNull();
+  });
+
+  it("a mousedown INSIDE the field does not close it (the input itself)", () => {
+    const h = setup({ f: { owner: "", q: "" } }, { searchBind: "f.q" });
+    h.key("ArrowDown");
+    mouseDown(h.input);
+    expect(h.isOpen()).toBe(true);
+  });
+
+  it("🚨 a mousedown on an OPTION still commits it — the close must not eat the pick", () => {
+    // The sharp edge: options commit on MOUSEDOWN (they preventDefault to keep
+    // DOM focus in the input). A close handler that fired on the same press
+    // would make the popup un-pickable with a mouse — i.e. the fix would break
+    // the control's primary interaction.
+    const h = setup({ f: { owner: "", q: "" } }, { searchBind: "f.q" });
+    h.key("ArrowDown");
+    mouseDown(h.options[1]);
+    expect(h.owner()).toBe("u-3");
+  });
+
+  it("does nothing when the popup is already closed (no spurious state churn)", () => {
+    const h = setup({ f: { owner: "u-9", q: "" } }, { searchBind: "f.q", selected: [{ value: "u-9", label: "Zoe Adams" }] });
+    expect(h.isOpen()).toBe(false);
+    mouseDown(document.body);
+    expect(h.isOpen()).toBe(false);
+    expect(h.owner()).toBe("u-9");
+  });
+
+  it("🚨 a lookup dropped from the tree leaves no live document listener behind", () => {
+    // The handler lives on `document`, which render()'s innerHTML wipe does not
+    // touch — so without the per-render sweep every render would leak one dead
+    // listener closing over a destroyed popup, forever.
+    const h = setup({ f: { owner: "", q: "" } }, { searchBind: "f.q" });
+    h.key("ArrowDown");
+    const spy = vi.spyOn(document, "removeEventListener");
+    // Re-render the lookup away entirely.
+    const adapter = new BrowserAdapter(h.container);
+    adapter.render({ type: "text", text: "gone" } as unknown as ViewNode, () => {});
+    // The prior render's handlers are removed at the TOP of the next render.
+    expect(() => mouseDown(document.body)).not.toThrow();
+    spy.mockRestore();
   });
 });
