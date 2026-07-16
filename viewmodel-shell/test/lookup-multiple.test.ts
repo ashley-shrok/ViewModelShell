@@ -36,6 +36,19 @@ import { BrowserAdapter } from "../src/browser.js";
 
 const STATUS_DEBOUNCE = 1400;
 
+// jsdom doesn't ship CSS.escape; render()'s focus-id restore uses it. The house
+// polyfill (test/browser-scroll.test.ts, test/follow-tail.test.ts) — a
+// passthrough is fine for the simple ASCII ids here. This suite needs it because
+// it is the first to re-render WHILE a chip button holds focus, which is exactly
+// the path the preservation tests below exercise.
+if (typeof (globalThis as { CSS?: { escape?: unknown } }).CSS === "undefined") {
+  (globalThis as unknown as { CSS: { escape: (s: string) => string } }).CSS = {
+    escape: (s: string) => s,
+  };
+} else if (typeof (globalThis as { CSS: { escape?: unknown } }).CSS.escape !== "function") {
+  (globalThis as unknown as { CSS: { escape: (s: string) => string } }).CSS.escape = (s) => s;
+}
+
 function setup(initial: Record<string, unknown> = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);

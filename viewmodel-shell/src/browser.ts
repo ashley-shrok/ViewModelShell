@@ -178,7 +178,23 @@ export class BrowserAdapter implements Adapter {
   // the live region's result announcements, so a lookup that merely re-renders
   // for unrelated reasons never narrates its candidate count at an AT user out
   // of nowhere.
-  private lookupOpenSnapshot: Map<string, { open: boolean; querying: boolean }> = new Map();
+  // Phase 21 (LOOK-03) — `roving`/`armed` join this snapshot rather than growing
+  // a fourth mechanism, exactly as 21-04's executor asked. Both are chip state,
+  // and both are DOM-local: the roving tabindex POSITION and the "last chip is
+  // highlighted, press again to remove" arm die in render()'s innerHTML wipe.
+  // The 300ms search cadence lands a re-render mid-interaction routinely, so
+  // neither can be left to chance.
+  //
+  // 🚨 `armed` is a VALUE, not a boolean, and that is load-bearing. Restoring an
+  // armed FLAG by position would confirm the user's second Backspace against
+  // whatever the server happens to have put last — a DIFFERENT item than the one
+  // announced. That is precisely the silent, unannounced deletion of the wrong
+  // record that §7 item 31's two-step exists to prevent, reintroduced by the
+  // preservation pass meant to make it work. Keyed by value, a changed last chip
+  // simply fails to match and the arm is dropped (fail-safe: the user re-arms).
+  private lookupOpenSnapshot: Map<string, {
+    open: boolean; querying: boolean; roving: number; armed: string | null;
+  }> = new Map();
   // Per-render disambiguator for chart keys (title-derived or anonymous). Reset
   // at the TOP of every render() (like sectionKeyCounter) so snapshot keys and
   // rebuild keys compute identically across a render pass.
@@ -262,13 +278,28 @@ export class BrowserAdapter implements Adapter {
     // no preservation the popup the user is typing into snaps shut every time
     // and the control is unusable. This was invisible before the search cadence
     // existed — nothing re-rendered a lookup mid-interaction.
-    const lookupOpenMap = new Map<string, { open: boolean; querying: boolean }>();
+    //
+    // Phase 21 (LOOK-03) — the popup element is this lookup's DOM-local state
+    // CARRIER, not just its popup: `roving` and `armed` are chip facts parked on
+    // the same node so ONE snapshot pass covers every piece of DOM-local lookup
+    // state. A fourth mechanism per fact is the drift hazard chartInstances
+    // warns about.
+    const lookupOpenMap = new Map<string, {
+      open: boolean; querying: boolean; roving: number; armed: string | null;
+    }>();
     this.container.querySelectorAll<HTMLElement>("[data-vms-lookup-key]").forEach(el => {
       const key = el.dataset.vmsLookupKey;
       if (key != null) {
+        const roving = Number(el.dataset.vmsLookupRoving);
+        const armed = el.dataset.vmsLookupArmed;
         lookupOpenMap.set(key, {
           open: !el.hidden,
           querying: el.dataset.vmsLookupQuerying === "true",
+          roving: Number.isFinite(roving) ? roving : 0,
+          // "" is the no-arm sentinel: a dataset value is always a string, and a
+          // legitimate chip value is never empty (commitCustom trims and rejects
+          // empty; a server candidate with an empty id is meaningless).
+          armed: armed != null && armed !== "" ? armed : null,
         });
       }
     });
@@ -1446,6 +1477,12 @@ export class BrowserAdapter implements Adapter {
       popup.id = popupId;
       popup.setAttribute("role", "listbox");
       popup.setAttribute("aria-label", n.label ?? n.name);
+      // §7 item 30 — the multi listbox declares itself multi-selectable. Set
+      // because it is correct and cheap, but treated as NON-COMMUNICATING (§7
+      // item 32): like aria-selected it is barely announced, so the live region
+      // is what actually tells an AT user what is happening. Absent (not
+      // "false") on single-select — an unset optional is simply absent.
+      if (isMulti) popup.setAttribute("aria-multiselectable", "true");
       popup.hidden = true;
       // The key render()'s pre-wipe popup-open snapshot walks.
       popup.dataset.vmsLookupKey = n.name;
@@ -1532,6 +1569,315 @@ export class BrowserAdapter implements Adapter {
         popup.dataset.vmsLookupQuerying = String(v);
       };
       setQuerying(querying);
+
+      // ══ THE CHIPS LAYER (LOOK-03, multi only) ═══════════════════════════════
+      //
+      // ⚠️ READ design §7 items 23-31 BEFORE CHANGING ANYTHING BELOW. There is
+      // NO APG PATTERN FOR CHIPS AT ALL — every rule here is extrapolation from
+      // a PUBLIC FAILURE plus vendor convention, so it is built conservatively
+      // and it is all tested (test/lookup-multiple.test.ts).
+      //
+      // The failure it is extrapolated from: `alphagov/accessible-autocomplete-
+      // multiselect` carries the notice "This project is retired as the
+      // component is not accessible." It failed GOV.UK's OWN review because it
+      // "does not announce the selections effectively or the presence of the
+      // 'Remove' button for screenreaders", and they judged the fixes "will be
+      // challenging" enough to WITHDRAW rather than repair it. The UK government
+      // shipped this control and had to pull it. Items 25 (item-specific remove
+      // names), 27 (announce WITH the running count) and 29 (the focus rule) are
+      // not polish — they are the difference between this and a retired control.
+      //
+      // This is why D2 makes multi a SEPARATE inputType: the selected set is a
+      // SECOND FOCUSABLE DIMENSION — a second widget grafted onto the first, as
+      // Downshift charges a separate hook for. It is NOT an orthogonal flag.
+      // And `select-multiple` REMAINS the control for ENUMERABLE sets: that
+      // split is an ACCESSIBILITY REQUIREMENT, not taste (the APG combobox has
+      // "tested poorly with users for more than two decades"). The lookup must
+      // never try to swallow it.
+      const chipButtons: HTMLButtonElement[] = [];
+      const chipValues: string[] = [];
+      const chipLabels: string[] = [];
+      let chipList: HTMLElement | undefined;
+      // The value of the chip currently armed for the two-step Backspace
+      // (§7 item 31), or null. A VALUE rather than an index — see the snapshot.
+      let armed: string | null = null;
+      let roving = 0;
+
+      /** Mirror the DOM-local chip facts onto the snapshot carrier. */
+      const syncChipSnapshot = (): void => {
+        popup.dataset.vmsLookupRoving = String(roving);
+        popup.dataset.vmsLookupArmed = armed ?? "";
+      };
+
+      /**
+       * §7 item 26 — ROVING TABINDEX across the remove buttons: exactly one is
+       * in the tab sequence at a time; Left/Right traverse.
+       *
+       * 🚨 Roving tabindex is correct HERE and WRONG for the popup 40 lines
+       * below, and the difference is not a style choice. A chip is NOT
+       * text-editable, so real DOM focus can move onto it freely — and the
+       * remove buttons NEED real focus to be operable at all, which
+       * aria-activedescendant cannot give them. The input IS text-editable, so
+       * moving DOM focus out of it would break typing, which is why the popup
+       * uses aria-activedescendant instead. Same control, two focus models, for
+       * two different reasons. Do not "unify" them.
+       */
+      const setRoving = (i: number): void => {
+        if (chipButtons.length === 0) { roving = 0; syncChipSnapshot(); return; }
+        roving = Math.min(Math.max(i, 0), chipButtons.length - 1);
+        chipButtons.forEach((b, j) => { b.tabIndex = j === roving ? 0 : -1; });
+        syncChipSnapshot();
+      };
+
+      const setArmed = (value: string | null): void => {
+        armed = value;
+        chipList?.querySelectorAll<HTMLElement>(".vms-field__chip").forEach((li, i) => {
+          li.classList.toggle("vms-field__chip--armed", value != null && chipValues[i] === value);
+        });
+        syncChipSnapshot();
+      };
+
+      /**
+       * 🚨 §7 item 29 — THE FOCUS-AFTER-REMOVAL RULE.
+       *
+       *     next chip's remove button -> else previous chip's -> else the text
+       *     input. NEVER <body>.
+       *
+       * Removing the focused element dumps focus to <body>, which strands the
+       * user AT THE TOP OF THE PAGE with no idea where they are or what just
+       * happened. This is one of the two failures that retired GOV.UK's
+       * component, and it has NO ANALOG in this codebase — nothing else here
+       * manages focus across a SET (the <details> restore is by id, not by set
+       * position). It is a single named helper on purpose: it is the highest-risk
+       * item in this arm and it must be findable, greppable, and testable.
+       *
+       * Called AFTER the removed entry has been spliced out of `chipButtons`,
+       * so `chipButtons[removedIndex]` IS the chip that shifted into the gap —
+       * i.e. the "next" one — and it is `undefined` when the removed chip was
+       * last. Both fallbacks are therefore structural rather than conditional
+       * branches someone can forget to write.
+       */
+      const focusAfterChipRemoval = (removedIndex: number): void => {
+        const next = chipButtons[removedIndex];
+        const previous = chipButtons[removedIndex - 1];
+        const target: HTMLElement = next ?? previous ?? inp;
+        target.focus();
+        if (target !== inp) setRoving(chipButtons.indexOf(target as HTMLButtonElement));
+        else setRoving(0);
+      };
+
+      const removeChipAt = (i: number): void => {
+        const value = chipValues[i];
+        const label = chipLabels[i];
+        const li = chipButtons[i]?.closest<HTMLElement>(".vms-field__chip");
+        if (value == null || li == null) return;
+
+        const current = this.readBind(n.bind);
+        const ids = Array.isArray(current) ? (current as unknown[]).map(String) : [];
+        const nextIds = ids.filter(id => id !== value);
+        // The id — and ONLY the id — is what persists (D1). The label was never
+        // in the bind, so there is nothing to keep in sync here.
+        this.writeBind(n.bind, nextIds);
+
+        // The chip leaves the DOM NOW, not when the server answers. A bind write
+        // does not re-render — `selected` is server-owned VIEW — so without this
+        // the user clicks "Remove Sally Omer" and Sally's chip just sits there.
+        // Same model as every other input in this file: the DOM shows the change
+        // immediately, state round-trips, and the SERVER'S NEXT RENDER IS
+        // AUTHORITATIVE (chips are rebuilt from `selected` above, so a server
+        // that rejects the removal simply puts the chip back).
+        li.remove();
+        chipButtons.splice(i, 1);
+        chipValues.splice(i, 1);
+        chipLabels.splice(i, 1);
+        if (armed === value) setArmed(null);
+
+        // Focus BEFORE announcing: the user must never be left on <body>, and
+        // the announcement is debounced anyway.
+        focusAfterChipRemoval(i);
+        // 🚨 §7 item 27 — WITH THE RUNNING COUNT. See addValue().
+        announce(`${label} removed. ${nextIds.length} items selected.`);
+      };
+
+      /** Render one chip. `label` is display-only; `value` is the id (D1). */
+      const appendChip = (value: string, label: string): void => {
+        if (chipList == null) return;
+        const i = chipValues.length;
+        const li = document.createElement("li");
+        li.className = "vms-field__chip";
+        // §7 item 24 — role="listitem" EXPLICITLY. `list-style: none` strips the
+        // implicit list/listitem roles in Safari/VoiceOver, so a styled <ul>
+        // silently stops being a list exactly where it matters most.
+        li.setAttribute("role", "listitem");
+
+        const text = document.createElement("span");
+        text.className = "vms-field__chip-label";
+        // textContent, never innerHTML — a server-supplied label is text, not
+        // markup (the house idiom throughout this file).
+        text.textContent = label;
+        li.appendChild(text);
+
+        const btn = document.createElement("button");
+        // MANDATORY: a chip inside a FormNode would otherwise SUBMIT it on every
+        // remove click — <button>'s default type is "submit".
+        btn.type = "button";
+        btn.className = "vms-field__chip-remove";
+        // Index-keyed, matching the popup options' id scheme and for the same
+        // reason: `selected` is the server's array and is not guaranteed deduped,
+        // so a value-derived id could collide — and a value may contain spaces
+        // (a free-form tag), which an id may not. render()'s generic focus
+        // restore re-finds this button by id after a re-render.
+        btn.id = `vms-${n.name}-chip-${i}-remove`;
+        // 🚨 §7 item 25 — A UNIQUE, ITEM-SPECIFIC ACCESSIBLE NAME. NOT "Remove",
+        // NOT "x", NOT an unlabelled icon. THIS EXACT FAILURE IS WHAT KILLED THE
+        // GOV.UK MULTISELECT: their review found it "does not announce ... the
+        // presence of the 'Remove' button for screenreaders", and a row of
+        // identically-named buttons is unusable — the user hears "Remove button,
+        // Remove button, Remove button" and cannot tell which is which. Per D5 an
+        // item whose label is omitted names itself by its value, so this is never
+        // unnamed. setAttribute takes an attribute VALUE — never parsed as
+        // markup — so a hostile server label cannot inject here.
+        btn.setAttribute("aria-label", `Remove ${label}`);
+        // Decorative: the accessible name above is the real one.
+        btn.textContent = "×";
+        btn.setAttribute("aria-hidden", "false");
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          // stopPropagation for the same reason the table's row-action does it:
+          // a chip row may live inside a clickable ancestor.
+          e.stopPropagation();
+          removeChipAt(chipButtons.indexOf(btn));
+        });
+        btn.addEventListener("keydown", (e) => {
+          const lastChip = chipButtons.length - 1;
+          const at = chipButtons.indexOf(btn);
+          if (e.key === "ArrowRight") {
+            e.preventDefault();
+            // §7 item 26 — traverse. Clamped, NOT wrapped: the popup listbox
+            // wraps (§7 item 16) because it is a closed loop the user is
+            // cycling; a chip row is a line the user is walking, and wrapping
+            // from the last chip back to the first silently moves focus across
+            // the whole widget.
+            const to = Math.min(at + 1, lastChip);
+            chipButtons[to]?.focus();
+            setRoving(to);
+            return;
+          }
+          if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            const to = Math.max(at - 1, 0);
+            chipButtons[to]?.focus();
+            setRoving(to);
+            return;
+          }
+        });
+        li.appendChild(btn);
+
+        chipList.appendChild(li);
+        chipButtons.push(btn);
+        chipValues.push(value);
+        chipLabels.push(label);
+      };
+
+      /**
+       * Commit `value` into the selection. The ONE path both a picked candidate
+       * and an invented (allowCustom) value take — see commitCustom().
+       */
+      const addValue = (value: string, label: string): void => {
+        const current = this.readBind(n.bind);
+        const ids = Array.isArray(current) ? (current as unknown[]).map(String) : [];
+
+        // 🚨 D12 SCOPE — deduping `bind` ON COMMIT is ALLOWED AND CORRECT, and is
+        // NOT a D12 violation. A reader fresh off D12 WILL flag this line (the
+        // phase planner did, which is why the decision now spells the scope out
+        // and why this comment exists).
+        //
+        //   D12 forbids second-guessing the SERVER'S ANSWER: the renderer may not
+        //   reorder, filter, dedupe or truncate `candidates` FOR DISPLAY. That
+        //   list is the app's judgment — a real consumer ranks it by
+        //   recency-weighted mention frequency — and a renderer with an opinion
+        //   about it would silently destroy that ranking.
+        //
+        //   THIS IS NOT THAT. This is a STATE WRITE about the user's OWN
+        //   accumulated selection. A selection set has set semantics; a duplicate
+        //   id in `bind` is meaningless in every case anyone has been able to
+        //   construct, and mature libraries prevent it structurally
+        //   (react-select's `hideSelectedOptions` defaults on for multi).
+        //
+        // Presentation vs. state write. Two different things.
+        const already = ids.includes(value);
+        const nextIds = already ? ids : [...ids, value];
+        if (!already) {
+          this.writeBind(n.bind, nextIds);
+          // Optimistic, for the same reason removeChipAt() is — see there. The
+          // label is the one the user JUST PICKED (or JUST TYPED), held in hand
+          // at the moment of the act.
+          //
+          // 🚨 This is NOT the D1 trap, and the distinction is exact: the trap is
+          // RESOLVING AN ALREADY-SELECTED ID'S LABEL BY SEARCHING `candidates` —
+          // which fails precisely when it matters (a cold-start form load, or a
+          // filtered list that excludes the selection) because there is nothing
+          // to find. Nothing here searches: this label is the clicked item's own,
+          // used once, immediately, and replaced by the server's authoritative
+          // `selected` on the very next render. The chip RENDER path above reads
+          // `n.selected` and only `n.selected`.
+          appendChip(value, label);
+          setRoving(roving);
+        }
+        // 🚨 §7 item 27 — ANNOUNCE WITH THE RUNNING COUNT, on add AND remove.
+        //
+        // GOV.UK FAILED REVIEW FOR EXACTLY THIS OMISSION ("does not announce the
+        // selections effectively"). Without the count an AT user cannot know the
+        // SIZE of the selection they are building without abandoning the input to
+        // audit the chips one by one. The count is not decoration; it is the only
+        // thing that makes an unseen, accumulating set comprehensible. If you are
+        // here to shorten this string, that is what you are deleting.
+        //
+        // §7 item 32 — this is also the ONLY thing that actually conveys the
+        // selection: aria-selected/aria-multiselectable are "mostly not announced
+        // when true", and on Safari/VoiceOver the ARIA path conveys NOTHING. Set
+        // the attributes (correct, cheap, support improves); TELL the user here.
+        //
+        // A duplicate still announces, and the sentence stays true — the item IS
+        // selected and the count IS accurate. Silence would just look broken.
+        announce(`${label} selected. ${nextIds.length} items selected.`);
+        inp.value = "";
+        this.writeBind(n.searchBind, "");
+        setArmed(null);
+      };
+
+      if (isMulti) {
+        chipList = document.createElement("ul");
+        chipList.className = "vms-field__chips";
+        // §7 item 24 — role="list", NOT a listbox with option children. A chip
+        // CONTAINS a remove button, and an interactive descendant inside
+        // role="option" is invalid and DESTROYS the accessibility tree. Explicit
+        // despite the <ul> for the Safari `list-style: none` bug (see appendChip).
+        chipList.setAttribute("role", "list");
+        // §7 item 28 — the group needs an accessible name or it cannot be found.
+        chipList.setAttribute("aria-label", "Selected items");
+
+        // 🚨 THE DISPLAY PATH (D1) — chips are built from `n.selected`, and ONLY
+        // from `n.selected`. `candidates` feeds the popup listbox and NOTHING
+        // else. Same trap, same rule, same reason as the single-select display
+        // path above: mid-search the candidate list routinely EXCLUDES what is
+        // already chosen, so a chip labelled out of `candidates` renders a raw
+        // database id or vanishes on the case that matters most. Per D5 an item
+        // whose label is omitted displays its value.
+        selectedItems.forEach(item => appendChip(item.value, item.label ?? item.value));
+
+        // Restore the DOM-local chip facts the wipe destroyed. Clamped, because
+        // the server may have returned fewer chips than the last render had.
+        setRoving(snapshot?.roving ?? 0);
+        // Only re-arm if the LAST chip is still the SAME ITEM — see the snapshot
+        // declaration for why this is keyed by value and not by a boolean.
+        const armedValue = snapshot?.armed;
+        if (armedValue != null && chipValues[chipValues.length - 1] === armedValue) {
+          setArmed(armedValue);
+        } else {
+          setArmed(null);
+        }
+      }
 
       const setActive = (i: number): void => {
         activeIndex = i;
@@ -1624,24 +1970,8 @@ export class BrowserAdapter implements Adapter {
         const c = (n.candidates ?? [])[i];
         if (c == null) return;
         if (isMulti) {
-          // ── SEAM (Plan 21-05): the CHIPS layer hangs off here. ────────────
-          // This is the STATE half only — the accumulated selection is written
-          // correctly; rendering it as chips (role=list/listitem with real
-          // per-item "Remove {item}" buttons, roving tabindex, the focus rule
-          // after removal, and the two-step Backspace) is 21-05's job and is
-          // deliberately NOT half-built here.
-          const current = this.readBind(n.bind);
-          const ids = Array.isArray(current) ? (current as unknown[]).map(String) : [];
-          // D12 SCOPE — deduping `bind` ON COMMIT is ALLOWED and correct, and
-          // is NOT a D12 violation. D12 forbids second-guessing the SERVER's
-          // answer (reordering/filtering/deduping/truncating `candidates` for
-          // display). This is a STATE WRITE about the user's own accumulated
-          // selection: a selection set has set semantics, and a duplicate id in
-          // `bind` is meaningless. A reader fresh off D12 will flag this line —
-          // hence this comment.
-          if (!ids.includes(c.value)) this.writeBind(n.bind, [...ids, c.value]);
-          inp.value = "";
-          this.writeBind(n.searchBind, "");
+          // Per D5 an omitted label means the label IS the value.
+          addValue(c.value, c.label ?? c.value);
           // §7 item 30 — do NOT close the popup on select in a multi-select;
           // the user is usually picking several.
           setActive(-1);
@@ -1651,6 +1981,59 @@ export class BrowserAdapter implements Adapter {
           // ...and the label is what is shown. Same D1/D5 rule as the display
           // path above: an omitted label means the label IS the value.
           inp.value = c.label ?? c.value;
+          setOpen(false);
+        }
+        inp.focus();
+      };
+
+      /**
+       * D3 (LOOK-04) — commit an INVENTED value: one the server never offered.
+       *
+       * 🚨 GATED ON THE DECLARED `allowCustom` AXIS, NEVER INFERRED FROM
+       * BEHAVIOR. The rationale is the whole decision: "choosing somebody to
+       * mention is very different from inventing a new tag." Those are different
+       * ACTS sharing one widget, so the control DECLARES which it is doing
+       * rather than leaving it to be guessed from what the user happened to
+       * type. Omitted/false ⇒ a typed non-candidate commits NOTHING.
+       *
+       * 🚨 An invented value is a HOMOGENEOUS LookupItem — a value whose label
+       * equals itself (and is therefore omitted, D5) — and NEVER a bare string.
+       * That is the entire reason one control can serve both acts. MUI's
+       * `multiple + freeSolo` yields `Array<Value | string>`: a heterogeneous
+       * union that forces EVERY consumer to branch on `typeof`, and whose own
+       * docs warn it "may cause type mismatch". Their tags demo dodges it only by
+       * degrading options to bare strings. We never admit a bare string, so the
+       * union cannot arise: `bind` stays uniformly string[] of ids whether the
+       * entries were picked or invented.
+       *
+       * ⇒ `allowCustom: true` + NO candidates + labels omitted IS a free-form
+       * tags input, with NO SPECIAL CASE ANYWHERE IN THIS RENDERER — this
+       * function is the same one the picked path uses. That composition is why
+       * the separately-designed `inputType: "tags"` proposal was superseded
+       * rather than built.
+       *
+       * 🚨 NO PROVENANCE MARKER, DELIBERATELY. Do not add react-select's
+       * `__isNew__`, and do not add a distinct `create-option` action. The next
+       * person WILL reach for them — react-select is the obvious precedent —
+       * so: react-select needs a marker because it is CLIENT-ONLY and has no
+       * server to ask. We have a server, and it produced every candidate it ever
+       * offered, so "is this id one of mine?" is server-decidable and picked-vs-
+       * invented needs no wire field (OPEN-3). The explicitness D3 demands is
+       * carried by `allowCustom` being a DECLARED AXIS ON THE NODE — the app
+       * declares the act — not by a per-value flag.
+       */
+      const commitCustom = (raw: string): void => {
+        // Trim on the commit path (carried over from the superseded `tags`
+        // research per D3): a trailing space is a slip, not a distinct tag.
+        const value = raw.trim();
+        if (value === "") return;
+        if (isMulti) {
+          // Dedupe lives in addValue() — see the D12 SCOPE note there.
+          addValue(value, value);
+          setActive(-1);
+        } else {
+          this.writeBind(n.bind, value);
+          inp.value = value;
           setOpen(false);
         }
         inp.focus();
@@ -1771,6 +2154,11 @@ export class BrowserAdapter implements Adapter {
         // changes, and never let list-typeahead swallow typing. Typing is the
         // user's; the list does not get to eat it.
         setActive(-1);
+        // §7 item 31 — typing DISARMS the two-step Backspace. This is what
+        // BOUNDS the armed window: an arm can never survive across an unrelated
+        // edit and turn a later Backspace into a delete of something the user
+        // was told about minutes ago.
+        setArmed(null);
         // The user is now mid-search: results that arrive should open the popup
         // and be announced. Set BEFORE setOpen — setOpen(false) clears it, and
         // this path never closes.
@@ -1845,6 +2233,15 @@ export class BrowserAdapter implements Adapter {
             commit(activeIndex);
             return;
           }
+          // D3 (LOOK-04) — no option active + a non-empty typed value: this is
+          // the INVENTION path. Gated on the declared axis; when `allowCustom`
+          // is absent/false this falls straight through and NOTHING is
+          // committed, which is the point of declaring it.
+          if (n.allowCustom === true && inp.value.trim() !== "") {
+            e.preventDefault();
+            commitCustom(inp.value);
+            return;
+          }
           // No option active: fall through to the field's own `action`, if it
           // declares one. `action` and `searchAction` are INDEPENDENT — a
           // lookup may legitimately carry both — and this mirrors the text
@@ -1915,13 +2312,65 @@ export class BrowserAdapter implements Adapter {
           return;
         }
 
+        // ── §7 item 31 — THE TWO-STEP, NON-DESTRUCTIVE BACKSPACE ────────────
+        //
+        // 🚨 NO AUTHORITY ADDRESSES THIS. It is our convention, and it is a
+        // RECORDED DECISION rather than an accident, because the obvious
+        // implementation — one Backspace, chip gone — is what every other
+        // library does and what the next person will "restore".
+        //
+        // Why two steps: a single-press delete is DESTRUCTIVE, INVISIBLE TO AT,
+        // and TRIVIALLY MIS-TRIGGERED. The trigger is Backspace on an empty
+        // input — which is exactly the keystroke of someone who has just cleared
+        // a typo and is still deleting. One press too many and a reference they
+        // chose is silently gone, with no announcement and nothing on screen to
+        // notice. The two-step makes the first press SAY what is about to
+        // happen. It costs mouse users nothing (they have a remove button) and
+        // costs keyboard users one keystroke.
+        //
+        // §7 item 22 — Backspace/Delete are PLAIN TEXT EDITING everywhere else
+        // and are never intercepted: this arm is gated on isMulti AND an EMPTY
+        // input, so it can never eat a real edit.
+        if (isMulti && inp.value === "" && (e.key === "Backspace" || e.key === "Delete")) {
+          if (chipButtons.length === 0) return;
+          const lastIdx = chipButtons.length - 1;
+          if (armed != null) {
+            // Step two — confirmed. Either key confirms, because the
+            // announcement promises both ("press Backspace or Delete").
+            e.preventDefault();
+            removeChipAt(chipValues.indexOf(armed));
+            return;
+          }
+          // Step one — Backspace ARMS. Delete does not: the design specifies
+          // Backspace-on-empty as the entry point, and a bare Delete on an empty
+          // input is not a "remove the last chip" gesture anyone has asked for.
+          if (e.key === "Backspace") {
+            e.preventDefault();
+            setArmed(chipValues[lastIdx]);
+            // 🚨 The highlight is a VISUAL fact, so it is ALSO spoken (§7 item
+            // 32). An arm that only added a CSS class would leave an AT user
+            // pressing Backspace, hearing nothing, pressing again, and deleting
+            // something they were never told about — the two-step would become a
+            // single-press delete FOR EXACTLY THE USERS IT EXISTS TO PROTECT.
+            announce(`${chipLabels[lastIdx]}, press Backspace or Delete to remove`);
+          }
+          return;
+        }
+        // Any other key is the user moving on — disarm, so a stale arm can never
+        // turn a later stray Backspace into a delete. (Typing disarms via the
+        // input listener; this covers navigation keys that fire no input event.)
+        if (armed != null && e.key !== "Backspace" && e.key !== "Delete") setArmed(null);
+
         // §7 item 20 — PageUp/PageDown are NOT part of the listbox-popup
         // contract. Do not invent them; they fall through untouched.
-        // §7 item 22 — Backspace/Delete are plain text editing on single-select
-        // and are NEVER intercepted. (The chips two-step Backspace is Plan
-        // 21-05's, and applies only to lookup-multiple with an EMPTY input.)
       });
 
+      // The chip group sits OUTSIDE the combobox, BEFORE the input — SLDS's
+      // precedent (D2): Salesforce renders single-select INSIDE the input (no
+      // pill element exists at all) and multi as a separate pill listbox outside
+      // it with its own focus model. Outside is not cosmetic: a listbox popup
+      // owning interactive chips would be the §7 item 24 violation.
+      if (chipList) wrapper.appendChild(chipList);
       wrapper.appendChild(inp);
       wrapper.appendChild(popup);
       if (hintEl) wrapper.appendChild(hintEl);
