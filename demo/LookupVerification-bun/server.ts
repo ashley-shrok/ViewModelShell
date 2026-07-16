@@ -270,6 +270,18 @@ function buildVm(state: LookupState): ViewNode {
       ),
 
       // ── 1. THE HEADLINE ───────────────────────────────────────────────────
+      //
+      // 🚨 THE ANTI-TRAP DEMO USED TO LIVE HERE AND IT WAS NOT PERFORMABLE
+      // (21-13). It told the reviewer to search a query excluding Sally and
+      // observe that "the label is STILL shown" — but in SINGLE-select the input
+      // does double duty, so mid-search the box shows THE QUERY, not the label.
+      // There was nothing to observe, and the demo read as nonsense.
+      //
+      // The anti-trap is only OBSERVABLE where the SELECTION and the CANDIDATE
+      // LIST are visible AT THE SAME TIME — i.e. the MULTI field, whose chips sit
+      // OUTSIDE the input. It is now the headline of §3. What single-select can
+      // honestly prove is the ROUND TRIP, which is below and now spells out every
+      // keystroke.
       {
         type: "section",
         heading: "1. The headline — a reference already set, with NO search",
@@ -286,6 +298,14 @@ function buildVm(state: LookupState): ViewNode {
             "is deliberate: an MRU list on load would contain the selected person " +
             "and let a broken implementation look correct by accident.)",
           ),
+          note(
+            "Note the field READS as a chosen thing — a pill, with a ✕ to clear " +
+            "it — rather than as text someone typed. That distinction is the " +
+            "point: this one box does double duty (it shows the SELECTION and it " +
+            "accepts the QUERY), so it has to say which it is currently doing. " +
+            "Start typing and the pill drops instantly: no pill means the text is " +
+            "YOUR query, not your selection.",
+          ),
           {
             type: "field",
             name: "owner",
@@ -300,10 +320,28 @@ function buildVm(state: LookupState): ViewNode {
           },
           ...capNote(ownerSearch, state.ownerQuery),
           note(
-            "🚨 THE ANTI-TRAP: type “Petrova” (or any query that excludes Sally " +
-            "Omer). The candidate list no longer contains the selection — and the " +
-            "label is STILL shown. Filtering the list must never mean forgetting " +
-            "the selection. Press Escape twice to clear the selection.",
+            "🚨 THE SINGLE-SELECT PROOF IS THE ROUND TRIP — do it exactly like " +
+            "this: (1) type “Nakamura” and press ENTER. Eight candidates appear " +
+            "and NOT ONE of them is Sally Omer. The box now shows your query, so " +
+            "she is not on screen anywhere — but read the “bind holds” line " +
+            "below: it STILL says “u-401”. The search did not touch the " +
+            "selection. (2) Now CLEAR the box and press ENTER again: Sally's pill " +
+            "is back, resolved server-side from that id. Nothing was ever lost.",
+          ),
+          note(
+            "Escape is the other half, and it is two-stage: with the popup open, " +
+            "Escape CLOSES it and keeps everything (the “bind holds” line still " +
+            "reads “u-401”). Press Escape again — on an already-closed popup — " +
+            "and THAT is what clears the selection. Or just click the pill's ✕. " +
+            "(The “bind holds” line reads the last SERVER render, so after a " +
+            "clear it catches up on the next round trip.)",
+          ),
+          note(
+            "Be told honestly: the deepest form of this case — the server " +
+            "re-rendering with candidates that exclude the selection, with no " +
+            "user action at all — is covered by unit tests and is not clickable. " +
+            "§3 below is where you can SEE the selection and the candidate list " +
+            "disagree at the same time.",
           ),
           note(`bind holds: “${state.owner || "(cleared)"}”`),
         ],
@@ -325,6 +363,13 @@ function buildVm(state: LookupState): ViewNode {
             "hit), then “zzzz” (no matches) — each is a DIFFERENT, unambiguous " +
             "signal. Press Enter on an EMPTY box for the most-recently-used path.",
           ),
+          note(
+            "🚨 AND THE POPUP STAYS SHUT UNTIL YOU ASK. Type as much as you like " +
+            "— nothing opens, nothing is suggested. The list appears only when " +
+            "the RESULTS of a search you ran arrive. (Arrow Down still opens it " +
+            "on demand when there are candidates to show: that is you asking, " +
+            "which is the opposite of the box guessing.)",
+          ),
           {
             type: "field",
             name: "assignee",
@@ -345,12 +390,31 @@ function buildVm(state: LookupState): ViewNode {
         ],
       },
 
-      // ── 3. lookup-multiple — the chips ────────────────────────────────────
+      // ── 3. lookup-multiple — the chips, AND THE ANTI-TRAP ─────────────────
+      //
+      // 🚨 THE ANTI-TRAP DEMO LIVES HERE NOW (21-13), and this is the ONLY field
+      // on the page where it is performable. The trap — "filtering the candidate
+      // list" and "forgetting the selection" being the same operation — is only
+      // OBSERVABLE where the SELECTION and the CANDIDATE LIST are on screen AT
+      // THE SAME TIME. Multi's chips sit OUTSIDE the input, so they are; single's
+      // selection IS the input, so mid-search it is showing the query and there
+      // is nothing to watch survive. It was demonstrated on the wrong field.
       {
         type: "section",
-        heading: "3. lookup-multiple — the chips",
+        heading: "3. 🚨 lookup-multiple — the chips, and THE ANTI-TRAP you can actually watch",
         variant: "card",
         children: [
+          note(
+            "🚨 THIS IS THE HEADLINE. Type “Nakamura” and press ENTER. The " +
+            "candidate list narrows to eight people, and NOT ONE of them is " +
+            "Bjorn Omer or Priya Lindqvist — the two watchers already selected. " +
+            "WATCH THE CHIPS: they stay exactly where they are. That is the trap, " +
+            "visible in one screen — the selection and the list that excludes it, " +
+            "side by side, disagreeing, with the selection winning. A picker that " +
+            "resolved its labels out of the candidate list would drop both chips " +
+            "or turn them into raw ids the instant that list stopped containing " +
+            "them, which is precisely when it matters most.",
+          ),
           note(
             "Loads with two chips already set — again from ids alone, with no " +
             "search. Add more by searching. Remove one with the mouse (the ✕), " +
@@ -517,11 +581,14 @@ function buildVm(state: LookupState): ViewNode {
         children: [
           note(
             "Use the theme picker at the very top of the page to switch across " +
-            "the shipped light default and all 12 themes. The chips must stay " +
-            "readable in every one — nothing washed out or invisible. The chip " +
-            "fill and the remove button's focus ring were hand-measured across " +
-            "all 13 (worst 10.63:1, vs a 4.5:1 text bar and a 3:1 focus bar). " +
-            "Tab to a chip's ✕ in a light theme to check the focus ring.",
+            "the shipped light default and all 12 themes. The chips AND §1's " +
+            "selected pill must stay readable in every one — nothing washed out " +
+            "or invisible. The chip fill, §1's pill, and both remove/clear focus " +
+            "rings were hand-measured across all 13 (worst 10.63:1 on the dark-* " +
+            "themes, vs a 4.5:1 text bar and a 3:1 focus bar) — the pill reuses " +
+            "the chip's own tone token, so it is literally the same measured " +
+            "pair and adds no theme var. Tab to a chip's ✕ and to §1's pill ✕ in " +
+            "a light theme to check the focus rings.",
           ),
         ],
       },
