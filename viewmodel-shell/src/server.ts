@@ -161,6 +161,11 @@ function collectActions(
     case "field": {
       const field = node as FieldNode;
       if (field.action) recordAction(field.action, enclosingForm, out);
+      // Phase 21 (LOOK-01) — a lookup's debounced search is a real dispatch to a
+      // real handler, so its name participates in uniqueness like every other
+      // dispatch site. `action` and `searchAction` are independent: a lookup may
+      // carry both (Enter commits, typing searches).
+      if (field.searchAction) recordAction(field.searchAction, enclosingForm, out);
       return;
     }
     case "checkbox": {

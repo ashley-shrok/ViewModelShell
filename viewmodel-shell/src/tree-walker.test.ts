@@ -303,4 +303,73 @@ describe("validateActionNames", () => {
     const tree = page(steps, button("Cart"));
     expect(() => validateActionNames(tree)).not.toThrow();
   });
+
+  // ─── Phase 21 (LOOK-01) — FieldNode.searchAction is a dispatch site ────────
+  // The lookup's debounced search is a real round trip to a real handler, so its
+  // name must name exactly one operation like every other dispatch site. A
+  // walker that doesn't descend into `searchAction` fails SILENTLY: the tree
+  // validates, then two different handlers answer to the same name at runtime.
+  // These pin the descent so a missed walker fails the build instead of shipping.
+
+  function lookup(overrides: Partial<FieldNode> = {}): FieldNode {
+    return {
+      type: "field",
+      name: "owner",
+      inputType: "lookup",
+      bind: "fields.ownerId",
+      searchBind: "fields.ownerQuery",
+      ...overrides,
+    };
+  }
+
+  it("throws: FieldNode searchAction collides with a top-level button (the walk descends)", () => {
+    const tree = page(
+      lookup({ searchAction: { name: "dupe" } }),
+      button("dupe"),
+    );
+    expect(() => validateActionNames(tree)).toThrow(/Duplicate action name 'dupe'/);
+  });
+
+  it("throws: two lookups' searchActions collide with each other", () => {
+    const tree = page(
+      lookup({ name: "owner", searchAction: { name: "lookup-search" } }),
+      lookup({ name: "assignee", searchAction: { name: "lookup-search" } }),
+    );
+    expect(() => validateActionNames(tree)).toThrow(
+      /Duplicate action name 'lookup-search'/,
+    );
+  });
+
+  it("records BOTH action and searchAction from one field (they are independent sites)", () => {
+    // A lookup may legitimately carry both: Enter commits (`action`), typing
+    // searches (`searchAction`). Each must reach the sink — proven by colliding
+    // each, independently, with a same-named button elsewhere in the tree.
+    const commitCollides = page(
+      lookup({ action: { name: "owner-commit" }, searchAction: { name: "owner-search" } }),
+      button("owner-commit"),
+    );
+    expect(() => validateActionNames(commitCollides)).toThrow(
+      /Duplicate action name 'owner-commit'/,
+    );
+
+    const searchCollides = page(
+      lookup({ action: { name: "owner-commit" }, searchAction: { name: "owner-search" } }),
+      button("owner-search"),
+    );
+    expect(() => validateActionNames(searchCollides)).toThrow(
+      /Duplicate action name 'owner-search'/,
+    );
+  });
+
+  it("passes: a lookup carrying both action and searchAction with distinct names", () => {
+    const tree = page(
+      lookup({ action: { name: "owner-commit" }, searchAction: { name: "owner-search" } }),
+    );
+    expect(() => validateActionNames(tree)).not.toThrow();
+  });
+
+  it("passes: a lookup with NO searchAction records nothing and does not throw", () => {
+    const tree = page(lookup(), button("unrelated"));
+    expect(() => validateActionNames(tree)).not.toThrow();
+  });
 });
