@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Agent discoverability — this is a ViewModel Shell app: agents can drive it via the JSON wire
+       (GET endpoint → {vm, state}; POST actionEndpoint multipart {_action, _state}). Docs: https://github.com/ashley-shrok/ViewModelShell -->
+  <meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/1.0","endpoint":"/api/lookup","actionEndpoint":"/api/lookup/action","skill":"/.well-known/vms-skill.md"}'>
+  <title>Lookup Field — Tailnet Verification</title>
+
+  <!-- The REAL shipped CSS, served verbatim from viewmodel-shell/styles by
+       server.ts. default.css is the shipped light baseline; #vms-theme overrides
+       :root and is swapped at runtime by the picker below (empty href = the
+       shipped default). This is host-chrome for the verification harness
+       (outside the VMS view tree) — the only hand-written markup on the page;
+       everything inside #app is drawn by the shipped renderer. -->
+  <link rel="stylesheet" href="/vms/default.css" />
+  <link rel="stylesheet" id="vms-theme" href="" />
+</head>
+<body>
+  <!-- Theme picker (host-chrome, not part of the view tree). Swaps the real
+       shipped theme file so the reviewer can confirm chip fill + chip text +
+       the remove button's focus ring across the default and all 12 themes. -->
+  <div style="display:flex;gap:.5rem;align-items:center;padding:.5rem .75rem;font:14px system-ui,sans-serif;border-bottom:1px solid #8884;flex-wrap:wrap">
+    <strong>Theme:</strong>
+    <select id="theme-select">
+      <option value="">default (shipped light)</option>
+      <option value="light-amber">light-amber</option>
+      <option value="light-blue">light-blue</option>
+      <option value="light-green">light-green</option>
+      <option value="light-purple">light-purple</option>
+      <option value="light-rose">light-rose</option>
+      <option value="light-teal">light-teal</option>
+      <option value="dark-amber">dark-amber</option>
+      <option value="dark-blue">dark-blue</option>
+      <option value="dark-green">dark-green</option>
+      <option value="dark-purple">dark-purple</option>
+      <option value="dark-rose">dark-rose</option>
+      <option value="dark-teal">dark-teal</option>
+    </select>
+    <span style="opacity:.7">— chips must stay readable in every one</span>
+  </div>
+
+  <div id="app"></div>
+
+  <script>
+    (function () {
+      var link = document.getElementById("vms-theme");
+      var sel = document.getElementById("theme-select");
+      sel.addEventListener("change", function () {
+        // Empty value = the shipped default (no theme file layered on top).
+        link.setAttribute("href", sel.value ? "/vms/themes/" + sel.value + ".css" : "");
+      });
+    })();
+  </script>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

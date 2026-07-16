@@ -1,0 +1,18 @@
+{
+  "name": "lookup-verification-bun",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "start": "bun run server.ts",
+    "serve": "vite build && bun run server.ts"
+  },
+  "dependencies": {
+    "@ashley-shrok/viewmodel-shell": "link:@ashley-shrok/viewmodel-shell"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.4.0",
+    "vite": "^6.0.1"
+  }
+}
