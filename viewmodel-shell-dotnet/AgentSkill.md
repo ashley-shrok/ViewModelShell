@@ -200,7 +200,8 @@ Write your query into the state blob at `searchBind`, then POST `searchAction`'s
 ```
 
 - **An empty query is a legitimate query.** There is no minimum-length gate. An empty query may legitimately return most-recently-used candidates rather than nothing.
-- **`blocking` is meaningless on `searchAction`.** The renderer forces a search onto the non-blocking lane regardless of what the app declares, and per *Non-blocking actions* above it never rides the POST payload anyway. Setting it does nothing. Dispatch normally.
+- **`searchAction` is an ordinary action, with no special cadence.** A browser user fires it by pressing **Enter** in the field (typing alone dispatches nothing — there is no debounce and no live-query behavior). For you this changes nothing: it is one POST like any other, whenever you decide to ask.
+- **`blocking` on a `searchAction` means what it means everywhere else** — see *Non-blocking actions* above. It is a client-side hint that never rides the POST payload, so as a wire-driving agent you dispatch normally regardless of its value.
 
 ### `allowCustom` — invented values are declared, never inferred
 

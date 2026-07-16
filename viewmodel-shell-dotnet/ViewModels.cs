@@ -841,30 +841,45 @@ public record FieldNode(
     /// <summary>LOOKUP INPUTS ONLY. Path into state where the typed query lives, so the
     /// server can see it and the view stays a pure function of state. Separate from
     /// <c>Bind</c>, which holds the id — the query and the selection are different facts
-    /// and never share a slot. Required for a working typeahead: with a SearchAction but
+    /// and never share a slot. Required for a working search: with a SearchAction but
     /// no SearchBind the query is dispatched but the server can never read what was typed
-    /// — a silently dead typeahead that renders perfectly and returns nothing forever.
+    /// — a silently dead search that renders perfectly and returns nothing forever.
+    ///
+    /// Keystrokes write here immediately (the query is state); ENTER dispatches
+    /// SearchAction — the same cadence TableColumn filtering uses.
+    ///
+    /// 🚨 The query is what the user TYPED. It is NOT the display text: an input showing
+    /// the selected label (a form loaded with a reference already set) holds a label, not a
+    /// query, and the renderer does not flush it here. Clearing the box clears the query and
+    /// reveals the label again — clearing the SEARCH TEXT is not clearing the SELECTION
+    /// (only Bind holds that).
     /// Omitted = the query is not round-tripped.</summary>
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SearchBind = null,
 
-    /// <summary>LOOKUP INPUTS ONLY. Dispatched DEBOUNCED (~250-300ms) ON KEYSTROKE — not
-    /// on Enter, unlike <c>Action</c>. The framework's live-query lane: the app declares
-    /// where to ask, and the framework owns the cadence and the response ordering, so no
-    /// consumer has to get either right.
+    /// <summary>LOOKUP INPUTS ONLY. Dispatched ON ENTER, as an ORDINARY action — the same
+    /// cadence TableColumn filtering uses, and the same one <c>Action</c> uses. Keystrokes
+    /// write SearchBind and dispatch nothing; there is NO debounce and NO live-query lane.
     ///
-    /// 🚨 <c>ActionDescriptor.Blocking</c> is MEANINGLESS here — setting it does NOTHING.
-    /// The renderer FORCES this action onto the non-blocking lane regardless of what the
-    /// app declares. A search query is definitionally a background question (there is no
-    /// coherent app that wants a blocking one), and an app that merely FORGOT
-    /// Blocking:false would busy-lock the entire page on every keystroke (the framework
-    /// applies .vms-busy for the duration of any user-initiated dispatch). That failure is
-    /// severe, silent at author time, and only shows up when someone types — so the choice
-    /// is not worth exposing.
+    /// 🚨 <c>ActionDescriptor.Blocking</c> means exactly what it means everywhere else, and
+    /// the framework NEVER sets it. Your descriptor is dispatched as you declared it — omit
+    /// Blocking (the default, blocking/serialized lane) unless you have a specific reason
+    /// not to.
     ///
-    /// There is NO minimum-character gate, deliberately — debounce is the real convention,
-    /// not a length gate. An EMPTY query is a legitimate query and IS dispatched, so an app
-    /// may answer it with most-recently-used candidates rather than nothing.
-    /// Omitted = no live query; the field is a plain id input.</summary>
+    /// Leaving it blocking is the recommended default, and it is a correctness property,
+    /// not a preference: a blocking action is serialized by the shell's dispatch guard (a
+    /// second action cannot dispatch while a round trip is in flight), so a stale search
+    /// response can never land after — and clobber — a newer action. Opting into
+    /// Blocking:false means "this response may be discarded, may arrive out of order, and
+    /// may coexist with another in flight"; that is yours to choose, and yours to handle.
+    ///
+    /// ⚠️ Enter is shared. If the field also declares AllowCustom, a non-empty Enter INVENTS
+    /// that value instead of searching (an empty Enter still searches); if it also declares
+    /// Action, SearchAction wins. Declare the combination you actually want.
+    ///
+    /// There is NO minimum-character gate, deliberately. An EMPTY query is a legitimate
+    /// query and IS dispatched, so an app may answer it with most-recently-used candidates
+    /// rather than nothing (Salesforce's picker searchType defaults to Recent).
+    /// Omitted = no search; the field is a plain id input.</summary>
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? SearchAction = null,
 
     /// <summary>LOOKUP INPUTS ONLY. The DECLARED custom-entry axis: may the user commit a

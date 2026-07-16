@@ -543,37 +543,53 @@ export interface FieldNode {
    * state. Separate from `bind`, which holds the id — the query and the
    * selection are different facts and never share a slot.
    *
-   * Required for a working typeahead: with a `searchAction` but no
-   * `searchBind`, the query is dispatched but the server can never read what
-   * was typed — a silently dead typeahead that renders perfectly and returns
-   * nothing forever. The browser warns `[vms:lookup-no-searchbind]`.
+   * Required for a working search: with a `searchAction` but no `searchBind`,
+   * the query is dispatched but the server can never read what was typed — a
+   * silently dead search that renders perfectly and returns nothing forever. The
+   * browser warns `[vms:lookup-no-searchbind]`.
+   *
+   * Keystrokes write here immediately (the query is state); **Enter** dispatches
+   * `searchAction`. That is the same cadence `TableNode.filterAction` uses.
+   *
+   * 🚨 The query is what the user TYPED. It is **not** the display text: an
+   * input showing the selected label (a form loaded with a reference already
+   * set) holds a label, not a query, and the renderer does not flush it here.
+   * Clearing the box clears the query and reveals the label again — clearing the
+   * SEARCH TEXT is not clearing the SELECTION (only `bind` holds that).
    *
    * Omitted = the query is not round-tripped.
    */
   searchBind?: string;
   /**
-   * LOOKUP INPUTS ONLY (Phase 21, LOOK-04). Dispatched **DEBOUNCED (~250-300ms)
-   * on keystroke** — not on Enter, unlike `action` above. This is the
-   * framework's live-query lane: the app declares where to ask, and the
-   * framework owns the cadence and the response ordering, so no consumer has to
-   * get either right.
+   * LOOKUP INPUTS ONLY (Phase 21). Dispatched **on ENTER**, as an **ordinary
+   * action** — the same cadence `TableNode.filterAction` uses, and the same one
+   * `action` above uses. Keystrokes write `searchBind` and dispatch nothing;
+   * there is **no debounce** and **no live-query lane**.
    *
-   * 🚨 **`blocking` is MEANINGLESS here.** The renderer FORCES this action onto
-   * the non-blocking lane regardless of what the app declares. A search query is
-   * definitionally a background question — there is no coherent app that wants a
-   * blocking one — and an app that merely forgot `blocking: false` would
-   * busy-lock the entire page on every keystroke (the framework applies
-   * `.vms-busy` for the duration of any user-initiated dispatch). That failure
-   * is severe, silent at author time, and only shows up when someone types, so
-   * the choice is not worth exposing. Setting `blocking` on a `searchAction`
-   * does nothing.
+   * 🚨 **`blocking` means exactly what it means everywhere else, and the
+   * framework NEVER sets it.** Your `ActionEvent` is dispatched as you declared
+   * it — omit `blocking` (the default, blocking/serialized lane) unless you have
+   * a specific reason not to.
    *
-   * **There is NO minimum-character gate**, deliberately — debounce is the real
-   * convention, not a length gate (ServiceNow has no min-chars property at all).
-   * **An EMPTY query is a legitimate query and IS dispatched**, so an app may
-   * answer it with most-recently-used candidates rather than nothing.
+   * **Leaving it blocking is the recommended default, and it is a correctness
+   * property, not a preference:** a blocking action is serialized by the shell's
+   * dispatch guard (a second action cannot dispatch while a round trip is in
+   * flight), so a stale search response can never land after — and clobber — a
+   * newer action. Opting into `blocking: false` means *this response may be
+   * discarded, may arrive out of order, and may coexist with another in flight*;
+   * that is yours to choose, and yours to handle.
    *
-   * Omitted = no live query; the field is a plain id input.
+   * ⚠️ **Enter is shared.** If the field also declares `allowCustom`, a non-empty
+   * Enter INVENTS that value instead of searching (an empty Enter still
+   * searches); if it also declares `action`, `searchAction` wins. Declare the
+   * combination you actually want.
+   *
+   * **There is NO minimum-character gate**, deliberately. **An EMPTY query is a
+   * legitimate query and IS dispatched**, so an app may answer it with
+   * most-recently-used candidates rather than nothing (Salesforce's picker
+   * `searchType` defaults to `Recent`).
+   *
+   * Omitted = no search; the field is a plain id input.
    */
   searchAction?: ActionEvent;
   /**
