@@ -367,7 +367,18 @@ would re-implement all of that and drift).
 means absent ⇒ `[JsonIgnore(Condition = WhenWritingDefault)]`. Every nullable carries
 `WhenWritingNull`. Otherwise it silently re-introduces null/false-vs-absent drift from the TS twin.
 
-## 5. `textArrangement` — adopted from SAP's `UI.TextArrangement`
+## 5. `textArrangement` — adopted from SAP's `UI.TextArrangement` (⚠️ DEFERRED — NOT SHIPPED)
+
+> 🚨 **READ THIS BEFORE THE SECTION BELOW.** `textArrangement` is **designed and deliberately
+> deferred** — see OPEN-1 in §8. It does **not** exist in `index.ts`. This section is the *design*
+> for it, not a description of shipped behavior.
+>
+> **This section was a trap and it caught someone** (Phase 21, plan 21-08): it reads as though the
+> field ships, and only §8 reveals otherwise. The executor writing `agent-skill.md` from it would have
+> **advertised a nonexistent field to wire-driving agents** — it checked the shipped type instead and
+> flagged the doc. Documenting a deferred design as though it were real is exactly the
+> claim-outruns-the-code failure the framework's own conventions warn about. Fixed by this banner.
+
 
 A **closed enum** expressing how to render a key+text pair **with zero CSS** — structurally identical
 to our existing appearance axes, and it answers a real question: *does the user see "Sally Omer", the
