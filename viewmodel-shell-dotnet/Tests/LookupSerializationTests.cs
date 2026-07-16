@@ -99,4 +99,176 @@ public class LookupSerializationTests
         var ex = Record.Exception(() => ViewTreeValidation.ValidateActionNames(tree));
         Assert.Null(ex);
     }
+
+    // ─── LookupItem — label/type absent when unset (D5 / D6) ────────────────
+
+    // NOTE: these two serialize the BARE LookupItem, not a FieldNode. That is
+    // deliberate and load-bearing for the `type` case: a FieldNode ALWAYS emits
+    // the [JsonPolymorphic] discriminator "type":"field", so a
+    // DoesNotContain("\"type\"") assertion against a serialized FieldNode could
+    // never pass and would prove nothing about LookupItem.Type. The bare record
+    // is the only place the item's own `type` absence is observable — and the
+    // fact that it serializes with NO discriminator of its own is exactly the
+    // "LookupItem is a plain sub-record, not a ViewNode" claim (T-21-07).
+    // FieldNode-level non-collision is asserted separately below.
+
+    [Fact]
+    public void LookupItem_ValueOnly_OmitsLabelAndType()
+    {
+        // D5: the label is omitted when it equals the value (the free-form tag
+        // case — a tag is a value whose label is itself). D6: type is omitted
+        // for a monomorphic reference.
+        var json = Serialize(new LookupItem("u-1"));
+        Assert.Equal("{\"value\":\"u-1\"}", json);
+        Assert.DoesNotContain("\"label\"", json);
+        Assert.DoesNotContain("\"type\"", json);
+    }
+
+    [Fact]
+    public void LookupItem_LabelAndType_Present()
+    {
+        var json = Serialize(new LookupItem("u-1", "Sally Omer", "user"));
+        Assert.Contains("\"value\":\"u-1\"", json);
+        Assert.Contains("\"label\":\"Sally Omer\"", json);
+        Assert.Contains("\"type\":\"user\"", json);
+    }
+
+    [Fact]
+    public void LookupItem_BareRecord_CarriesNoDiscriminator()
+    {
+        // T-21-07 stated as an executable claim: LookupItem is NOT a ViewNode,
+        // so STJ writes no "type" discriminator into it and its own Type member
+        // is free to be the reference-kind tag.
+        var json = Serialize(new LookupItem("u-1", "Sally Omer"));
+        Assert.DoesNotContain("\"type\"", json);
+    }
+
+    // ─── FieldNode — the four nullables are absent when null ────────────────
+
+    private static FieldNode PlainLookup(
+        IReadOnlyList<LookupItem>? selected = null,
+        IReadOnlyList<LookupItem>? candidates = null,
+        string? searchBind = null,
+        ActionDescriptor? searchAction = null,
+        bool allowCustom = false) =>
+        new(
+            "owner",
+            "lookup",
+            Bind: "fields.ownerId",
+            Label: "Owner",
+            Placeholder: null,
+            Selected: selected,
+            Candidates: candidates,
+            SearchBind: searchBind,
+            SearchAction: searchAction,
+            AllowCustom: allowCustom);
+
+    [Fact]
+    public void Field_LookupNullables_AllAbsentWhenNull()
+    {
+        var json = Serialize<ViewNode>(PlainLookup());
+        Assert.DoesNotContain("\"selected\"", json);
+        Assert.DoesNotContain("\"candidates\"", json);
+        Assert.DoesNotContain("\"searchBind\"", json);
+        Assert.DoesNotContain("\"searchAction\"", json);
+    }
+
+    [Fact]
+    public void Field_LookupNullables_PresentWhenSet()
+    {
+        var json = Serialize<ViewNode>(PlainLookup(
+            selected: new[] { new LookupItem("u-1", "Sally Omer") },
+            candidates: new[] { new LookupItem("u-2", "Ada Vance") },
+            searchBind: "fields.ownerQuery",
+            searchAction: new ActionDescriptor("search-owner")));
+        Assert.Contains("\"selected\":[", json);
+        Assert.Contains("\"candidates\":[", json);
+        Assert.Contains("\"searchBind\":\"fields.ownerQuery\"", json);
+        Assert.Contains("\"searchAction\":{\"name\":\"search-owner\"}", json);
+    }
+
+    [Fact]
+    public void Field_LookupItemTypeNull_DoesNotCollideWithDiscriminator()
+    {
+        // The FieldNode-level half of T-21-07: with every LookupItem.Type null,
+        // "type" appears EXACTLY ONCE in the whole tree — the node discriminator
+        // — proving the item contributed none of its own.
+        var json = Serialize<ViewNode>(PlainLookup(
+            selected: new[] { new LookupItem("u-1", "Sally Omer") },
+            candidates: new[] { new LookupItem("u-2", "Ada Vance") }));
+        Assert.Contains("\"type\":\"field\"", json);
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(json, "\"type\":").Count);
+    }
+
+    // ─── AllowCustom — the WhenWritingDefault proof (gotcha #8) ─────────────
+
+    [Fact]
+    public void Field_AllowCustom_DefaultFalse_IsAbsent()
+    {
+        // THE assertion this whole plan exists for: an optional non-nullable
+        // bool whose `false` means "absent/unset" must NOT serialize its
+        // default, or it drifts from the TS optional `allowCustom?: boolean`
+        // (which omits it) and fails strict consumers.
+        var json = Serialize<ViewNode>(PlainLookup());
+        Assert.DoesNotContain("\"allowCustom\"", json);
+    }
+
+    [Fact]
+    public void Field_AllowCustom_True_SerializesTrue()
+    {
+        var json = Serialize<ViewNode>(PlainLookup(allowCustom: true));
+        Assert.Contains("\"allowCustom\":true", json);
+    }
+
+    // ─── Selected is ALWAYS an array ───────────────────────────────────────
+
+    [Fact]
+    public void Field_SingleSelect_SelectedSerializesAsArray_NotObject()
+    {
+        // The deliberate always-array decision, asserted explicitly because it
+        // is precisely what a future "simplification" would break: a single
+        // `lookup` holds 0 or 1 entries in an ARRAY. A T | T[] union does not
+        // serialize byte-identically under both System.Text.Json and
+        // JSON.stringify — that is the banked parity-drift lesson.
+        var json = Serialize<ViewNode>(PlainLookup(
+            selected: new[] { new LookupItem("u-1", "Sally Omer") }));
+        Assert.Contains("\"selected\":[", json);
+        Assert.DoesNotContain("\"selected\":{", json);
+        Assert.Contains("\"selected\":[{\"value\":\"u-1\",\"label\":\"Sally Omer\"}]", json);
+    }
+
+    [Fact]
+    public void Field_SingleSelect_EmptySelected_SerializesAsEmptyArray()
+    {
+        // 0 entries is a legitimate, DISTINCT state from absent: "the app is
+        // rendering a lookup and nothing is chosen" vs "no selection concept".
+        var json = Serialize<ViewNode>(PlainLookup(selected: System.Array.Empty<LookupItem>()));
+        Assert.Contains("\"selected\":[]", json);
+    }
+
+    [Fact]
+    public void Field_LookupMultiple_SelectedHoldsMultipleEntries()
+    {
+        var node = new FieldNode(
+            "tags",
+            "lookup-multiple",
+            Bind: "fields.tagIds",
+            Label: "Tags",
+            Placeholder: null,
+            Selected: new[] { new LookupItem("t-1", "urgent"), new LookupItem("t-2") },
+            AllowCustom: true);
+        var json = Serialize<ViewNode>(node);
+        Assert.Contains("\"inputType\":\"lookup-multiple\"", json);
+        Assert.Contains("\"selected\":[{\"value\":\"t-1\",\"label\":\"urgent\"},{\"value\":\"t-2\"}]", json);
+        Assert.Contains("\"allowCustom\":true", json);
+    }
+
+    // ─── inputType tokens ride as plain strings ────────────────────────────
+
+    [Fact]
+    public void Field_LookupInputType_SerializesAsLiteralString()
+    {
+        var json = Serialize<ViewNode>(PlainLookup());
+        Assert.Contains("\"inputType\":\"lookup\"", json);
+    }
 }
