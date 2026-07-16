@@ -678,3 +678,382 @@ describe("DOM-local chip state survives the re-render the search cadence causes"
     expect(removeButtons().filter(b => b.tabIndex === 0)).toHaveLength(1);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe("🚨 §7 #27 — add AND remove announce WITH THE RUNNING COUNT", () => {
+  // GOV.UK FAILED REVIEW FOR EXACTLY THIS OMISSION ("does not announce the
+  // selections effectively"). Without the count an AT user cannot know the SIZE
+  // of the selection they are building without abandoning the input to audit the
+  // chips one by one. The count is the whole point — a test that only asserted
+  // "the item name is announced" would pass on the retired GOV.UK component.
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("ADD is announced with the item AND the count", () => {
+    const { render, input, text } = setup({ f: { tags: ["u-1"] } });
+    render(node({
+      selected: [{ value: "u-1", label: "Sally Omer" }],
+      candidates: [{ value: "u-2", label: "Bob Lee" }],
+    }));
+    key(input(), "ArrowDown");
+    key(input(), "Enter");
+    vi.advanceTimersByTime(STATUS_DEBOUNCE);
+    expect(text()).toBe("Bob Lee selected. 2 items selected.");
+    expect(text()).toContain("2");
+  });
+
+  it("REMOVE is announced with the item AND the count", () => {
+    const { render, removeButtons, text } = setup({ f: { tags: ["u-1", "u-2"] } });
+    render(node());
+    removeButtons()[0].click();
+    vi.advanceTimersByTime(STATUS_DEBOUNCE);
+    expect(text()).toBe("Sally Omer removed. 1 items selected.");
+    expect(text()).toContain("1");
+  });
+
+  it("the count TRACKS the selection as it is built up", () => {
+    const { render, input, text } = setup({ f: { tags: [] } });
+    render(node({
+      selected: [],
+      candidates: [{ value: "u-2", label: "Bob Lee" }, { value: "u-3", label: "Ann Kim" }],
+    }));
+    key(input(), "ArrowDown");
+    key(input(), "Enter");
+    vi.advanceTimersByTime(STATUS_DEBOUNCE);
+    expect(text()).toContain("1 items selected.");
+    key(input(), "ArrowDown");
+    key(input(), "ArrowDown");
+    key(input(), "Enter");
+    vi.advanceTimersByTime(STATUS_DEBOUNCE);
+    expect(text()).toContain("2 items selected.");
+  });
+
+  it("§7 #12 — two successive IDENTICAL announcements land in DIFFERENT regions", () => {
+    // Writing identical text into a live region twice is NOT a change and is NOT
+    // re-announced. Committing the same item twice must still be heard.
+    const { render, input, container } = setup({ f: { tags: [] } });
+    render(node({ selected: [], candidates: [{ value: "u-2", label: "Bob Lee" }] }));
+    const regionOf = (t: string) =>
+      Array.from(container.querySelectorAll<HTMLElement>('[data-vms-live="tags"]'))
+        .find(el => el.textContent === t) ?? null;
+
+    key(input(), "ArrowDown");
+    key(input(), "Enter");
+    vi.advanceTimersByTime(STATUS_DEBOUNCE);
+    const first = regionOf("Bob Lee selected. 1 items selected.");
+    expect(first).not.toBeNull();
+
+    // Same item again — a duplicate. Same sentence, and it must still register.
+    key(input(), "ArrowDown");
+    key(input(), "Enter");
+    vi.advanceTimersByTime(STATUS_DEBOUNCE);
+    const second = regionOf("Bob Lee selected. 1 items selected.");
+    expect(second).not.toBeNull();
+    expect(second).not.toBe(first);
+  });
+
+  it("🚨 §7 #32 — a selection change produces live-region TEXT, not merely an attribute flip", () => {
+    // aria-selected/aria-multiselectable are "mostly not announced when true",
+    // and on Safari/VoiceOver the ARIA path conveys NOTHING. Every fact they
+    // encode must ALSO be in the live-region text — so this asserts the TEXT,
+    // not the attributes.
+    const { render, input, announced, options, popup } = setup({ f: { tags: [] } });
+    render(node({ selected: [], candidates: [{ value: "u-2", label: "Bob Lee" }] }));
+    key(input(), "ArrowDown");
+    // The ARIA is set, and it is set correctly...
+    expect(options()[0].getAttribute("aria-selected")).toBe("true");
+    expect(popup().getAttribute("aria-multiselectable")).toBe("true");
+    key(input(), "Enter");
+    // ...and it is NOT the delivery mechanism. Note the attribute is now back to
+    // "false" (§7 #14 clears the active option on commit), so at this instant
+    // the ARIA encodes NOTHING about the selection the user just made — the
+    // live-region text is quite literally the only carrier.
+    expect(options()[0].getAttribute("aria-selected")).toBe("false");
+    vi.advanceTimersByTime(STATUS_DEBOUNCE);
+    expect(announced()).not.toBeNull();
+    expect(announced()!.textContent).toContain("Bob Lee");
+    expect(announced()!.getAttribute("role")).toBe("status");
+  });
+
+  it("chip announcements route through the EXISTING 1400ms helper — not a second mechanism", () => {
+    const { render, removeButtons, text } = setup({ f: { tags: ["u-1", "u-2"] } });
+    render(node());
+    removeButtons()[0].click();
+    // Nothing before the debounce elapses: same helper, same cadence.
+    vi.advanceTimersByTime(STATUS_DEBOUNCE - 1);
+    expect(text()).toBe("");
+    vi.advanceTimersByTime(1);
+    expect(text()).toContain("Sally Omer removed.");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe("D3 (LOOK-04) — `allowCustom` is a DECLARED axis, never inferred", () => {
+  it("🚨 allowCustom ABSENT — a typed non-candidate value commits NOTHING", () => {
+    const { render, input, writes, state } = setup({ f: { tags: [] } });
+    render(node({ selected: [] }));
+    type(input(), "invented");
+    key(input(), "Enter");
+    expect((state.f as Record<string, unknown>).tags).toEqual([]);
+    expect(writes.filter(w => w.path === "f.tags")).toHaveLength(0);
+  });
+
+  it("allowCustom EXPLICITLY false — still commits nothing", () => {
+    const { render, input, state } = setup({ f: { tags: [] } });
+    render(node({ selected: [], allowCustom: false }));
+    type(input(), "invented");
+    key(input(), "Enter");
+    expect((state.f as Record<string, unknown>).tags).toEqual([]);
+  });
+
+  it("allowCustom TRUE — a typed non-candidate value commits", () => {
+    const { render, input, state, chips } = setup({ f: { tags: [] } });
+    render(node({ selected: [], allowCustom: true }));
+    type(input(), "invented");
+    key(input(), "Enter");
+    expect((state.f as Record<string, unknown>).tags).toEqual(["invented"]);
+    expect(chips()).toHaveLength(1);
+  });
+
+  it("an invented value's chip LABEL EQUALS ITS VALUE (D5 — a tag is a value that labels itself)", () => {
+    const { render, input, chips, removeButtons } = setup({ f: { tags: [] } });
+    render(node({ selected: [], allowCustom: true }));
+    type(input(), "urgent");
+    key(input(), "Enter");
+    expect(chips()[0].textContent).toContain("urgent");
+    expect(removeButtons()[0].getAttribute("aria-label")).toBe("Remove urgent");
+  });
+
+  it("an invented value is announced with the running count, exactly like a picked one", () => {
+    vi.useFakeTimers();
+    try {
+      const { render, input, text } = setup({ f: { tags: [] } });
+      render(node({ selected: [], allowCustom: true }));
+      type(input(), "urgent");
+      key(input(), "Enter");
+      vi.advanceTimersByTime(STATUS_DEBOUNCE);
+      expect(text()).toBe("urgent selected. 1 items selected.");
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("committing an invented value clears the input and the query bind", () => {
+    const { render, input, state } = setup({ f: { tags: [], q: "urgent" } });
+    render(node({ selected: [], allowCustom: true }));
+    type(input(), "urgent");
+    key(input(), "Enter");
+    expect(input().value).toBe("");
+    expect((state.f as Record<string, unknown>).q).toBe("");
+  });
+
+  it("Enter with an ACTIVE option still picks the candidate — allowCustom does not hijack it", () => {
+    const { render, input, state } = setup({ f: { tags: [] } });
+    render(node({
+      selected: [], allowCustom: true,
+      candidates: [{ value: "u-2", label: "Bob Lee" }],
+    }));
+    type(input(), "Bob");
+    key(input(), "ArrowDown");
+    key(input(), "Enter");
+    expect((state.f as Record<string, unknown>).tags).toEqual(["u-2"]);
+  });
+
+  it("allowCustom + an EMPTY input commits nothing", () => {
+    const { render, input, state } = setup({ f: { tags: [] } });
+    render(node({ selected: [], allowCustom: true }));
+    key(input(), "Enter");
+    expect((state.f as Record<string, unknown>).tags).toEqual([]);
+  });
+
+  it("single-select allowCustom commits the invented value to the bind as the id", () => {
+    const { render, input, state } = setup({ f: { owner: "" } });
+    render({
+      type: "field", name: "owner", inputType: "lookup", bind: "f.owner",
+      allowCustom: true, selected: [],
+    } as ViewNode);
+    type(input(), "someone-new");
+    key(input(), "Enter");
+    expect((state.f as Record<string, unknown>).owner).toBe("someone-new");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe("🚨 D3 — the bind stays HOMOGENEOUS: no `Value | string` union can arise", () => {
+  // MUI's `multiple + freeSolo` yields `Array<Value | string>` — a heterogeneous
+  // array that forces EVERY consumer to branch on `typeof`, and whose own docs
+  // warn it "may cause type mismatch". Their tags demo dodges it only by
+  // degrading options to bare strings. We never admit a bare string: an invented
+  // value is a homogeneous LookupItem whose label equals its value, and `bind`
+  // is string[] of ids either way.
+  it("a bind built from BOTH picked and invented entries is uniformly strings", () => {
+    const { render, input, state } = setup({ f: { tags: [] } });
+    render(node({
+      selected: [], allowCustom: true,
+      candidates: [{ value: "u-2", label: "Bob Lee" }],
+    }));
+    // Picked.
+    key(input(), "ArrowDown");
+    key(input(), "Enter");
+    // Invented.
+    type(input(), "urgent");
+    key(input(), "Enter");
+
+    const tags = (state.f as Record<string, unknown>).tags as unknown[];
+    expect(tags).toEqual(["u-2", "urgent"]);
+    tags.forEach(t => expect(typeof t).toBe("string"));
+    // The load-bearing assertion: NOTHING in the array is an object. If a bare
+    // LookupItem ever leaked into the bind, this is what would catch it.
+    tags.forEach(t => expect(typeof t).not.toBe("object"));
+  });
+
+  it("the invented entry is indistinguishable IN SHAPE from a picked one (OPEN-3)", () => {
+    // Picked-vs-invented is SERVER-decidable — the server produced every
+    // candidate it ever offered, so it can test an id against its own id space.
+    // There is deliberately no wire marker for provenance.
+    const { render, input, state } = setup({ f: { tags: [] } });
+    render(node({
+      selected: [], allowCustom: true,
+      candidates: [{ value: "u-2", label: "Bob Lee" }],
+    }));
+    key(input(), "ArrowDown");
+    key(input(), "Enter");
+    type(input(), "urgent");
+    key(input(), "Enter");
+    const tags = (state.f as Record<string, unknown>).tags as string[];
+    expect(tags.join("|")).not.toContain("__isNew__");
+    expect(JSON.stringify(tags)).toBe('["u-2","urgent"]');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe("D3 — `allowCustom: true` + NO candidates IS a free-form tags input", () => {
+  // The design's claim, asserted end-to-end: this composition needs NO special
+  // case in the renderer, which is why it SUPERSEDED the separately-designed
+  // `inputType: "tags"` proposal. Every node field below is one a tags input
+  // would need anyway; nothing is tags-specific.
+  const tagsNode = (extra: Record<string, unknown> = {}): ViewNode => ({
+    type: "field", name: "tags", inputType: "lookup-multiple",
+    bind: "f.tags", searchBind: "f.q", allowCustom: true, selected: [],
+    ...extra,
+  } as ViewNode);
+
+  it("types three tags, gets three chips and three strings — no candidates anywhere", () => {
+    const { render, input, state, chips } = setup({ f: { tags: [] } });
+    render(tagsNode());
+    for (const t of ["alpha", "beta", "gamma"]) {
+      type(input(), t);
+      key(input(), "Enter");
+    }
+    expect((state.f as Record<string, unknown>).tags).toEqual(["alpha", "beta", "gamma"]);
+    expect(chips().map(c => c.textContent?.replace("×", ""))).toEqual(["alpha", "beta", "gamma"]);
+  });
+
+  it("its chips carry the full a11y baseline — item-specific removes, roving, focus rule", () => {
+    const { render, input, removeButtons } = setup({ f: { tags: [] } });
+    render(tagsNode());
+    for (const t of ["alpha", "beta"]) { type(input(), t); key(input(), "Enter"); }
+    expect(removeButtons().map(b => b.getAttribute("aria-label")))
+      .toEqual(["Remove alpha", "Remove beta"]);
+    expect(removeButtons().filter(b => b.tabIndex === 0)).toHaveLength(1);
+    removeButtons()[1].focus();
+    removeButtons()[1].click();
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it("a tag is removable and the bind keeps up", () => {
+    const { render, input, state, removeButtons } = setup({ f: { tags: [] } });
+    render(tagsNode());
+    for (const t of ["alpha", "beta", "gamma"]) { type(input(), t); key(input(), "Enter"); }
+    removeButtons()[1].click();
+    expect((state.f as Record<string, unknown>).tags).toEqual(["alpha", "gamma"]);
+  });
+
+  it("the popup stays empty and closed — there is nothing to suggest", () => {
+    const { render, input, popup, options } = setup({ f: { tags: [] } });
+    render(tagsNode());
+    type(input(), "alpha");
+    expect(options()).toHaveLength(0);
+    expect(popup().hidden).toBe(true);
+  });
+
+  it("the two-step Backspace works in the tags composition too", () => {
+    const { render, input, state } = setup({ f: { tags: [] } });
+    render(tagsNode());
+    for (const t of ["alpha", "beta"]) { type(input(), t); key(input(), "Enter"); }
+    key(input(), "Backspace");
+    expect((state.f as Record<string, unknown>).tags).toEqual(["alpha", "beta"]);
+    key(input(), "Backspace");
+    expect((state.f as Record<string, unknown>).tags).toEqual(["alpha"]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe("commit-path dedupe + trim (D12 SCOPE — a state write, NOT a presentation)", () => {
+  // ⚠️ This is NOT a D12 violation. D12 forbids second-guessing the SERVER'S
+  // answer — reordering/filtering/deduping/truncating `candidates` FOR DISPLAY.
+  // This is a STATE WRITE about the user's OWN accumulated selection, and a
+  // selection set has set semantics. Presentation vs. state write.
+  it("committing a DUPLICATE does not add a second id to the bind", () => {
+    const { render, input, state, chips } = setup({ f: { tags: [] } });
+    render(node({ selected: [], candidates: [{ value: "u-2", label: "Bob Lee" }] }));
+    key(input(), "ArrowDown");
+    key(input(), "Enter");
+    key(input(), "ArrowDown");
+    key(input(), "Enter");
+    expect((state.f as Record<string, unknown>).tags).toEqual(["u-2"]);
+    expect(chips()).toHaveLength(1);
+  });
+
+  it("a duplicate INVENTED value does not double up either", () => {
+    const { render, input, state, chips } = setup({ f: { tags: [] } });
+    render(node({ selected: [], allowCustom: true }));
+    type(input(), "urgent");
+    key(input(), "Enter");
+    type(input(), "urgent");
+    key(input(), "Enter");
+    expect((state.f as Record<string, unknown>).tags).toEqual(["urgent"]);
+    expect(chips()).toHaveLength(1);
+  });
+
+  it("leading/trailing whitespace is TRIMMED before commit", () => {
+    const { render, input, state } = setup({ f: { tags: [] } });
+    render(node({ selected: [], allowCustom: true }));
+    type(input(), "  urgent  ");
+    key(input(), "Enter");
+    expect((state.f as Record<string, unknown>).tags).toEqual(["urgent"]);
+  });
+
+  it("trim + dedupe compose: '  urgent  ' does not re-add 'urgent'", () => {
+    const { render, input, state } = setup({ f: { tags: [] } });
+    render(node({ selected: [], allowCustom: true }));
+    type(input(), "urgent");
+    key(input(), "Enter");
+    type(input(), "  urgent  ");
+    key(input(), "Enter");
+    expect((state.f as Record<string, unknown>).tags).toEqual(["urgent"]);
+  });
+
+  it("a WHITESPACE-ONLY entry commits nothing", () => {
+    const { render, input, state } = setup({ f: { tags: [] } });
+    render(node({ selected: [], allowCustom: true }));
+    type(input(), "   ");
+    key(input(), "Enter");
+    expect((state.f as Record<string, unknown>).tags).toEqual([]);
+  });
+
+  it("🚨 D12 — the renderer still dedupes NOTHING in the candidate PRESENTATION", () => {
+    // The other half of the scope line, asserted so the dedupe above can never
+    // creep into the display path: duplicate candidates render as given.
+    const { render, options } = setup({ f: { tags: [] } });
+    render(node({
+      selected: [],
+      candidates: [
+        { value: "u-2", label: "Bob Lee" },
+        { value: "u-2", label: "Bob Lee" },
+        { value: "u-1", label: "Sally Omer" },
+      ],
+    }));
+    expect(options()).toHaveLength(3);
+    // ...and ORDER is preserved: unsorted is the app's judgment, not a bug.
+    expect(options().map(o => o.textContent)).toEqual(["Bob Lee", "Bob Lee", "Sally Omer"]);
+  });
+});
