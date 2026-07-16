@@ -279,6 +279,48 @@ and ordering (D4): the correct behavior is baked in rather than left to every co
 Corollary for the design: **`blocking` is meaningless on `searchAction`.** Say so in the TSDoc rather
 than letting an author believe setting it does something.
 
+### D13 — The client **provisionally owns** the selection between round-trips (D1's missing half)
+
+> **Found during execution (Phase 21, plan 21-06), not during design.** The plan assumed writing to
+> `bind` was visible. It isn't: `writeBind` does not re-render, and `selected` is **server-owned
+> view**. So as originally specified, clicking "Remove Sally Omer" left the chip sitting there,
+> picking a candidate showed nothing, and **§7 #29's focus-after-removal rule was literally
+> unimplementable** — no chip was ever removed to move focus away from.
+
+D1 is right that the label is view and the server is authoritative. **What D1 omitted is what happens
+in the gap** — between the user's click and the server's next response, *something* has to reflect the
+change or the control appears broken.
+
+**The rule: optimistic client update + authoritative server re-render.** This is not a special case —
+it is **the model every other bound input in VMS already uses** (a text field shows your keystrokes
+immediately; the server's next response is still authoritative and overwrites). The lookup is only
+unusual in that its *display* value (`selected`) and its *state* value (`bind`) are different fields,
+so the optimism has to touch both.
+
+**This is the mirror of the D10 finding**, and the pair is worth stating together because they are the
+two halves of the same blind spot:
+- **D10 / 21-04:** *client*-owned DOM state (popup-open, live regions) silently dies in the re-render.
+- **D13 / 21-06:** *server*-owned view state (`selected`) silently fails to update between renders.
+
+⇒ **Any future control that mutates a `selected`-style server-owned array hits this identically.**
+A wire field that is server-authoritative and user-mutable needs an explicit answer for the interval
+between the mutation and the next response. Ours is: optimistic, then authoritative.
+
+### D14 — Two-step backspace must be armed **by value**, never by a boolean
+
+> **Also found during execution (21-06).** §7 #31 (first Backspace arms the last chip; second removes
+> it) is **silent on a re-render landing between the two presses** — which, on a live-query cadence, is
+> routine rather than exotic.
+
+**The naive fix is actively dangerous.** Preserving an "armed" *boolean* across the re-render means
+the second press confirms against **whatever chip is last now** — which may not be the chip that was
+announced. That **recreates the exact wrong-record deletion the two-step exists to prevent**, while
+looking like it works.
+
+⇒ **The arm is keyed by the chip's `value`.** If that value is no longer present after a re-render,
+the arm is void and the next Backspace re-arms rather than deletes. A confirmation must confirm the
+thing that was announced, or it is not a confirmation.
+
 ## 4. Wire shape
 
 New `FieldNode.inputType` values: **`"lookup"`** and **`"lookup-multiple"`**.
