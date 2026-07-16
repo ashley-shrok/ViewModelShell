@@ -71,6 +71,14 @@ let state: State = {
     subscribe: "true",
     file: null,
     query: "select id, title, status\nfrom tickets\nwhere priority in ('high', 'critical')\norder by created_at desc;",
+    // Phase 21 — lookup bind slots. The bind holds the ID and NOTHING ELSE
+    // (`string` for lookup, `string[]` for lookup-multiple); every label on
+    // screen comes from the node's `selected`, never from state and never from
+    // `candidates`. The searchBind slots hold the typed query.
+    lookupAssignee: "u-1", lookupAssigneeQuery: "",
+    lookupCustomer: "", lookupCustomerQuery: "",
+    lookupWatchers: ["u-1", "u-4"], lookupWatchersQuery: "",
+    lookupTags: ["urgent", "backend"], lookupTagsQuery: "",
     // Checkout (form view)
     fullName: "", email_co: "", phone: "",
     address1: "", address2: "", city: "", country: "us", zip: "",
@@ -343,6 +351,60 @@ function componentsView(): ViewNode[] {
           { type: "field", name: "query",    inputType: "code",            bind: "formInputs.query",     label: "Code (SQL)", language: "sql" },
         ],
       },
+    ]},
+
+    { type: "section", heading: "Lookup (reference field)", children: [
+      { type: "text", value: "A lookup says \"the values are a database table — describe which row you mean\", where a select says \"here are all the values, pick one\". The bind holds the ID and nothing else; the label travels on the node's `selected`, server→client only. `select`/`select-multiple` above REMAIN the control for enumerable sets — the lookup does not replace them.", style: "muted" },
+
+      { type: "text", value: "① The preselected value — the case that kills naive designs", style: "subheading" },
+      { type: "text", value: "This field loads with a reference ALREADY SET and NO candidates and NO search having occurred — and it still renders \"Sally Omer\", not the raw id `u-1`. That works because the label came from the node's `selected`, not from a candidate list that is empty on a cold start. A picker that resolves its label out of `candidates` renders the database id here, silently.", style: "muted" },
+      { type: "field", name: "assignee", inputType: "lookup",
+        bind: "formInputs.lookupAssignee", label: "Assignee (preselected, no candidates)",
+        placeholder: "Search agents…",
+        selected: [ { value: "u-1", label: "Sally Omer" } ],
+        searchBind: "formInputs.lookupAssigneeQuery",
+        searchAction: { name: "noop-lookup-search-agents" } },
+
+      { type: "text", value: "② Single lookup with candidates", style: "subheading" },
+      { type: "text", value: "Nothing selected yet; the popup offers `candidates`. Their ORDER is the server's ranking and the renderer preserves it exactly — it sorts nothing, dedupes nothing, truncates nothing. Position 0 is the server's best answer. (No backend here, so the list is static — typing won't refetch.)", style: "muted" },
+      { type: "field", name: "customer", inputType: "lookup",
+        bind: "formInputs.lookupCustomer", label: "Customer",
+        placeholder: "Search customers…",
+        selected: [],
+        candidates: [
+          { value: "c-118", label: "Northwind Traders" },
+          { value: "c-204", label: "Contoso Ltd" },
+          { value: "c-377", label: "Fabrikam Inc" },
+          { value: "c-991", label: "Adventure Works" },
+        ],
+        searchBind: "formInputs.lookupCustomerQuery",
+        searchAction: { name: "noop-lookup-search-customers" } },
+
+      { type: "text", value: "③ lookup-multiple — chips", style: "subheading" },
+      { type: "text", value: "The bind is a string[] of ids; `selected` carries one entry per chip. Each remove button gets its own item-specific accessible name (\"Remove Sally Omer\"), chips take a roving tabindex, and Backspace on an empty input is two-step rather than a silent delete.", style: "muted" },
+      { type: "field", name: "watchers", inputType: "lookup-multiple",
+        bind: "formInputs.lookupWatchers", label: "Watchers",
+        placeholder: "Add a watcher…",
+        selected: [
+          { value: "u-1", label: "Sally Omer" },
+          { value: "u-4", label: "Ravi Desai" },
+        ],
+        candidates: [
+          { value: "u-7", label: "Sam Ortiz" },
+          { value: "u-9", label: "Dana Whitfield" },
+        ],
+        searchBind: "formInputs.lookupWatchersQuery",
+        searchAction: { name: "noop-lookup-search-watchers" } },
+
+      { type: "text", value: "④ allowCustom — free-form tags, with no special case anywhere", style: "subheading" },
+      { type: "text", value: "`allowCustom: true` + no `candidates` + labels omitted IS a tags input — the renderer has no tags mode. An invented value is just a value whose label equals itself, so it stays the same homogeneous {value, label?, type?} object as a picked one and never degrades to a bare string. Choosing a person and inventing a tag are different acts, so the control DECLARES which it is doing rather than leaving it inferred.", style: "muted" },
+      { type: "field", name: "tags", inputType: "lookup-multiple",
+        bind: "formInputs.lookupTags", label: "Tags (allowCustom, no candidates)",
+        placeholder: "Type a tag and press Enter…",
+        allowCustom: true,
+        selected: [ { value: "urgent" }, { value: "backend" } ],
+        searchBind: "formInputs.lookupTagsQuery",
+        searchAction: { name: "noop-lookup-search-tags" } },
     ]},
 
     { type: "section", heading: "Checkbox (immediate dispatch)", children: [
