@@ -138,40 +138,45 @@ leave it to be inferred from behavior.
   structural marker and a **distinct action** (`create-option` vs `select-option`), never a `typeof`
   sniff.
 
-### D4 — The framework **learns to search** (the live-query lane)
+### D4 — ~~The framework learns to search (the live-query lane)~~ → **REVERSED. Enter-to-search, blocking.**
 
-Today VMS only asks when told: **every** text field dispatches on Enter (`browser.ts:1291-1303`),
-and the table's column filter is the same (keystrokes write the bind; Enter dispatches
-`filterAction`). **There is no live-query dispatch anywhere in the framework.** A lookup cannot exist
-under that rule — a picker that only answers on Enter is a query form.
+> 🚨 **REVERSED 2026-07-16 by Ashley, after seeing it run.** The live-query lane is OUT. `searchAction`
+> is an **ordinary blocking action fired on Enter** — byte-for-byte the pattern `TableNode.filterAction`
+> has always used. No debounce. No non-blocking lane. **We already had the answer in the codebase.**
 
-- **New tempo:** debounced per-keystroke dispatch riding the **existing v4.2 non-blocking lane**
-  (Phases 14/15) — a background query that must not block typing, where the lane-aware epoch already
-  discards stale and out-of-order responses.
-- **Convention: ~250–300ms debounce.** (ServiceNow `glide.xmlhttp.ac_wait_time` = 250ms; PrimeReact
-  `delay` = 300ms.)
-- **No minimum-character gate.** Nearly nonexistent in *both* lanes: ServiceNow has no min-chars
-  property at all (effective minimum 1), and PrimeReact is the only surveyed library with `minLength`.
-  **Debounce is the real convention, not a length gate.**
+**What she saw that decided it:** results re-rendering under the cursor while she was reaching to click
+a name, and a tag that was created, vanished, and refilled the box — twice in three tries — a stale
+search response landing after her action and restoring old state. **That race was scripted and
+"passing"** (see the note on 21-05 below).
 
-> 🏆 **This is a genuine differentiator, not a catch-up feature. No surveyed library handles both
-> debounce and response ordering in framework code.** react-select guards ordering
-> (`if (request !== lastRequest.current) return;`) but the word "debounce" has **zero occurrences in
-> its entire repository**, and the open request for it is unanswered by any maintainer. PrimeReact
-> debounces but ships no ordering guard. Ant Design and MUI address the race **only in demo code** —
-> meaning every consumer who didn't copy the demo verbatim shipped the bug. Consumer-owned debounce is
-> genuinely treacherous, not boilerplate: a debounced *promise-returning* loader returns `undefined`
-> on suppressed calls, react-select's `.then` duck-check fails, and the spinner never clears (issues
-> #2476, #3075, #4931 — the same bug, three times).
->
-> **We own both halves, in the framework, and we already built the hard one.**
+**The argument that makes this more than a preference:** a blocking `searchAction` is an ordinary
+action, so **the existing dispatch guard already serializes it** — a second action cannot dispatch
+while a round trip is in flight, and has not been able to since long before this phase. The race
+category is not *mitigated*; it becomes **structurally impossible**. That is a far stronger
+correctness argument than any test suite.
 
-⚠️ **Banked lesson applies with full force:** subtle-concurrency code needs adversarial interleaving
-verification; the first implementation is almost never right. The plan **must** enumerate the
-interleavings (user-action-races-background; background-resolves-first; rapid-fire-supersede;
-stale-arrives-late) and demand a FAIL-before / PASS-after test per race. A green unit suite that
-doesn't script the interleaving proves nothing about the race. **Also check whether this is the
-signal for the deferred, conditional Phase 17 admission barrier.**
+**Everything the cadence was generating dies with it:** the popup slamming shut on every re-render
+(21-03/21-04's finding); the 1400ms announcement debounce that existed only to tame a per-keystroke
+firehose; the chip state dying mid-interaction; the four adversarial races; the jumping-under-cursor.
+**Every one of those existed to serve type-as-you-go.**
+
+**What it costs, honestly:** the differentiator this doc was pleased about — nobody in the industry
+has both framework-owned debounce and ordering (react-select guards ordering but "debounce" has zero
+occurrences in its repo; PrimeReact debounces with no ordering guard; Ant/MUI solve the race only in
+demo code). That is only worth having **if you have the lane at all.** Being first to solve a problem
+we chose to have is not a win. Enter-to-search is a search box rather than a typeahead; it is
+slightly more friction and entirely predictable.
+
+⚠️ **The lesson worth keeping — 21-05's race suite was rigorous and still proved nothing useful.**
+It scripted four interleavings, mutation-proved each could fail, and passed. Ashley then hit a real
+race in ~2 minutes of clicking. The suite was not sloppy; it was **testing the properties of a
+mechanism we should not have been using.** Rigor inside the wrong frame is not rigor. The banked
+concurrency lesson needs this corollary: *before you verify a race exhaustively, ask whether the race
+should exist.*
+
+**Retained from the survey, still true:** ~250–300ms is the debounce convention *if you type-to-search*
+(ServiceNow 250ms, PrimeReact 300ms), and min-chars gates are nearly nonexistent in both lanes. Kept
+for the record in case this is ever revisited — it is not a plan to revisit it.
 
 ### D5 — The label is **absent when redundant**
 
@@ -263,63 +268,30 @@ ordinal, holding the live-region element(s), reattached on each render rather th
 removed from the tree must drop its regions) and its per-render key-counter reset idiom
 (`chartKeyCounter` / `chartKeysSeen`).
 
-### D11 — `searchAction` is **renderer-forced** onto the non-blocking lane. The app cannot opt out.
+### D11 — ~~searchAction is renderer-forced non-blocking~~ → **REVERSED. Non-blocking is ALWAYS opt-in.**
 
-The non-blocking lane is opted into via `ActionEvent.blocking === false` (`index.ts:20`) — i.e. it is
-**a wire field the app sets.** For a search-as-you-type action that is a footgun: an app that forgets
-`blocking: false` **busy-locks the entire page on every keystroke**, because the framework applies
-`.vms-busy` for the duration of any user-initiated dispatch. The failure is severe, silent at author
-time, and only visible when someone types.
+> 🚨 **REVERSED 2026-07-16 by Ashley**, and her framing is a **framework-level principle**, not a
+> lookup decision:
+>
+> > *"our whole philosophy for non-blocking round trips should be that those are **opt-in always**,
+> > because that could really mess with your app's logic if we default anything to that."*
 
-⇒ **The renderer forces `searchAction` non-blocking**, regardless of what the app declares. A search
-query is *definitionally* a background question — there is no coherent app that wants a blocking one,
-so this is not a choice worth exposing. This is the same instinct as the framework owning debounce
-and ordering (D4): the correct behavior is baked in rather than left to every consumer to get right.
+**She is right, and my reasoning was circular.** I forced non-blocking because an app that forgot
+`blocking: false` would busy-lock the page on every keystroke — but **that failure only existed
+because I had made typing trigger round-trips.** I invented the problem, then took a power away from
+the app to paper over it.
 
-Corollary for the design: **`blocking` is meaningless on `searchAction`.** Say so in the TSDoc rather
-than letting an author believe setting it does something.
+**And what I took was semantic.** `blocking: false` means *this response may be discarded, may arrive
+out of order, may coexist with another in flight.* An app that did not ask for those semantics can
+absolutely have its logic broken by them. **The framework silently changing dispatch semantics under
+an app is not ours to do** — it is the app's call, every time, and the framework's job is to honor it.
 
-### D13 — The client **provisionally owns** the selection between round-trips (D1's missing half)
+⇒ **THE RULE (generalizes well beyond the lookup): `blocking: false` is ALWAYS the app's explicit
+choice. The framework never forces, infers, or upgrades a dispatch onto the non-blocking lane.** If a
+feature seems to *need* forcing, that is the signal the feature's shape is wrong — as it was here.
 
-> **Found during execution (Phase 21, plan 21-06), not during design.** The plan assumed writing to
-> `bind` was visible. It isn't: `writeBind` does not re-render, and `selected` is **server-owned
-> view**. So as originally specified, clicking "Remove Sally Omer" left the chip sitting there,
-> picking a candidate showed nothing, and **§7 #29's focus-after-removal rule was literally
-> unimplementable** — no chip was ever removed to move focus away from.
-
-D1 is right that the label is view and the server is authoritative. **What D1 omitted is what happens
-in the gap** — between the user's click and the server's next response, *something* has to reflect the
-change or the control appears broken.
-
-**The rule: optimistic client update + authoritative server re-render.** This is not a special case —
-it is **the model every other bound input in VMS already uses** (a text field shows your keystrokes
-immediately; the server's next response is still authoritative and overwrites). The lookup is only
-unusual in that its *display* value (`selected`) and its *state* value (`bind`) are different fields,
-so the optimism has to touch both.
-
-**This is the mirror of the D10 finding**, and the pair is worth stating together because they are the
-two halves of the same blind spot:
-- **D10 / 21-04:** *client*-owned DOM state (popup-open, live regions) silently dies in the re-render.
-- **D13 / 21-06:** *server*-owned view state (`selected`) silently fails to update between renders.
-
-⇒ **Any future control that mutates a `selected`-style server-owned array hits this identically.**
-A wire field that is server-authoritative and user-mutable needs an explicit answer for the interval
-between the mutation and the next response. Ours is: optimistic, then authoritative.
-
-### D14 — Two-step backspace must be armed **by value**, never by a boolean
-
-> **Also found during execution (21-06).** §7 #31 (first Backspace arms the last chip; second removes
-> it) is **silent on a re-render landing between the two presses** — which, on a live-query cadence, is
-> routine rather than exotic.
-
-**The naive fix is actively dangerous.** Preserving an "armed" *boolean* across the re-render means
-the second press confirms against **whatever chip is last now** — which may not be the chip that was
-announced. That **recreates the exact wrong-record deletion the two-step exists to prevent**, while
-looking like it works.
-
-⇒ **The arm is keyed by the chip's `value`.** If that value is no longer present after a re-render,
-the arm is void and the next Backspace re-arms rather than deletes. A confirmation must confirm the
-thing that was announced, or it is not a confirmation.
+`searchAction` is a plain blocking action like every other. `blocking` on it means exactly what it
+means everywhere else.
 
 ## 4. Wire shape
 
