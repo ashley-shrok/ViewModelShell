@@ -693,17 +693,48 @@ public record FormNode(
 
 public record FieldOption(string Value, string Label);
 
+// 5.2.0 (LOOK-01/LOOK-06) — mirrors the TS `LookupItem` in src/index.ts. The
+// homogeneous shape a lookup deals in: an invented value is a LookupItem too,
+// NEVER a bare string, so no `LookupItem | string` union can arise (MUI's
+// `multiple + freeSolo` yields exactly that heterogeneous union and their own
+// docs warn it "may cause type mismatch").
+//
+// ⚠️ `Type` here is the REFERENCE-KIND tag, NOT the [JsonPolymorphic]
+// discriminator. There is no collision: LookupItem is a plain sub-record (like
+// FieldOption), NOT a ViewNode, so it carries no [JsonDerivedType] and STJ
+// writes no discriminator into it. Stated explicitly because "a record with a
+// `type` property inside a polymorphic tree" is exactly the thing a reviewer
+// should stop on. It serializes as "type" via the host camelCase naming policy
+// (matching the TS `type?: string`); no [JsonPropertyName] is needed.
+//
+// Label/Type are nullable + WhenWritingNull (the maintainer rule at the top of
+// this file): Label is omitted when it EQUALS Value (D5 — Principle 7 applied
+// to a pair; exactly the free-form-tag case, where a tag is a value whose label
+// is itself), and Type is omitted for monomorphic references (D6 — a
+// polymorphic reference needs it because, per Microsoft verbatim, "this value
+// doesn't tell you whether the owner of the record is a user or a team").
+public record LookupItem(
+    string Value,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Type = null);
+
 public record FieldNode(
     string Name,
     string InputType,
     /// <summary>Path into state where this input reads its current value and writes user
     /// changes (e.g. "fields.title"). REQUIRED for value-bearing inputs
     /// (text/email/password/number/date/time/datetime-local/textarea/select/
-    /// select-multiple/checkbox/code) and OPTIONAL for <c>file</c> inputs — a file
+    /// select-multiple/checkbox/lookup/lookup-multiple/code) and OPTIONAL for
+    /// <c>file</c> inputs — a file
     /// input's binary rides the multipart side channel (fileRegistry keyed on
     /// <c>Name</c>), so pass <c>Bind: null</c> on a file input to avoid writing a
     /// {filename,size} placeholder object into state (which breaks a string/string-map
-    /// state slot on round-trip). Kept in its positional slot; a null bind is absent on the wire.</summary>
+    /// state slot on round-trip). Kept in its positional slot; a null bind is absent on the wire.
+    ///
+    /// For the lookup inputTypes this path holds the ID AND NOTHING ELSE: <c>lookup</c>
+    /// binds a string (one id), <c>lookup-multiple</c> binds a string[] (the ids). The
+    /// human-readable label never lives here — it travels on <c>Selected</c>,
+    /// server→client only. The id is state; the label is view.</summary>
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Bind,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Placeholder,
@@ -732,7 +763,129 @@ public record FieldNode(
     // depend on button position (buttons[]/children/submit/Enter all honor it
     // equally). Absent/empty = the file rides nothing (no positional fallback);
     // the browser warns [vms:orphan-file]. Omitted-when-null on the wire.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? UploadOn = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? UploadOn = null,
+    // ─── 5.2.0 (LOOK-01/02/04/06) — the lookup surface ──────────────────────
+    // Mirrors the TS twin's selected?/candidates?/searchBind?/searchAction?/
+    // allowCustom? on FieldNode (src/index.ts). Two new InputType STRING tokens
+    // ride the existing InputType member: "lookup" (binds one id) and
+    // "lookup-multiple" (binds a string[] of ids) — separate inputTypes, not a
+    // flag, mirroring our existing select/select-multiple cardinality split
+    // (D2). `select-multiple` REMAINS the control for enumerable sets; a lookup
+    // is for sets that CANNOT be enumerated into the tree (a 5,000-person
+    // directory), and it must never try to swallow select-multiple.
+    //
+    // Selected/Candidates follow the Options shape (WhenWritingNull);
+    // SearchBind follows the Bind shape; SearchAction follows the Action shape;
+    // AllowCustom drops its false default like Required (WhenWritingDefault) so
+    // `false` is ABSENT from the wire, matching the TS optional bool. A new
+    // nullable without WhenWritingNull, or an optional bool without
+    // WhenWritingDefault, silently re-introduces the null/false-vs-absent drift
+    // from the TS twin that the header rule exists to kill.
+
+    /// <summary>LOOKUP INPUTS ONLY. What is currently selected, WITH display labels.
+    ///
+    /// 🚨 DIRECTION IS THE ENTIRE SAFETY ARGUMENT: this is server→client ONLY. It is
+    /// recomputed every render, is never authoritative, and is NEVER trusted coming back
+    /// from the client — a client cannot forge a label into a handler because a client
+    /// never sends one (the POST carries only the action NAME plus state). <c>Bind</c>
+    /// holds the id and is the only authoritative thing. The id persists and round-trips
+    /// (state); the label is derived, server-owned, recomputed every render (view).
+    /// Putting the label in the bind is putting view into state.
+    ///
+    /// 🚨 Selected and Candidates are SEPARATE MEMBERS ON PURPOSE, and the selected label
+    /// is NEVER resolved from Candidates. Fusing them is the original sin: with an
+    /// id-valued field, "filter the candidate list" and "forget what's selected" are the
+    /// SAME operation — so a picker resolving its label out of the candidate list renders
+    /// a raw database id the moment a form loads with a value already set and no search
+    /// has occurred (the cold-start case, which is the case that matters most).
+    ///
+    /// ALWAYS AN ARRAY, including for single <c>lookup</c>, where it holds 0 or 1 entries.
+    /// Deliberate: a T | T[] union does not serialize byte-identically under both
+    /// System.Text.Json and JSON.stringify, and the banked parity lesson is to prefer the
+    /// shape that cannot drift over the shape that reads nicer. Omitted = nothing selected.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<LookupItem>? Selected = null,
+
+    /// <summary>LOOKUP INPUTS ONLY. The current search results — what the popup listbox
+    /// offers. Feeds the popup and NOTHING else. NEVER the source of a selected label
+    /// (see <c>Selected</c>).
+    ///
+    /// 🚨 ORDER IS MEANINGFUL APP DATA. The renderer presents candidates AS GIVEN — it
+    /// sorts nothing, dedupes nothing, and truncates nothing. Relevance ordering is the
+    /// SERVER's judgment, never the widget's (Salesforce's picker searchType defaults to
+    /// Recent; Dynamics shows 5 most-recently-used plus 5 favourites, explicitly NOT
+    /// filtered by the search term). For a .NET app author specifically: this is the
+    /// guarantee that an ORDER BY in your provider handler SURVIVES TO THE SCREEN. A
+    /// renderer that "helpfully" alphabetized for tidiness would silently destroy a
+    /// server-side ranking with no way for the app to stop it. (Scope: this governs the
+    /// PRESENTATION of Candidates; it is not a ban on the renderer having logic —
+    /// deduping Bind on commit in lookup-multiple is a state write about the user's own
+    /// accumulated selection, and is correct.)
+    ///
+    /// 🚨 Any cap MUST be VISIBLE in the tree. Nothing truncates silently. There is no
+    /// wire field for a cap: the app renders a TextNode saying so — "Refine your filter —
+    /// N matches, max is X", the canonical table-workflow pattern. The anti-pattern is
+    /// ServiceNow's 15-result cap applied post-ACL behind a hard 250-row SQL ceiling,
+    /// where an exact-match record can be SILENTLY INVISIBLE. A cap the user cannot see is
+    /// a correctness bug wearing a performance knob's clothes.
+    ///
+    /// 🚨 The picker's filter is UX, NEVER authorization. Narrowing what is OFFERED is not
+    /// a security boundary, and a filter that looks like one is precisely what gets
+    /// trusted by mistake. ServiceNow says it outright: "To restrict what data specific
+    /// users can access, use ACLs not reference qualifiers." The server authorizes IN THE
+    /// ACTION HANDLER, with the real auth context, exactly as every other VMS action does
+    /// — omitting a record from Candidates hides it from the dropdown and from nothing
+    /// else, since a client that already knows an id can still put it in Bind.
+    /// Omitted = no results to offer.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<LookupItem>? Candidates = null,
+
+    /// <summary>LOOKUP INPUTS ONLY. Path into state where the typed query lives, so the
+    /// server can see it and the view stays a pure function of state. Separate from
+    /// <c>Bind</c>, which holds the id — the query and the selection are different facts
+    /// and never share a slot. Required for a working typeahead: with a SearchAction but
+    /// no SearchBind the query is dispatched but the server can never read what was typed
+    /// — a silently dead typeahead that renders perfectly and returns nothing forever.
+    /// Omitted = the query is not round-tripped.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SearchBind = null,
+
+    /// <summary>LOOKUP INPUTS ONLY. Dispatched DEBOUNCED (~250-300ms) ON KEYSTROKE — not
+    /// on Enter, unlike <c>Action</c>. The framework's live-query lane: the app declares
+    /// where to ask, and the framework owns the cadence and the response ordering, so no
+    /// consumer has to get either right.
+    ///
+    /// 🚨 <c>ActionDescriptor.Blocking</c> is MEANINGLESS here — setting it does NOTHING.
+    /// The renderer FORCES this action onto the non-blocking lane regardless of what the
+    /// app declares. A search query is definitionally a background question (there is no
+    /// coherent app that wants a blocking one), and an app that merely FORGOT
+    /// Blocking:false would busy-lock the entire page on every keystroke (the framework
+    /// applies .vms-busy for the duration of any user-initiated dispatch). That failure is
+    /// severe, silent at author time, and only shows up when someone types — so the choice
+    /// is not worth exposing.
+    ///
+    /// There is NO minimum-character gate, deliberately — debounce is the real convention,
+    /// not a length gate. An EMPTY query is a legitimate query and IS dispatched, so an app
+    /// may answer it with most-recently-used candidates rather than nothing.
+    /// Omitted = no live query; the field is a plain id input.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? SearchAction = null,
+
+    /// <summary>LOOKUP INPUTS ONLY. The DECLARED custom-entry axis: may the user commit a
+    /// value that isn't one of the offered candidates? NEVER inferred from behavior —
+    /// choosing somebody to mention is very different from inventing a new tag (different
+    /// ACTS sharing one widget), so the control DECLARES which it is doing.
+    ///
+    /// An invented value stays a homogeneous LookupItem, never a bare string, so no
+    /// union ever arises. AllowCustom:true + no Candidates + labels omitted IS a free-form
+    /// tags input, with NO special case in the renderer.
+    ///
+    /// Whether a value was picked or invented is SERVER-DECIDABLE (the server produced
+    /// every candidate it ever offered, so it tests the id against its own id space).
+    /// There is deliberately no wire marker for provenance — any such marker would be
+    /// client-supplied and therefore untrusted, i.e. a field that LOOKS authoritative and
+    /// isn't.
+    ///
+    /// Dropped from the wire when false (WhenWritingDefault) → ABSENT, matching the TS
+    /// optional `allowCustom?: boolean`. Omitted = false (custom entries rejected; only
+    /// offered candidates commit).</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool AllowCustom = false
 ) : ViewNode;
 
 public record CheckboxNode(
