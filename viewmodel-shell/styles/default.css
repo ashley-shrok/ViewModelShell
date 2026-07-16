@@ -604,6 +604,23 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
    display:none, but the block above would otherwise win on specificity and the
    popup would be permanently visible. */
 .vms-field__popup[hidden] { display: none; }
+/* The lookup's aria-live status regions and its assistive hint: available to
+   assistive tech, invisible on screen. Deliberately NOT display:none and NOT
+   visibility:hidden — both REMOVE the element from the accessibility tree, so a
+   live region styled that way is never announced and the hint is never read.
+   This is the standard visually-hidden clip; it must stay clipped-but-rendered. */
+.vms-field__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .vms-field__option {
   padding: var(--vms-space-xs) var(--vms-space-md);
   font-size: var(--vms-text-md);

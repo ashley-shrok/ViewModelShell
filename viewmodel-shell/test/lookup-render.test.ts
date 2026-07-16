@@ -323,12 +323,17 @@ describe("the lookup arm stays in the decorateField chain", () => {
     expect(input().getAttribute("aria-invalid")).toBe("true");
     const err = container.querySelector(".vms-field__error")!;
     expect(err.getAttribute("role")).toBe("alert");
-    expect(input().getAttribute("aria-describedby")).toBe("vms-owner-error");
+    // Phase 21 (LOOK-05) — `toContain`, not `toBe`: the §7 item 13 assistive
+    // hint is also referenced here until the user's first input. decorateField
+    // SEEDS its describedby list from the attribute the arm already set, so the
+    // error joins the hint rather than clobbering it. Both must be present.
+    expect(input().getAttribute("aria-describedby")).toContain("vms-owner-error");
   });
 
   it("help → wired into aria-describedby for free", () => {
     const { input } = renderLookup({ help: "Who owns this ticket" });
-    expect(input().getAttribute("aria-describedby")).toBe("vms-owner-help");
+    // toContain — see the error test above (the assistive hint shares this slot).
+    expect(input().getAttribute("aria-describedby")).toContain("vms-owner-help");
   });
 
   it("disabled → the native attribute + .vms-field--disabled for free", () => {

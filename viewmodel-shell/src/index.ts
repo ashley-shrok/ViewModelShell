@@ -414,7 +414,27 @@ export interface FieldNode {
    *  `.vms-field--error`, the control's `aria-invalid="true"`, and wires the
    *  message into `aria-describedby`. The view-side complement to the
    *  response-level `rejected` channel — set it on the offending field when you
-   *  build the tree. Omitted = no error shown. */
+   *  build the tree. Omitted = no error shown.
+   *
+   *  **Lookup note (5.2.0, OPEN-5): a SEARCH failure reuses this slot** — if the
+   *  directory query behind a `lookup` / `lookup-multiple` fails, put the message
+   *  here. Do NOT swallow it: react-select actively discards fetch errors
+   *  (`loader.then(callback, () => callback())`), which makes a dead backend
+   *  indistinguishable from "no results" — a direct violation of principle 8
+   *  (nothing important fails quietly), and no surveyed library has a
+   *  search-error state at all. Reusing `error` closes that gap at zero wire
+   *  cost, and §7 item 9 reserves the assertive channel for errors, so a genuine
+   *  search failure is a correct fit for this slot's `role="alert"`.
+   *
+   *  ⚠️ **The known, accepted wart:** this overloads the slot. "The server is
+   *  down" is NOT "your input is invalid", so the `aria-invalid="true"` it sets
+   *  on the combobox is semantically wrong for a search failure; and one slot
+   *  with two meanings COLLIDES if a field has a live search failure and a
+   *  pending validation error at once (last writer wins). Accepted for v1: the
+   *  app owns which message it puts here, the collision needs both conditions
+   *  simultaneously on the same field, and a distinct search-error slot is
+   *  purely additive later. Recorded rather than hidden, so a future phase can
+   *  promote it with the reasoning already written down. */
   error?: string;
   /** Hint/help text rendered below the control as `.vms-field__help` and wired
    *  into the control's `aria-describedby`. Omitted = no hint. */

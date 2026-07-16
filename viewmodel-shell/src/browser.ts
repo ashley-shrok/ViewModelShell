@@ -55,6 +55,19 @@ const noopStateAccess: StateAccess = {
 // up past it and the adapter respects the user reading history instead.
 const FOLLOW_TAIL_STICK_THRESHOLD_PX = 40;
 
+/**
+ * Phase 21 (LOOK-05) — how long the lookup's live region waits for the user to
+ * stop typing before it speaks (§7 item 10; GOV.UK's `statusDebounceMillis`).
+ *
+ * 🚨 NOT the query debounce. The query debounce is ~300ms and lives in field()'s
+ * lookup arm; this is ~4.6x longer and has the opposite audience: the SERVER is
+ * asked while the user types, the USER is told only once they pause. On
+ * Safari/VoiceOver "typing echo can otherwise interrupt announcement of the aria
+ * live content" — i.e. announcing too eagerly means the user hears NEITHER their
+ * own keystrokes nor the status. Do not "unify" the two timers.
+ */
+const LOOKUP_STATUS_DEBOUNCE_MS = 1400;
+
 export class BrowserAdapter implements Adapter {
   private fileRegistry = new Map<string, File>();
   private sa: StateAccess = noopStateAccess;
@@ -90,6 +103,52 @@ export class BrowserAdapter implements Adapter {
   // second render still applies once the import resolves. Instances are
   // mark-swept (destroy()'d + deleted) in render() when the new tree drops them.
   private chartInstances = new Map<string, { canvas: HTMLCanvasElement; chart: any | null; latest: any | null }>();
+  // Phase 21 (LOOK-05) — the lookup's aria-live status regions, keyed by
+  // FieldNode.name. DELIBERATELY PERSISTENT across renders (NOT reset like the
+  // per-render fields below), for exactly the reason chartInstances is: these
+  // NODES must SURVIVE render()'s innerHTML wipe. They are re-appended each
+  // render, never rebuilt.
+  //
+  // 🚨 IF YOU RESET THIS MAP, EVERY ANNOUNCEMENT SILENTLY STOPS AND NOTHING
+  // LOOKS WRONG. A screen reader only announces changes to an element it has
+  // ALREADY REGISTERED for. A region re-created each render is registered,
+  // wiped, and re-created — so it is never heard from again, while the DOM
+  // still contains a perfect-looking role="status" div and every structural
+  // test still passes. This is the one a11y failure that is INVISIBLE rather
+  // than merely unverified, and on Safari/VoiceOver the live region is the ONLY
+  // thing that works at all (the ARIA plumbing conveys nothing there — verified
+  // against the APG's own reference example). The comment on chartInstances
+  // below exists for the same reason: the next person's instinct is to "tidy"
+  // these into the per-render group.
+  //
+  // Two regions, not one (§7 item 12): writing IDENTICAL text into one live
+  // region twice is not a change and is NOT re-announced — re-highlight the
+  // same option, hear silence. `next` alternates them, which is why the value
+  // is an object rather than a bare element (same shape reason as the chart's
+  // {canvas, chart, latest} triple). `timer` is the ~1400ms status debounce
+  // (§7 item 10 — GOV.UK's statusDebounceMillis): a THIRD, independent timer,
+  // distinct from the 300ms query debounce AND from the dispatch lane, because
+  // on Safari/VoiceOver "typing echo can otherwise interrupt announcement of the
+  // aria live content". Do not unify the three; they have different jobs.
+  // `hintShown` tracks §7 item 13's assistive hint, which is dropped after the
+  // first input so it is not a per-keystroke tax.
+  //
+  // Keyed by n.name — a deliberate, documented DIVERGENCE from the chart's
+  // title+ordinal scheme (and NO ordinal counter: do not cargo-cult
+  // chartKeyCounter). FieldNode.name is already unique-ish per field, stable
+  // across renders, and is already the id basis for the control itself
+  // (`inp.id = vms-${n.name}`).
+  //
+  // Mark-swept in render() against lookupKeysSeen, exactly as chartInstances is:
+  // a lookup dropped from the tree must drop its regions rather than leak them
+  // across a long session.
+  private liveRegions = new Map<string, {
+    a: HTMLElement;
+    b: HTMLElement;
+    next: "a" | "b";
+    timer: ReturnType<typeof setTimeout> | undefined;
+    hintShown: boolean;
+  }>();
   // Phase 21 (LOOK-02) — pending ~300ms query-debounce timers, keyed by
   // FieldNode.name. DELIBERATELY PERSISTENT across renders (NOT reset like the
   // per-render fields below), for a reason specific to this control: a lookup
@@ -111,7 +170,15 @@ export class BrowserAdapter implements Adapter {
   // and CLEAR the user's selection. Cleared at the bottom of every render().
   //
   // 🚨 OPEN is preserved. ACTIVE IS NOT — see the arm.
-  private lookupOpenSnapshot: Map<string, boolean> = new Map();
+  //
+  // `querying` rides along: it marks "the user has typed and has not yet
+  // committed or dismissed" — i.e. an ACTIVE SEARCH SESSION. It is what lets
+  // results arriving from the server open the popup (a first search has no
+  // prior options, so the input listener's own open cannot fire) and what gates
+  // the live region's result announcements, so a lookup that merely re-renders
+  // for unrelated reasons never narrates its candidate count at an AT user out
+  // of nowhere.
+  private lookupOpenSnapshot: Map<string, { open: boolean; querying: boolean }> = new Map();
   // Per-render disambiguator for chart keys (title-derived or anonymous). Reset
   // at the TOP of every render() (like sectionKeyCounter) so snapshot keys and
   // rebuild keys compute identically across a render pass.
@@ -195,10 +262,15 @@ export class BrowserAdapter implements Adapter {
     // no preservation the popup the user is typing into snaps shut every time
     // and the control is unusable. This was invisible before the search cadence
     // existed — nothing re-rendered a lookup mid-interaction.
-    const lookupOpenMap = new Map<string, boolean>();
+    const lookupOpenMap = new Map<string, { open: boolean; querying: boolean }>();
     this.container.querySelectorAll<HTMLElement>("[data-vms-lookup-key]").forEach(el => {
       const key = el.dataset.vmsLookupKey;
-      if (key != null) lookupOpenMap.set(key, !el.hidden);
+      if (key != null) {
+        lookupOpenMap.set(key, {
+          open: !el.hidden,
+          querying: el.dataset.vmsLookupQuerying === "true",
+        });
+      }
     });
     this.lookupOpenSnapshot = lookupOpenMap;
     this.lookupKeysSeen = new Set();
@@ -240,6 +312,19 @@ export class BrowserAdapter implements Adapter {
       if (!this.lookupKeysSeen.has(key)) {
         clearTimeout(timer);
         this.searchTimers.delete(key);
+      }
+    }
+
+    // Phase 21 (LOOK-05) — mark-sweep the live regions against the same key set,
+    // exactly as the chart sweep above does: a lookup removed from the new tree
+    // drops its two region nodes (and any pending status announcement) rather
+    // than leaking them for the life of the session. Swept POST-rebuild, like
+    // the charts and for the same reason — a PERSISTING lookup's regions must
+    // survive the innerHTML wipe to be re-appended by field().
+    for (const [key, entry] of this.liveRegions) {
+      if (!this.lookupKeysSeen.has(key)) {
+        if (entry.timer != null) clearTimeout(entry.timer);
+        this.liveRegions.delete(key);
       }
     }
 
@@ -1412,6 +1497,42 @@ export class BrowserAdapter implements Adapter {
       let open = false;
       let activeIndex = -1;
 
+      // Phase 21 (LOOK-05) — the two aria-live regions. Fetched from the
+      // PERSISTENT map and RE-APPENDED (never rebuilt): these exact node objects
+      // predate this render and must outlive it, or the assistive tech's
+      // registration dies with them and every announcement stops silently. This
+      // is the chartInstances idiom; see lookupLiveRegions().
+      const live = this.lookupLiveRegions(n.name);
+      const announce = (message: string): void => this.announceLookup(n.name, message);
+
+      // §7 item 13 — the assistive hint, wired via aria-describedby and REMOVED
+      // after the first input so it is not a per-keystroke tax. `hintShown`
+      // lives on the persistent entry because "the user has typed here before"
+      // must survive the re-render their own typing causes.
+      //
+      // Set on the input directly rather than passed to decorateField: that
+      // method seeds its own describedBy list from this attribute (see there),
+      // so a lookup carrying `help` and/or `error` keeps all of them.
+      let hintEl: HTMLElement | undefined;
+      if (!live.hintShown) {
+        hintEl = document.createElement("div");
+        hintEl.id = `vms-${n.name}-hint`;
+        hintEl.className = "vms-field__live";
+        hintEl.textContent =
+          "When results are available use up and down arrows to review and enter to select.";
+        inp.setAttribute("aria-describedby", hintEl.id);
+      }
+
+      // "The user is mid-search" — survives the re-render the search causes, via
+      // the same pre-wipe snapshot that preserves popup-open.
+      const snapshot = this.lookupOpenSnapshot.get(n.name);
+      let querying = snapshot?.querying === true;
+      const setQuerying = (v: boolean): void => {
+        querying = v;
+        popup.dataset.vmsLookupQuerying = String(v);
+      };
+      setQuerying(querying);
+
       const setActive = (i: number): void => {
         activeIndex = i;
         // §7 item 32 — keep aria-selected accurate on EVERY option (true AND
@@ -1424,12 +1545,23 @@ export class BrowserAdapter implements Adapter {
         // §7 item 2 — present ONLY while an option is active; removed otherwise.
         if (activeEl) inp.setAttribute("aria-activedescendant", activeEl.id);
         else inp.removeAttribute("aria-activedescendant");
+        // §7 items 11 + 32 — the highlight is ALSO spoken. The ARIA above is set
+        // because it is correct and cheap, but it is NOT the delivery mechanism:
+        // aria-selected is "mostly not announced when true", and on
+        // Safari/VoiceOver the ARIA path conveys nothing at all. Every fact the
+        // ARIA encodes must also reach the user as live-region TEXT.
+        if (activeEl) {
+          announce(`${activeEl.textContent} ${i + 1} of ${optionEls.length} is highlighted`);
+        }
       };
       const setOpen = (v: boolean): void => {
         open = v;
         popup.hidden = !v;
         inp.setAttribute("aria-expanded", String(v));
-        if (!v) setActive(-1);
+        // Closing the popup ends the search session: the user has committed,
+        // escaped, or tabbed away. Anything they hear after that is noise about
+        // a question they stopped asking.
+        if (!v) { setActive(-1); setQuerying(false); }
       };
 
       // ── POPUP-OPEN PRESERVATION (Phase 21, LOOK-02) ──────────────────────
@@ -1465,8 +1597,26 @@ export class BrowserAdapter implements Adapter {
       //
       // An empty candidate set stays closed: there is nothing to show, matching
       // the input listener's own `optionEls.length > 0` gate below.
-      if (this.lookupOpenSnapshot.get(n.name) === true && optionEls.length > 0) {
+      //
+      // `querying` opens it too, and that is NOT redundant with `open`: on the
+      // FIRST search there are no prior options, so the input listener's own
+      // `if (optionEls.length > 0) setOpen(true)` cannot fire and the popup was
+      // never open to preserve. Without this, the results of the very first
+      // search would arrive invisibly and the user would have to press ArrowDown
+      // to discover the answer they just asked for.
+      if ((snapshot?.open === true || querying) && optionEls.length > 0) {
         setOpen(true);
+      }
+
+      // §7 item 11 — results arriving is a fact the user must be TOLD, not just
+      // shown. Gated on `querying` so that a re-render for unrelated reasons (a
+      // poll tick, another action) never narrates a candidate count out of
+      // nowhere; and debounced 1400ms, so a fast response supersedes its own
+      // pending "Loading results" and only the answer is spoken.
+      if (querying) {
+        announce(optionEls.length > 0
+          ? `${optionEls.length} results are available.`
+          : "No search results");
       }
 
       /** Accept the candidate at `i` — the ONLY path that writes the bind. */
@@ -1550,6 +1700,13 @@ export class BrowserAdapter implements Adapter {
           // state must be what the box actually says when the request goes out.
           this.writeBind(n.searchBind, inp.value);
 
+          // §7 item 11 — announce LOADING. An async combobox that is silent
+          // during the fetch leaves AT users with no signal at all: they cannot
+          // tell a slow server from a dead one. A fast response supersedes this
+          // inside the 1400ms window, so it is only ever heard when the wait is
+          // actually long enough to be worth mentioning.
+          announce("Loading results");
+
           // 🚨 D11 — THE DISPATCH. `blocking: false` is RENDERER-FORCED: the
           // spread puts it LAST so it overrides whatever the app declared, and
           // the app cannot opt out.
@@ -1614,7 +1771,16 @@ export class BrowserAdapter implements Adapter {
         // changes, and never let list-typeahead swallow typing. Typing is the
         // user's; the list does not get to eat it.
         setActive(-1);
+        // The user is now mid-search: results that arrive should open the popup
+        // and be announced. Set BEFORE setOpen — setOpen(false) clears it, and
+        // this path never closes.
+        setQuerying(true);
         if (optionEls.length > 0) setOpen(true);
+        // §7 item 13 — the assistive hint has done its job the moment the user
+        // starts typing; from here on it would be a per-keystroke tax read out
+        // on every visit to the field.
+        live.hintShown = true;
+        hintEl?.remove();
         scheduleSearch();
       });
 
@@ -1758,6 +1924,13 @@ export class BrowserAdapter implements Adapter {
 
       wrapper.appendChild(inp);
       wrapper.appendChild(popup);
+      if (hintEl) wrapper.appendChild(hintEl);
+      // 🚨 RE-APPEND, never rebuild. These two nodes were detached by render()'s
+      // innerHTML wipe, NOT destroyed — the same move the chart makes with its
+      // canvas. Creating fresh ones here would look identical in the DOM and
+      // announce nothing, forever.
+      wrapper.appendChild(live.a);
+      wrapper.appendChild(live.b);
     } else if (n.inputType === "file") {
       const inp = document.createElement("input");
       inp.type = "file";
@@ -1894,6 +2067,78 @@ export class BrowserAdapter implements Adapter {
    *  render help + error text below it, wiring aria-describedby / aria-invalid.
    *  Runs on the main field path (the hidden + checkbox-FieldNode variants
    *  return before this). */
+  /**
+   * The lookup's two aria-live status regions for `key`, created ONCE and
+   * reused forever after (§7 items 8 + 12).
+   *
+   * 🚨 This is the `chartInstances` idiom, not a new mechanism: the nodes are
+   * DETACHED by render()'s innerHTML wipe, NOT destroyed, and field() re-appends
+   * these same objects on every render. That is the entire point — a screen
+   * reader's registration is held against the OBJECT, so a structurally
+   * identical replacement is a region it has never heard of, and announcements
+   * stop silently while the DOM still looks perfect.
+   *
+   * Created EMPTY, before any results exist (§7 item 8): creating an element and
+   * injecting its text in the same tick announces NOTHING, because there was no
+   * registered element to observe a change on.
+   */
+  private lookupLiveRegions(key: string): {
+    a: HTMLElement; b: HTMLElement; next: "a" | "b";
+    timer: ReturnType<typeof setTimeout> | undefined; hintShown: boolean;
+  } {
+    const existing = this.liveRegions.get(key);
+    if (existing) return existing;
+
+    const make = (slot: "a" | "b"): HTMLElement => {
+      const el = document.createElement("div");
+      // §7 item 9 — role="status" IS politeness=polite. Never assertive:
+      // assertive interrupts the user's own typing echo, and is reserved for
+      // errors (which arrive via decorateField's role="alert" region instead).
+      el.setAttribute("role", "status");
+      el.className = "vms-field__live";
+      el.dataset.vmsLive = key;
+      el.dataset.vmsLiveSlot = slot;
+      el.textContent = "";
+      return el;
+    };
+    const entry = { a: make("a"), b: make("b"), next: "a" as "a" | "b", timer: undefined, hintShown: false };
+    this.liveRegions.set(key, entry);
+    return entry;
+  }
+
+  /**
+   * Announce `message` in `key`'s live region, debounced ~1400ms (§7 item 10 —
+   * GOV.UK's `statusDebounceMillis`).
+   *
+   * 🚨 THIS IS A THIRD, INDEPENDENT TIMER. It is NOT the 300ms query debounce
+   * and it is NOT the dispatch lane. The three have different jobs and must not
+   * be "unified": this one exists because on Safari/VoiceOver "typing echo can
+   * otherwise interrupt announcement of the aria live content", so the status
+   * must wait for the user to stop typing. It is ~4.6x longer than the query
+   * debounce ON PURPOSE — the server is asked while the user types; the user is
+   * TOLD only once they pause.
+   *
+   * Trailing debounce: a newer message REPLACES a pending one. That is what
+   * makes a fast response supersede its own "Loading results" — the loading
+   * message is already untrue by the time it would have been spoken.
+   *
+   * Alternates the two regions (§7 item 12) and clears the other, so identical
+   * consecutive messages still register as a change and are re-announced.
+   */
+  private announceLookup(key: string, message: string): void {
+    const entry = this.liveRegions.get(key);
+    if (entry == null) return;
+    if (entry.timer != null) clearTimeout(entry.timer);
+    entry.timer = setTimeout(() => {
+      entry.timer = undefined;
+      const target = entry.next === "a" ? entry.a : entry.b;
+      const other = entry.next === "a" ? entry.b : entry.a;
+      other.textContent = "";
+      target.textContent = message;
+      entry.next = entry.next === "a" ? "b" : "a";
+    }, LOOKUP_STATUS_DEBOUNCE_MS);
+  }
+
   private decorateField(wrapper: HTMLElement, n: FieldNode): void {
     const control = wrapper.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
       ".vms-field__input",
@@ -1916,7 +2161,14 @@ export class BrowserAdapter implements Adapter {
         (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) {
       control.maxLength = n.maxLength;
     }
+    // Seed from any aria-describedby an inputType arm already wired (Phase 21:
+    // the lookup's §7 item 13 assistive hint). The control is freshly created on
+    // every render, so this cannot accumulate stale ids — and without the seed,
+    // the unconditional set below would silently CLOBBER the arm's hint the
+    // moment the field also carried a `help` or an `error`.
     const describedBy: string[] = [];
+    const preset = control?.getAttribute("aria-describedby");
+    if (preset != null && preset !== "") describedBy.push(...preset.split(" "));
     if (n.help != null && n.help !== "") {
       const helpEl = document.createElement("div");
       helpEl.className = "vms-field__help";
