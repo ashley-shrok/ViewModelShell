@@ -90,6 +90,28 @@ export class BrowserAdapter implements Adapter {
   // second render still applies once the import resolves. Instances are
   // mark-swept (destroy()'d + deleted) in render() when the new tree drops them.
   private chartInstances = new Map<string, { canvas: HTMLCanvasElement; chart: any | null; latest: any | null }>();
+  // Phase 21 (LOOK-02) — pending ~300ms query-debounce timers, keyed by
+  // FieldNode.name. DELIBERATELY PERSISTENT across renders (NOT reset like the
+  // per-render fields below), for a reason specific to this control: a lookup
+  // dispatches on its OWN keystrokes, so a re-render lands mid-typing on EVERY
+  // search. A timer held in the field()-closure would be unreachable from the
+  // NEXT render's closure, so a keystroke after a re-render could not cancel
+  // the debounce scheduled before it — and both would fire. Keying by name on
+  // the adapter makes cancel-across-render coherent. Mark-swept in render()
+  // (alongside chartInstances) so a lookup dropped from the tree cannot fire a
+  // search for a field that no longer exists.
+  private searchTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  // Phase 21 (LOOK-02) — popup-open snapshot for the lookup combobox, keyed by
+  // FieldNode.name. Captured by render() BEFORE this.container.innerHTML = ""
+  // by walking [data-vms-lookup-key] popups; consumed IN field()'s lookup arm
+  // (not by a post-render DOM pass, unlike the [data-section-key] details
+  // restore below) because the arm's `open` CLOSURE VARIABLE must agree with
+  // the DOM: setting popup.hidden from outside would leave the closure thinking
+  // it is closed, and Escape would then take its popup-already-closed branch
+  // and CLEAR the user's selection. Cleared at the bottom of every render().
+  //
+  // 🚨 OPEN is preserved. ACTIVE IS NOT — see the arm.
+  private lookupOpenSnapshot: Map<string, boolean> = new Map();
   // Per-render disambiguator for chart keys (title-derived or anonymous). Reset
   // at the TOP of every render() (like sectionKeyCounter) so snapshot keys and
   // rebuild keys compute identically across a render pass.
@@ -98,6 +120,12 @@ export class BrowserAdapter implements Adapter {
   // every render(); render() mark-sweeps any chartInstances key NOT in this set
   // (a ChartNode removed from the new tree → its Chart instance is destroyed).
   private chartKeysSeen = new Set<string>();
+  // Per-render set of every lookup key rendered this pass. Reset at the TOP of
+  // every render(); render() mark-sweeps the persistent lookup maps
+  // (searchTimers, and liveRegions below) against it, so a lookup removed from
+  // the tree drops its pending timer and its live regions rather than leaking
+  // them across a long session. Same idiom as chartKeysSeen above.
+  private lookupKeysSeen = new Set<string>();
 
   constructor(private container: HTMLElement) {}
 
@@ -156,6 +184,25 @@ export class BrowserAdapter implements Adapter {
     this.detailsOpenSnapshot = openMap;
     this.sectionKeyCounter = new Map();
 
+    // Phase 21 (LOOK-02) — snapshot lookup popup-open state by field name.
+    // Same capture-before-the-wipe contract as the details snapshot above, but
+    // RESTORED INSIDE field()'s lookup arm rather than by a post-render walk
+    // (see the field declaration for why: the closure and the DOM must not be
+    // allowed to disagree).
+    //
+    // Why this pass exists at all: the popup is DOM-local state, and the ~300ms
+    // debounced search means a re-render lands MID-TYPING on every search. With
+    // no preservation the popup the user is typing into snaps shut every time
+    // and the control is unusable. This was invisible before the search cadence
+    // existed — nothing re-rendered a lookup mid-interaction.
+    const lookupOpenMap = new Map<string, boolean>();
+    this.container.querySelectorAll<HTMLElement>("[data-vms-lookup-key]").forEach(el => {
+      const key = el.dataset.vmsLookupKey;
+      if (key != null) lookupOpenMap.set(key, !el.hidden);
+    });
+    this.lookupOpenSnapshot = lookupOpenMap;
+    this.lookupKeysSeen = new Set();
+
     // Phase 10 (FITS-01) — disconnect every ResizeObserver registered by the
     // prior render's fits() calls before the tree is rebuilt (leak prevention).
     // Same per-render reset model as the focus/scroll/details snapshots above.
@@ -181,6 +228,18 @@ export class BrowserAdapter implements Adapter {
       if (!this.chartKeysSeen.has(key)) {
         entry.chart?.destroy();
         this.chartInstances.delete(key);
+      }
+    }
+
+    // Phase 21 (LOOK-02) — mark-sweep the lookup's pending query-debounce
+    // timers against the keys rendered this pass, exactly as the chart sweep
+    // above does. A lookup removed from the new tree must not fire the search
+    // it had scheduled: the field is gone, so the round trip is pointless, and
+    // its response would be applied to a control that no longer exists.
+    for (const [key, timer] of this.searchTimers) {
+      if (!this.lookupKeysSeen.has(key)) {
+        clearTimeout(timer);
+        this.searchTimers.delete(key);
       }
     }
 
@@ -233,6 +292,7 @@ export class BrowserAdapter implements Adapter {
     });
     this.detailsOpenSnapshot.clear();
     this.sectionKeyCounter.clear();
+    this.lookupOpenSnapshot.clear();
   }
 
   navigate(url: string): void {
@@ -1191,6 +1251,9 @@ export class BrowserAdapter implements Adapter {
       const isMulti = n.inputType === "lookup-multiple";
       wrapper.classList.add("vms-field--lookup");
       if (isMulti) wrapper.classList.add("vms-field--lookup-multiple");
+      // Phase 21 (LOOK-02) — mark this key rendered so render()'s mark-sweep
+      // keeps this lookup's pending debounce timer and live regions alive.
+      this.lookupKeysSeen.add(n.name);
 
       // [vms:lookup-no-searchbind] — a searchAction with no searchBind
       // dispatches the query but the server can never READ what was typed: a
@@ -1299,6 +1362,8 @@ export class BrowserAdapter implements Adapter {
       popup.setAttribute("role", "listbox");
       popup.setAttribute("aria-label", n.label ?? n.name);
       popup.hidden = true;
+      // The key render()'s pre-wipe popup-open snapshot walks.
+      popup.dataset.vmsLookupKey = n.name;
 
       const optionEls: HTMLElement[] = [];
       // 🚨 D12 — CANDIDATES ARE PRESENTED AS GIVEN. This forEach SORTS NOTHING,
@@ -1367,6 +1432,43 @@ export class BrowserAdapter implements Adapter {
         if (!v) setActive(-1);
       };
 
+      // ── POPUP-OPEN PRESERVATION (Phase 21, LOOK-02) ──────────────────────
+      //
+      // 🚨 PRESERVE OPEN. DO NOT PRESERVE ACTIVE. The two lines below look like
+      // they are missing a third; they are not.
+      //
+      // Why open is preserved: this arm's popup state is DOM-local, and the
+      // ~300ms debounced search means a re-render lands MID-TYPING on EVERY
+      // search. Without this, the popup the user is typing into snaps shut
+      // ~300ms after every keystroke and the control is unusable. (The bug was
+      // invisible before the search cadence existed, because nothing re-rendered
+      // a lookup mid-interaction — which is exactly why it had to be solved
+      // here, with the cadence that exposes it.)
+      //
+      // Why active is NOT preserved: `activeIndex` starts at -1 on every render,
+      // and that is HALF OF §7 item 14 — we never auto-highlight when results
+      // arrive. Restoring the highlight here is the natural-looking completion
+      // of this pass and it would resurrect the exact React Aria NVDA failure
+      // item 14 exists to prevent: with an option auto-focused, "character
+      // deletions and text cursor movement in the ComboBox input weren't being
+      // announced at all". It bites async HARDEST — results land mid-typing, so
+      // the restore would fire on precisely the renders where the user is still
+      // editing. Restoring open costs nothing; restoring active silently breaks
+      // the announcement of the user's own typing.
+      //
+      // Restored HERE rather than in a post-render DOM walk (the [data-section-key]
+      // details pattern) because `open` is a CLOSURE variable: setting
+      // popup.hidden from outside would leave the closure believing the popup is
+      // closed, and Escape would then take its popup-already-closed branch and
+      // CLEAR the user's selection — silent data loss on a keypress that meant
+      // "get this out of my way". The closure and the DOM must never disagree.
+      //
+      // An empty candidate set stays closed: there is nothing to show, matching
+      // the input listener's own `optionEls.length > 0` gate below.
+      if (this.lookupOpenSnapshot.get(n.name) === true && optionEls.length > 0) {
+        setOpen(true);
+      }
+
       /** Accept the candidate at `i` — the ONLY path that writes the bind. */
       const commit = (i: number): void => {
         const c = (n.candidates ?? [])[i];
@@ -1414,6 +1516,90 @@ export class BrowserAdapter implements Adapter {
         });
       });
 
+      // ── THE LIVE QUERY (Phase 21, LOOK-02 / D4 / D11) ─────────────────────
+      //
+      // VMS's FIRST live-query dispatch cadence. Every other text field in this
+      // file dispatches on Enter ONLY (the text arm below; the table's column
+      // filter). This is the one control that asks the server a question while
+      // the user is still typing.
+      //
+      // 🚨 300ms — the survey's convention, not a guess: ServiceNow's
+      // `glide.xmlhttp.ac_wait_time` is 250ms; PrimeReact's `delay` is 300ms.
+      // (This is the QUERY debounce. It is NOT the ~1400ms live-region status
+      // debounce, which is a separate, much longer timer with a different job —
+      // do not "unify" them.)
+      const SEARCH_DEBOUNCE_MS = 300;
+
+      const scheduleSearch = (): void => {
+        const searchAction = n.searchAction;
+        if (searchAction == null) return;
+
+        // Cancel the pending trip and reschedule: only the LAST keystroke in a
+        // burst fires. The timer lives on the ADAPTER (keyed by n.name), not in
+        // this closure — a re-render replaces the closure, and a timer the new
+        // closure cannot reach is a timer a subsequent keystroke cannot cancel.
+        const pending = this.searchTimers.get(n.name);
+        if (pending != null) clearTimeout(pending);
+
+        this.searchTimers.set(n.name, setTimeout(() => {
+          this.searchTimers.delete(n.name);
+          // Re-read the value FRESH at FIRE time, and flush it to state HERE —
+          // not at schedule time. Same defensive reasoning as the text arm's
+          // Enter handler: the value can move after the timer is scheduled (an
+          // autofill or IME commit that never fired `input`), and the dispatched
+          // state must be what the box actually says when the request goes out.
+          this.writeBind(n.searchBind, inp.value);
+
+          // 🚨 D11 — THE DISPATCH. `blocking: false` is RENDERER-FORCED: the
+          // spread puts it LAST so it overrides whatever the app declared, and
+          // the app cannot opt out.
+          //
+          // Why the framework takes this decision away from the app:
+          //
+          // 1. `action.blocking === false` is the ENTIRE opt-in to the v4.2
+          //    non-blocking lane (index.ts, dispatch()). Nothing else selects it.
+          // 2. An app that forgets it — or leaves it undefined, which classifies
+          //    as BLOCKING — busy-locks the WHOLE PAGE on every keystroke: the
+          //    framework applies `.vms-busy` (pointer-events: none) for the
+          //    duration of any user-initiated dispatch. That failure is severe,
+          //    SILENT AT AUTHOR TIME, and only visible when someone types.
+          // 3. There is no coherent app that wants a blocking search. A search
+          //    query is DEFINITIONALLY a background question, so this isn't a
+          //    choice worth exposing — the same instinct as the framework owning
+          //    the debounce and the ordering rather than asking the app to.
+          // 4. Synthesizing the field here is IN-CONTRACT, not a hack:
+          //    ActionEvent.blocking's own TSDoc says it is "read PURELY
+          //    client-side" and "never rides inside the `_action` POST payload".
+          //
+          // 🚨 WHAT THIS ONE LINE BUYS, AND WHAT MUST NEVER BE RE-IMPLEMENTED
+          // HERE. The lane already guarantees all four, and this control is its
+          // first real consumer — it CALLS the lane, it does not touch it:
+          //   • Stale discard (`seq >= appliedSeq`) — a slow search response
+          //     landing after a newer one is dropped. This IS react-select's
+          //     `if (request !== lastRequest.current) return;`, already built
+          //     and already tested.
+          //   • Blocking is authoritative — the user PICKING an option is never
+          //     clobbered by a background search response that lands after it.
+          //   • Refire-queued discard — if a newer search is already queued, the
+          //     in-flight response is dropped rather than applied-then-
+          //     superseded, so stale candidates never flicker into the popup.
+          //   • Latest-wins coalescing — at most ONE extra round trip fires once
+          //     the in-flight one resolves, carrying the LATEST query. Overwrite,
+          //     never append.
+          // Any `pendingSearch` / `searchSeq` / `lastSearchRequest` field added
+          // to ViewModelShell is a parallel mechanism that will drift from the
+          // lane it duplicates. Reject on sight.
+          //
+          // The debounce belongs HERE, in browser.ts, and not in the lane:
+          // `setTimeout` is an allowed core universal so a core debounce would
+          // PASS check:core-globals — it still does not belong there. It is a
+          // DOM-input-cadence concern, it belongs with the `input` listener that
+          // owns the timer, and in core it would force the TUI to inherit a
+          // cadence it has no use for.
+          on({ ...searchAction, blocking: false });
+        }, SEARCH_DEBOUNCE_MS));
+      };
+
       inp.addEventListener("input", () => {
         // 🚨 Written UNCONDITIONALLY — NEVER gated on a non-empty value. An
         // EMPTY query is a legitimate query (D4/OPEN-6): it is how an app
@@ -1429,6 +1615,7 @@ export class BrowserAdapter implements Adapter {
         // user's; the list does not get to eat it.
         setActive(-1);
         if (optionEls.length > 0) setOpen(true);
+        scheduleSearch();
       });
 
       inp.addEventListener("keydown", (e) => {
