@@ -2,8 +2,8 @@
 // sign-off page (LOOK-03 / LOOK-06 / LOOK-07, Plan 21-09).
 //
 // A real-bundle, real-CSS human-verification harness for the two new inputTypes
-// shipped in Phase 21 — `lookup` + `lookup-multiple` — plus the live-query
-// dispatch lane (VMS's first). It drives the REAL shipped viewmodel-shell
+// shipped in Phase 21 — `lookup` + `lookup-multiple` — plus Enter-to-search.
+// It drives the REAL shipped viewmodel-shell
 // browser bundle (Vite-aliased to ../../viewmodel-shell/src) and the REAL
 // shipped default.css + all 12 themes (served verbatim below), so Ashley's
 // visual + interactive sign-off is meaningful — nothing here is hand-mocked.
@@ -35,8 +35,8 @@ import {
 
 // ─── The directory (the "database table" a lookup describes a row of) ─────────
 //
-// ~120 people: large enough that (a) the 300ms debounce is perceptible against
-// the simulated latency, and (b) the D7 cap actually fires on a broad query.
+// ~120 people: large enough that (a) the round trip is perceptible against the
+// simulated latency, and (b) the D7 cap actually fires on a broad query.
 
 const FIRST = [
   "Sally", "Omar", "Priya", "Dmitri", "Naomi", "Kwame", "Ingrid", "Hiro",
@@ -280,16 +280,18 @@ function buildVm(state: LookupState): ViewNode {
       // ── 2. Live search from cold + the D7 cap ─────────────────────────────
       {
         type: "section",
-        heading: "2. Search-as-you-type — the live-query lane, and the visible cap",
+        heading: "2. Enter-to-search — an ordinary blocking action, and the visible cap",
         variant: "card",
         children: [
           note(
-            "Starts empty. Typing dispatches a DEBOUNCED (~300ms) background " +
-            "search — the page must never grey out or lock while you type " +
-            "(searchAction is renderer-forced non-blocking, D11). This directory " +
-            `holds ${DIRECTORY_SIZE} people and caps at ${CAP} results. Try “a” ` +
-            "(over cap), then “Nakamura” (a real hit), then “zzzz” (no matches) — " +
-            "each is a DIFFERENT, unambiguous signal.",
+            "Starts empty. Type, then press ENTER to search — typing alone " +
+            "dispatches nothing (searchAction is an ORDINARY BLOCKING action, " +
+            "exactly like a table's column filter; D4/D11 reversed). Nothing " +
+            "re-renders under your cursor, because the only re-render is the one " +
+            `you asked for. This directory holds ${DIRECTORY_SIZE} people and ` +
+            `caps at ${CAP} results. Try “a” (over cap), then “Nakamura” (a real ` +
+            "hit), then “zzzz” (no matches) — each is a DIFFERENT, unambiguous " +
+            "signal. Press Enter on an EMPTY box for the most-recently-used path.",
           ),
           {
             type: "field",
@@ -450,12 +452,14 @@ validated(buildVm(initialState()));
 
 /** Simulated directory latency. NOT padding — it is what makes the property
  *  under review OBSERVABLE. With an in-memory 120-row search the round trip is
- *  ~1ms, so a busy-lock would flash by unseen and "the page never greys out
- *  while you type" (D11's renderer-forced non-blocking searchAction) would be
- *  unfalsifiable by eye. At ~350ms an in-flight search is plainly visible: if
- *  the lane were blocking, the reviewer would SEE the page lock on every
- *  keystroke. It also keeps the ~300ms debounce and the network legible as two
- *  distinct effects (type → 300ms quiet → ~350ms fetch → results). */
+ *  ~1ms, so the search would appear instantaneous and the reviewer could not
+ *  see WHICH cadence is running. At ~350ms the Enter-to-search contract is
+ *  plainly visible by eye: typing produces NOTHING (no network, no re-render),
+ *  and one Enter produces exactly one visible round trip whose results land
+ *  where the cursor expects them. `searchAction` is an ordinary BLOCKING action
+ *  (D4/D11 reversed), so the page correctly shows its in-flight busy state for
+ *  ~350ms — that lock is the dispatch guard serializing the trip, which is
+ *  precisely what makes a stale response impossible. */
 const SEARCH_LATENCY_MS = 350;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -464,9 +468,9 @@ const actionHandler = createAction<LookupState>(async (payload) => {
   await sleep(SEARCH_LATENCY_MS);
   switch (payload.name) {
     // Every search action is a no-op on state: the query already round-tripped
-    // via `searchBind`, and the view is a pure function of state, so buildVm
-    // simply re-runs the search. That IS the live-query lane — there is nothing
-    // else to do here.
+    // via `searchBind` (keystrokes write it; Enter dispatches), and the view is
+    // a pure function of state, so buildVm simply re-runs the search. There is
+    // nothing else to do here.
     case "search-owner":
     case "search-assignee":
     case "search-watchers":
@@ -520,8 +524,8 @@ const skillHandler = createAgentSkillHandler({
     "a `lookup-multiple` chip field, a `lookup-multiple` with allowCustom:true " +
     "and no directory (a free-form tags input), and a lookup whose directory " +
     "fails on any query containing 'fail' (the search-error state, surfaced via " +
-    "FieldNode.error). The search-* actions drive the debounced live-query lane; " +
-    "each is a state no-op because the query round-trips via searchBind.",
+    "FieldNode.error). The search-* actions are ordinary blocking actions fired " +
+    "on Enter; each is a state no-op because the query round-trips via searchBind.",
 });
 
 // ─── HTTP server ──────────────────────────────────────────────────────────────
