@@ -646,6 +646,121 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   color: var(--vms-text);
 }
 
+/* ── lookup-multiple chips (Phase 21, LOOK-03) ──
+   The selected set, rendered OUTSIDE the combobox per SLDS's precedent (D2):
+   single-select renders its selection INSIDE the input and no chip element
+   exists at all; multi's is a separate group with its own focus model.
+   Structure is role=list/listitem + a real <button> (design §7 item 24) — see
+   browser.ts. This is presentation only; nothing here is on the wire. */
+.vms-field__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vms-space-2xs);
+  /* Reset the <ul>. NOTE this is exactly why browser.ts sets role="list"
+     EXPLICITLY: `list-style: none` strips the implicit list/listitem roles in
+     Safari/VoiceOver, so a styled <ul> silently stops being a list — the
+     accessibility regression is caused BY this line and repaired in the
+     renderer. Do not "clean up" that seemingly-redundant role. */
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.vms-field__chip {
+  /* The .vms-badge private-tone technique (default.css, .vms-badge): ONE private
+     custom property holds the working color and the fill, text and border all
+     derive from it, so EVERY THEME RECOLORS AUTOMATICALLY — --vms-text and
+     --vms-surface are theme-owned. Retoning a chip would be one line. */
+  --_chip-tone: var(--vms-text);
+  display: inline-flex;
+  align-items: center;
+  /* Hug content in ANY parent layout. Carried over from .vms-badge's comment
+     (written in 5.1.2 for exactly this failure mode) because the chip hits it
+     IDENTICALLY: a chip is semantically inline, but as a flex item it is
+     BLOCKIFIED (inline-flex → flex) and the chip row's align-items would then
+     stretch it. A definite cross-size opts out of that stretch —
+     align-items:stretch only stretches items whose cross size is `auto`.
+     Deliberately NOT align-self:start, which would top-anchor the chip since a
+     child's align-self beats the parent's align-items. */
+  width: fit-content;
+  max-width: 100%;
+  gap: var(--vms-space-2xs);
+  font-size: var(--vms-text-xs);
+  font-weight: 600;
+  /* Not the badge's `1`: a chip's text WRAPS (below), and line-height:1 makes
+     wrapped lines collide. */
+  line-height: 1.35;
+  /* Tighter on the right — the remove button carries its own hit area. */
+  padding: 0.2em 0.3em 0.2em 0.6em;
+  border-radius: 999px;
+  /* 🚨 DELIBERATELY NOT `white-space: nowrap` — the ONE thing not copied from
+     .vms-badge, and the easiest to reintroduce by "consistency". Design §7 item
+     33: chip text must WRAP WITHOUT TRUNCATION. A badge is a short status word;
+     a chip holds a PERSON'S NAME. GOV.UK's 12x-magnification tester on the
+     truncation failure: "Some larger country names may take over two lines. It
+     wasn't always clear to him that this had happened — the words just looked
+     like separate suggestions that didn't make much sense." The pill border-
+     radius + the surface knockout are what delimit a wrapped chip so it never
+     reads as two. (The popup's options carry the same rule and their own
+     delimiting border — see .vms-field__option.) */
+  overflow-wrap: anywhere;
+  /* The polarity-adaptive knockout — the house technique, used 18x in this file.
+     Mixing TOWARD --vms-surface (never toward white/black) auto-adapts to light
+     AND dark themes with ZERO per-theme deepening.
+     ⚠️ PROVISIONAL MIX RATIO — 12%, not the badge's 16%, and Plan 21-09's
+     hand-check owns the final number. Two reasons it must not simply inherit
+     16%: (1) the fg/bg pair here is a NEW one the fixed 13-pair check:aa-contrast
+     gate does NOT auto-cover; (2) the badge's 16% was tuned for a small badge on
+     a PAGE surface. This is deliberately conservative — the tone is --vms-text
+     (near-maximal contrast against a 12% tint of ITSELF in the surface), not the
+     badge's --vms-text-muted, because a chip carries CONTENT (a name) rather
+     than muted status. The chip's background is opaque, so the field's input
+     backdrop does not enter the contrast pair. */
+  background: color-mix(in srgb, var(--_chip-tone) 12%, var(--vms-surface));
+  color: var(--_chip-tone);
+  border: 1px solid transparent;
+}
+/* §7 item 31 — the two-step Backspace's ARMED chip: the first press highlights
+   the last chip rather than deleting it. This is the VISUAL half only; the
+   announcement is the half that matters (browser.ts), because an arm that were
+   only a CSS class would leave an AT user pressing Backspace, hearing nothing,
+   pressing again, and deleting something they were never told about. Border, not
+   a fill swap, so it cannot disturb the contrast pair above. */
+.vms-field__chip--armed { border-color: var(--_chip-tone); }
+.vms-field__chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Never let the button shrink or wrap away from its label — the chip's text
+     wraps; its remove affordance must not. */
+  flex: none;
+  align-self: flex-start;
+  width: 1.4em;
+  height: 1.4em;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  /* Inherit the chip's tone rather than re-deriving it, so a retoned chip keeps
+     a consistent remove button for free. */
+  color: inherit;
+  font-family: inherit;
+  font-size: 1.1em;
+  line-height: 1;
+  cursor: pointer;
+}
+.vms-field__chip-remove:hover {
+  background: color-mix(in srgb, var(--_chip-tone) 22%, transparent);
+}
+/* The chip is INTERACTIVE where the badge is inert, so its remove button needs a
+   visible focus ring: it is a REAL focusable button (§7 item 26 gives the chips a
+   roving tabindex precisely so DOM focus lands here), and it is reachable by
+   keyboard alone. :focus-visible, so a mouse click doesn't ring it. Same accent
+   tokens as .vms-field__input:focus. */
+.vms-field__chip-remove:focus-visible {
+  outline: 2px solid var(--vms-accent);
+  outline-offset: 1px;
+}
+
 /* Form-collected checkbox (FieldNode inputType="checkbox") — inline label. */
 .vms-field--checkbox { flex-direction: row; align-items: center; gap: var(--vms-space-xs); }
 .vms-field--checkbox .vms-field__input {
