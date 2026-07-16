@@ -370,11 +370,53 @@ describe("🚨 §7 items 14 + 21 — typing clears the active option and is neve
     expect(e.defaultPrevented).toBe(false);
   });
 
-  it("typing refilters (writes the query) and opens the popup", () => {
+  it("🚨 typing writes the query and does NOT open the popup", () => {
+    // 🚨 THIS ASSERTION IS THE INVERSE OF WHAT IT USED TO BE, DELIBERATELY
+    // (21-13). It held `expect(h.isOpen()).toBe(true)` — typing opened the
+    // popup, a leftover from the type-as-you-go model D4 reversed.
+    //
+    // Under Enter-to-search that is a BUG, and the operator named the harm:
+    // "it shouldn't pop up the box before I hit enter, because otherwise it's
+    // just kind of throwing random possibilities at me." A popup that opens on
+    // its own is volunteering candidates the user never asked for. The user
+    // asks (Enter); the answer arrives.
+    //
+    // Note the query IS still written on every keystroke — that half is
+    // unchanged and load-bearing (the table filter's cadence exactly): the bind
+    // write is what makes the eventual Enter dispatch the right `_state`.
     const h = setup({ f: { owner: "", q: "" } }, { searchBind: "f.q" });
     h.input.value = "bo";
     h.input.dispatchEvent(new Event("input"));
     expect((h.state.f as Record<string, unknown>).q).toBe("bo");
+    expect(h.isOpen()).toBe(false);
+  });
+
+  it("typing does not open the popup EVEN WHEN candidates are already present", () => {
+    // The sharp case: candidates on the tree with no search run (a server-
+    // supplied MRU list, or the previous query's answer). `optionEls.length > 0`
+    // was the old gate, so this is the exact shape that used to pop open and
+    // throw possibilities at the operator.
+    const h = setup({ f: { owner: "", q: "" } }, { searchBind: "f.q" });
+    expect(h.isOpen()).toBe(false);
+    h.input.value = "b";
+    h.input.dispatchEvent(new Event("input"));
+    expect(h.isOpen()).toBe(false);
+  });
+
+  it("focus does not open the popup", () => {
+    const h = setup({ f: { owner: "", q: "" } }, { searchBind: "f.q" });
+    h.input.focus();
+    h.input.dispatchEvent(new FocusEvent("focus", { bubbles: false }));
+    h.input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(h.isOpen()).toBe(false);
+  });
+
+  it("§7 item 15 — Down on a CLOSED popup that HAS candidates still opens it (an explicit request, not a guess)", () => {
+    // The one thing 21-13 deliberately KEPT: arrowing into the list is the user
+    // asking for it, which is the opposite of the popup volunteering itself.
+    const h = setup({ f: { owner: "", q: "" } }, { searchBind: "f.q" });
+    expect(h.isOpen()).toBe(false);
+    h.input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     expect(h.isOpen()).toBe(true);
   });
 });

@@ -469,7 +469,13 @@ describe("🚨 popup-open survives the re-render the search itself causes", () =
   it("a popup left open is still open after a full re-render", () => {
     const t = setup({ ownerQuery: "" });
     t.render(lookupVm({ candidates: [{ value: "1", label: "Sally" }] }));
+    // 🚨 Opened by a SEARCH the user ran, not by typing (21-13). This used to
+    // be a bare `type()`, back when keystrokes opened the popup — see the
+    // "typing does NOT open the popup" suite below for why that is now the
+    // bug rather than the setup.
     type(t.input(), "sa");
+    enter(t.input());
+    t.render(lookupVm({ candidates: [{ value: "1", label: "Sally" }] }));
     expect(t.popup().hidden).toBe(false);
 
     t.render(lookupVm({ candidates: [{ value: "1", label: "Sally Omer" }, { value: "2", label: "Sam" }] }));
@@ -506,8 +512,12 @@ describe("🚨 popup-open survives the re-render the search itself causes", () =
     // on a keypress that meant "get this out of my way".
     const t = setup({ ownerId: "1", ownerQuery: "" });
     t.render(lookupVm({ candidates: [{ value: "1", label: "Sally" }], selected: [{ value: "1", label: "Sally" }] }));
+    // Opened by the SEARCH, not by the typing (21-13) — the preserved-open path
+    // this test guards is reached the same way either way.
     type(t.input(), "sa");
+    enter(t.input());
     t.render(lookupVm({ candidates: [{ value: "1", label: "Sally" }], selected: [{ value: "1", label: "Sally" }] }));
+    expect(t.popup().hidden).toBe(false);
 
     t.input().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(t.popup().hidden).toBe(true);

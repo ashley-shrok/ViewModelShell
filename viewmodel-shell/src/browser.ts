@@ -2214,10 +2214,37 @@ export class BrowserAdapter implements Adapter {
         // edit and turn a later Backspace into a delete of something the user
         // was told about minutes ago.
         setArmed(null);
-        // Any options on screen are the previous query's answer. They stay
-        // visible and pickable — the user asked for them — but this is NOT a new
-        // search session, so `querying` is left alone: only search() sets it.
-        if (optionEls.length > 0) setOpen(true);
+        // 🚨 TYPING DOES NOT OPEN THE POPUP. THIS IS NOT A MISSING LINE (21-13).
+        //
+        // It used to: `if (optionEls.length > 0) setOpen(true)` lived here, a
+        // leftover from the type-as-you-go model D4 reversed. Under Enter-to-
+        // search it is actively WRONG, and the operator named the harm exactly:
+        //
+        //   "it shouldn't pop up the box before I hit enter, because otherwise
+        //    it's just kind of throwing random possibilities at me."
+        //
+        // She is describing the popup volunteering the PREVIOUS query's answers
+        // (or a server-supplied MRU list) against text she is still typing —
+        // candidates she never asked for, presented as though she had. Under a
+        // typeahead the list tracked the keystrokes and that was the contract;
+        // under Enter-to-search THE USER ASKS, and the answer arrives when they
+        // ask. A popup that opens on its own is guessing.
+        //
+        // ⇒ THE POPUP OPENS ON EXACTLY TWO EVENTS, AND NEITHER IS TYPING:
+        //   1. RESULTS ARRIVE from a search the user ran (the `querying` branch
+        //      of the open-preservation block ~200 lines above — Enter → dispatch
+        //      → the response's candidates render → open).
+        //   2. Down / Alt+Down / Up on a CLOSED popup that HAS candidates (§7
+        //      item 15, in the keydown handler below) — an EXPLICIT request for
+        //      the list, which is the opposite of a guess.
+        //
+        // Focus does not open it either, and there is deliberately no focus
+        // listener in this arm — same reason.
+        //
+        // Options already on screen are the previous query's answer: if the
+        // popup is ALREADY open the user asked for them, so they stay visible
+        // and pickable (nothing here closes it). This is NOT a new search
+        // session either way, so `querying` is left alone: only search() sets it.
         // §7 item 13 — the assistive hint has done its job the moment the user
         // starts typing; from here on it would be a per-keystroke tax read out
         // on every visit to the field.
