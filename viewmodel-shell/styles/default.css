@@ -754,10 +754,31 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 /* The chip is INTERACTIVE where the badge is inert, so its remove button needs a
    visible focus ring: it is a REAL focusable button (§7 item 26 gives the chips a
    roving tabindex precisely so DOM focus lands here), and it is reachable by
-   keyboard alone. :focus-visible, so a mouse click doesn't ring it. Same accent
-   tokens as .vms-field__input:focus. */
+   keyboard alone. :focus-visible, so a mouse click doesn't ring it.
+
+   🚨 DELIBERATELY --_chip-tone, NOT --vms-accent (which is what
+   .vms-field__input:focus uses, and what this rule used before Plan 21-09's
+   hand-check). Measured, not assumed: --vms-accent clears the 3:1 non-text bar
+   (SC 1.4.11) against --vms-surface on all 13 targets, but only BARELY on
+   light-amber/light-green/light-teal (3.34 / 3.23 / 3.28). The chip's fill is a
+   TINTED surface, and that tint eats the entire remaining margin — the accent
+   ring measures 2.63 / 2.54 / 2.58 against the chip fill on those three themes:
+   a FAILING focus indicator on a keyboard-only affordance.
+
+   The mix ratio is NOT the lever, which is the non-obvious part: the ring still
+   fails at a 4% tint and only reaches 3.10:1 at 2% — a chip with no visible fill
+   at all. No chip worth rendering can rescue the accent here.
+
+   --_chip-tone is the structural fix and needs no per-theme rule: it is the same
+   polarity-adaptive knockout pair as the chip's TEXT (mixing toward
+   --vms-surface), so it inherits that pair's measured headroom — 10.63:1 worst
+   (dark-*), 13.60:1 (light-*), vs a 3:1 bar. It is also what the chip's own
+   private-tone technique already does everywhere else: .vms-field__chip--armed
+   borders with it and this button's `color` inherits it. The accent ring was the
+   outlier, not the convention. Re-measure if --_chip-tone ever stops being
+   --vms-text. */
 .vms-field__chip-remove:focus-visible {
-  outline: 2px solid var(--vms-accent);
+  outline: 2px solid var(--_chip-tone);
   outline-offset: 1px;
 }
 
