@@ -68,7 +68,6 @@ class StubResizeObserver {
 beforeEach(() => {
   stubInstances = [];
   RealResizeObserver = globalThis.ResizeObserver;
-  // @ts-expect-error — minimal stub for lifecycle assertions
   globalThis.ResizeObserver = StubResizeObserver;
   // jsdom does not implement window.scrollTo; render() calls it for scroll
   // preservation. Stub it to a no-op so the unrelated "Not implemented" noise

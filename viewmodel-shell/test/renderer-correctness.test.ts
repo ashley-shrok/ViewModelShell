@@ -71,7 +71,7 @@ describe("Stable ids for focus restore (B1)", () => {
     const c = render({
       type: "table",
       columns: [{ key: "title", label: "Title", filterable: true }],
-      rows: [{ cells: ["Alpha"] }],
+      rows: [{ cells: { title: "Alpha" } }],
       filterBinds: { title: "filters.title" },
       filterAction: { name: "apply-filters" },
     });

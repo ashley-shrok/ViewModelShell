@@ -264,7 +264,7 @@ describe("Phase 6 — FormNode submit dispatches action name only", () => {
       ],
       buttons: [
         { type: "button", label: "Preview", action: { name: "preview" } },
-        { type: "button", label: "Save", action: { name: "save" }, variant: "primary" },
+        { type: "button", label: "Save", action: { name: "save" }, emphasis: "primary" },
       ],
     });
     const labels = Array.from(container.querySelectorAll("button"))
@@ -331,7 +331,7 @@ describe("Phase 6 — TableNode per-row button dispatches its unique action", ()
           id: "42",
           cells: { name: "Alpha" },
           actions: [
-            { type: "button", label: "Delete", action: { name: "delete-row-42" }, variant: "danger" },
+            { type: "button", label: "Delete", action: { name: "delete-row-42" }, tone: "danger" },
           ],
         },
         {

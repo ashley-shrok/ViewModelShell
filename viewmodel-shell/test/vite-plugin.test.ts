@@ -23,7 +23,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { vmsBuildIdPlugin, vmsHashManifestBytes } from "../src/vite";
+import { vmsBuildIdPlugin, vmsHashManifestBytes } from "../src/vite.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_MANIFEST = join(__dirname, "fixtures", "manifest.json");

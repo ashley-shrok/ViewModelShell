@@ -92,7 +92,7 @@ function malformedMultipartRequest(): Request {
 
 /** Build a minimal valid page tree for the success path. */
 function makeVm(): PageNode {
-  return { type: "page", children: [{ type: "text", text: "hello" }] };
+  return { type: "page", children: [{ type: "text", value: "hello" }] };
 }
 
 async function parseBody(res: Response): Promise<unknown> {

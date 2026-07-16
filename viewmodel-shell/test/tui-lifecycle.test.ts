@@ -672,7 +672,7 @@ describe("0.6.0 — B5 click handlers (wired on render)", () => {
 
   it("CheckboxView renders onMouseDown when an action is bound", () => {
     const vm: ViewNode = { type: "page", children: [
-      { type: "checkbox", name: "active", checked: false, label: "Active", action: { name: "toggle" } },
+      { type: "checkbox", name: "active", bind: "active", label: "Active", action: { name: "toggle" } },
     ]};
     expect(findFirstHandler(renderTree(vm)), "checkbox has onMouseDown").not.toBeNull();
   });

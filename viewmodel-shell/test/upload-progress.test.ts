@@ -143,7 +143,6 @@ describe("UPLOAD-01 / D-14 (a) — onUploadProgress FIRES with (sent,total) on f
 
     await shell.dispatch({
       name: "upload",
-      context: {},
       files: { file: new File(["data"], "f.txt") },
     });
     await flush();
@@ -177,7 +176,7 @@ describe("UPLOAD-01 / D-14 (b) — onUploadProgress NEVER fires without files OR
     });
     seedState(shell);
 
-    await shell.dispatch({ name: "noop", context: {} });
+    await shell.dispatch({ name: "noop" });
     await flush();
 
     expect(calls).toHaveLength(0);
@@ -203,7 +202,6 @@ describe("UPLOAD-01 / D-14 (b) — onUploadProgress NEVER fires without files OR
 
     await shell.dispatch({
       name: "upload",
-      context: {},
       files: { file: new File(["data"], "f.txt") },
     });
     await flush();
@@ -240,7 +238,6 @@ describe("UPLOAD-01 / D-14 (c) — missing adapter.transport → fetch fallback 
 
     await shell.dispatch({
       name: "upload",
-      context: {},
       files: { file: new File(["data"], "f.txt") },
     });
     await flush();
@@ -274,7 +271,6 @@ describe("UPLOAD-01 / D-14 (d) — response still flows through the shared proce
 
     await shell.dispatch({
       name: "upload",
-      context: {},
       files: { file: new File(["data"], "f.txt") },
     });
     await flush();
@@ -308,7 +304,6 @@ describe("UPLOAD-01 / D-14 (e) — indeterminate completion is (finalLoaded,fina
 
     await shell.dispatch({
       name: "upload",
-      context: {},
       files: { file: new File(["data"], "f.txt") },
     });
     await flush();
@@ -343,7 +338,6 @@ describe("UPLOAD-01 / WR-02 — XHR path applies the SAME request headers the fe
     seedState(xhrShell);
     await xhrShell.dispatch({
       name: "upload",
-      context: {},
       files: { file: new File(["data"], "f.txt") },
     });
     await flush();
@@ -369,7 +363,6 @@ describe("UPLOAD-01 / WR-02 — XHR path applies the SAME request headers the fe
     seedState(fetchShell);
     await fetchShell.dispatch({
       name: "upload",
-      context: {},
       files: { file: new File(["data"], "f.txt") },
     });
     await flush();
