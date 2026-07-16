@@ -1177,6 +1177,400 @@ export class BrowserAdapter implements Adapter {
         if (n.action) on(n.action);
       });
       wrapper.appendChild(sel);
+    } else if (n.inputType === "lookup" || n.inputType === "lookup-multiple") {
+      // Phase 21 (LOOK-01) — the lookup / reference picker: an editable
+      // combobox over a candidate set the SERVER resolves. A `select` says
+      // "here are all the values, pick one"; a lookup says "the values are a
+      // database table — describe which row you mean". Built to the ARIA 1.2
+      // combobox contract (design §7 items 1-7; keyboard items 14-22).
+      //
+      // Cardinality is a local bool, exactly as the select arm above does it:
+      // D2 splits the WIRE tokens (lookup / lookup-multiple are separate
+      // inputTypes because the chips layer is a second widget grafted on, not
+      // an orthogonal flag), but the renderer may still share one code path.
+      const isMulti = n.inputType === "lookup-multiple";
+      wrapper.classList.add("vms-field--lookup");
+      if (isMulti) wrapper.classList.add("vms-field--lookup-multiple");
+
+      // [vms:lookup-no-searchbind] — a searchAction with no searchBind
+      // dispatches the query but the server can never READ what was typed: a
+      // silently dead typeahead that renders perfectly and returns nothing
+      // forever. Structurally invisible, so warn.
+      if (n.searchAction && n.searchBind == null) {
+        this.warnOnce(
+          "lookup-no-searchbind:" + n.name,
+          "[vms:lookup-no-searchbind] lookup FieldNode '" + n.name +
+            "' has a searchAction but no searchBind — the query is dispatched but never round-trips, " +
+            "so the server cannot see what was typed and the typeahead returns nothing forever; add searchBind:\"<path>\".",
+        );
+      }
+
+      const inp = document.createElement("input");
+      inp.type = "text";
+      // MANDATORY: decorateField() finds the control via
+      // wrapper.querySelector(".vms-field__input"). Without this class every
+      // decoration (disabled/readonly/error/help/aria-describedby/aria-invalid)
+      // silently no-ops — it fails quietly and structurally passes.
+      inp.className = "vms-field__input";
+      // Stable id so render()'s focus+caret restore can re-find this input
+      // after a re-render. The table filter needs this because an unlucky
+      // silent poll can land mid-keystroke; a lookup is WORSE — it dispatches
+      // on its OWN keystrokes, so a re-render lands mid-typing on EVERY search
+      // (~300ms), not just on an unlucky tick. Without the id the value
+      // survives (it's bound state) but focus and caret are destroyed on every
+      // debounce fire and the control is unusable.
+      inp.id = `vms-${n.name}`;
+      inp.name = n.name;
+      if (n.placeholder) inp.placeholder = n.placeholder;
+      if (n.required) inp.required = true;
+      // The browser's own autofill dropdown would fight the listbox popup.
+      inp.autocomplete = "off";
+
+      // ── THE DISPLAY PATH (D1) — the decision this primitive exists to protect
+      //
+      // 🚨 The label is VIEW, not STATE. It is read from `n.selected` and ONLY
+      // from `n.selected`. It is NEVER resolved out of `n.candidates`, which
+      // feeds the popup listbox and NOTHING ELSE.
+      //
+      // The select arm ~40 lines above resolves what it displays out of its
+      // `options` (`o.textContent = opt.label`). Mirroring that instinct here
+      // is THE TRAP: with an id-valued field, "filter the candidate list" and
+      // "forget what's selected" are THE SAME OPERATION — no cache separates
+      // them, and one cannot be seeded for a value the client has never seen.
+      // So a lookup that resolved its label from `candidates` renders a raw
+      // database id on the one case that matters most: a form that loads with a
+      // value already set, where nobody has searched and `candidates` is empty.
+      // Ant Design ships exactly this failure silently (`label: ... ?? item.value`);
+      // Zag chased it across four changelog entries and two years; SAP names it
+      // as its own degenerate case. If you are here to "simplify" this by
+      // reading `candidates`, the tests at the top of test/lookup-render.test.ts
+      // are telling you not to.
+      //
+      // Per D5, an entry whose `label` is omitted displays its `value` — a
+      // label that merely repeats the id carries no information, so it is
+      // absent (that is exactly the free-form-tag case).
+      const selectedItems = n.selected ?? [];
+      const selectedLabel = selectedItems.length > 0
+        ? (selectedItems[0].label ?? selectedItems[0].value)
+        : "";
+
+      // The typed query round-trips (searchBind) so the server sees it and the
+      // view stays a pure function of state. `undefined` (no query slot yet) is
+      // NOT the same fact as `""` (the user cleared the box): an EMPTY QUERY IS
+      // A LEGITIMATE QUERY (D4/OPEN-6 — it is how an app serves a
+      // most-recently-used list), so the two must never be conflated by a
+      // truthiness check.
+      const query = n.searchBind != null ? this.readBind(n.searchBind) : undefined;
+      inp.value = query != null
+        ? String(query)
+        // Single-select renders its selection INSIDE the input — SLDS does the
+        // same, and no chip element exists for single-select at all. Multi's
+        // selection lives in chips OUTSIDE the input (Plan 21-05), so its input
+        // carries only the query.
+        : (isMulti ? "" : selectedLabel);
+
+      // D6 — the polymorphic type tag rides ALONGSIDE the display and never
+      // leaks into the bound value: `bind` holds the id and nothing else. An id
+      // alone is not an identity (a Dataverse owner GUID "doesn't tell you
+      // whether the owner of the record is a user or a team"), so a
+      // polymorphic reference exposes what KIND of thing it names.
+      const selectedType = !isMulti && selectedItems.length > 0 ? selectedItems[0].type : undefined;
+      if (selectedType != null) inp.dataset.vmsSelectedType = selectedType;
+
+      // §7 items 1-3 — role="combobox" on the INPUT ITSELF (ARIA 1.2; the 1.0
+      // wrapper + aria-owns pattern is deprecated). aria-expanded is ALWAYS
+      // present, even when closed. NO aria-haspopup: `listbox` is implicit for
+      // role="combobox", so setting it is noise.
+      const popupId = `vms-${n.name}-popup`;
+      inp.setAttribute("role", "combobox");
+      inp.setAttribute("aria-expanded", "false");
+      inp.setAttribute("aria-controls", popupId);
+      inp.setAttribute("aria-autocomplete", "list");
+
+      // §7 items 4-6 — the popup. Rendered ALWAYS and merely hidden when
+      // closed, because aria-controls must stay valid while the popup is
+      // hidden. Excluded from the tab sequence (no tabindex anywhere in here):
+      // only the input is tabbable, and DOM focus NEVER leaves it — the active
+      // option is conveyed by aria-activedescendant rather than a roving
+      // tabindex, because moving real focus out of a text input breaks typing.
+      const popup = document.createElement("div");
+      popup.className = "vms-field__popup";
+      popup.id = popupId;
+      popup.setAttribute("role", "listbox");
+      popup.setAttribute("aria-label", n.label ?? n.name);
+      popup.hidden = true;
+
+      const optionEls: HTMLElement[] = [];
+      // 🚨 D12 — CANDIDATES ARE PRESENTED AS GIVEN. This forEach SORTS NOTHING,
+      // DEDUPES NOTHING, and TRUNCATES NOTHING, and it must stay that way.
+      //
+      // The reason is written here because the next reader's instinct is to
+      // "tidy" an unsorted list: candidate ORDER IS MEANINGFUL APP DATA.
+      // Relevance ordering is the SERVER's judgment, never the widget's — that
+      // is universal in mature pickers (Salesforce's picker `searchType`
+      // defaults to `Recent`; Dynamics shows 5 most-recently-used rows plus 5
+      // favourites, explicitly NOT filtered by the search term). A real
+      // consumer ranks candidates by recency-weighted mention frequency in
+      // their own handler, and a renderer that helpfully alphabetized for
+      // tidiness would SILENTLY DESTROY that ranking with no way for the app to
+      // stop it. If an app wants a cap, D7 applies: it says so visibly in the
+      // tree (a TextNode — "Refine your filter — N matches, max is X"), because
+      // nothing truncates silently.
+      (n.candidates ?? []).forEach((c, i) => {
+        const opt = document.createElement("div");
+        opt.className = "vms-field__option";
+        // Index-keyed, NOT value-keyed: candidates are deliberately not deduped
+        // (D12), so two entries may legitimately share a value — an id derived
+        // from the value would collide and break aria-activedescendant.
+        opt.id = `${popupId}-opt-${i}`;
+        // §7 item 7 — a role="option" ELEMENT, never a <button>/<a>: an
+        // interactive descendant destroys the listbox accessibility tree.
+        opt.setAttribute("role", "option");
+        opt.setAttribute("aria-selected", "false");
+        // textContent, never innerHTML — a server-supplied label is text, not
+        // markup (the house idiom throughout this file).
+        opt.textContent = c.label ?? c.value;
+        opt.dataset.vmsValue = c.value;
+        if (c.type != null) opt.dataset.vmsType = c.type;
+        popup.appendChild(opt);
+        optionEls.push(opt);
+      });
+
+      // Popup/highlight state is DOM-local and starts fresh on every render.
+      // 🚨 That is deliberate and is half of §7 item 14: we NEVER auto-highlight
+      // the first option when results arrive. React Aria's NVDA finding is why
+      // — with an option auto-focused, "character deletions and text cursor
+      // movement in the ComboBox input weren't being announced at all", and it
+      // bites async HARDEST, because the natural implementation highlights
+      // option 1 the moment results land, mid-typing. Starting at -1 makes that
+      // structural rather than a rule someone has to remember.
+      let open = false;
+      let activeIndex = -1;
+
+      const setActive = (i: number): void => {
+        activeIndex = i;
+        // §7 item 32 — keep aria-selected accurate on EVERY option (true AND
+        // false), while treating it as NON-COMMUNICATING: it is "mostly not
+        // announced when true", so the live region (Plan 21-04) is what
+        // actually tells an AT user what is highlighted. Set it anyway: it is
+        // correct, it is cheap, and support improves.
+        optionEls.forEach((el, j) => el.setAttribute("aria-selected", String(j === i)));
+        const activeEl = i >= 0 ? optionEls[i] : undefined;
+        // §7 item 2 — present ONLY while an option is active; removed otherwise.
+        if (activeEl) inp.setAttribute("aria-activedescendant", activeEl.id);
+        else inp.removeAttribute("aria-activedescendant");
+      };
+      const setOpen = (v: boolean): void => {
+        open = v;
+        popup.hidden = !v;
+        inp.setAttribute("aria-expanded", String(v));
+        if (!v) setActive(-1);
+      };
+
+      /** Accept the candidate at `i` — the ONLY path that writes the bind. */
+      const commit = (i: number): void => {
+        const c = (n.candidates ?? [])[i];
+        if (c == null) return;
+        if (isMulti) {
+          // ── SEAM (Plan 21-05): the CHIPS layer hangs off here. ────────────
+          // This is the STATE half only — the accumulated selection is written
+          // correctly; rendering it as chips (role=list/listitem with real
+          // per-item "Remove {item}" buttons, roving tabindex, the focus rule
+          // after removal, and the two-step Backspace) is 21-05's job and is
+          // deliberately NOT half-built here.
+          const current = this.readBind(n.bind);
+          const ids = Array.isArray(current) ? (current as unknown[]).map(String) : [];
+          // D12 SCOPE — deduping `bind` ON COMMIT is ALLOWED and correct, and
+          // is NOT a D12 violation. D12 forbids second-guessing the SERVER's
+          // answer (reordering/filtering/deduping/truncating `candidates` for
+          // display). This is a STATE WRITE about the user's own accumulated
+          // selection: a selection set has set semantics, and a duplicate id in
+          // `bind` is meaningless. A reader fresh off D12 will flag this line —
+          // hence this comment.
+          if (!ids.includes(c.value)) this.writeBind(n.bind, [...ids, c.value]);
+          inp.value = "";
+          this.writeBind(n.searchBind, "");
+          // §7 item 30 — do NOT close the popup on select in a multi-select;
+          // the user is usually picking several.
+          setActive(-1);
+        } else {
+          // The id — and ONLY the id — is what persists (D1).
+          this.writeBind(n.bind, c.value);
+          // ...and the label is what is shown. Same D1/D5 rule as the display
+          // path above: an omitted label means the label IS the value.
+          inp.value = c.label ?? c.value;
+          setOpen(false);
+        }
+        inp.focus();
+      };
+
+      optionEls.forEach((opt, i) => {
+        // mousedown (not click) + preventDefault: keeps DOM focus in the input
+        // instead of letting the press blur it, which is the same reason the
+        // active option is tracked with aria-activedescendant at all.
+        opt.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          commit(i);
+        });
+      });
+
+      inp.addEventListener("input", () => {
+        // 🚨 Written UNCONDITIONALLY — NEVER gated on a non-empty value. An
+        // EMPTY query is a legitimate query (D4/OPEN-6): it is how an app
+        // supplies a most-recently-used list on an empty box (Salesforce's
+        // picker `searchType` DEFAULTS to `Recent`; Dynamics shows 5 MRU + 5
+        // favourites). Plan 21-04 hangs the debounced searchAction dispatch off
+        // this same listener — it must NOT write `if (value) schedule(...)`
+        // either, or the empty-query path silently never reaches the server and
+        // the MRU decision is voided with nothing to show for it.
+        this.writeBind(n.searchBind, inp.value);
+        // 🚨 §7 items 14 + 21 — clear the active option whenever the query text
+        // changes, and never let list-typeahead swallow typing. Typing is the
+        // user's; the list does not get to eat it.
+        setActive(-1);
+        if (optionEls.length > 0) setOpen(true);
+      });
+
+      inp.addEventListener("keydown", (e) => {
+        const last = optionEls.length - 1;
+
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          if (!open) {
+            setOpen(true);
+            // §7 item 15 — Alt+Down opens WITHOUT moving focus into the list.
+            if (!e.altKey && optionEls.length > 0) setActive(0);
+          } else if (optionEls.length > 0) {
+            // §7 item 16 — wrap: last → first.
+            setActive(activeIndex >= last ? 0 : activeIndex + 1);
+          }
+          return;
+        }
+
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          if (!open) {
+            // §7 item 15 — Up opens and focuses the LAST option.
+            setOpen(true);
+            if (optionEls.length > 0) setActive(last);
+          } else if (optionEls.length > 0) {
+            // §7 item 16 — wrap: first → last.
+            setActive(activeIndex <= 0 ? last : activeIndex - 1);
+          }
+          return;
+        }
+
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+          // §7 item 16 — Left/Right RETURN TO THE INPUT TEXT and move the
+          // caret: they EXIT the list, they do NOT navigate it. Deliberately
+          // NOT preventDefault'd — the browser's own caret movement is the
+          // entire point, and the APG's own warning is to "avoid JavaScript
+          // interference with browser-provided editing functions". We only drop
+          // the highlight.
+          setActive(-1);
+          return;
+        }
+
+        if (e.key === "Home" || e.key === "End") {
+          // 🚨 §7 item 16 — Home/End are TEXT-EDITING keys here (caret to
+          // start/end of the text), NOT first/last-option. This is an EDITABLE
+          // combobox: the caret wins. Wiring these to the list is the single
+          // most likely well-meaning break in this handler — a combobox with a
+          // listbox popup is not a listbox, and the user is typing in it.
+          // So: no preventDefault, and no active-option change. The browser
+          // edits, we stay out of the way. This early return exists ONLY to say
+          // so; deleting it changes nothing today and invites the "fix"
+          // tomorrow.
+          return;
+        }
+
+        if (e.key === "Enter") {
+          if (open && activeIndex >= 0) {
+            // §7 item 17 — accept, set the input value, close, keep focus in
+            // the input (all of which commit() does).
+            e.preventDefault();
+            commit(activeIndex);
+            return;
+          }
+          // No option active: fall through to the field's own `action`, if it
+          // declares one. `action` and `searchAction` are INDEPENDENT — a
+          // lookup may legitimately carry both — and this mirrors the text
+          // arm's Enter cadence (flush the value to state, then dispatch), so a
+          // lookup's `action` isn't silently dead.
+          if (n.action) {
+            e.preventDefault();
+            this.writeBind(n.searchBind, inp.value);
+            on(n.action);
+          }
+          return;
+        }
+
+        if (e.key === "Escape") {
+          if (open) {
+            // 🚨 §7 item 18 — Escape is TWO-STAGE, and THIS stage is the
+            // load-bearing half: with the popup OPEN it closes and KEEPS the
+            // value. ESCAPE MUST NEVER CLEAR WHILE THE POPUP IS OPEN. The user
+            // is dismissing the popup, not discarding their selection;
+            // conflating the two silently destroys data on a keypress that
+            // meant "get this out of my way".
+            e.preventDefault();
+            setOpen(false);
+            return;
+          }
+          // Stage two — the popup is ALREADY CLOSED. The design leaves clearing
+          // OPTIONAL ("optionally clear"); we clear, and ONLY here, where the
+          // intent is unambiguous. Reasoning, recorded because it is a choice:
+          // this is the ONLY keyboard path to un-set a single-select lookup.
+          // Deleting the input text does NOT clear the selection — the text is
+          // the LABEL, a view of the id in `bind` (D1) — so without this a
+          // keyboard user who picked the wrong person could never undo it.
+          // Multi's selection lives in chips with their own remove buttons
+          // (Plan 21-05), so there Escape clears only the query text.
+          e.preventDefault();
+          inp.value = "";
+          this.writeBind(n.searchBind, "");
+          if (!isMulti) this.writeBind(n.bind, "");
+          setActive(-1);
+          return;
+        }
+
+        if (e.key === "Tab") {
+          // 🚨 §7 item 19 / OPEN-2 — Tab CLOSES the popup and does NOT SELECT.
+          // It abandons the active option; the field keeps whatever value it
+          // already had.
+          //
+          // ⚠️ APG IS SILENT here — its table only specifies where Tab GOES,
+          // never what it does to the active option — so this is our call, and
+          // it is a RECORDED DECISION rather than an accident. The next person
+          // WILL be asked "why doesn't Tab accept like my IDE?", so the answer
+          // lives here:
+          //
+          // Tab is a NAVIGATION key, and a navigation key must never silently
+          // commit a value. The failure modes are ASYMMETRIC. Tab-abandons
+          // costs a user who wanted IDE/URL-bar accept semantics ONE EXTRA
+          // KEYSTROKE (press Enter, then Tab) — and they SEE that nothing was
+          // selected. Tab-accepts silently writes a WRONG REFERENCE into a
+          // record when someone tabs past a field mid-typing, and an accidental
+          // commit is UNANNOUNCED DATA CORRUPTION — invisible to sighted users
+          // and doubly invisible to AT users. It also matches Escape's
+          // keep-the-value semantics above, so the two "get me out of here"
+          // keys behave consistently rather than one committing and one not.
+          // This will generate complaints; that is accepted.
+          //
+          // NOT preventDefault'd — focus must actually move on.
+          setOpen(false);
+          return;
+        }
+
+        // §7 item 20 — PageUp/PageDown are NOT part of the listbox-popup
+        // contract. Do not invent them; they fall through untouched.
+        // §7 item 22 — Backspace/Delete are plain text editing on single-select
+        // and are NEVER intercepted. (The chips two-step Backspace is Plan
+        // 21-05's, and applies only to lookup-multiple with an EMPTY input.)
+      });
+
+      wrapper.appendChild(inp);
+      wrapper.appendChild(popup);
     } else if (n.inputType === "file") {
       const inp = document.createElement("input");
       inp.type = "file";
