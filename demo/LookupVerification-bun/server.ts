@@ -269,19 +269,25 @@ function buildVm(state: LookupState): ViewNode {
         "leaves this server.",
       ),
 
-      // ── 1. THE HEADLINE ───────────────────────────────────────────────────
+      // ── 1. THE HEADLINE, AND THE ANTI-TRAP — BOTH, ON SINGLE ─────────────
       //
-      // 🚨 THE ANTI-TRAP DEMO USED TO LIVE HERE AND IT WAS NOT PERFORMABLE
-      // (21-13). It told the reviewer to search a query excluding Sally and
-      // observe that "the label is STILL shown" — but in SINGLE-select the input
-      // does double duty, so mid-search the box shows THE QUERY, not the label.
-      // There was nothing to observe, and the demo read as nonsense.
+      // 🚨 THE ANTI-TRAP COMES BACK HERE (21-14), AND THIS TIME IT IS ACTUALLY
+      // PERFORMABLE. Its history is the lesson:
       //
-      // The anti-trap is only OBSERVABLE where the SELECTION and the CANDIDATE
-      // LIST are visible AT THE SAME TIME — i.e. the MULTI field, whose chips sit
-      // OUTSIDE the input. It is now the headline of §3. What single-select can
-      // honestly prove is the ROUND TRIP, which is below and now spells out every
-      // keystroke.
+      //   • It lived here originally and was NOT performable — it told the
+      //     reviewer to search a query excluding Sally and observe that "the
+      //     label is STILL shown", but single's selection lived INSIDE the input,
+      //     so mid-search the box showed THE QUERY. There was nothing to observe
+      //     and the demo read as nonsense.
+      //   • 21-13 moved it to §3 (multi), the only field where a selection and a
+      //     candidate list could then be seen at once.
+      //   • D2a moves single's selection OUT of the input into a chip — so the
+      //     chip and the excluding candidate list are now BOTH ON SCREEN here.
+      //
+      // That is the third thing the chip bought (D2a §"why this is better", #3),
+      // and it is what the operator was reaching for from the start. The old
+      // clear-the-box-and-Enter round trip is no longer the proof: the DIRECT one
+      // works now.
       {
         type: "section",
         heading: "1. The headline — a reference already set, with NO search",
@@ -290,8 +296,8 @@ function buildVm(state: LookupState): ViewNode {
           note(
             `This form loaded holding the id “${OWNER_ID}” and nothing else. No ` +
             "search has run, and this field's candidate list is EMPTY " +
-            `(candidates: ${ownerSearch.items.length}) — yet the field shows the ` +
-            "NAME. That is the whole design: the label rides on the node " +
+            `(candidates: ${ownerSearch.items.length}) — yet the NAME is on ` +
+            "screen. That is the whole design: the label rides on the node " +
             "(server→client, recomputed every render); it is never resolved out " +
             "of the candidate list. A picker that resolves labels from candidates " +
             "renders a raw database id right here, on cold start. (The empty list " +
@@ -299,12 +305,14 @@ function buildVm(state: LookupState): ViewNode {
             "and let a broken implementation look correct by accident.)",
           ),
           note(
-            "Note the field READS as a chosen thing — a pill, with a ✕ to clear " +
-            "it — rather than as text someone typed. That distinction is the " +
-            "point: this one box does double duty (it shows the SELECTION and it " +
-            "accepts the QUERY), so it has to say which it is currently doing. " +
-            "Start typing and the pill drops instantly: no pill means the text is " +
-            "YOUR query, not your selection.",
+            "🚨 LOOK AT WHERE SALLY IS: in a CHIP beside the box, not in it. The " +
+            "box itself is empty and showing its placeholder — so there is always " +
+            "somewhere to click and type, with the selection still visible next " +
+            "to what you are typing. That is the fix for what you found last " +
+            "round: when the box WAS the pill, there was nowhere to type without " +
+            "first destroying the selection. Single and multi (§3) now render " +
+            "selections identically; the only difference is that picking here " +
+            "REPLACES the chip instead of adding one.",
           ),
           {
             type: "field",
@@ -320,30 +328,38 @@ function buildVm(state: LookupState): ViewNode {
           },
           ...capNote(ownerSearch, state.ownerQuery),
           note(
-            "🚨 THE SINGLE-SELECT PROOF IS THE ROUND TRIP — do it exactly like " +
-            "this: (1) type “Nakamura” and press ENTER. Eight candidates appear " +
-            "and NOT ONE of them is Sally Omer. The box now shows your query, so " +
-            "she is not on screen anywhere — but read the “bind holds” line " +
-            "below: it STILL says “u-401”. The search did not touch the " +
-            "selection. (2) Now CLEAR the box and press ENTER again: Sally's pill " +
-            "is back, resolved server-side from that id. Nothing was ever lost.",
+            "🚨 NOW THE ANTI-TRAP, AND YOU CAN WATCH IT HAPPEN: type “Nakamura” " +
+            "and press ENTER. Eight candidates appear and NOT ONE of them is " +
+            "Sally Omer. WATCH THE CHIP: it sits exactly where it is. That is " +
+            "the trap, visible in one screen — the selection and a candidate " +
+            "list that has nothing to do with it, both on screen at once, " +
+            "disagreeing, with the selection winning. A picker that resolved its " +
+            "label out of the candidate list would turn Sally into a raw " +
+            "database id (Ant Design does) or drop her entirely, the instant " +
+            "that list stopped containing her — which is precisely when it " +
+            "matters most.",
           ),
           note(
-            "Escape is the other half, and it is two-stage: with the popup open, " +
-            "Escape CLOSES it and keeps everything (the “bind holds” line still " +
-            "reads “u-401”). Press Escape again — on an already-closed popup — " +
-            "and THAT is what clears the selection. Or just click the pill's ✕. " +
-            "(The “bind holds” line reads the last SERVER render, so after a " +
-            "clear it catches up on the next round trip.)",
+            "This demo used to be unperformable here, and that is worth knowing: " +
+            "when the selection lived INSIDE the box, searching replaced it with " +
+            "your query on screen, so there was nothing to watch survive — you " +
+            "had to take the round trip on faith and read an id off a debug " +
+            "line. Moving the selection into a chip is what made it visible. " +
+            "(§3 shows the same thing with two chips.)",
           ),
           note(
-            "Be told honestly: the deepest form of this case — the server " +
-            "re-rendering with candidates that exclude the selection, with no " +
-            "user action at all — is covered by unit tests and is not clickable. " +
-            "§3 below is where you can SEE the selection and the candidate list " +
-            "disagree at the same time.",
+            "The rest of the contract: picking a candidate REPLACES the chip — " +
+            "search “Petrova”, pick one, and Sally is gone, not joined. Remove " +
+            "the selection with the chip's ✕ (or Tab to it and press Enter — it " +
+            "is a real button named “Remove Sally Omer”, not an anonymous ✕). " +
+            "Escape is two-stage and touches only the popup and your query text: " +
+            "with the popup open it CLOSES it; pressed again it clears the box. " +
+            "Neither Escape touches the chip — clearing your search is not " +
+            "clearing your selection, and those are now visibly different things " +
+            "in different places.",
           ),
-          note(`bind holds: “${state.owner || "(cleared)"}”`),
+          note(`bind holds: “${state.owner || "(cleared)"}”  ` +
+            "(the last SERVER render, so it catches up on the next round trip)"),
         ],
       },
 
@@ -390,30 +406,33 @@ function buildVm(state: LookupState): ViewNode {
         ],
       },
 
-      // ── 3. lookup-multiple — the chips, AND THE ANTI-TRAP ─────────────────
+      // ── 3. lookup-multiple — the chips, AND THE ANTI-TRAP AT TWO CHIPS ────
       //
-      // 🚨 THE ANTI-TRAP DEMO LIVES HERE NOW (21-13), and this is the ONLY field
-      // on the page where it is performable. The trap — "filtering the candidate
-      // list" and "forgetting the selection" being the same operation — is only
-      // OBSERVABLE where the SELECTION and the CANDIDATE LIST are on screen AT
-      // THE SAME TIME. Multi's chips sit OUTSIDE the input, so they are; single's
-      // selection IS the input, so mid-search it is showing the query and there
-      // is nothing to watch survive. It was demonstrated on the wrong field.
+      // 🚨 KEPT (21-14). §1 can demonstrate the anti-trap on its own now that
+      // single's selection is a chip, but this stays: it is the same property at
+      // a real SET, and it is where APPEND-vs-REPLACE becomes visible as the one
+      // difference between the two nodes. Read §1 then §3 back to back — same
+      // chips, same trap, different arity. That contrast IS D2a.
       {
         type: "section",
-        heading: "3. 🚨 lookup-multiple — the chips, and THE ANTI-TRAP you can actually watch",
+        heading: "3. 🚨 lookup-multiple — the same chips, the same trap, and the ONE difference",
         variant: "card",
         children: [
           note(
-            "🚨 THIS IS THE HEADLINE. Type “Nakamura” and press ENTER. The " +
-            "candidate list narrows to eight people, and NOT ONE of them is " +
-            "Bjorn Omer or Priya Lindqvist — the two watchers already selected. " +
-            "WATCH THE CHIPS: they stay exactly where they are. That is the trap, " +
-            "visible in one screen — the selection and the list that excludes it, " +
-            "side by side, disagreeing, with the selection winning. A picker that " +
-            "resolved its labels out of the candidate list would drop both chips " +
-            "or turn them into raw ids the instant that list stopped containing " +
-            "them, which is precisely when it matters most.",
+            "🚨 THE SAME PROOF AS §1, AT TWO CHIPS. Type “Nakamura” and press " +
+            "ENTER. The candidate list narrows to eight people, and NOT ONE of " +
+            "them is Bjorn Omer or Priya Lindqvist — the two watchers already " +
+            "selected. WATCH THE CHIPS: they stay exactly where they are. The " +
+            "selection and the list that excludes it, side by side, disagreeing, " +
+            "with the selection winning. A picker that resolved its labels out of " +
+            "the candidate list would drop both chips or turn them into raw ids " +
+            "the instant that list stopped containing them.",
+          ),
+          note(
+            "🚨 AND HERE IS THE ONLY DIFFERENCE BETWEEN THIS FIELD AND §1's: pick " +
+            "a candidate and it is ADDED — three chips. In §1, picking REPLACES " +
+            "the one chip. Same chips, same markup, same keyboard, same remove " +
+            "buttons, one implementation; arity is the whole difference.",
           ),
           note(
             "Loads with two chips already set — again from ids alone, with no " +
@@ -581,14 +600,15 @@ function buildVm(state: LookupState): ViewNode {
         children: [
           note(
             "Use the theme picker at the very top of the page to switch across " +
-            "the shipped light default and all 12 themes. The chips AND §1's " +
-            "selected pill must stay readable in every one — nothing washed out " +
-            "or invisible. The chip fill, §1's pill, and both remove/clear focus " +
-            "rings were hand-measured across all 13 (worst 10.63:1 on the dark-* " +
-            "themes, vs a 4.5:1 text bar and a 3:1 focus bar) — the pill reuses " +
-            "the chip's own tone token, so it is literally the same measured " +
-            "pair and adds no theme var. Tab to a chip's ✕ and to §1's pill ✕ in " +
-            "a light theme to check the focus rings.",
+            "the shipped light default and all 12 themes. The chips must stay " +
+            "readable in every one — nothing washed out or invisible. There is " +
+            "only ONE pair to check now: §1's selection is the same chip as §3's, " +
+            "so single-select adds no new colour pair at all (21-13's separate " +
+            "pill treatment, and its separate measurement, are gone with it). The " +
+            "chip fill and the remove-button focus ring are hand-measured across " +
+            "all 13 themes — worst 10.63:1 on the dark-* themes, 13.60:1 on the " +
+            "light ones, vs a 4.5:1 text bar and a 3:1 focus bar. Tab to a chip's " +
+            "✕ in a light theme to check the ring.",
           ),
         ],
       },
