@@ -6,6 +6,32 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 5.2.0 / 5.2.0 — Lookup / remote-search reference field: `lookup` + `lookup-multiple` (npm + NuGet)
+
+**npm:** `5.2.0` (minor, from `5.1.2`) · **NuGet:** `5.2.0` (minor, from `5.1.0`). **Additive** — the wire protocol token stays `viewmodel-shell/1.0`; existing apps and wire-driving agents are byte-unchanged. Both packages gain two new `FieldNode.inputType` values.
+
+### Added
+
+- **`inputType: "lookup"` and `inputType: "lookup-multiple"`** — the reference/relation field VMS has been missing since the beginning. `select`/`select-multiple` both assume the option set can be **enumerated into the tree**; the moment it's a 5,000-person directory or an 80,000-row customer table, VMS had no answer and apps were forced into a workaround. A lookup is conceptually **not a big select**: a select says *"here are all the values, pick one"*; a lookup says *"the values are a database table — describe which row you mean."*
+
+  Wire shape (new optional `FieldNode` members): `bind` holds the **id** (`string`, or `string[]` for multi); `selected?: [{ value, label?, type? }]` carries the resolved label(s); `searchBind` holds the typed query; `searchAction` is dispatched on **Enter**; `candidates?` carries the current results; `allowCustom?` declares whether invented values are permitted.
+
+  **The load-bearing rule: the label is VIEW, not STATE.** `bind` holds the id and only the id — the label rides on the node, server→client, recomputed every render, and is **never trusted coming back from the client**. It is **never** resolved out of `candidates`. That distinction is the whole design: with an id-valued field, *"filter the candidate list"* and *"forget what's selected"* are the same operation, which is why a form that loads with a reference already set renders its label with **no search having occurred** — the case that breaks naive implementations.
+
+  **Both nodes render selections as chips outside the input**; the only difference is arity — single **replaces** on pick, multi **appends**. The input holds nothing but the query, in both modes. Framework owns the full accessibility layer (combobox ARIA on the input itself, item-specific `aria-label="Remove {item}"` per chip, add/remove announced via a live region, focus after removal moving next→previous→input and never to `<body>`, roving tabindex across chips, two-step Backspace armed by value). Zero appearance crosses the wire.
+
+  **`allowCustom: true` with no candidate source is a free-form tags field** — no special case in the renderer. `allowCustom` **and** `searchAction` on the same field is **not supported in v1** and fails loud (`[vms:lookup-ambiguous-enter]`): Enter cannot mean both *invent this* and *search for this*.
+
+  Designed against a three-part survey (mature component libraries; enterprise reference fields; the combobox accessibility contract) — design of record: [`.planning/design/lookup-field.md`](https://github.com/ashley-shrok/ViewModelShell/blob/main/.planning/design/lookup-field.md). Both backends emit them byte-identically (parity-gated), both tree-validators descend (`searchAction` participates in action-name uniqueness), the TUI degrades legibly, and `agent-skill.md` documents the picker as a first-class public protocol — **no surveyed platform publishes its picker's transport**, so an agent driving a lookup exactly like a human is a property that falls straight out of the architecture.
+
+### Changed
+
+- **`agent-skill.md`** gains a "Lookup / reference fields" section (byte-identical .NET twin, parity-gated). No new wire verbs, side-effect types, or error codes — the protocol token is unchanged.
+
+**Consumers:** no action needed. Purely additive — nothing existing changes shape or behavior. Reach for a lookup when your option set is too large to enumerate; keep `select`/`select-multiple` for enumerable sets (that split is deliberate and is an accessibility requirement, not a stylistic one).
+
+---
+
 ## 5.1.2 — Fixed: a lone `BadgeNode` stretched to full width in a `stack` section; per-row action buttons rendered flush together (npm)
 
 **npm:** `5.1.2` (patch, from `5.1.1`) · **NuGet:** unchanged at `5.1.0`. Client-CSS-only fixes — no renderer logic, no wire or type change; the .NET package has no CSS, so it does not move. The wire protocol token stays `viewmodel-shell/1.0`.

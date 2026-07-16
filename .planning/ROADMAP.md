@@ -216,7 +216,7 @@ Plans:
 - [x] 20-06-PLAN.md — Full green-tree gate + combined tailnet verification page + Ashley pre-publish sign-off (wave 3) — gate GREEN, `demo/NavVerification-bun/` page served over the tailnet, Ashley signed off ✅ 2026-07-11
 - [x] 20-07-PLAN.md — CHANGELOG/MIGRATION + agent-skill no-change + version bump 5.1.0 + publish/tag/advance-main/announce (wave 4) ✅ 2026-07-11
 
-## 🔵 v5.2 Lookup / remote-search reference field (Phase 21) — PLANNED
+## ✅ v5.2 Lookup / remote-search reference field (Phase 21) — SHIPPED 2026-07-16 (npm + NuGet `5.2.0`, tag `v5.2.0`)
 
 **Milestone Goal:** Close the primitive VMS has been missing since the beginning: `select`/`select-multiple` both assume the option set can be **enumerated into the tree**, so the moment the set is a 5,000-person directory or an 80,000-row customer table VMS has no answer and the app is forced into a workaround (which by our own rule is the signal a primitive is missing). The industry calls it a **lookup / reference / relation** field — conceptually NOT a big select: a select says *"here are all the values, pick one"*; a lookup says *"the values are a database table, describe which row you mean."* Bread-and-butter for the workflow/queue/admin tools VMS targets (assign a ticket to one of 5k agents; attach an invoice to one of 80k customers). **The gap predates the request that surfaced it** (a Metis @mention brief) and is not shaped by it — inline caret-spliced @mention is explicitly OUT ("maybe we do text editing but certainly not right now", Ashley 2026-07-16).
 
