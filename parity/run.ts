@@ -7,7 +7,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { readFileSync, existsSync, rmSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { normalize, diff } from "./normalize";
+import { normalize, diff, findNulls } from "./normalize";
 import { checkSourceTwins, checkHttpTwins } from "./check-skill";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -274,6 +274,21 @@ async function runFixtureAgainst(cfg: BackendConfig, fixture: Fixture): Promise<
     }
     if (step.expectStatus != null && body.ok !== false) {
       throw new Error(`${cfg.name} step '${step.id}' expected ok:false on envelope path, got ok:${body.ok}`);
+    }
+    // NULL-OMISSION invariant (AGENTS.md gotcha #8): an unset optional is ABSENT,
+    // never `"field": null`. Checked PER-RESPONSE, per-backend, on the raw parsed
+    // body BEFORE normalize() — because normalize() drops nulls, which is exactly
+    // what made the cross-backend diff blind to this. Not a diff on purpose: two
+    // backends that both emit `"x": null` match each other, so no diff of any
+    // strictness can catch them, while both break strict-`tsc` consumers.
+    const nulls = findNulls(body);
+    if (nulls.length > 0) {
+      throw new Error(
+        `${cfg.name} step '${step.id}' emitted explicit null(s) on the wire: ${nulls.join(", ")}. ` +
+        `The wire contract is "an unset optional is ABSENT, never \\"field\\": null" (AGENTS.md gotcha #8). ` +
+        `On .NET, give the member [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]; ` +
+        `on a TS backend, omit the key instead of assigning null.`,
+      );
     }
     captured.push({ step: step.id, status: res.status, ...body });
     lastState = body.state ?? lastState;  // envelope responses have no `state` — keep prior

@@ -26,6 +26,40 @@ export function normalize(value: unknown): unknown {
   return result;
 }
 
+/** Collect the JSON-Path of every key whose value is an explicit `null`.
+ *
+ *  This exists because `normalize()` above DROPS nulls before the diff, which
+ *  makes the cross-backend diff structurally blind to the exact drift AGENTS.md
+ *  gotcha #8 is entirely about: the wire contract is "an unset optional is
+ *  ABSENT, never `"field": null`", and a TS backend emitting `"x": null` against
+ *  a .NET twin that omits `x` normalizes to equal and passes. "Parity green" was
+ *  therefore never proof of null-omission.
+ *
+ *  This is deliberately NOT a diff. Null-omission is a per-response INVARIANT
+ *  that each backend must satisfy on its own, not a property of a comparison —
+ *  and that makes this check strictly stronger than a "strict diff mode" would
+ *  be. Two backends that BOTH emit `"x": null` match each other perfectly, so a
+ *  diff of any strictness passes them, while both violate the contract and both
+ *  break strict-`tsc` consumers (`exactOptionalPropertyTypes`). Only a
+ *  per-response invariant catches that.
+ *
+ *  Arrays are walked (a null INSIDE an array is a real value, not an unset
+ *  optional, so only object VALUES are reported — an array element that is null
+ *  is left to the diff).
+ */
+export function findNulls(value: unknown, path = "$", out: string[] = []): string[] {
+  if (value === null || typeof value !== "object") return out;
+  if (Array.isArray(value)) {
+    value.forEach((v, i) => findNulls(v, `${path}[${i}]`, out));
+    return out;
+  }
+  for (const [key, v] of Object.entries(value)) {
+    if (v === null) out.push(`${path}.${key}`);
+    else findNulls(v, `${path}.${key}`, out);
+  }
+  return out;
+}
+
 /** Deep-equality check after normalization. Returns null if equal, else a JSON-Path-style diff string. */
 export function diff(a: unknown, b: unknown, path = "$"): string | null {
   if (a === b) return null;
