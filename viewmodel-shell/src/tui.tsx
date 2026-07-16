@@ -1806,6 +1806,26 @@ function FormView({ node, ctx }: { node: FormNode; ctx: RCtx }) {
 //                                B3 ships single-select; select-multiple semantics
 //                                are deferred (no native OpenTUI multi-select
 //                                widget; would need a custom focusable list — B5).
+//   lookup / lookup-multiple  → <text label> + <input value=the ID at `bind`> +
+//                                a <text> line listing the `selected` labels
+//                                (label ?? value, per the wire's "label omitted
+//                                = label equals value" rule). Both inputTypes get
+//                                the SAME layout; lookup-multiple joins its
+//                                selected labels with ", ".
+//                                🚨 The debounced `searchAction`, the popup
+//                                listbox, the chips, the roving tabindex, and the
+//                                aria-live region are DELIBERATELY NOT ported.
+//                                This is the ARCHITECTURE WORKING AS DESIGNED,
+//                                not a gap: `bind` holds the id and nothing else,
+//                                so — per the lookup design of record §6 — "an
+//                                agent sets `bind` to the id and never touches the
+//                                search UI. It does not need to know the label."
+//                                A terminal user does exactly what an agent does.
+//                                Everything omitted here is a browser/DOM concept
+//                                with no OpenTUI analog (the a11y spec is a
+//                                screen-reader contract that means nothing in a
+//                                terminal). Same honest-degradation precedent as
+//                                select-multiple → single-select above.
 //   checkbox                  → <text "[x] label" or "[ ] label"> — decorative
 //                                for B3 (toggle interactivity in B5).
 //   file                      → <text "{label}: [file: …]"> placeholder —
@@ -1903,6 +1923,42 @@ function FieldView({ node, ctx }: { node: FieldNode; ctx: RCtx }) {
             handleSubmit(next);
           }}
         />
+      </box>
+    );
+  }
+
+  // ── lookup / lookup-multiple: honest degradation to a bound id input ───
+  // See the per-inputType layout contract in the header comment above for WHY
+  // this is a complete implementation for the terminal rather than a stub: the
+  // id is the only thing that round-trips, and typing it directly is precisely
+  // the agent-drivable path the design of record §6 describes. No search
+  // machinery is ported (no debounce, no searchAction dispatch, no popup, no
+  // chips, no live region) — those are DOM concepts, and the a11y baseline they
+  // implement is a screen-reader contract with no terminal meaning.
+  if (node.inputType === "lookup" || node.inputType === "lookup-multiple") {
+    // Read the display text from `selected` and ONLY from `selected` — never
+    // from `candidates`. That is the load-bearing invariant of the whole
+    // primitive (the label is view, server-owned, recomputed every render;
+    // `candidates` is the search result set and says nothing about what is
+    // currently chosen). `label ?? value` implements the wire rule that a label
+    // equal to its value is omitted — a free-form tag shows as its own id.
+    const selectedLabels = (node.selected ?? []).map((s) => s.label ?? s.value);
+    const selectedLine =
+      selectedLabels.length > 0 ? selectedLabels.join(", ") : "(none selected)";
+    return (
+      <box flexDirection="column" gap={0}>
+        <text fg="#888888">{label}</text>
+        <input
+          key={`${node.name}::wire::${wireValue}`}
+          value={currentValue}
+          placeholder={node.placeholder ?? ""}
+          focused={focused}
+          onInput={(v) => ctx.setFieldValue(node.name, v)}
+          onSubmit={(v: string | object) => {
+            handleSubmit(typeof v === "string" ? v : undefined);
+          }}
+        />
+        <text fg="#888888">Selected: {selectedLine}</text>
       </box>
     );
   }
