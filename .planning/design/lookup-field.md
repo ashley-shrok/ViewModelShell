@@ -233,6 +233,52 @@ intact** (§7, item 8). Milliseconds, every CI run, no ceremony.
 
 Revisit if a real user ever surfaces.
 
+### D10 — The live region reuses the **`chartInstances` idiom**. It is NOT a new mechanism.
+
+> ⚠️ **CORRECTION (2026-07-16, caught by the Phase 21 pattern-mapper).** An earlier revision of this
+> doc asserted the live region needed a *"genuinely new, fourth preservation category"* beyond
+> focus/scroll/`<details>`. **That was wrong, and it was wrong in the specific way our own banked rule
+> warns about: it reasoned from memory instead of grepping.** The mechanism already exists and has
+> shipped since Phase 12.
+
+**`BrowserAdapter.chartInstances`** (`browser.ts:83-95`, used at `:676-700`) is **exactly** the
+node-identity-survives-`innerHTML`-wipe mechanism this needs. Its own comment states the property:
+
+> *"DELIBERATELY PERSISTENT across renders (NOT reset like the per-render fields below): the canvas +
+> Chart instance must **SURVIVE render()'s innerHTML wipe** so a re-render with changed data redraws
+> IN PLACE… Instances are mark-swept (destroy()'d + deleted) in render() when the new tree drops
+> them."*
+
+And at the reuse site: *"Reuse the SAME canvas element (**detached by the innerHTML wipe, not
+destroyed**) — its 2D context + drawn bitmap survive."*
+
+The distinction that matters is real and still holds — focus/scroll/details restore **state** onto
+fresh nodes, whereas a live region (like a canvas) needs **the same node object** to persist, because
+what survives is an external registration (the assistive tech's, or Chart.js's). **But that is a
+distinction between two existing idioms, not a gap.** The correct implementation is a **fifth
+instance of the `chartInstances` idiom**: a persistent, mark-swept map keyed by a stable per-render
+ordinal, holding the live-region element(s), reattached on each render rather than rebuilt.
+
+⇒ **Do NOT build a parallel mechanism. Copy `chartInstances`,** including its mark-sweep (a lookup
+removed from the tree must drop its regions) and its per-render key-counter reset idiom
+(`chartKeyCounter` / `chartKeysSeen`).
+
+### D11 — `searchAction` is **renderer-forced** onto the non-blocking lane. The app cannot opt out.
+
+The non-blocking lane is opted into via `ActionEvent.blocking === false` (`index.ts:20`) — i.e. it is
+**a wire field the app sets.** For a search-as-you-type action that is a footgun: an app that forgets
+`blocking: false` **busy-locks the entire page on every keystroke**, because the framework applies
+`.vms-busy` for the duration of any user-initiated dispatch. The failure is severe, silent at author
+time, and only visible when someone types.
+
+⇒ **The renderer forces `searchAction` non-blocking**, regardless of what the app declares. A search
+query is *definitionally* a background question — there is no coherent app that wants a blocking one,
+so this is not a choice worth exposing. This is the same instinct as the framework owning debounce
+and ordering (D4): the correct behavior is baked in rather than left to every consumer to get right.
+
+Corollary for the design: **`blocking` is meaningless on `searchAction`.** Say so in the TSDoc rather
+than letting an author believe setting it does something.
+
 ## 4. Wire shape
 
 New `FieldNode.inputType` values: **`"lookup"`** and **`"lookup-multiple"`**.
@@ -295,6 +341,43 @@ raw id, or both?*
 SAP annotates `TextOnly` *"e.g. for UUIDs"* — i.e. when the id is noise. Ours defaults to label-only
 and lets an app surface the id when it is genuinely meaningful (an order number, a SKU, a ticket ref).
 **OPEN-1: v1 or fast-follow.**
+
+### D12 — **Candidate ORDER is the app's. The renderer MUST NEVER re-sort.**
+
+`candidates` is an array and **its order is meaningful data, not incidental**. The renderer presents
+them in the order given, full stop.
+
+**Consumer signal (@molly / Metis, 2026-07-16), which is why this is written down:** their plan is to
+sort candidates by *recency-weighted mention frequency* — the people a given operator @-mentions most
+bubble to the top — computed server-side in their own provider handler before the list is returned.
+They flagged it as *"Metis-side sort… so it doesn't touch your design."* **It does touch it**: a
+renderer that helpfully alphabetized for tidiness would silently destroy that ranking, and the app
+would have no way to stop it.
+
+This also settles **OPEN-6** concretely and matches the survey: Salesforce's picker `searchType`
+**defaults to `Recent`**, and Dynamics shows *"the five most recently used rows… along with five
+favorite rows"* (explicitly *not* filtered by the search term). **Relevance ordering is universal in
+mature pickers, and in every case it is the server's judgment, not the widget's.**
+
+⇒ The renderer sorts nothing, dedupes nothing, and truncates nothing. The app decides what comes back
+and in what order; if it wants a cap, D7 requires it say so visibly in the tree.
+
+**Scope — D12 governs PRESENTATION of `candidates`, not state writes.** (Ambiguity caught by the
+Phase 21 planner, 2026-07-16 — it read the multi-select commit-path dedupe as a D12 violation and
+flagged it rather than silently working around it. It isn't one, but the wording invited the reading,
+so: the fix is here, in the decision.)
+
+- **In scope (forbidden):** reordering, filtering, deduping, or truncating **`candidates`** for
+  display. That list is the server's answer and the renderer is not entitled to an opinion about it.
+- **Out of scope (allowed, and correct):** **deduping `bind` on commit** in `lookup-multiple` — i.e.
+  not writing the same id into the selection twice. That is a *state write* about the user's own
+  accumulated selection, not a presentation of the server's list. A selection set has set semantics;
+  a duplicate id in `bind` is meaningless in every case anyone has been able to construct, and mature
+  libraries prevent it structurally (react-select's `hideSelectedOptions` defaults on for multi).
+
+The distinction in one line: **D12 is about not second-guessing the server's answer. It is not a ban
+on the renderer having any logic at all.** Comment it at the commit site — a reader fresh off D12 will
+flag it, exactly as the planner did.
 
 ## 6. Agent-drivability
 
