@@ -150,6 +150,31 @@ function isFailingQuery(query: string): boolean {
   return query.trim().toLowerCase().includes("fail");
 }
 
+/** §4a's CURATED directory — a fixed, server-owned label set you PICK from and
+ *  cannot invent into. It exists to sit beside §4b's free-form tags over the
+ *  SAME domain (labelling a ticket), because that contrast IS D15: one act per
+ *  field, DECLARED. Same control, same domain, two different acts. */
+const CATEGORIES: LookupItem[] = [
+  { value: "cat-billing", label: "Billing" },
+  { value: "cat-data-loss", label: "Data loss" },
+  { value: "cat-integration", label: "Integration" },
+  { value: "cat-perf", label: "Performance" },
+  { value: "cat-security", label: "Security" },
+  { value: "cat-ui", label: "UI / rendering" },
+];
+
+function categoryById(id: string): LookupItem | undefined {
+  return CATEGORIES.find((c) => c.value === id);
+}
+
+/** §4a — the same D1 rule as the people directory: `selected` resolves out of
+ *  CATEGORIES (the server's own id space), never out of `candidates`. */
+function searchCategories(query: string): LookupItem[] {
+  const q = query.trim().toLowerCase();
+  if (q === "") return [];
+  return CATEGORIES.filter((c) => (c.label ?? c.value).toLowerCase().includes(q));
+}
+
 // ─── State ────────────────────────────────────────────────────────────────────
 
 interface LookupState {
@@ -162,7 +187,10 @@ interface LookupState {
   // 3 — lookup-multiple chips.
   watchers: string[];
   watchersQuery: string;
-  // 4 — allowCustom free-form tags (no directory behind it).
+  // 4a — a DIRECTORY PICKER: search, no invention (searchAction, no allowCustom).
+  category: string;
+  categoryQuery: string;
+  // 4b — a TAGS FIELD: invention, no directory (allowCustom, no searchAction).
   tags: string[];
   tagsQuery: string;
   // 5 — the always-broken directory (the search-error differentiator).
@@ -180,6 +208,8 @@ function initialState(): LookupState {
     assigneeQuery: "",
     watchers: ["u-403", "u-407"],
     watchersQuery: "",
+    category: "",
+    categoryQuery: "",
     tags: ["urgent", "regression"],
     tagsQuery: "",
     brokenPick: "",
@@ -219,6 +249,8 @@ function buildVm(state: LookupState): ViewNode {
   // there, so an MRU list cannot muddy any proof.
   const assigneeSearch = searchDirectory(state.assigneeQuery, true);
   const watchersSearch = searchDirectory(state.watchersQuery);
+  // 4a — the curated-category directory picker (search, no invention).
+  const categorySearch = searchCategories(state.categoryQuery);
 
   return {
     type: "page",
@@ -345,33 +377,99 @@ function buildVm(state: LookupState): ViewNode {
         ],
       },
 
-      // ── 4. allowCustom — free-form tags ───────────────────────────────────
+      // ── 4. D15 — the TWO supported shapes, side by side ────────────────────
+      //
+      // 🚨 THIS SECTION USED TO DECLARE ONE FIELD WITH allowCustom + searchAction
+      // TOGETHER. That combination is UNSUPPORTED as of D15 and now warns
+      // [vms:lookup-ambiguous-enter]: one Enter cannot both invent a value and
+      // run a search ("urgent" + Enter — create the tag, or search for it?), and
+      // NO precedence serves both. So the page exercises what actually SHIPS: the
+      // two shapes, over the SAME domain (labelling a ticket), so the contrast is
+      // the lesson — same control, one DECLARED act each, Enter unambiguous in
+      // both.
       {
         type: "section",
-        heading: "4. allowCustom — a free-form tags field",
+        heading: "4. D15 — one Enter, one declared act",
         variant: "card",
         children: [
           note(
-            "The SAME control with allowCustom:true and NO directory behind it — " +
-            "a free-form tags input falls out with zero renderer special-casing " +
-            "(D3). Type a new value and press Enter to create a tag. Note these " +
-            "chips carry no label: a tag is a value whose label IS itself, so per " +
-            "D5 the label is simply absent from the wire rather than repeated.",
+            "Enter carries a dispatch, and this control could declare more than " +
+            "one act on it. D15 settles that by SHAPE rather than by precedence: " +
+            "declare a search OR an invention, never both. Both fields below " +
+            "label a ticket; they differ only in the act they declare, and that " +
+            "is exactly the point. (Declaring both is not silently half-served — " +
+            "it is a console error, because a combination that quietly half-works " +
+            "is the failure principle 8 forbids.)",
           ),
+
+          // 4a — DIRECTORY PICKER: search, NO invention.
           {
-            type: "field",
-            name: "tags",
-            inputType: "lookup-multiple",
-            label: "Tags",
-            bind: "tags",
-            searchBind: "tagsQuery",
-            placeholder: "Type a tag, press Enter…",
-            // D5 — label OMITTED, because it would merely repeat `value`.
-            selected: state.tags.map((t) => ({ value: t })),
-            allowCustom: true,
-            searchAction: { name: "search-tags" },
+            type: "section",
+            heading: "4a. Directory picker — searchAction, NO allowCustom",
+            children: [
+              note(
+                "A CURATED label set: you pick, you cannot invent. Type “i” and " +
+                "press Enter — Enter SEARCHES (Integration, UI / rendering); " +
+                "arrow+Enter accepts. Typing a category that does not exist and " +
+                "pressing Enter creates NOTHING — it searches and finds nothing. " +
+                "That refusal is the declared act doing its job.",
+              ),
+              {
+                type: "field",
+                name: "category",
+                inputType: "lookup",
+                label: "Category (curated)",
+                bind: "category",
+                searchBind: "categoryQuery",
+                placeholder: "Search categories…",
+                // D1 — resolved from CATEGORIES (the server's id space), NEVER
+                // from `candidates`. Same anti-trap rule as the people fields.
+                selected: state.category
+                  ? [categoryById(state.category)].filter((c): c is LookupItem => c !== undefined)
+                  : [],
+                candidates: categorySearch,
+                searchAction: { name: "search-category" },
+                // NO allowCustom — declaring it here would warn and be ignored.
+              },
+              ...(state.categoryQuery.trim() !== "" && categorySearch.length === 0
+                ? [note(`No category matches “${state.categoryQuery}” — and Enter will not invent one.`)]
+                : []),
+              note(`bind holds: ${state.category ? `“${state.category}”` : "—"}`),
+            ],
           },
-          note(`bind holds: [${state.tags.map((t) => `“${t}”`).join(", ") || "—"}]`),
+
+          // 4b — TAGS FIELD: invention, NO directory.
+          {
+            type: "section",
+            heading: "4b. Tags field — allowCustom, NO searchAction",
+            children: [
+              note(
+                "The SAME control with allowCustom:true and NO directory behind " +
+                "it — a free-form tags input falls out with zero renderer " +
+                "special-casing (D3). Type a new value and press Enter to create " +
+                "a tag; here Enter INVENTS, unambiguously, because nothing else " +
+                "claims it. Note these chips carry no label: a tag is a value " +
+                "whose label IS itself, so per D5 the label is simply absent from " +
+                "the wire rather than repeated.",
+              ),
+              {
+                type: "field",
+                name: "tags",
+                inputType: "lookup-multiple",
+                label: "Tags (free-form)",
+                bind: "tags",
+                searchBind: "tagsQuery",
+                placeholder: "Type a tag, press Enter…",
+                // D5 — label OMITTED, because it would merely repeat `value`.
+                selected: state.tags.map((t) => ({ value: t })),
+                allowCustom: true,
+                // NO searchAction — suggestions on a tags field are DEFERRED
+                // (D15), exactly as the parked `tags` design already deferred
+                // them. The combo would warn and drop the invention.
+              },
+              note(`bind holds: [${state.tags.map((t) => `“${t}”`).join(", ") || "—"}]`),
+            ],
+          },
         ],
       },
 
@@ -474,7 +572,9 @@ const actionHandler = createAction<LookupState>(async (payload) => {
     case "search-owner":
     case "search-assignee":
     case "search-watchers":
-    case "search-tags":
+    // 4a's directory picker. There is deliberately no "search-tags" any more:
+    // 4b declares allowCustom and therefore NO searchAction (D15).
+    case "search-category":
     case "search-broken":
       break;
     default:
