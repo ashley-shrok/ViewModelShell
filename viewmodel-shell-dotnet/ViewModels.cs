@@ -1415,6 +1415,12 @@ public static class ViewTreeValidation
 
             case FieldNode field:
                 if (field.Action is { } fieldAction) Record(fieldAction, enclosingForm, sink);
+                // 5.2.0 (LOOK-06) — the lookup's live-query action participates in
+                // name uniqueness exactly like every other action. Mirrors the TS
+                // collectActions `case "field"` arm; both walkers must agree or a
+                // duplicate name is a hard failure on one backend and a silent pass
+                // on the other.
+                if (field.SearchAction is { } fieldSearchAction) Record(fieldSearchAction, enclosingForm, sink);
                 break;
 
             case CheckboxNode checkbox:
