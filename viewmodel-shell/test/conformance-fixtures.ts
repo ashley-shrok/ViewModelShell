@@ -126,12 +126,12 @@ export const FIXTURES: ConformanceFixture[] = [
     expect: ["Romeo", "Sierra"],
   },
   {
-    name: "stat-bar (label + value, incl. numeric)",
+    name: "stat-bar (label + value — value is display text on both backends)",
     vm: {
       type: "stat-bar",
       stats: [
         { label: "Tango", value: "Uniform" },
-        { label: "Victor", value: 7 },
+        { label: "Victor", value: "7" },
       ],
     },
     expect: ["Tango", "Uniform", "Victor", "7"],
