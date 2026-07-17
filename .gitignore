@@ -22,11 +22,14 @@ viewmodel-shell-dotnet/nupkg/
 .env
 .env.*
 
-# SQLite DBs created at runtime by demos / parity runs
+# SQLite DBs created at runtime by demos / parity runs.
+# Globbed, not enumerated: these were listed one-by-one, so adding the seeded
+# parity twins (helpdesk-parity-*-seeded.db) silently produced committable
+# artifacts. A new parity backend must not be able to reintroduce that.
 demo/HelpDesk/AspNetCore/helpdesk.db
-demo/HelpDesk/AspNetCore/helpdesk-parity-dotnet.db
+demo/HelpDesk/AspNetCore/helpdesk-parity-*.db
 demo/HelpDesk-bun/helpdesk.db
-demo/HelpDesk-bun/helpdesk-parity-bun.db
+demo/HelpDesk-bun/helpdesk-parity-*.db
 
 # GSD auto-generated state scratch — AGENTS.md forbids a committed state ledger
 .planning/STATE.md

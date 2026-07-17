@@ -105,6 +105,31 @@
       "fixtures": ["helpdesk"]
     },
     {
+      "$comment": "SEEDED helpdesk twin. Deliberately does NOT set HELPDESK_SEED=0, so the demo's ~80-ticket seed runs and the agent queue's OVER-CAP branch (matching > Cap(25) -> 'refine the filter') actually EXECUTES. The unseeded pair above cannot reach it: with the seed off there are 2 tickets, so `matching <= Cap` is always true and that branch is dead code under parity — which is how a real style-vs-tone drift on that node shipped for releases while parity printed 'all backends agree'. Its own DB file so it never shares state with the unseeded twin. See fixtures/helpdesk-seeded.json.",
+      "name": "dotnet-helpdesk-seeded",
+      "cwd": "../demo/HelpDesk/AspNetCore",
+      "prebuild": { "cmd": "dotnet", "args": ["build", "--nologo", "-v", "minimal"] },
+      "cleanupFiles": ["helpdesk-parity-dotnet-seeded.db"],
+      "start": "dotnet",
+      "args": ["run", "--no-build", "--no-launch-profile", "--urls", "http://localhost:5016"],
+      "env": { "HELPDESK_DB": "helpdesk-parity-dotnet-seeded.db" },
+      "baseUrl": "http://localhost:5016",
+      "ready": "/api/requester",
+      "fixtures": ["helpdesk-seeded"]
+    },
+    {
+      "$comment": "SEEDED helpdesk twin (bun side) — see dotnet-helpdesk-seeded above. HELPDESK_SEED intentionally unset so the seed runs.",
+      "name": "bun-helpdesk-seeded",
+      "cwd": "../demo/HelpDesk-bun",
+      "cleanupFiles": ["helpdesk-parity-bun-seeded.db"],
+      "start": "bun",
+      "args": ["run", "server.ts"],
+      "env": { "PORT": "5017", "HELPDESK_DB": "helpdesk-parity-bun-seeded.db" },
+      "baseUrl": "http://localhost:5017",
+      "ready": "/api/requester",
+      "fixtures": ["helpdesk-seeded"]
+    },
+    {
       "name": "dotnet-probe",
       "cwd": "../demo/FeatureProbe/AspNetCore",
       "prebuild": { "cmd": "dotnet", "args": ["build", "--nologo", "-v", "minimal"] },

@@ -81,6 +81,27 @@ interface FixtureStep {
    *  Use SPARINGLY — its purpose is to accommodate library-flavored divergence (e.g. parse-error
    *  messages), NOT to paper over real wire-shape drift. */
   compareIgnoreFields?: string[];
+  /** COVERAGE tripwire — substrings that MUST appear in this step's response body, asserted
+   *  PER-RESPONSE on every backend independently (like findNulls, and for the same reason:
+   *  it is not a property of a comparison).
+   *
+   *  This exists because a diff can only ever prove things about code the fixture actually RUNS.
+   *  A step that claims to cover a documented behaviour proves nothing if its configuration makes
+   *  that behaviour's branch UNREACHABLE — the backends then agree perfectly on the branch's
+   *  absence and the diff passes over it forever. That is not hypothetical: `HELPDESK_SEED=0`
+   *  left the HelpDesk queue with 2 tickets instead of ~80, so `matching <= Cap` was always true,
+   *  the over-cap "refine your filter" branch NEVER executed under parity, and a real
+   *  style-vs-tone drift on that node shipped for releases while parity printed "all backends
+   *  agree" over every run.
+   *
+   *  So: when a fixture step exists to cover a specific branch, name a substring only that branch
+   *  emits. If the branch stops firing (someone disables a seed, changes a cap, reorders a
+   *  distribution), the step FAILS LOUDLY instead of silently going vacuous.
+   *
+   *  Deliberately a coverage check, not a correctness check — the cross-backend diff already
+   *  proves correctness. Keep the substring ASCII and wording-stable (assert "refine the filter",
+   *  not a whole formatted sentence with counts in it). */
+  expectBodyContains?: string[];
 }
 
 interface Fixture {
@@ -289,6 +310,23 @@ async function runFixtureAgainst(cfg: BackendConfig, fixture: Fixture): Promise<
         `On .NET, give the member [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]; ` +
         `on a TS backend, omit the key instead of assigning null.`,
       );
+    }
+    // COVERAGE tripwire — assert this step actually reached the branch it claims to cover.
+    // Per-response, per-backend, on the parsed body (so \u-escapes from System.Text.Json and
+    // raw UTF-8 from JSON.stringify compare identically). See FixtureStep.expectBodyContains:
+    // a diff cannot see a branch that never ran, so coverage needs an invariant, not a diff.
+    if (step.expectBodyContains && step.expectBodyContains.length > 0) {
+      const haystack = JSON.stringify(body);
+      const missing = step.expectBodyContains.filter(s => !haystack.includes(s));
+      if (missing.length > 0) {
+        throw new Error(
+          `${cfg.name} step '${step.id}' did not reach the branch it claims to cover — ` +
+          `missing expected substring(s): ${missing.map(s => JSON.stringify(s)).join(", ")}. ` +
+          `This step exists to EXERCISE that branch; if the branch no longer fires, the step is ` +
+          `vacuous and the cross-backend diff is silently proving nothing about it. Check whether ` +
+          `the backend's config (e.g. a disabled seed) made the branch unreachable.`,
+        );
+      }
     }
     captured.push({ step: step.id, status: res.status, ...body });
     lastState = body.state ?? lastState;  // envelope responses have no `state` — keep prior

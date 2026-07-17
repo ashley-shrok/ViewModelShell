@@ -1,0 +1,30 @@
+{
+  "name": "helpdesk-seeded",
+  "endpoint": "/api/agent",
+  "actionEndpoint": "/api/agent/action",
+  "$comment": "The SEEDED helpdesk agent queue — the twin of the `helpdesk` fixture that runs WITH the demo's ~80-ticket seed (see the dotnet-helpdesk-seeded / bun-helpdesk-seeded backends). It exists for one reason: the unseeded pair sets HELPDESK_SEED=0 for stable ticket IDs, which leaves 2 tickets, so `matching <= Cap(25)` is ALWAYS true and the agent queue's over-cap 'refine the filter' branch NEVER EXECUTES. A real style-vs-tone drift on that exact node shipped for releases while parity printed 'all backends agree' over every run — the diff was never broken, it was never shown the data. || WHY THIS FIXTURE IS A SEPARATE FILE, NOT EXTRA STEPS ON `helpdesk`: that fixture pins ticket IDs (select-ticket-1, selectedIds.1/2) against an AUTOINCREMENT table, so seeding ~80 rows first would push its created tickets to id 81/82 and break it. Its seed-off call is well-founded; this ADDS coverage rather than changing it. || WHY QUEUE-ONLY — DO NOT ADD A TICKET-DETAIL STEP: created_at is wall-clock (DateTime.UtcNow / Date.now()) and reaches the wire ONLY on the ticket detail page, baked INSIDE a text node's value string ('Submitted: ...'). normalize.ts masks volatile values by FIELD NAME, which cannot reach a substring inside a value, so a detail step would diff two different clocks and flake. The queue never renders created_at. || THE SEED DISTRIBUTION COVERS BOTH BRANCHES BY DESIGN (HelpDeskDb.cs says so in those words): All(80) and Open(35) exceed Cap(25) -> over-cap branch, warning node, zero rows; In Progress(22) and Resolved(23) fit under -> within-cap branch with 22/23 real seeded rows plus the bulk-action switcher toolbar. Ordering is deterministic across twins (ORDER BY created_at DESC, id DESC; both seeds decrement by idx, and the id tiebreak removes ambiguity). || expectBodyContains on the over-cap steps is the tripwire that stops this recurring: if someone disables the seed or changes the cap, these steps FAIL LOUDLY instead of silently going vacuous.",
+  "steps": [
+    { "id": "seeded-initial", "method": "GET", "expectBodyContains": ["refine the filter"],
+      "$comment": "Default filter is 'all' -> 80 matching -> OVER-CAP. The branch parity could never reach." },
+
+    { "id": "seeded-filter-all", "method": "POST", "action": { "name": "filter-all" },
+      "stateMutations": [{ "path": "filter", "value": "all" }],
+      "expectBodyContains": ["refine the filter"],
+      "$comment": "80 matching > Cap(25) -> over-cap warning node, zero rows, no bulk toolbar." },
+
+    { "id": "seeded-filter-open", "method": "POST", "action": { "name": "filter-open" },
+      "stateMutations": [{ "path": "filter", "value": "open" }],
+      "expectBodyContains": ["refine the filter"],
+      "$comment": "35 open > Cap(25) -> over-cap branch again, via a different count." },
+
+    { "id": "seeded-filter-in-progress", "method": "POST", "action": { "name": "filter-in-progress" },
+      "stateMutations": [{ "path": "filter", "value": "in-progress" }],
+      "expectBodyContains": ["Mark Resolved"],
+      "$comment": "22 in-progress <= Cap(25) -> WITHIN-cap: 22 real seeded rows + the bulk-action switcher toolbar. The toolbar's presence is the tripwire (it renders only when withinCap && rows > 0)." },
+
+    { "id": "seeded-filter-resolved", "method": "POST", "action": { "name": "filter-resolved" },
+      "stateMutations": [{ "path": "filter", "value": "resolved" }],
+      "expectBodyContains": ["Mark Resolved"],
+      "$comment": "23 resolved <= Cap(25) -> within-cap with 23 rows + toolbar." }
+  ]
+}
