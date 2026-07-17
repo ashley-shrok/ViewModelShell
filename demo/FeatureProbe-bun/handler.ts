@@ -17,6 +17,8 @@ import {
   shellRedirect,
   shellSideEffect,
   validateActionNames,
+  type TableColumn,
+  type TableNode,
   type ViewNode,
 } from "@ashley-shrok/viewmodel-shell/server";
 
@@ -120,12 +122,14 @@ function tableWindow(s: FeatureProbeState): { page: TableItem[]; total: number; 
 
 function buildTableSection(state: FeatureProbeState): ViewNode {
   const { page, total, clampedPage } = tableWindow(state);
-  const nameCol: Record<string, unknown> = {
+  const nameCol: TableColumn = {
     key: "name", label: "Name", sortable: true, filterable: true,
+    // Spread, not a post-hoc assignment: filterValue stays ABSENT when unset
+    // (an unset optional is never `null` on the wire — AGENTS.md gotcha #8).
+    ...(state.tableFilters.name.length > 0 ? { filterValue: state.tableFilters.name } : {}),
   };
-  if (state.tableFilters.name.length > 0) nameCol.filterValue = state.tableFilters.name;
 
-  const table: Record<string, unknown> = {
+  const table: TableNode = {
     type: "table",
     columns: [
       nameCol,
@@ -153,7 +157,7 @@ function buildTableSection(state: FeatureProbeState): ViewNode {
     type: "section",
     heading: "Table matrix",
     variant: "card",
-    children: [table as unknown as ViewNode],
+    children: [table],
   };
 }
 
@@ -169,9 +173,9 @@ function buildVm(state: FeatureProbeState): ViewNode {
     });
   }
   children.push(
-    { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!", emphasis: "secondary" } as ViewNode,
+    { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!", emphasis: "secondary" },
   );
-  children.push({ type: "image", src: "/logo.png", alt: "ViewModel Shell logo", size: "small", shape: "circle" } as ViewNode);
+  children.push({ type: "image", src: "/logo.png", alt: "ViewModel Shell logo", size: "small", shape: "circle" });
   if (state.lastSubmit != null) {
     children.push({ type: "text", value: `Last submit: ${state.lastSubmit}`, style: "muted" });
   }
@@ -193,7 +197,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       { type: "button", label: "Save Draft", action: { name: "save-draft" }, emphasis: "secondary" },
       { type: "button", label: "Publish", action: { name: "publish" }, emphasis: "primary" },
     ],
-  } as ViewNode);
+  });
   const probeSection: ViewNode = {
     type: "section",
     heading: "Probe",

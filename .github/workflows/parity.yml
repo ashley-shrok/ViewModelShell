@@ -128,5 +128,26 @@ jobs:
           done
           cd parity && bun install --frozen-lockfile
 
+      - name: Install frontend demo deps (for the demo type-check)
+        # The demo/*/frontend trees were never installed in CI — nothing ran
+        # against them. check:demo-types needs each demo's own tsc (each pins
+        # its own typescript), and it treats an uninstallable demo as a hard
+        # failure rather than a skip, so these installs are load-bearing: drop
+        # them and the gate fails loudly instead of silently under-covering.
+        run: |
+          for dir in demo/*/frontend; do
+            (cd "$dir" && npm ci)
+          done
+
+      - name: Type-check the demo sources (nothing else does)
+        # Every demo ships a strict tsconfig that NOTHING ever ran. CI builds
+        # the .NET demos (so 6.0.0's enums type-check those), while the
+        # TypeScript demos were gated by neither a build nor vitest — a demo
+        # could emit a value no ViewNode type allows and stay green. Proven at
+        # RED: re-injecting the real pre-6.0.0 drift (`style:"warning"` where
+        # the axis is `tone`) into demo/HelpDesk-bun fails this step in the
+        # exact file where it once shipped for releases.
+        run: cd viewmodel-shell && npm run check:demo-types
+
       - name: Run cross-backend parity tests
         run: cd parity && bun run run.ts

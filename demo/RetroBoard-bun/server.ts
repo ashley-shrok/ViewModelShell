@@ -150,7 +150,7 @@ function buildSectionNode(
       },
     ],
   };
-  return section as ViewNode;
+  return section;
 }
 
 function buildVm(state: RetroState): ViewNode {
@@ -169,7 +169,7 @@ function buildVm(state: RetroState): ViewNode {
       buildSectionNode("Action Items",   "action-items",  state.actionItems, true,  state.actionItems),
     ],
   };
-  return page as ViewNode;
+  return page;
 }
 
 function generateId(): string {

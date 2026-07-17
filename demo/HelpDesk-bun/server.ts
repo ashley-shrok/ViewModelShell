@@ -26,7 +26,12 @@ import {
   createAgentSkillHandler,
   shellRejection,
   validateActionNames,
+  type ButtonNode,
+  type CheckboxNode,
   type ErrorEntry,
+  type TableColumn,
+  type TableNode,
+  type TableRow,
   type ViewNode,
 } from "@ashley-shrok/viewmodel-shell/server";
 import { Database } from "bun:sqlite";
@@ -366,7 +371,7 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
 
   const rows = tickets.map(t => {
     const status = ticketStatus(t);
-    const rowActions: ViewNode[] = [
+    const rowActions: (ButtonNode | CheckboxNode)[] = [
       // Per-row selection checkbox bound to `selectedIds.${id}` (renderer
       // writes true/false directly to that slot on click; no dispatch needed).
       // Clicking the checkbox stops propagation so it doesn't also fire the
@@ -377,14 +382,7 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
         bind: `selectedIds.${t.id}`,
       },
     ];
-    const row: {
-      cells: Record<string, string>;
-      id?: string;
-      actions?: ViewNode[];
-      state?: string;
-      tone?: "danger" | "warning" | "success" | "info";
-      action?: { name: string };
-    } = {
+    const row: TableRow = {
       cells: {
         title:    t.title,
         type:     typeLabel(t.type),
@@ -397,9 +395,10 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
       // Click-anywhere row navigation — same target as the old "Open" button,
       // just on the whole row (keyboard + ARIA emitted by the renderer).
       action: { name: `select-ticket-${t.id}` },
+      // Spread, not post-hoc assignment: an unset optional stays ABSENT.
+      ...(status.state ? { state: status.state } : {}),
+      ...(status.tone ? { tone: status.tone } : {}),
     };
-    if (status.state) row.state = status.state;
-    if (status.tone) row.tone = status.tone;
     return row;
   });
 
@@ -464,12 +463,14 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
   if (withinCap && rows.length === 0 && dbEmpty) {
     children.push({ type: "text", value: "No tickets in queue.", style: "muted" });
   } else {
-    const titleCol: Record<string, unknown> = {
+    const titleCol: TableColumn = {
       key: "title", label: "Title", filterable: true,
+      // Spread, not a post-hoc assignment: filterValue stays ABSENT when unset
+      // (an unset optional is never `null` on the wire — AGENTS.md gotcha #8).
+      ...(state.titleFilter.length > 0 ? { filterValue: state.titleFilter } : {}),
     };
-    if (state.titleFilter.length > 0) titleCol.filterValue = state.titleFilter;
 
-    const table: Record<string, unknown> = {
+    const table: TableNode = {
       type: "table",
       columns: [
         titleCol,
@@ -482,7 +483,7 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
       filterBinds: { title: "titleFilter" },
       filterAction: { name: "filter-text" },
     };
-    children.push(table as unknown as ViewNode);
+    children.push(table);
   }
 
   return { type: "page", title: "Help Desk — Agent", children };

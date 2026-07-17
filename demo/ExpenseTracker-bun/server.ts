@@ -270,7 +270,7 @@ function buildVm(state: ExpensesState): ViewNode {
     title: "Expenses",
     children: [rail, main],
     layout: "sidebar",
-  } as ViewNode;
+  };
 }
 
 const actionHandler = createAction<ExpensesState>(async payload => {
