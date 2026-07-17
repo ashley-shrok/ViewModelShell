@@ -799,7 +799,24 @@ export interface ImageNode {
 
 export interface StatBarNode {
   type: "stat-bar";
-  stats: Array<{ label: string; value: string | number }>;
+  stats: Array<{
+    label: string;
+    /** The stat's value. Typed `string` (not `string | number`) so the TS and
+     *  .NET backends emit BYTE-IDENTICAL wire — a bare number would serialize as
+     *  JSON `12` in TS but the .NET twin's `string Value` can only emit `"12"`,
+     *  a real cross-backend drift the parity suite never exercised. Format the
+     *  number server-side (`String(n)`, `n.toFixed(2)`, `$${n}`) — the value is
+     *  display text, and any formatting an app wants is richer than a bare
+     *  number anyway. (Narrowed in 6.0.0 — see CHANGELOG; the field was unused.) */
+    value: string;
+    /** Optional semantic status tone for this tile — the universal status color
+     *  axis (same closed set as Section/Button/ListItem/TableRow). Renders the
+     *  tile as a subtly tinted chip (surface tint + colored border, reusing the
+     *  --vms-error/-warning/-success/-info tokens), so an unhealthy stat reads at
+     *  a glance rather than via one small line of text. Omitted = today's neutral
+     *  inline stat. Closed union. */
+    tone?: "danger" | "warning" | "success" | "info";
+  }>;
 }
 
 export interface TabsNode {
@@ -1080,6 +1097,16 @@ export interface StepItem {
   label: string;
   /** Optional one-line supporting text shown beside/under the label. */
   description?: string;
+  /** Optional semantic status tone for this step — the universal status color
+   *  axis (same closed set as Section/Button/ListItem/TableRow). ORTHOGONAL to
+   *  the done/current/upcoming state the framework DERIVES from `current`: tone
+   *  overlays a semantic color onto the marker (e.g. a failed/blocked stage read
+   *  as `danger`, a stage needing attention as `warning`) regardless of its
+   *  position in the sequence. Omitted = the derived state's default appearance
+   *  (accent for done/current, muted for upcoming). Because tone is app-authored
+   *  status reinforced by the step's own label text, it is NOT color-only (same
+   *  posture as Section tone). Closed union. */
+  tone?: "danger" | "warning" | "success" | "info";
 }
 
 /** A discrete step / stepper / wizard progress indicator — an ordered list of

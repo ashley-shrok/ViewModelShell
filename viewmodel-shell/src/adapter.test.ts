@@ -560,6 +560,48 @@ describe("v5.1 — StepsNode derives per-step state from current + marks the cur
   });
 });
 
+describe("6.0.0 — per-item tone (StatItem.tone + StepItem.tone)", () => {
+  it("StepItem.tone emits the shared --toned + specific --tone-{tone} classes, orthogonal to derived state", () => {
+    const { container, render } = setup({});
+    render({
+      type: "steps",
+      steps: [
+        { label: "Draft" },
+        { label: "Review", tone: "danger" },
+        { label: "Publish" },
+      ],
+      current: 1,
+    });
+    const steps = Array.from(container.querySelectorAll("li.vms-steps__step"));
+    // Untoned steps carry neither class.
+    expect(steps[0]!.classList.contains("vms-steps__step--toned")).toBe(false);
+    expect(steps[2]!.classList.contains("vms-steps__step--toned")).toBe(false);
+    // The toned step keeps its DERIVED state class AND gains the tone classes.
+    expect(steps[1]!.classList.contains("vms-steps__step--current")).toBe(true);
+    expect(steps[1]!.classList.contains("vms-steps__step--toned")).toBe(true);
+    expect(steps[1]!.classList.contains("vms-steps__step--tone-danger")).toBe(true);
+  });
+
+  it("StatItem.tone emits the chip classes; untoned items stay bare; value renders as its string", () => {
+    const { container, render } = setup({});
+    render({
+      type: "stat-bar",
+      stats: [
+        { label: "active", value: "12" },
+        { label: "failing", value: "3", tone: "danger" },
+      ],
+    });
+    const items = Array.from(container.querySelectorAll(".vms-stat-bar__item"));
+    expect(items).toHaveLength(2);
+    expect(items[0]!.classList.contains("vms-stat-bar__item--toned")).toBe(false);
+    expect(items[1]!.classList.contains("vms-stat-bar__item--toned")).toBe(true);
+    expect(items[1]!.classList.contains("vms-stat-bar__item--tone-danger")).toBe(true);
+    // Value is display text on both backends — rendered verbatim from the string.
+    const vals = Array.from(container.querySelectorAll(".vms-stat-bar__value"));
+    expect(vals.map((v) => v.textContent)).toEqual(["12", "3"]);
+  });
+});
+
 describe("v5.1 — BreadcrumbNode external crumb hardens the link (T-20-06)", () => {
   it("external:true sets target=_blank + rel=noopener noreferrer", () => {
     const { container, render } = setup({});

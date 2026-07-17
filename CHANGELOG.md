@@ -6,6 +6,30 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 6.0.0 / NuGet 6.1.0 — Per-item tone, stat-bar wire fix, accessible warning fill
+
+**npm:** `6.0.0` (major, from `5.2.0`) · **NuGet:** `6.1.0` (minor, from `6.0.0`). npm takes the major for one breaking type-narrowing (below); the tone fields are additive on both sides. Both packages now sit on major `6`.
+
+### Added
+
+- **`StatItem.tone` and `StepItem.tone`** — the universal status-color axis (`danger`/`warning`/`success`/`info`) now rides two more per-item composites, the same closed set already on Section/Button/ListItem/TableRow. A toned stat renders as a subtly tinted chip (tint + border carry the status; text stays neutral and readable — the Section-tone model), so an unhealthy count reads at a glance. A toned step overlays its status color onto the marker: filled states fill in the tone, an upcoming step outlines in it — orthogonal to the done/current/upcoming state the framework derives from `current`, so a failed or attention-needing stage reads without losing the reached/not-reached distinction. Both optional; omitted = today's neutral rendering. Asked for by consumers (Morpheus dashboards; PBMInvoices stuck-step rows).
+
+### Changed
+
+- **(BREAKING, npm/TypeScript only) `StatBarNode` stat `value` is now `string`, not `string | number`.** The two backends could not emit the same wire: a TS backend serialized a bare number as JSON `12` while the .NET twin's `string Value` could only emit `"12"` — a real cross-backend drift no parity fixture ever exercised (nothing rendered a stat-bar). Format the number server-side (`String(n)`, `n.toFixed(2)`, `$${n}`). See MIGRATION.md — the fix is one call and only affects code that emitted a numeric stat value. .NET was already `string`, so **NuGet is unaffected by this change.**
+- **(visual, npm) Warning's solid fills are now a bright, accessible yellow.** Every solid warning fill — toast, primary badge, primary button, and the new toned step marker — switched from the dark brown-amber `--vms-warning` (which is dark *because it doubles as a text/border color*, where a bright yellow on white would be unreadable) to a new **`--vms-warning-fill`** (bright amber) with a **`--vms-on-warning-fill`** dark foreground. This is the standard "yellow gets dark text" pattern: warning now reads as an attention-grabbing yellow on light themes (7.37:1 dark-on-bright), and it also **fixes a latent AA failure on dark themes** (white on the bright amber was 2.14:1). Tints (section/table/chip surfaces) keep the base `--vms-warning` as their own consistent family. **Consumer-visible:** apps using a warning toast/button/badge will see the color shift — it is a strict accessibility improvement, nothing to do.
+
+### Fixed
+
+- **Two demos emitted a numeric stat value** — `demo/Showcase` (the canonical teaching demo) and `demo/NonBlockingPoll-bun` — teaching a shape the .NET backend cannot produce. Both corrected to strings. Parity now renders a stat-bar in FeatureProbe (both twins) with an `expectBodyContains` coverage tripwire asserting the value crosses as a JSON string; mutation-proved to fail loudly if a bare number returns.
+
+### Notes for adopters
+
+- **npm:** if you build a `StatBarNode`, its stat `value` must now be a `string` — `tsc` will flag any numeric literal. Nothing else changed for TypeScript consumers. The warning color shift needs no action.
+- **NuGet:** purely additive (`StatItem.Tone`, `StepItem.Tone`). Nothing to do; adopt the tone fields when you want them.
+
+---
+
 ## 6.0.0 — Closed wire unions are enums, not `string?` (NuGet only)
 
 **NuGet:** `6.0.0` (major, from `5.2.0`) · **npm:** unchanged at `5.2.0`. **BREAKING for .NET apps; the wire is byte-identical and TypeScript consumers are entirely unaffected.**

@@ -29,6 +29,21 @@
   --vms-error:       #c2453d;
   --vms-error-glow:  rgba(194, 69, 61, 0.10);
   --vms-warning:       #8a630d;
+  /* Warning is the ONE tone with a polarity split. --vms-warning is deliberately
+     DARK on light themes because it doubles as a TEXT/border color (.vms-text--warning,
+     button/badge outline) and warning-colored TEXT on a light surface must be dark to
+     clear WCAG-AA — a bright yellow text on white is unreadable. But a warning FILL has
+     no such constraint: the standard design-system pattern (Bootstrap/Material) is a
+     BRIGHT yellow fill with a DARK foreground. --vms-warning-fill + --vms-on-warning-fill
+     are that pair — used on every SOLID warning fill (toast, primary badge/button, the
+     toned steps marker) so warning actually reads as a yellow that grabs attention on
+     light themes, while staying AA (dark #2a2205 on #e0a823 = 7.37:1). Theme-independent
+     (a solid amber fill reads the same on any page surface); dark themes need no override
+     — their --vms-warning is already #e0a823, so this ALSO fixes the white-on-bright-amber
+     fill that failed AA on dark themes (2.14:1). Tints (section/table/chip) keep the base
+     --vms-warning as their own consistent family. */
+  --vms-warning-fill:    #e0a823;
+  --vms-on-warning-fill: #2a2205;
   --vms-priority-high: #d76410;
   --vms-success:       #2da359;
   --vms-info:          #2277dd;
@@ -473,6 +488,32 @@ body:has(.vms-page--fill) { margin: 0; }
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+/* Per-tile tone (StatItem.tone) — a toned stat becomes a subtly tinted chip
+   (surface tint + colored border, the SAME color-mix formula as Section tone, so
+   it inherits that surface's already-AA-cleared text contrast) so an unhealthy
+   stat reads at a glance. Only toned items get the chip surface; neutral items
+   stay byte-identical to today's inline stat. --_tone resolves per tone below. */
+.vms-stat-bar__item--tone-danger  { --_tone: var(--vms-error); }
+.vms-stat-bar__item--tone-warning { --_tone: var(--vms-warning); }
+.vms-stat-bar__item--tone-success { --_tone: var(--vms-success); }
+.vms-stat-bar__item--tone-info    { --_tone: var(--vms-info); }
+.vms-stat-bar__item--toned {
+  align-items: center;
+  gap: var(--vms-space-2xs);
+  padding: var(--vms-space-2xs) var(--vms-space-sm);
+  border: 1px solid var(--_tone);
+  border-radius: var(--vms-radius-md);
+  background: color-mix(in srgb, var(--_tone) 14%, var(--vms-surface));
+}
+/* The tint + border carry the status (the Section-tone model); the value + label
+   stay NEUTRAL and readable rather than tone-colored — tone text on its own 14%
+   tint fails WCAG-AA (success bottomed at 2.79:1 across the light themes), while
+   neutral text on the tint clears it exactly as Section tone's neutral text does. */
+.vms-stat-bar__item--toned .vms-stat-bar__value { color: var(--vms-text); }
+/* Label strengthens from muted to full text on a toned chip: muted on the 14%
+   tint bottoms at 4.21:1 (just under the 4.5 AA-text bar), and an emphasized chip
+   reads better with a solid label anyway. Full text on the tint is 11.14:1. */
+.vms-stat-bar__item--toned .vms-stat-bar__label { color: var(--vms-text); }
 
 /* ── Form ── */
 .vms-form { display: flex; flex-direction: column; gap: var(--vms-space-sm); align-items: stretch; }
@@ -874,6 +915,16 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   background: var(--_btn-tone);
   border-color: var(--_btn-tone);
   color: #fff;
+}
+/* Warning is the polarity exception: a filled warning button uses the bright fill +
+   dark label (white on warning fails AA — 3.2/2.14:1 light/dark; see --vms-warning-fill).
+   Border matches the fill (no rim) — same as every other primary tone, which is the
+   conventional filled-warning look (cf. Bootstrap .btn-warning). The dark label + filled
+   shape identify the control; a dark rim read as out-of-place next to danger/success/info. */
+.vms-button--warning.vms-button--primary {
+  background: var(--vms-warning-fill);
+  border-color: var(--vms-warning-fill);
+  color: var(--vms-on-warning-fill);
 }
 .vms-button--primary:hover { filter: brightness(1.1); }
 .vms-button--secondary {
@@ -1328,7 +1379,10 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
    success/info are deepened (color-mix w/ black) so white at 14px also clears
    4.5:1 (their pure tokens sit at 3.2 / 4.4:1). */
 .vms-toast--danger  { background: var(--vms-error);   color: #fff; }
-.vms-toast--warning { background: var(--vms-warning); color: #fff; }
+/* Warning uses the bright fill + dark foreground (see --vms-warning-fill): white on
+   the dark #8a630d was muddy on light and white on the bright #e0a823 fails AA on dark
+   (2.14:1). Dark text on the bright fill is 7.37:1 and reads as an attention-grabbing yellow. */
+.vms-toast--warning { background: var(--vms-warning-fill); color: var(--vms-on-warning-fill); }
 .vms-toast--success { background: color-mix(in srgb, var(--vms-success) 80%, #000); color: #fff; }
 .vms-toast--info    { background: color-mix(in srgb, var(--vms-info) 88%, #000);    color: #fff; }
 /* fade-out applied just before removal. */
@@ -1402,6 +1456,14 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   background: var(--_badge-tone);
   border-color: var(--_badge-tone);
   color: #fff;
+}
+/* Warning polarity exception: a filled warning badge uses the bright fill + dark text
+   (white on warning fails AA; see --vms-warning-fill). Border matches the fill (no rim),
+   like every other primary tone. */
+.vms-badge--warning.vms-badge--primary {
+  background: var(--vms-warning-fill);
+  border-color: var(--vms-warning-fill);
+  color: var(--vms-on-warning-fill);
 }
 .vms-badge--secondary {
   background: transparent;
@@ -1530,6 +1592,52 @@ button.vms-breadcrumb__link {
 }
 .vms-steps__label { color: var(--vms-text); font-weight: 600; }
 .vms-steps__description { color: var(--vms-text-muted); font-size: var(--vms-text-xs); }
+/* Per-step tone (StepItem.tone) — overlays the universal status color onto the
+   marker, ORTHOGONAL to the derived done/current/upcoming treatment: the tone
+   recolors whatever the state already does (filled states fill in the tone;
+   upcoming stays outlined but in the tone), so a failed/blocked stage reads red
+   without losing the reached/not-reached distinction. Two-class selectors
+   outspecify the base state rules. The knockout glyph stays --vms-surface
+   (polarity-adaptive, >=3:1 on the filled tone tokens across all themes — a
+   graphical indicator whose state also rides aria-label + glyph + label text). */
+.vms-steps__step--tone-danger  { --_tone: var(--vms-error); }
+.vms-steps__step--tone-warning { --_tone: var(--vms-warning); }
+.vms-steps__step--tone-success { --_tone: var(--vms-success); }
+.vms-steps__step--tone-info    { --_tone: var(--vms-info); }
+/* Tone recolors the DERIVED treatment: filled states (done/current) fill in the tone;
+   upcoming stays outlined but in the tone — preserving the reached/not-reached read while
+   overlaying status color. Two-class selectors outspecify the base state rules. */
+.vms-steps__step--toned.vms-steps__step--done .vms-steps__marker,
+.vms-steps__step--toned.vms-steps__step--current .vms-steps__marker {
+  background: var(--_tone);
+  border-color: var(--_tone);
+  color: var(--vms-surface);
+}
+.vms-steps__step--toned.vms-steps__step--upcoming .vms-steps__marker {
+  border-color: var(--_tone);
+  color: var(--_tone);
+}
+.vms-steps__step--toned.vms-steps__step--current .vms-steps__marker {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--_tone) 30%, transparent);
+}
+/* Warning FILLED (done/current): bright fill + dark glyph, no rim (see --vms-warning-fill). */
+.vms-steps__step--tone-warning.vms-steps__step--done .vms-steps__marker,
+.vms-steps__step--tone-warning.vms-steps__step--current .vms-steps__marker {
+  background: var(--vms-warning-fill);
+  border-color: var(--vms-warning-fill);
+  color: var(--vms-on-warning-fill);
+}
+/* Warning UPCOMING (outline): try the BRIGHT amber for the ring + number rather than the
+   dark --vms-warning. Bright amber as a line/digit on white is ~2.14:1 (below the strict
+   bar), so this is a judgment call on visual legibility — the step's state is multi-channel
+   (aria-label + number + position), so color is not its sole carrier. */
+.vms-steps__step--tone-warning.vms-steps__step--upcoming .vms-steps__marker {
+  border-color: var(--vms-warning-fill);
+  color: var(--vms-warning-fill);
+}
+.vms-steps__step--tone-warning.vms-steps__step--current .vms-steps__marker {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--vms-warning-fill) 35%, transparent);
+}
 
 /* Connector — the OUTGOING segment from this marker toward the next (hidden on
    the last step). Colored by the step's own state: accent once the step is done,

@@ -6,6 +6,24 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `6.0.0` / NuGet `6.1.0` — one small TypeScript-only break
+
+**NuGet consumers: nothing to do.** `6.1.0` is purely additive (`StatItem.Tone`, `StepItem.Tone`). Adopt the tone fields when you want them.
+
+**npm consumers: one change, and only if you build a `StatBarNode`.** The stat `value` narrowed from `string | number` to `string`, so the two backends emit byte-identical wire (a bare number was JSON `12` in TS but the .NET twin could only emit `"12"`). `tsc` flags every site; the fix is to stringify:
+
+```typescript
+// before                                  // after
+{ label: "active", value: count }          { label: "active", value: String(count) }
+{ label: "revenue", value: total }         { label: "revenue", value: `$${total.toFixed(2)}` }
+```
+
+Formatting a stat value server-side is richer than a bare number anyway. If your app never emits a numeric stat value, nothing changes.
+
+**The warning color shift needs no action.** Warning's solid fills (toast, primary button/badge) render as a brighter, accessible yellow now; it is a visual improvement with no API change.
+
+---
+
 ## Upgrading to NuGet `6.0.0` (.NET only) — BREAKING, mechanical, compiler-guided
 
 **npm consumers: nothing to do.** npm stays at `5.2.0`; the wire is byte-identical and no TypeScript type changed. Pair npm `5.2.0` with NuGet `6.0.0`.

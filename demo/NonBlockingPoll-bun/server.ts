@@ -63,8 +63,8 @@ function buildVm(state: DemoState): ViewNode {
       {
         type: "stat-bar",
         stats: [
-          { label: "Poll ticks (auto, ~1.2s cadence)", value: state.pollTicks },
-          { label: "Button clicks (blocking, instant)", value: state.userClicks },
+          { label: "Poll ticks (auto, ~1.2s cadence)", value: String(state.pollTicks) },
+          { label: "Button clicks (blocking, instant)", value: String(state.userClicks) },
         ],
       },
       {

@@ -242,9 +242,17 @@ function componentsView(): ViewNode[] {
 
     { type: "section", heading: "Stat bar", children: [
       { type: "stat-bar", stats: [
-        { label: "active",    value: 12 },
-        { label: "completed", value: 38 },
+        { label: "active",    value: "12" },
+        { label: "completed", value: "38" },
         { label: "remaining", value: "$420.50" },
+      ]},
+      // Per-tile tone (StatItem.tone) — a toned stat reads as a tinted chip so an
+      // unhealthy count is visible at a glance, not via one small line of text.
+      { type: "stat-bar", stats: [
+        { label: "healthy",  value: "40", tone: "success" },
+        { label: "degraded", value: "3",  tone: "warning" },
+        { label: "failing",  value: "1",  tone: "danger" },
+        { label: "next run", value: "4pm", tone: "info" },
       ]},
     ]},
 
@@ -753,8 +761,8 @@ function dashboardView(): ViewNode[] {
     ]},
     { type: "section", heading: "This month", children: [
       { type: "stat-bar", stats: [
-        { label: "orders",       value: 1842 },
-        { label: "refunds",      value: 37 },
+        { label: "orders",       value: "1842" },
+        { label: "refunds",      value: "37" },
         { label: "avg. order",   value: "$69.70" },
         { label: "net revenue",  value: "$126,510" },
       ]},

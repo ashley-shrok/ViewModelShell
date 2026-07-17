@@ -799,9 +799,18 @@ public class FeatureProbeController : ControllerBase
                 new StepsNode(new StepItem[]
                 {
                     new StepItem("Draft", Description: "Compose the post"),
-                    new StepItem("Review"),
-                    new StepItem("Publish"),
+                    // Per-step tone (StepItem.tone) — overlays status on the derived state.
+                    new StepItem("Review", Tone: Tone.Danger),
+                    new StepItem("Publish", Tone: Tone.Warning),
                 }, Current: 1, Orientation: Orientation.Vertical),
+                // Stat bar (STAT-01) — Value is a STRING on both backends (a bare
+                // number would drift: JSON `12` in TS vs `"12"` here). Includes a
+                // toned tile so StatItem.Tone rides the parity diff.
+                new StatBarNode(new StatItem[]
+                {
+                    new StatItem("active", "12"),
+                    new StatItem("failing", "3", Tone: Tone.Danger),
+                }),
             }));
         // Lookup field (LOOK-01/LOOK-06) — the two lookup inputTypes as static
         // view-shape captured by every GET step; byte-identical to the bun twin

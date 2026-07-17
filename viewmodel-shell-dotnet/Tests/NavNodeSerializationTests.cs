@@ -145,6 +145,63 @@ public class NavNodeSerializationTests
         Assert.Contains("\"description\":\"final stage\"", json);
     }
 
+    // ─── step: tone omitted-vs-present (6.0.0) ──────────────────────────────
+
+    [Fact]
+    public void StepItem_Tone_DefaultNull_IsAbsent()
+    {
+        var node = new StepsNode(new[] { new StepItem("Deploy") }, Current: 0);
+        var json = Serialize<ViewNode>(node);
+        Assert.DoesNotContain("\"tone\"", json);
+    }
+
+    [Fact]
+    public void StepItem_Tone_Set_SerializesKebab()
+    {
+        var node = new StepsNode(
+            new[] { new StepItem("Deploy", Tone: Tone.Danger) },
+            Current: 0);
+        var json = Serialize<ViewNode>(node);
+        Assert.Contains("\"tone\":\"danger\"", json);
+    }
+
+    // ─── stat bar: value is a STRING, tone omitted-vs-present (6.0.0) ────────
+
+    [Fact]
+    public void StatBarNode_SerializesTypeAsStatBar()
+    {
+        var node = new StatBarNode(new[] { new StatItem("active", "12") });
+        var json = Serialize<ViewNode>(node);
+        Assert.Contains("\"type\":\"stat-bar\"", json);
+    }
+
+    [Fact]
+    public void StatItem_Value_SerializesAsJsonString_NotBareNumber()
+    {
+        // The narrowing that motivated 6.0.0: value crosses as "12", never 12,
+        // so the TS twin (string) and this record emit byte-identical wire.
+        var node = new StatBarNode(new[] { new StatItem("active", "12") });
+        var json = Serialize<ViewNode>(node);
+        Assert.Contains("\"value\":\"12\"", json);
+        Assert.DoesNotContain("\"value\":12", json);
+    }
+
+    [Fact]
+    public void StatItem_Tone_DefaultNull_IsAbsent()
+    {
+        var node = new StatBarNode(new[] { new StatItem("active", "12") });
+        var json = Serialize<ViewNode>(node);
+        Assert.DoesNotContain("\"tone\"", json);
+    }
+
+    [Fact]
+    public void StatItem_Tone_Set_SerializesKebab()
+    {
+        var node = new StatBarNode(new[] { new StatItem("failing", "3", Tone: Tone.Danger) });
+        var json = Serialize<ViewNode>(node);
+        Assert.Contains("\"tone\":\"danger\"", json);
+    }
+
     // ─── Collect descends into crumb actions (uniqueness enforced) ──────────
 
     [Fact]

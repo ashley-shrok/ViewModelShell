@@ -739,11 +739,22 @@ function buildVm(state: FeatureProbeState): ViewNode {
         type: "steps",
         steps: [
           { label: "Draft", description: "Compose the post" },
-          { label: "Review" },
-          { label: "Publish" },
+          // Per-step tone (StepItem.tone) — overlays status on the derived state.
+          { label: "Review", tone: "danger" },
+          { label: "Publish", tone: "warning" },
         ],
         current: 1,
         orientation: "vertical",
+      },
+      // Stat bar (STAT-01) — value is a STRING on both backends (a bare number
+      // would drift: JSON `12` in TS vs `"12"` from the .NET twin). Includes a
+      // toned tile so StatItem.tone rides the parity diff.
+      {
+        type: "stat-bar",
+        stats: [
+          { label: "active", value: "12" },
+          { label: "failing", value: "3", tone: "danger" },
+        ],
       },
     ],
   };

@@ -1104,7 +1104,15 @@ public record TextNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null
 ) : ViewNode;
 
-public record StatItem(string Label, string Value);
+// StatItem.Value is `string` on BOTH backends by design — the TS twin narrowed
+// its `string | number` union to `string` in 6.0.0 so the two emit byte-identical
+// wire (a bare number is JSON `12` in TS but this record can only emit `"12"`).
+// Format numbers server-side ($"{n:F2}", n.ToString()). Tone is the optional
+// universal status axis (nullable → absent when unset, per the file-header rule).
+public record StatItem(
+    string Label,
+    string Value,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null);
 public record StatBarNode(IReadOnlyList<StatItem> Stats) : ViewNode;
 
 // ChartNode (CHARTBASE-01..06) — VMS's multi-series-native data-visualization
@@ -1154,9 +1162,15 @@ public record ChartNode(
 // enum — the closed set is enforced TS-side + validated by parity, per the
 // ChartNode.Kind rule); WhenWritingNull → omitted = horizontal. StepsNode is a
 // childless/action-free LEAF — both validators fall through it with no recursion.
+// Tone is the optional universal status axis, ORTHOGONAL to the done/current/
+// upcoming state StepsNode derives from Current — it overlays a semantic color
+// onto the marker (a failed stage as Danger, one needing attention as Warning)
+// regardless of position. App-authored status reinforced by the step label, so
+// not color-only (mirrors Section tone). Nullable → absent when unset.
 public record StepItem(
     string Label,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Description = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Description = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null
 );
 
 public record StepsNode(

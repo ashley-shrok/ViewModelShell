@@ -3043,10 +3043,12 @@ export class BrowserAdapter implements Adapter {
     bar.className = "vms-stat-bar";
     n.stats.forEach(stat => {
       const item = document.createElement("div");
-      item.className = "vms-stat-bar__item";
+      item.className = stat.tone
+        ? `vms-stat-bar__item vms-stat-bar__item--toned vms-stat-bar__item--tone-${stat.tone}`
+        : "vms-stat-bar__item";
       const val = document.createElement("span");
       val.className = "vms-stat-bar__value";
-      val.textContent = String(stat.value);
+      val.textContent = stat.value;
       const lbl = document.createElement("span");
       lbl.className = "vms-stat-bar__label";
       lbl.textContent = stat.label;
@@ -3607,7 +3609,9 @@ export class BrowserAdapter implements Adapter {
     n.steps.forEach((step, i) => {
       const state = i < n.current ? "done" : i === n.current ? "current" : "upcoming";
       const li = document.createElement("li");
-      li.className = `vms-steps__step vms-steps__step--${state}`;
+      li.className = step.tone
+        ? `vms-steps__step vms-steps__step--${state} vms-steps__step--toned vms-steps__step--tone-${step.tone}`
+        : `vms-steps__step vms-steps__step--${state}`;
       if (state === "current") li.setAttribute("aria-current", "step");
 
       // Connector — CSS-drawn line marker-center to marker-center, behind the
