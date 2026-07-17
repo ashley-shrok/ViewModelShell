@@ -283,6 +283,14 @@ export interface SectionNode {
 export interface ListNode {
   type: "list";
   id?: string;
+  /** When true, this is an ORDERED list — renders `<ol>` (numbered) instead of
+   *  `<ul>`. The semantic element gives real ordinal meaning (a11y: screen
+   *  readers announce position/count; agent-legibility: the order is structural,
+   *  not baked into item text). The visible "1." / "2." markers come from a CSS
+   *  counter (`.vms-list--ordered`), not native list markers, because `.vms-list`
+   *  is a flex column with `list-style:none` — so numbering survives the styled
+   *  list-item layout. Omitted/false = `<ul>` (byte-identical to today). */
+  ordered?: boolean;
   children: ViewNode[];
 }
 

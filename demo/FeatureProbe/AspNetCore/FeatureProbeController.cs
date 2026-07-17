@@ -582,6 +582,13 @@ public class FeatureProbeController : ControllerBase
                     new ListItemNode("axes-li-2", null,     new ViewNode[] { new TextNode("danger tone", null) }, Tone: Tone.Danger),
                     new ListItemNode("axes-li-3", "done",   new ViewNode[] { new TextNode("done + success", null) }, Tone: Tone.Success),
                 }),
+                // ListNode.ordered — an <ol> probe (Ordered:true crosses the wire);
+                // the unordered list above OMITS ordered (proving absent = <ul>).
+                new ListNode(new ViewNode[]
+                {
+                    new ListItemNode("axes-oli-1", null, new ViewNode[] { new TextNode("ordered one", null) }),
+                    new ListItemNode("axes-oli-2", null, new ViewNode[] { new TextNode("ordered two", null) }),
+                }, Ordered: true),
                 new TableNode(
                     new TableColumn[] { new TableColumn("k", "K") },
                     new TableRow[]

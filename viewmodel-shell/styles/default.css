@@ -1043,6 +1043,22 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-list-item--success:hover { border-left-color: var(--vms-success); }
 .vms-list-item--info:hover    { border-left-color: var(--vms-info); }
 
+/* Ordered list — <ol>. `.vms-list` sets list-style:none for the styled
+   flex-column layout, so native markers never show; a CSS counter supplies the
+   number as the first flex child of each item (spaced by the item's own gap).
+   tabular-nums + right-aligned min-width keeps multi-digit numbers aligned. */
+.vms-list--ordered { counter-reset: vms-li; }
+.vms-list--ordered > .vms-list-item { counter-increment: vms-li; }
+.vms-list--ordered > .vms-list-item::before {
+  content: counter(vms-li) ".";
+  flex: 0 0 auto;
+  min-width: 1.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--vms-text-muted);
+}
+
 /* Selection state for master-detail / list-detail patterns (D-27). The
    currently-selected row. Stronger than the semantic hints (selection is
    the primary state) and stable through hover. Themable: uses only seam

@@ -758,7 +758,12 @@ public record SectionNode(
 
 public record ListNode(
     IReadOnlyList<ViewNode> Children,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id = null,
+    // Ordered (<ol>) vs unordered (<ul>). Semantic "unset" is false = the CLR
+    // default, so WhenWritingDefault drops it from the wire (matching the TS
+    // optional `ordered?: boolean`, absent when unset) — same posture as
+    // PageNode/SectionNode.Fill, LinkNode.External, FieldNode.Required.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Ordered = false
 ) : ViewNode;
 
 // The SwiftUI `ViewThatFits` port (FITS-01/03). Children are ordered

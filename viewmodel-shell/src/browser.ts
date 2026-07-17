@@ -1085,8 +1085,8 @@ export class BrowserAdapter implements Adapter {
   }
 
   private list(n: ListNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
-    const ul = document.createElement("ul");
-    ul.className = "vms-list";
+    const ul = document.createElement(n.ordered ? "ol" : "ul");
+    ul.className = `vms-list${n.ordered ? " vms-list--ordered" : ""}`;
     if (n.id) ul.id = n.id;
     this.kids(n.children, ul, on);
     parent.appendChild(ul);

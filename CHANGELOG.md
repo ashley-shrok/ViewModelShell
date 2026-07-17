@@ -6,7 +6,19 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
-## npm 6.0.0 / NuGet 6.1.0 — Per-item tone, stat-bar wire fix, accessible warning fill
+## npm 6.1.0 / NuGet 6.2.0 — Ordered lists (`<ol>`)
+
+**npm:** `6.1.0` (minor, from `6.0.0`) · **NuGet:** `6.2.0` (minor, from `6.1.0`). Purely additive on both sides.
+
+### Added
+
+- **`ListNode.ordered?: boolean`** — an ordered list. When true the list renders as a semantic `<ol>` (numbered) instead of `<ul>`; omitted/`false` is byte-identical to today's `<ul>`. The semantic element is the point: screen readers announce ordinal position and count, and the ordering is structural on the wire rather than baked into item text (so a wire-driving agent reads it as an ordered list, not `"1. "`-prefixed strings). The visible `1.` / `2.` markers come from a CSS counter (`.vms-list--ordered`), not native list markers, because `.vms-list` is a styled flex column with `list-style:none` — so numbering survives the framework's list-item layout, tone borders, and item states. Asked for by a consumer (`/ai`, whose Markdown→ViewNode transform was emitting visible number prefixes inside text nodes). Parity: FeatureProbe (both twins) now renders an ordered list beside the existing unordered one, with an `expectBodyContains` tripwire asserting `"ordered":true` crosses the wire.
+
+### Notes for adopters
+
+- **Both packages:** purely additive. Set `ordered: true` (TS) / `Ordered: true` (.NET) on a `ListNode` when you want a numbered list; existing lists are unchanged.
+
+
 
 **npm:** `6.0.0` (major, from `5.2.0`) · **NuGet:** `6.1.0` (minor, from `6.0.0`). npm takes the major for one breaking type-narrowing (below); the tone fields are additive on both sides. Both packages now sit on major `6`.
 

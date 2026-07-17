@@ -513,6 +513,12 @@ function buildVm(state: FeatureProbeState): ViewNode {
         { type: "list-item", id: "axes-li-2", tone: "danger", children: [{ type: "text", value: "danger tone" }] },
         { type: "list-item", id: "axes-li-3", state: "done", tone: "success", children: [{ type: "text", value: "done + success" }] },
       ]},
+      // ListNode.ordered — an <ol> probe (ordered:true crosses the wire); the
+      // unordered list above OMITS ordered (proving absent = <ul>).
+      { type: "list", ordered: true, children: [
+        { type: "list-item", id: "axes-oli-1", children: [{ type: "text", value: "ordered one" }] },
+        { type: "list-item", id: "axes-oli-2", children: [{ type: "text", value: "ordered two" }] },
+      ]},
       { type: "table",
         columns: [{ key: "k", label: "K" }],
         rows: [
