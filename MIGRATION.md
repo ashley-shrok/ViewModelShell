@@ -6,6 +6,20 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `6.2.0` / NuGet `6.3.0` — nothing to do (additive rich copy)
+
+**Both packages: purely additive.** Every existing `CopyButtonNode` is byte-unchanged. Two new optional fields let a copy carry a formatted representation alongside its plain text:
+
+- `copyTargetId` — point at a described region's DOM id (`SectionNode.id` / `ListNode.id`); the adapter harvests both the formatted markup and the plain text off what it already rendered.
+- `html` — hand the button a ready formatted representation the server authored (use only when the content isn't already on the page).
+
+**Two non-obvious behaviors to know:**
+
+1. **Rich copy requires a secure context.** The two-representation clipboard write uses the async Clipboard API, exposed by browsers only over **HTTPS or `http://localhost`** (this has always governed clipboard writes). Over plain `http://<ip>` the button falls back to the legacy plain-text copy — the formatted representation simply can't be written there. This is a browser platform constraint, not a framework one.
+2. **`SectionNode.id` now emits a real DOM `id`.** It was previously an internal collapsible-state key only. If you already set `id` on sections, it will now also appear as the element's DOM id — inert unless something targets it (and required for a section to be a `copyTargetId` harvest target). DOM ids must be unique on a page, the same uniqueness the collapse key already wanted.
+
+---
+
 ## Upgrading to npm `6.0.0` / NuGet `6.1.0` — one small TypeScript-only break
 
 **NuGet consumers: nothing to do.** `6.1.0` is purely additive (`StatItem.Tone`, `StepItem.Tone`). Adopt the tone fields when you want them.

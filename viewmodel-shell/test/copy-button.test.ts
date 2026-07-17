@@ -155,3 +155,152 @@ describe("CopyButtonNode — Case C: silent failure when both clipboard paths fa
     execCommandSpy.mockRestore();
   });
 });
+
+// ─── Rich copy (dual-representation clipboard write) ───
+//
+// Shared fake: navigator.clipboard.write + a fake ClipboardItem that keeps the
+// Blob map so a test can read back what each representation carried.
+
+class FakeClipboardItem {
+  constructor(public items: Record<string, Blob>) {}
+}
+
+// jsdom's Blob doesn't implement the async `.text()` reader, so record the source
+// parts on construction via a transparent subclass and read them synchronously.
+// SpyBlob is a real Blob (extends the global), so the adapter behaves identically.
+const RealBlob = globalThis.Blob;
+class SpyBlob extends RealBlob {
+  _parts: BlobPart[];
+  constructor(parts: BlobPart[], opts?: BlobPropertyBag) {
+    super(parts, opts);
+    this._parts = parts;
+  }
+}
+
+function installRichClipboard() {
+  const write = vi.fn().mockResolvedValue(undefined);
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    value: { write, writeText },
+    writable: true,
+    configurable: true,
+  });
+  (globalThis as unknown as { ClipboardItem: unknown }).ClipboardItem = FakeClipboardItem;
+  (globalThis as unknown as { Blob: unknown }).Blob = SpyBlob;
+  return { write, writeText };
+}
+
+function writtenItem(write: ReturnType<typeof vi.fn>): FakeClipboardItem {
+  return write.mock.calls[0][0][0] as FakeClipboardItem;
+}
+
+function blobSource(b: Blob): string {
+  return (b as unknown as { _parts: BlobPart[] })._parts.map(String).join("");
+}
+
+// ─── Case D: server-provided `html` → text/html + text/plain both written ───
+
+describe("CopyButtonNode — Case D: server-provided html writes both representations", () => {
+  it("writes text/html=html and text/plain=text via ClipboardItem, not writeText", async () => {
+    const { write, writeText } = installRichClipboard();
+
+    const container = freshContainer();
+    const shell = makeShell(container);
+    const vm: ViewNode = {
+      type: "copy-button",
+      text: "plain fallback",
+      html: "<strong>rich</strong>",
+      label: "Copy",
+      copiedLabel: "Copied!",
+    };
+    shell.push({ vm, state: {} });
+
+    const btn = container.querySelector("button") as HTMLButtonElement;
+    btn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(writeText).not.toHaveBeenCalled();
+    const item = writtenItem(write);
+    expect(blobSource(item.items["text/html"])).toBe("<strong>rich</strong>");
+    expect(blobSource(item.items["text/plain"])).toBe("plain fallback");
+    expect(btn.textContent).toBe("Copied!");
+
+    vi.advanceTimersByTime(1500);
+    expect(btn.textContent).toBe("Copy");
+  });
+});
+
+// ─── Case E: harvest via copyTargetId → lifts outerHTML + textContent off the region ───
+
+describe("CopyButtonNode — Case E: copyTargetId harvests the rendered region", () => {
+  it("writes the target's outerHTML as text/html and its textContent as text/plain", async () => {
+    const { write, writeText } = installRichClipboard();
+
+    const container = freshContainer();
+    const shell = makeShell(container);
+    const vm: ViewNode = {
+      type: "page",
+      children: [
+        {
+          type: "section",
+          id: "report-card-e",
+          variant: "card",
+          children: [{ type: "text", value: "Quarterly numbers", style: "heading" }],
+        },
+        { type: "copy-button", text: "unused fallback", copyTargetId: "report-card-e", label: "Copy" },
+      ],
+    };
+    shell.push({ vm, state: {} });
+
+    const btn = container.querySelector("button") as HTMLButtonElement;
+    btn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(writeText).not.toHaveBeenCalled();
+    const item = writtenItem(write);
+    const html = blobSource(item.items["text/html"]);
+    // The harvested markup is the target's outerHTML — the section element itself,
+    // its heading structure, and its text — NOT the plain fallback string.
+    expect(html).toContain("Quarterly numbers");
+    expect(html).toContain("vms-section");
+    expect(html).not.toContain("unused fallback");
+    expect(blobSource(item.items["text/plain"])).toContain("Quarterly numbers");
+  });
+});
+
+// ─── Case F: copyTargetId matches nothing → fail LOUD + plain fallback (never a dead button) ───
+
+describe("CopyButtonNode — Case F: dangling copyTargetId fails loud, falls back to plain", () => {
+  it("logs a console error and writes the plain text, without a rich write", async () => {
+    const { write, writeText } = installRichClipboard();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const container = freshContainer();
+    const shell = makeShell(container);
+    const vm: ViewNode = {
+      type: "copy-button",
+      text: "plain fallback",
+      copyTargetId: "does-not-exist-f",
+      label: "Copy",
+      copiedLabel: "Copied!",
+    };
+    shell.push({ vm, state: {} });
+
+    const btn = container.querySelector("button") as HTMLButtonElement;
+    btn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(String(errorSpy.mock.calls[0][0])).toContain("does-not-exist-f");
+    expect(write).not.toHaveBeenCalled();
+    expect(writeText).toHaveBeenCalledWith("plain fallback");
+    expect(btn.textContent).toBe("Copied!");
+
+    errorSpy.mockRestore();
+  });
+});

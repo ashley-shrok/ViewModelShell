@@ -281,7 +281,10 @@ public class FeatureProbeController : ControllerBase
             "npx @ashley-shrok/viewmodel-shell",
             "Copy install command",
             "Copied!",
-            Emphasis: Emphasis.Secondary));
+            Emphasis: Emphasis.Secondary,
+            // Rich copy — server-provided route: a formatted representation written
+            // as text/html alongside the plain Text. Parity coverage for Html.
+            Html: "<code>npx @ashley-shrok/viewmodel-shell</code>"));
 
         children.Add(new ImageNode("/logo.png", Alt: "ViewModel Shell logo", Size: ImageSize.Small, Shape: ImageShape.Circle));
 
@@ -571,10 +574,12 @@ public class FeatureProbeController : ControllerBase
                 new ButtonNode("combo",       new ActionDescriptor("axes-noop-9"), Emphasis: Emphasis.Primary, Tone: Tone.Danger, Size: ControlSize.Lg),
                 // Destructive-action guard: Confirm carries a native-confirm question.
                 new ButtonNode("confirm-guard", new ActionDescriptor("axes-noop-confirm"), Tone: Tone.Danger, Confirm: "Delete this? This cannot be undone."),
-                new CopyButtonNode("axes-clip", Label: "Copy", Emphasis: Emphasis.Secondary, Tone: Tone.Info, Size: ControlSize.Sm),
+                // Rich copy — harvest route: copies the rendered "Warning card" region
+                // below (which carries the matching DOM id). Parity coverage for CopyTargetId.
+                new CopyButtonNode("axes-clip", Label: "Copy", Emphasis: Emphasis.Secondary, Tone: Tone.Info, Size: ControlSize.Sm, CopyTargetId: "axes-warning-card"),
                 new TextNode("tone text", Tone: Tone.Warning),
                 new TextNode("heading + tone", TextStyle.Heading, Tone.Danger),
-                new SectionNode("Warning card", new ViewNode[] { new TextNode("tinted card surface", null) }, Variant: SectionVariant.Card, Tone: Tone.Warning),
+                new SectionNode("Warning card", new ViewNode[] { new TextNode("tinted card surface", null) }, Variant: SectionVariant.Card, Tone: Tone.Warning, Id: "axes-warning-card"),
                 new SectionNode("Danger band", new ViewNode[] { new TextNode("bare tinted section", null) }, Tone: Tone.Danger),
                 new ListNode(new ViewNode[]
                 {

@@ -937,6 +937,7 @@ export class BrowserAdapter implements Adapter {
         n.alignSelf ? ` vms-self--${n.alignSelf}` : ""}${
         n.maxWidth ? ` vms-maxw--${n.maxWidth}` : ""}`;
       el.dataset.sectionKey = finalKey;
+      if (n.id) el.id = n.id;  // addressable DOM id (e.g. CopyButtonNode.copyTargetId target)
       // Initial render is always closed — the post-render restore loop in
       // render() re-applies `open=true` for keys the user had open before.
 
@@ -975,6 +976,7 @@ export class BrowserAdapter implements Adapter {
         n.alignSelf ? ` vms-self--${n.alignSelf}` : ""}${
         n.maxWidth ? ` vms-maxw--${n.maxWidth}` : ""}`;
       a.href = n.link.url;
+      if (n.id) a.id = n.id;  // addressable DOM id (e.g. CopyButtonNode.copyTargetId target)
       // Mirror LinkNode's external-attribute pattern (browser.ts ~line 666)
       // byte-for-byte: target=_blank + rel=noopener noreferrer when external.
       if (n.link.external) {
@@ -1030,6 +1032,7 @@ export class BrowserAdapter implements Adapter {
       n.alignSelf ? ` vms-self--${n.alignSelf}` : ""}${
       n.maxWidth ? ` vms-maxw--${n.maxWidth}` : ""}${
       n.action ? " vms-section--clickable" : ""}`;
+    if (n.id) el.id = n.id;  // addressable DOM id (e.g. CopyButtonNode.copyTargetId target)
     // SectionNode.followTail — mark this as an append-only feed so render()'s
     // snapshot/restore keeps its newest content in view (see render() + the
     // FOLLOW_TAIL_STICK_THRESHOLD_PX constant). No CSS/class — the scroll comes
@@ -3472,25 +3475,66 @@ export class BrowserAdapter implements Adapter {
       n.tone ? ` vms-button--${n.tone}` : ""}${n.size ? ` vms-button--${n.size}` : ""}${
       n.width === "full" ? " vms-button--full" : ""}`;
     btn.textContent = n.label ?? "Copy";
-    btn.addEventListener("click", () => {
-      const write = navigator.clipboard?.writeText(n.text);
+
+    const showCopied = () => {
+      btn.textContent = n.copiedLabel ?? "Copied!";
+      setTimeout(() => { btn.textContent = n.label ?? "Copy"; }, 1500);
+    };
+    // Plain-text copy (today's behavior, unchanged): async writeText with the
+    // execCommand fallback for engines without the async Clipboard API.
+    const copyPlain = (text: string) => {
+      const write = navigator.clipboard?.writeText(text);
       if (write) {
-        write.then(() => {
-          btn.textContent = n.copiedLabel ?? "Copied!";
-          setTimeout(() => { btn.textContent = n.label ?? "Copy"; }, 1500);
-        }).catch(() => {
-          if (legacyCopy(n.text)) {
-            btn.textContent = n.copiedLabel ?? "Copied!";
-            setTimeout(() => { btn.textContent = n.label ?? "Copy"; }, 1500);
-          }
-        });
+        write.then(showCopied).catch(() => { if (legacyCopy(text)) showCopied(); });
       } else {
-        if (legacyCopy(n.text)) {
-          btn.textContent = n.copiedLabel ?? "Copied!";
-          setTimeout(() => { btn.textContent = n.label ?? "Copy"; }, 1500);
+        if (legacyCopy(text)) showCopied();
+      }
+    };
+
+    btn.addEventListener("click", () => {
+      // RICH COPY — resolve the two representations by precedence: copyTargetId > html > plain.
+      let html: string | null = null;
+      let plain = n.text;
+      if (n.copyTargetId != null) {
+        // Harvest route: lift both representations off the already-rendered region.
+        const target = document.getElementById(n.copyTargetId);
+        if (target) {
+          html = target.outerHTML;
+          plain = target.textContent ?? n.text;
+        } else {
+          // Fail LOUD — a copy target that resolves to nothing is a bug, not a
+          // silent no-op — then still give the user the plain fallback.
+          console.error(
+            `[viewmodel-shell] CopyButtonNode.copyTargetId "${n.copyTargetId}" matched no ` +
+            `element on the page; falling back to plain-text copy. The target must be a ` +
+            `described region that emits that DOM id (e.g. SectionNode.id / ListNode.id).`,
+          );
+          copyPlain(n.text);
+          return;
         }
+      } else if (n.html != null) {
+        // Server-provided route: the formatted representation the server authored.
+        html = n.html;
+      }
+
+      // No rich representation → today's plain-text write.
+      if (html === null) { copyPlain(plain); return; }
+
+      // Two representations at once via the async Clipboard API. A destination that
+      // understands formatting takes text/html; a plain one takes text/plain. If the
+      // API is unavailable or the write is rejected (permissions, older engine),
+      // degrade to the plain representation so the button is never dead.
+      if (navigator.clipboard?.write && typeof ClipboardItem === "function") {
+        const item = new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([plain], { type: "text/plain" }),
+        });
+        navigator.clipboard.write([item]).then(showCopied).catch(() => copyPlain(plain));
+      } else {
+        copyPlain(plain);
       }
     });
+
     parent.appendChild(btn);
   }
 

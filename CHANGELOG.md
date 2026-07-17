@@ -6,6 +6,24 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 6.2.0 / NuGet 6.3.0 — Rich copy (formatted + plain clipboard)
+
+**npm:** `6.2.0` (minor, from `6.1.0`) · **NuGet:** `6.3.0` (minor, from `6.2.0`). Purely additive on both sides.
+
+### Added
+
+- **`CopyButtonNode.copyTargetId?: string` — the harvest route (adapter-side, no server authoring).** Names an already-rendered region by its DOM id; on click the adapter lifts that element's rendered markup as the `text/html` representation and its plain text as `text/plain`, writing **both** to the clipboard at once (`navigator.clipboard.write` + `ClipboardItem`). A paste into a formatted destination (email, doc) keeps its **semantic structure** — headings, lists, tables, bold — while a plain destination still receives clean text. Because the framework carries its look in class-keyed styling rather than inline, the app's theme naturally falls away on paste and only the structure survives (the desired outcome). The target must be a described region that emits a DOM id (`SectionNode.id`, `ListNode.id`) — so a wire-driving agent can always resolve what a copy would carry, and the button can never point at undescribed chrome. A `copyTargetId` that resolves to no element fails **loud** (a console error) and falls back to the plain `text` — never a silent dead button.
+- **`CopyButtonNode.html?: string` — the server-provided route (opt-in).** A ready-made formatted representation the server authored, written as `text/html` alongside the plain `text`. Reach for it only when the content to copy is **not** already on the page; otherwise prefer `copyTargetId`, which authors nothing. This is a **write-only clipboard export** bound for a foreign destination — it never re-enters the rendered view (that would be decoration). Ignored when `copyTargetId` is set. Precedence: `copyTargetId` > `html` > plain `text` (today's behavior, byte-unchanged for every existing copy button).
+- **`SectionNode.id` is now emitted as the rendered element's DOM `id`.** Previously it was an internal collapsible-open-state preservation key only; it now *also* becomes the element's real DOM id, which is what makes a formatted card addressable as a `copyTargetId` harvest target. `ListNode.id` already emitted a DOM id; this brings sections in line.
+
+### Notes for adopters
+
+- **Both packages:** purely additive — every existing copy button is byte-unchanged. Set `copyTargetId` (point at a described region's id) or `html` (hand over formatted markup) when you want a paste to keep its formatting.
+- **Rich copy needs a secure context.** The two-representation write goes through the async Clipboard API, which browsers expose only over **HTTPS or `http://localhost`** (this has always been true of clipboard writes). In an insecure context the button degrades to the legacy plain-text copy — the plain representation still works, the formatted one can't be written. Nothing to configure; just don't expect rich paste over plain-`http://<ip>`.
+- Asked for by a consumer (`/ai`, whose CEO wanted paste-out of the app to keep its formatting) but shipped as a general capability. Parity: FeatureProbe (both twins) now carries `html` on one copy button and `copyTargetId` on another, with `expectBodyContains` tripwires asserting both cross the wire.
+
+---
+
 ## npm 6.1.0 / NuGet 6.2.0 — Ordered lists (`<ol>`)
 
 **npm:** `6.1.0` (minor, from `6.0.0`) · **NuGet:** `6.2.0` (minor, from `6.1.0`). Purely additive on both sides.

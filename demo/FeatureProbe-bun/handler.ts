@@ -173,7 +173,8 @@ function buildVm(state: FeatureProbeState): ViewNode {
     });
   }
   children.push(
-    { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!", emphasis: "secondary" },
+    // Rich copy — server-provided route: text/html alongside plain text (parity coverage for html).
+    { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!", emphasis: "secondary", html: "<code>npx @ashley-shrok/viewmodel-shell</code>" },
   );
   children.push({ type: "image", src: "/logo.png", alt: "ViewModel Shell logo", size: "small", shape: "circle" });
   if (state.lastSubmit != null) {
@@ -503,10 +504,11 @@ function buildVm(state: FeatureProbeState): ViewNode {
       { type: "button", label: "combo",       action: { name: "axes-noop-9" }, emphasis: "primary", tone: "danger", size: "lg" },
       // Destructive-action guard: confirm carries a native-confirm question.
       { type: "button", label: "confirm-guard", action: { name: "axes-noop-confirm" }, tone: "danger", confirm: "Delete this? This cannot be undone." },
-      { type: "copy-button", text: "axes-clip", label: "Copy", emphasis: "secondary", tone: "info", size: "sm" },
+      // Rich copy — harvest route: copies the rendered "Warning card" region below (parity coverage for copyTargetId).
+      { type: "copy-button", text: "axes-clip", label: "Copy", emphasis: "secondary", tone: "info", size: "sm", copyTargetId: "axes-warning-card" },
       { type: "text", value: "tone text", tone: "warning" },
       { type: "text", value: "heading + tone", style: "heading", tone: "danger" },
-      { type: "section", heading: "Warning card", variant: "card", tone: "warning", children: [{ type: "text", value: "tinted card surface" }] },
+      { type: "section", id: "axes-warning-card", heading: "Warning card", variant: "card", tone: "warning", children: [{ type: "text", value: "tinted card surface" }] },
       { type: "section", heading: "Danger band", tone: "danger", children: [{ type: "text", value: "bare tinted section" }] },
       { type: "list", children: [
         { type: "list-item", id: "axes-li-1", state: "active", children: [{ type: "text", value: "active state" }] },

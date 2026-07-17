@@ -206,7 +206,14 @@ export interface SectionNode {
   alignSelf?: "start" | "center" | "end";
   /** Bounded content-width cap — a CLOSED token set (NOT raw CSS, per P2), implemented with `max-inline-size` (writing-mode-safe). Fractional values are proportional to the container (half→50%, two-thirds→66.6667%, three-quarters→75%) — the chat-gutter case, scaling with width; `prose` caps at the readable measure (min(65ch,100%), the Tailwind `max-w-prose` / Every-Layout `--measure` cap). The section still shrinks to its content below the cap. Omitted = no class → no cap (today's full-width behavior) = byte-identical. Emits .vms-maxw--{value}. Closed union (CHILD-02). */
   maxWidth?: "half" | "two-thirds" | "three-quarters" | "prose";
-  /** Optional stable preservation key for the renderer's collapsible-section open-state snapshot. Used only when `collapsible: true`. Provide when `heading` isn't unique within a page or is absent — otherwise the renderer falls back to `heading ?? "vms-section-anon"`, disambiguated by per-render ordinal. Omitted = use the heading fallback. */
+  /** Optional stable identifier for the section. Two uses: (1) it is emitted as the
+   *  rendered element's DOM `id`, which makes the section addressable — e.g. as a
+   *  `CopyButtonNode.copyTargetId` harvest target; and (2) when `collapsible: true`
+   *  it is the renderer's open-state preservation key. Provide when `heading` isn't
+   *  unique within a page or is absent — otherwise the collapsible snapshot falls
+   *  back to `heading ?? "vms-section-anon"`, disambiguated by per-render ordinal.
+   *  DOM ids must be unique on a page (the same uniqueness the collapse-key already
+   *  wants). Omitted = no DOM id emitted and the heading fallback is used for collapse. */
   id?: string;
   /** When true, the section renders as a native `<details>`/`<summary>` disclosure widget (closed by default). Aesthetic, client-side primitive — the open/closed state is DOM-local and the server does NOT round-trip it (same conceptual model as draft text values in unsubmitted form inputs). The browser adapter snapshots `<details>.open` before each re-render and restores it after, keyed by `id ?? heading ?? "vms-section-anon"` (disambiguated by per-render ordinal); a re-key drops the preserved state (the documented escape hatch for rare server-driven expansion). The summary label is the section's `heading`; a headingless collapsible section uses the fallback string `"Show details"`. If a section needs to start open, do not mark it collapsible. Omitted/false = today's `<section>` rendering, byte-identical. */
   collapsible?: boolean;
@@ -947,8 +954,38 @@ export interface TableNode {
 
 export interface CopyButtonNode {
   type: "copy-button";
-  /** The string to write to the clipboard on click. */
+  /** The plain-text string written to the clipboard on click. Always the
+   *  `text/plain` representation and the universal fallback: it is what a plain
+   *  destination (a code box, a terminal, a plain-text field) receives, and what
+   *  is copied when neither rich-copy route below applies. Required. */
   text: string;
+  /** RICH COPY — harvest route (adapter-side, the default; no server authoring).
+   *  The DOM id of an already-rendered region to copy. On click the adapter reads
+   *  that element's rendered markup as the `text/html` representation and its plain
+   *  text as `text/plain`, writing BOTH to the clipboard at once — so a paste into a
+   *  formatted destination (email, doc) keeps its structure while a plain
+   *  destination still gets clean text. The framework carries its look in
+   *  class-keyed styling rather than inline, so the app's theme naturally falls away
+   *  on paste and the *semantic structure* (headings, tables, bold, lists) survives —
+   *  the desired outcome, achieved by the conventional native-copy mechanism (the
+   *  destination sanitizes; the framework invents no cleaning pass). The target must
+   *  be a described region carrying an emitted DOM id (e.g. `SectionNode.id`,
+   *  `ListNode.id`); because ids only live on described nodes, this can never point
+   *  at undescribed chrome, so the intent stays fully readable from the wire. Point
+   *  it at a *content* region, not one containing this button. If the id resolves to
+   *  no element the adapter fails LOUD (console error) and falls back to writing
+   *  `text` — never a silent dead button. Absent = no harvest.
+   *  Precedence: `copyTargetId` > `html` > plain `text`. */
+  copyTargetId?: string;
+  /** RICH COPY — server-provided route (opt-in). A ready-made formatted
+   *  representation the server authored, written as `text/html` alongside `text`
+   *  (`text/plain`). Reach for this only when the content to copy is NOT already
+   *  rendered on the page (a cleaner or richer export than what's shown) — otherwise
+   *  prefer `copyTargetId`, which authors nothing. This is a WRITE-ONLY clipboard
+   *  export bound for a foreign destination; it never re-enters the rendered view
+   *  (that would be decoration and is forbidden). Ignored when `copyTargetId` is set.
+   *  Absent = no server-provided rich representation. */
+  html?: string;
   /** Label shown on the button before copying. Adapter default: "Copy". */
   label?: string;
   /** Ephemeral label shown after a successful copy, reverts after ~1.5 s. Adapter default: "Copied!". */

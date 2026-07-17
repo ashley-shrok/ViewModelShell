@@ -1334,7 +1334,18 @@ public record CopyButtonNode(
     // Box geometry — mirrors ButtonNode.Size ("sm"|"lg"; omit = md).
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ControlSize? Size = null,
     // Width axis — mirrors ButtonNode.Width ("full" = stretch). Emits .vms-button--full.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ControlWidth? Width = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ControlWidth? Width = null,
+    // RICH COPY — harvest route (adapter-side, the default; no server authoring).
+    // The DOM id of an already-rendered region to copy; the adapter reads its rendered
+    // markup as text/html and its plain text as text/plain, writing BOTH. Target must
+    // be a described region carrying an emitted DOM id (SectionNode.Id / ListNode.Id).
+    // Missing element ⇒ fail loud + fall back to Text. Precedence: CopyTargetId > Html > Text.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? CopyTargetId = null,
+    // RICH COPY — server-provided route (opt-in). A ready formatted representation
+    // written as text/html alongside Text (text/plain). Use only when the content is
+    // NOT already rendered on the page; otherwise prefer CopyTargetId. Write-only
+    // clipboard export (never re-enters the view). Ignored when CopyTargetId is set.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Html = null
 ) : ViewNode;
 
 // A first-class "nothing here" presentation (empty-state primitive). Heading is
