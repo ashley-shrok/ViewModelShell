@@ -95,7 +95,7 @@ public class TasksController : ControllerBase
                 NavItem("active",    "Active",    active),
                 NavItem("completed", "Completed", completed),
             ])
-        ], Variant: "card");
+        ], Variant: SectionVariant.Card);
 
         // MAIN — progress, add, the task list.
         // Items render in CreatedAt order; the bind path uses each task's
@@ -120,23 +120,23 @@ public class TasksController : ControllerBase
                     [
                         new CheckboxNode("completed", $"items.{i}.completed", null,
                             new ActionDescriptor($"toggle-row-{t.Id}")),
-                        new TextNode(t.Title, t.Completed ? "strikethrough" : null),
+                        new TextNode(t.Title, t.Completed ? TextStyle.Strikethrough : null),
                         new ButtonNode("✕",
-                            new ActionDescriptor($"delete-row-{t.Id}"), Tone: "danger"),
+                            new ActionDescriptor($"delete-row-{t.Id}"), Tone: Tone.Danger),
                     ]);
             })
             .ToList();
         if (taskItems.Count == 0)
-            taskItems.Add(new TextNode("Nothing here.", "muted"));
+            taskItems.Add(new TextNode("Nothing here.", TextStyle.Muted));
 
         var main = new SectionNode(null,
         [
-            new TextNode($"{completed} of {total} complete", "muted"),
+            new TextNode($"{completed} of {total} complete", TextStyle.Muted),
             new ProgressNode(pct),
             new FormNode(
                 SubmitAction: new ActionDescriptor("add"),
                 SubmitLabel:  "Add",
-                Layout:       "inline",
+                Layout: FormLayout.Inline,
                 Children:
                 [
                     new FieldNode("title", "text", "draftTitle", null, "Add a task…"),
@@ -144,6 +144,6 @@ public class TasksController : ControllerBase
             new ListNode(taskItems),
         ]);
 
-        return new PageNode("Tasks", [rail, main], Layout: "sidebar");
+        return new PageNode("Tasks", [rail, main], Layout: Layout.Sidebar);
     }
 }

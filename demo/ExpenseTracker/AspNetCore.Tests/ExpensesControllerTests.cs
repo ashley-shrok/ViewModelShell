@@ -60,7 +60,7 @@ public class ExpensesControllerTests
     {
         var rail = Assert.IsType<SectionNode>(page.Children[0]);
         Assert.Equal("Overview", rail.Heading);
-        Assert.Equal("card", rail.Variant);
+        Assert.Equal(SectionVariant.Card, rail.Variant);
         return rail;
     }
 
@@ -74,7 +74,7 @@ public class ExpensesControllerTests
     // The header bar (v1.12 layout:"row" cluster): the headingless row section
     // carrying the "Transactions" title TextNode + the Add button.
     private static SectionNode Header(PageNode page) =>
-        Main(page).Children.OfType<SectionNode>().Single(s => s.Layout == "row");
+        Main(page).Children.OfType<SectionNode>().Single(s => s.Layout == Layout.Row);
 
     private static ButtonNode AddButton(PageNode page) =>
         Header(page).Children.OfType<ButtonNode>().Single();
@@ -110,7 +110,7 @@ public class ExpensesControllerTests
     {
         var page = Page(CreateController().Get().Vm);
         Assert.Equal("Expenses", page.Title);
-        Assert.Equal("sidebar", page.Layout);
+        Assert.Equal(Layout.Sidebar, page.Layout);
         Assert.Equal(2, page.Children.Count); // rail + main
     }
 
@@ -141,7 +141,7 @@ public class ExpensesControllerTests
     {
         var rail = Rail(Page(CreateController().Get().Vm));
         var head = Assert.IsType<TextNode>(rail.Children[0]);
-        Assert.Equal("heading", head.Style);
+        Assert.Equal(TextStyle.Heading, head.Style);
         Assert.StartsWith("$", head.Value);
         Assert.Equal("remaining this month", Assert.IsType<TextNode>(rail.Children[1]).Value);
         var summary = Assert.IsType<TextNode>(rail.Children[2]);
@@ -163,7 +163,7 @@ public class ExpensesControllerTests
         var billsIdx = texts.FindIndex(t => t.Value == "Bills");
         Assert.True(billsIdx >= 0);
         // the amount line immediately follows the category name; Bills is over budget (850/800)
-        Assert.Equal("danger", texts[billsIdx + 1].Tone);
+        Assert.Equal(Tone.Danger, texts[billsIdx + 1].Tone);
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public class ExpensesControllerTests
         var texts = rail.Children.OfType<TextNode>().ToList();
         var foodIdx = texts.FindIndex(t => t.Value == "Food");
         Assert.True(foodIdx >= 0);
-        Assert.Equal("muted", texts[foodIdx + 1].Style);
+        Assert.Equal(TextStyle.Muted, texts[foodIdx + 1].Style);
     }
 
     [Fact]
@@ -182,7 +182,7 @@ public class ExpensesControllerTests
         var btn = AddButton(Page(CreateController().Get().Vm));
         Assert.Equal("+ Add Transaction", btn.Label);
         Assert.Equal("show-add", btn.Action.Name);
-        Assert.Equal("primary", btn.Emphasis);
+        Assert.Equal(Emphasis.Primary, btn.Emphasis);
     }
 
     [Fact]
@@ -254,7 +254,7 @@ public class ExpensesControllerTests
         var modal = AddModal(Page(resp.Vm));
         Assert.NotNull(modal);
         Assert.Equal("Add Transaction", modal!.Title);
-        Assert.Equal("narrow", modal.Size);
+        Assert.Equal(ModalSize.Narrow, modal.Size);
         Assert.Equal("hide-add", modal.DismissAction?.Name);
         Assert.Contains(modal.Children, c => c is FormNode);
     }

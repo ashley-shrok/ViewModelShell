@@ -92,14 +92,14 @@ public class TasksControllerTests
     public void Get_UsesSidebarLayout_WithRailAndMainSections()
     {
         var page = Page(CreateController().Get().Vm);
-        Assert.Equal("sidebar", page.Layout);
+        Assert.Equal(Layout.Sidebar, page.Layout);
 
         var sections = page.Children.OfType<SectionNode>().ToList();
         Assert.Equal(2, sections.Count);
 
         var rail = Rail(page);
         Assert.Equal("Views", rail.Heading);
-        Assert.Equal("card", rail.Variant);
+        Assert.Equal(SectionVariant.Card, rail.Variant);
 
         var main = MainCol(page);
         Assert.Null(main.Heading);
@@ -168,7 +168,7 @@ public class TasksControllerTests
     {
         var text = SummaryText(Page(CreateController().Get().Vm));
         Assert.Equal("1 of 3 complete", text.Value);
-        Assert.Equal("muted", text.Style);
+        Assert.Equal(TextStyle.Muted, text.Style);
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public class TasksControllerTests
         Assert.NotNull(form.SubmitAction);
         Assert.Equal("add", form.SubmitAction!.Name);
         Assert.Equal("Add", form.SubmitLabel);
-        Assert.Equal("inline", form.Layout);
+        Assert.Equal(FormLayout.Inline, form.Layout);
 
         var field = Assert.IsType<FieldNode>(form.Children.Single());
         Assert.Equal("title", field.Name);
@@ -221,7 +221,7 @@ public class TasksControllerTests
 
             var del = Assert.Single(row.Children.OfType<ButtonNode>());
             Assert.Equal("✕", del.Label);
-            Assert.Equal("danger", del.Tone);
+            Assert.Equal(Tone.Danger, del.Tone);
             Assert.Equal($"delete-row-{row.Id}", del.Action.Name);
         }
     }
@@ -316,7 +316,7 @@ public class TasksControllerTests
 
         var row = TaskRows(Page(resp.Vm)).Single(i => i.Id == activeId);
         Assert.Equal("done", row.State);
-        Assert.Equal("strikethrough", row.Children.OfType<TextNode>().Single().Style);
+        Assert.Equal(TextStyle.Strikethrough, row.Children.OfType<TextNode>().Single().Style);
     }
 
     [Fact]
@@ -397,7 +397,7 @@ public class TasksControllerTests
         Assert.Empty(TaskRows(page));
         var empty = TaskList(page).Children.OfType<TextNode>().Single();
         Assert.Equal("Nothing here.", empty.Value);
-        Assert.Equal("muted", empty.Style);
+        Assert.Equal(TextStyle.Muted, empty.Style);
     }
 
     // ── action: filter-{value} ──────────────────────────────────────────────────

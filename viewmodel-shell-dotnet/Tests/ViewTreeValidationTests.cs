@@ -369,7 +369,7 @@ public class ViewTreeValidationTests
         var innerStyling = new SectionNode(
             Heading: null,
             Children: new ViewNode[] { Btn("close-outer", "Close") },
-            Variant: "card");
+            Variant: SectionVariant.Card);
         var outer = Card("Outer", new ActionDescriptor("select-outer"), innerStyling);
         var tree = Page(outer);
         var ex = Record.Exception(() => ViewTreeValidation.ValidateSectionAction(tree));
@@ -399,7 +399,7 @@ public class ViewTreeValidationTests
     public void Validate_SectionLink_Plain_Passes()
     {
         var tree = Page(LinkedCard("Read the docs", new SectionLink("https://example.com/docs", External: true),
-            new TextNode("Architecture, gotchas, demos.", "muted")));
+            new TextNode("Architecture, gotchas, demos.", TextStyle.Muted)));
         var ex = Record.Exception(() => ViewTreeValidation.ValidateSectionAction(tree));
         Assert.Null(ex);
     }
@@ -482,7 +482,7 @@ public class ViewTreeValidationTests
         var innerStyling = new SectionNode(
             Heading: null,
             Children: new ViewNode[] { Btn("close-outer", "Close") },
-            Variant: "card");
+            Variant: SectionVariant.Card);
         var outer = LinkedCard("Outer", new SectionLink("https://example.com"), innerStyling);
         var tree = Page(outer);
         var ex = Record.Exception(() => ViewTreeValidation.ValidateSectionAction(tree));

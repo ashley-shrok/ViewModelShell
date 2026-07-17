@@ -1,5 +1,6 @@
 namespace FeatureProbe.Controllers;
 
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using ViewModelShell;
 
@@ -258,32 +259,41 @@ public class FeatureProbeController : ControllerBase
         return new ShellResponse<FeatureProbeState>(BuildVm(state), state).Validate();
     }
 
+    /// <summary>
+    /// The wire spelling of an enum value, derived from the SAME naming policy
+    /// KebabEnum&lt;T&gt; serializes with — so a probe heading can never drift from
+    /// the value it labels (the bun twin interpolates the raw wire string, and
+    /// parity diffs the heading byte-for-byte).
+    /// </summary>
+    private static string WireName(Enum v) =>
+        JsonNamingPolicy.KebabCaseLower.ConvertName(v.ToString());
+
     private static ViewNode BuildVm(FeatureProbeState state)
     {
         var children = new List<ViewNode>
         {
-            new TextNode($"Poll count: {state.PollCount}", "muted"),
+            new TextNode($"Poll count: {state.PollCount}", TextStyle.Muted),
         };
         if (state.LastUploadName != null)
-            children.Add(new TextNode($"Last upload: {state.LastUploadName} ({state.LastUploadSize} bytes)", "muted"));
+            children.Add(new TextNode($"Last upload: {state.LastUploadName} ({state.LastUploadSize} bytes)", TextStyle.Muted));
 
         children.Add(new CopyButtonNode(
             "npx @ashley-shrok/viewmodel-shell",
             "Copy install command",
             "Copied!",
-            Emphasis: "secondary"));
+            Emphasis: Emphasis.Secondary));
 
-        children.Add(new ImageNode("/logo.png", Alt: "ViewModel Shell logo", Size: "small", Shape: "circle"));
+        children.Add(new ImageNode("/logo.png", Alt: "ViewModel Shell logo", Size: ImageSize.Small, Shape: ImageShape.Circle));
 
         if (state.LastSubmit != null)
-            children.Add(new TextNode($"Last submit: {state.LastSubmit}", "muted"));
+            children.Add(new TextNode($"Last submit: {state.LastSubmit}", TextStyle.Muted));
 
         children.Add(new ButtonNode("Start long action",
-            new ActionDescriptor("start-long-action"), Emphasis: "primary"));
+            new ActionDescriptor("start-long-action"), Emphasis: Emphasis.Primary));
         if (state.LongActionPolls > 0)
             children.Add(new TextNode(
                 $"Long action in progress · {state.LongActionPolls} tick{(state.LongActionPolls == 1 ? "" : "s")} remaining",
-                "muted"));
+                TextStyle.Muted));
 
         // Multi-action form: shared "note" field bound to state.Note; two
         // buttons, each dispatching a unique-named action.
@@ -293,11 +303,11 @@ public class FeatureProbeController : ControllerBase
             Children: [new FieldNode("note", "text", "note", "Note", "Type a note…")],
             Buttons:
             [
-                new ButtonNode("Save Draft", new ActionDescriptor("save-draft"), Emphasis: "secondary"),
-                new ButtonNode("Publish",    new ActionDescriptor("publish"),    "primary")
+                new ButtonNode("Save Draft", new ActionDescriptor("save-draft"), Emphasis: Emphasis.Secondary),
+                new ButtonNode("Publish",    new ActionDescriptor("publish"),    Emphasis.Primary)
             ]));
 
-        var probeSection = new SectionNode("Probe", children, Variant: "card", Layout: "split");
+        var probeSection = new SectionNode("Probe", children, Variant: SectionVariant.Card, Layout: Layout.Split);
         // 1.3.0 — clickable SectionNode (parity coverage for SectionNode.Action).
         var clickableCardSection = new SectionNode(
             Heading: "Clickable Card",
@@ -305,9 +315,9 @@ public class FeatureProbeController : ControllerBase
             {
                 new TextNode(
                     $"Clicked {state.CardClickCount} time{(state.CardClickCount == 1 ? "" : "s")}",
-                    "muted"),
+                    TextStyle.Muted),
             },
-            Variant: "card",
+            Variant: SectionVariant.Card,
             Action: new ActionDescriptor("select-card"));
         // 1.4.0 — linked SectionNode (parity coverage for SectionNode.Link, issue #21).
         // Pure client-side navigation — no state change, no dispatch arm needed;
@@ -316,9 +326,9 @@ public class FeatureProbeController : ControllerBase
             Heading: "Linked card",
             Children: new ViewNode[]
             {
-                new TextNode("Renders as <a href> for native link affordances.", "muted"),
+                new TextNode("Renders as <a href> for native link affordances.", TextStyle.Muted),
             },
-            Variant: "card",
+            Variant: SectionVariant.Card,
             Link: new SectionLink("https://example.com/probe", External: true));
         // 1.11.0 — row layout (parity coverage for layout:"row"). A left-aligned
         // wrapping row of links — the horizontal-row primitive a navbar composes from.
@@ -330,8 +340,8 @@ public class FeatureProbeController : ControllerBase
                 new LinkNode("Docs", "/docs"),
                 new LinkNode("About", "/about"),
             },
-            Variant: "card",
-            Layout: "row");
+            Variant: SectionVariant.Card,
+            Layout: Layout.Row);
         // 1.12.0 — arrange/align alignment vocabulary (parity coverage for
         // ALIGN-01/02/03). Static view-shape captured by every GET step (mirrors the
         // 1.11.0 row precedent; no dedicated action arm). Byte-identical to the bun
@@ -345,14 +355,14 @@ public class FeatureProbeController : ControllerBase
                 new LinkNode("One", "/one"),
                 new LinkNode("Two", "/two"),
             },
-            Layout: "row");
+            Layout: Layout.Row);
         // (b) canonical header-bar (ALIGN-04): row + Arrange:"space-between", first
         // child a heading TextNode, then a nested row section of nav links.
         var headerBarSection = new SectionNode(
             Heading: null,
             Children: new ViewNode[]
             {
-                new TextNode("Header", "heading"),
+                new TextNode("Header", TextStyle.Heading),
                 new SectionNode(
                     Heading: null,
                     Children: new ViewNode[]
@@ -362,31 +372,31 @@ public class FeatureProbeController : ControllerBase
                         new LinkNode("Home", "/home", Active: true),
                         new LinkNode("Docs", "/docs"),
                     },
-                    Layout: "row"),
+                    Layout: Layout.Row),
             },
-            Layout: "row",
-            Arrange: "space-between");
+            Layout: Layout.Row,
+            Arrange: Arrange.SpaceBetween);
         // (c) one row per remaining arrange value (space-between covered above).
-        var arrangeValues = new[] { "start", "center", "end", "space-around", "space-evenly" };
+        var arrangeValues = new[] { Arrange.Start, Arrange.Center, Arrange.End, Arrange.SpaceAround, Arrange.SpaceEvenly };
         var arrangeSections = arrangeValues.Select(v => new SectionNode(
-            Heading: $"arrange {v}",
+            Heading: $"arrange {WireName(v)}",
             Children: new ViewNode[]
             {
                 new LinkNode("A", "/a"),
                 new LinkNode("B", "/b"),
             },
-            Layout: "row",
+            Layout: Layout.Row,
             Arrange: v)).ToList();
         // (d) one row per align value.
-        var alignValues = new[] { "start", "center", "end", "stretch", "baseline" };
+        var alignValues = new[] { Align.Start, Align.Center, Align.End, Align.Stretch, Align.Baseline };
         var alignSections = alignValues.Select(v => new SectionNode(
-            Heading: $"align {v}",
+            Heading: $"align {WireName(v)}",
             Children: new ViewNode[]
             {
                 new LinkNode("A", "/a"),
                 new LinkNode("B", "/b"),
             },
-            Layout: "row",
+            Layout: Layout.Row,
             Align: v)).ToList();
         // npm 1.12.0 — switcher vocabulary (parity coverage for SWITCH-01/02/03).
         // Static view-shape captured by every GET step (mirrors the 1.12.0
@@ -403,18 +413,18 @@ public class FeatureProbeController : ControllerBase
                 new LinkNode("Two", "/two"),
                 new LinkNode("Three", "/three"),
             },
-            Layout: "switcher");
+            Layout: Layout.Switcher);
         // (b) one switcher per threshold value (sm/md/lg/xl).
-        var thresholdValues = new[] { "sm", "md", "lg", "xl" };
+        var thresholdValues = new[] { Threshold.Sm, Threshold.Md, Threshold.Lg, Threshold.Xl };
         var switcherThresholdSections = thresholdValues.Select(v => new SectionNode(
-            Heading: $"switcher {v}",
+            Heading: $"switcher {WireName(v)}",
             Children: new ViewNode[]
             {
                 new LinkNode("A", "/a"),
                 new LinkNode("B", "/b"),
                 new LinkNode("C", "/c"),
             },
-            Layout: "switcher",
+            Layout: Layout.Switcher,
             Threshold: v)).ToList();
         // (c) one switcher with Limit:4 and >4 children (6) — exercises the count cap.
         var switcherLimitSection = new SectionNode(
@@ -428,7 +438,7 @@ public class FeatureProbeController : ControllerBase
                 new LinkNode("5", "/5"),
                 new LinkNode("6", "/6"),
             },
-            Layout: "switcher",
+            Layout: Layout.Switcher,
             Limit: 4);
         // 1.13.0 — cards minItem vocabulary (parity coverage for GRID-01/02).
         // Static view-shape captured by every GET step (same precedent; no
@@ -447,11 +457,11 @@ public class FeatureProbeController : ControllerBase
                 new LinkNode("Two", "/c2"),
                 new LinkNode("Three", "/c3"),
             },
-            Layout: "cards");
+            Layout: Layout.Cards);
         // (b) one cards section per minItem value (xs/sm/md/lg/xl).
-        var minItemValues = new[] { "xs", "sm", "md", "lg", "xl" };
+        var minItemValues = new[] { MinItem.Xs, MinItem.Sm, MinItem.Md, MinItem.Lg, MinItem.Xl };
         var cardsMinItemSections = minItemValues.Select(v => new SectionNode(
-            Heading: $"cards minItem {v}",
+            Heading: $"cards minItem {WireName(v)}",
             Children: new ViewNode[]
             {
                 new LinkNode("P", "/p"),
@@ -459,7 +469,7 @@ public class FeatureProbeController : ControllerBase
                 new LinkNode("R", "/r"),
                 new LinkNode("S", "/s"),
             },
-            Layout: "cards",
+            Layout: Layout.Cards,
             MinItem: v)).ToList();
         // 1.x (Phase 10) — fits node vocabulary (parity coverage for FITS-03).
         // Static view-shape captured by every GET step (same precedent; no
@@ -482,13 +492,13 @@ public class FeatureProbeController : ControllerBase
                         new LinkNode("Wide A", "/wa"),
                         new LinkNode("Wide B", "/wb"),
                         new LinkNode("Wide C", "/wc"),
-                    }, Layout: "row"),
+                    }, Layout: Layout.Row),
                     new SectionNode(Heading: null, Children: new ViewNode[]
                     {
                         new LinkNode("Wide A", "/wa"),
                         new LinkNode("Wide B", "/wb"),
                         new LinkNode("Wide C", "/wc"),
-                    }, Layout: "stack"),
+                    }, Layout: Layout.Stack),
                 }),
             });
         // (b) fits with Axis:"both" — proves the axis field present on the wire.
@@ -502,13 +512,13 @@ public class FeatureProbeController : ControllerBase
                     {
                         new LinkNode("X", "/x"),
                         new LinkNode("Y", "/y"),
-                    }, Layout: "row"),
+                    }, Layout: Layout.Row),
                     new SectionNode(Heading: null, Children: new ViewNode[]
                     {
                         new LinkNode("X", "/x"),
                         new LinkNode("Y", "/y"),
-                    }, Layout: "stack"),
-                }, Axis: "both"),
+                    }, Layout: Layout.Stack),
+                }, Axis: Axis.Both),
             });
         // 12.x (Phase 12) — chart node vocabulary (parity coverage for CHART-05).
         // Reshaped Phase 18 (CHARTBASE-04) — multi-series + tone + stacked, over
@@ -530,7 +540,7 @@ public class FeatureProbeController : ControllerBase
                     Series: new[]
                     {
                         new ChartSeries("Visits", new double[] { 12, 19, 7 }),
-                        new ChartSeries("Errors", new double[] { 1, 3, 2 }, Tone: "danger"),
+                        new ChartSeries("Errors", new double[] { 1, 3, 2 }, Tone: Tone.Danger),
                     },
                     Stacked: true,
                     Title: "Weekly visits"),
@@ -540,7 +550,7 @@ public class FeatureProbeController : ControllerBase
                     {
                         new ChartSeries("Trend", new double[] { 5, 10, 15 }),
                     },
-                    Kind: "line"),
+                    Kind: ChartKind.Line),
             });
         // 3.0.0 — appearance axes (parity coverage for the unified vocabulary:
         // button emphasis × tone × size, section tone, text tone, list-item/row
@@ -550,47 +560,47 @@ public class FeatureProbeController : ControllerBase
             Heading: "Appearance axes",
             Children: new ViewNode[]
             {
-                new ButtonNode("E-primary",   new ActionDescriptor("axes-noop-1"), Emphasis: "primary"),
-                new ButtonNode("E-secondary", new ActionDescriptor("axes-noop-2"), Emphasis: "secondary"),
-                new ButtonNode("T-danger",    new ActionDescriptor("axes-noop-3"), Tone: "danger"),
-                new ButtonNode("T-warning",   new ActionDescriptor("axes-noop-4"), Tone: "warning"),
-                new ButtonNode("T-success",   new ActionDescriptor("axes-noop-5"), Tone: "success"),
-                new ButtonNode("T-info",      new ActionDescriptor("axes-noop-6"), Tone: "info"),
-                new ButtonNode("S-sm",        new ActionDescriptor("axes-noop-7"), Size: "sm"),
-                new ButtonNode("S-lg",        new ActionDescriptor("axes-noop-8"), Size: "lg"),
-                new ButtonNode("combo",       new ActionDescriptor("axes-noop-9"), Emphasis: "primary", Tone: "danger", Size: "lg"),
+                new ButtonNode("E-primary",   new ActionDescriptor("axes-noop-1"), Emphasis: Emphasis.Primary),
+                new ButtonNode("E-secondary", new ActionDescriptor("axes-noop-2"), Emphasis: Emphasis.Secondary),
+                new ButtonNode("T-danger",    new ActionDescriptor("axes-noop-3"), Tone: Tone.Danger),
+                new ButtonNode("T-warning",   new ActionDescriptor("axes-noop-4"), Tone: Tone.Warning),
+                new ButtonNode("T-success",   new ActionDescriptor("axes-noop-5"), Tone: Tone.Success),
+                new ButtonNode("T-info",      new ActionDescriptor("axes-noop-6"), Tone: Tone.Info),
+                new ButtonNode("S-sm",        new ActionDescriptor("axes-noop-7"), Size: ControlSize.Sm),
+                new ButtonNode("S-lg",        new ActionDescriptor("axes-noop-8"), Size: ControlSize.Lg),
+                new ButtonNode("combo",       new ActionDescriptor("axes-noop-9"), Emphasis: Emphasis.Primary, Tone: Tone.Danger, Size: ControlSize.Lg),
                 // Destructive-action guard: Confirm carries a native-confirm question.
-                new ButtonNode("confirm-guard", new ActionDescriptor("axes-noop-confirm"), Tone: "danger", Confirm: "Delete this? This cannot be undone."),
-                new CopyButtonNode("axes-clip", Label: "Copy", Emphasis: "secondary", Tone: "info", Size: "sm"),
-                new TextNode("tone text", Tone: "warning"),
-                new TextNode("heading + tone", "heading", "danger"),
-                new SectionNode("Warning card", new ViewNode[] { new TextNode("tinted card surface", null) }, Variant: "card", Tone: "warning"),
-                new SectionNode("Danger band", new ViewNode[] { new TextNode("bare tinted section", null) }, Tone: "danger"),
+                new ButtonNode("confirm-guard", new ActionDescriptor("axes-noop-confirm"), Tone: Tone.Danger, Confirm: "Delete this? This cannot be undone."),
+                new CopyButtonNode("axes-clip", Label: "Copy", Emphasis: Emphasis.Secondary, Tone: Tone.Info, Size: ControlSize.Sm),
+                new TextNode("tone text", Tone: Tone.Warning),
+                new TextNode("heading + tone", TextStyle.Heading, Tone.Danger),
+                new SectionNode("Warning card", new ViewNode[] { new TextNode("tinted card surface", null) }, Variant: SectionVariant.Card, Tone: Tone.Warning),
+                new SectionNode("Danger band", new ViewNode[] { new TextNode("bare tinted section", null) }, Tone: Tone.Danger),
                 new ListNode(new ViewNode[]
                 {
                     new ListItemNode("axes-li-1", "active", new ViewNode[] { new TextNode("active state", null) }),
-                    new ListItemNode("axes-li-2", null,     new ViewNode[] { new TextNode("danger tone", null) }, Tone: "danger"),
-                    new ListItemNode("axes-li-3", "done",   new ViewNode[] { new TextNode("done + success", null) }, Tone: "success"),
+                    new ListItemNode("axes-li-2", null,     new ViewNode[] { new TextNode("danger tone", null) }, Tone: Tone.Danger),
+                    new ListItemNode("axes-li-3", "done",   new ViewNode[] { new TextNode("done + success", null) }, Tone: Tone.Success),
                 }),
                 new TableNode(
                     new TableColumn[] { new TableColumn("k", "K") },
                     new TableRow[]
                     {
                         new TableRow(new Dictionary<string, string> { ["k"] = "running" }, State: "running"),
-                        new TableRow(new Dictionary<string, string> { ["k"] = "danger" }, Tone: "danger"),
-                        new TableRow(new Dictionary<string, string> { ["k"] = "done+warn" }, State: "done", Tone: "warning"),
+                        new TableRow(new Dictionary<string, string> { ["k"] = "danger" }, Tone: Tone.Danger),
+                        new TableRow(new Dictionary<string, string> { ["k"] = "done+warn" }, State: "done", Tone: Tone.Warning),
                     }),
             },
-            Variant: "card");
+            Variant: SectionVariant.Card);
         // 3.1.0 (#22) — button width, divider, form submitButton. Static view-shape
         // captured by the GET steps; byte-identical to the bun twin.
         var admin22Section = new SectionNode(
             Heading: "Admin primitives (#22)",
             Children: new ViewNode[]
             {
-                new ButtonNode("Full width", new ActionDescriptor("axes-noop-10"), Emphasis: "primary", Width: "full"),
+                new ButtonNode("Full width", new ActionDescriptor("axes-noop-10"), Emphasis: Emphasis.Primary, Width: ControlWidth.Full),
                 new DividerNode(),
-                new DividerNode(Orientation: "vertical"),
+                new DividerNode(Orientation: Orientation.Vertical),
                 new FormNode(
                     SubmitAction: null,
                     SubmitLabel: null,
@@ -598,9 +608,9 @@ public class FeatureProbeController : ControllerBase
                     {
                         new FieldNode("q", "text", "axesQuery", "Query", null),
                     },
-                    SubmitButton: new ButtonNode("Search", new ActionDescriptor("axes-search"), Emphasis: "primary", Width: "full")),
+                    SubmitButton: new ButtonNode("Search", new ActionDescriptor("axes-search"), Emphasis: Emphasis.Primary, Width: ControlWidth.Full)),
             },
-            Variant: "card");
+            Variant: SectionVariant.Card);
         // 3.2.0 — child-side modifiers alignSelf + maxWidth on SectionNode (parity
         // for CHILD-01/02/03). Byte-identical to the bun/node twin (handler.ts
         // childModifiersSection). Omitted alignSelf/maxWidth ABSENT on the wire, set
@@ -609,16 +619,16 @@ public class FeatureProbeController : ControllerBase
             Heading: "Child modifiers (alignSelf + maxWidth)",
             Children: new ViewNode[]
             {
-                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("bare (omitted)", null) }, Variant: "card"),
-                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("alignSelf start", null) },  Variant: "card", AlignSelf: "start"),
-                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("alignSelf center", null) }, Variant: "card", AlignSelf: "center"),
-                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("alignSelf end", null) },    Variant: "card", AlignSelf: "end"),
-                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("maxWidth half", null) },           Variant: "card", MaxWidth: "half"),
-                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("maxWidth two-thirds", null) },     Variant: "card", MaxWidth: "two-thirds"),
-                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("maxWidth three-quarters", null) }, Variant: "card", MaxWidth: "three-quarters"),
-                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("maxWidth prose", null) },          Variant: "card", MaxWidth: "prose"),
-                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("Hi there!", null) },          Variant: "card", AlignSelf: "start", MaxWidth: "three-quarters"),
-                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("Doing great, thanks!", null) }, Variant: "card", AlignSelf: "end", MaxWidth: "three-quarters", Tone: "info"),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("bare (omitted)", null) }, Variant: SectionVariant.Card),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("alignSelf start", null) },  Variant: SectionVariant.Card, AlignSelf: AlignSelf.Start),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("alignSelf center", null) }, Variant: SectionVariant.Card, AlignSelf: AlignSelf.Center),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("alignSelf end", null) },    Variant: SectionVariant.Card, AlignSelf: AlignSelf.End),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("maxWidth half", null) },           Variant: SectionVariant.Card, MaxWidth: MaxWidth.Half),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("maxWidth two-thirds", null) },     Variant: SectionVariant.Card, MaxWidth: MaxWidth.TwoThirds),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("maxWidth three-quarters", null) }, Variant: SectionVariant.Card, MaxWidth: MaxWidth.ThreeQuarters),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("maxWidth prose", null) },          Variant: SectionVariant.Card, MaxWidth: MaxWidth.Prose),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("Hi there!", null) },          Variant: SectionVariant.Card, AlignSelf: AlignSelf.Start, MaxWidth: MaxWidth.ThreeQuarters),
+                new SectionNode(Heading: null, Children: new ViewNode[] { new TextNode("Doing great, thanks!", null) }, Variant: SectionVariant.Card, AlignSelf: AlignSelf.End, MaxWidth: MaxWidth.ThreeQuarters, Tone: Tone.Info),
             });
         var pageChildren = new List<ViewNode>
         {
@@ -642,7 +652,7 @@ public class FeatureProbeController : ControllerBase
         // so every GET byte-diffs the new wire fields across all backends.
         pageChildren.Add(new SectionNode(
             Heading: "Forms completeness",
-            Variant: "card",
+            Variant: SectionVariant.Card,
             Children: new ViewNode[]
             {
                 new FieldNode("fc-email", "email", "note", "Email", null,
@@ -656,7 +666,7 @@ public class FeatureProbeController : ControllerBase
                 new FieldNode("fc-region", "text", "note", "Region", null,
                     Disabled: true),
                 new ButtonNode("Submit (disabled)", new ActionDescriptor("fc-submit"),
-                    Emphasis: "primary", Disabled: true),
+                    Emphasis: Emphasis.Primary, Disabled: true),
             }));
         // 3.9.0 — FieldNode.Bind optional (file inputs). A file field with
         // Bind: null: its binary rides the multipart side channel (fileRegistry
@@ -664,7 +674,7 @@ public class FeatureProbeController : ControllerBase
         // so every GET byte-diffs the NO-`bind`-key wire against the bun twin.
         pageChildren.Add(new SectionNode(
             Heading: "File field (optional bind)",
-            Variant: "card",
+            Variant: SectionVariant.Card,
             Children: new ViewNode[]
             {
                 new FieldNode("upload-nobind", "file", null, "Attachment (no bind)", null),
@@ -687,17 +697,17 @@ public class FeatureProbeController : ControllerBase
         // feedback-cta).
         pageChildren.Add(new SectionNode(
             Heading: "Feedback primitives",
-            Variant: "card",
+            Variant: SectionVariant.Card,
             Children: new ViewNode[]
             {
                 new BadgeNode("New"),
-                new BadgeNode("3", Tone: "danger"),
-                new BadgeNode("Beta", Tone: "info", Emphasis: "secondary"),
+                new BadgeNode("3", Tone: Tone.Danger),
+                new BadgeNode("Beta", Tone: Tone.Info, Emphasis: Emphasis.Secondary),
                 new EmptyStateNode("No items yet"),
                 new EmptyStateNode(
                     "Nothing here",
                     Message: "Add the first item.",
-                    Action: new ButtonNode("Add item", new ActionDescriptor("feedback-cta"), Emphasis: "primary")),
+                    Action: new ButtonNode("Add item", new ActionDescriptor("feedback-cta"), Emphasis: Emphasis.Primary)),
             }));
         // Fill axis (SectionNode.Fill) — one representative section carrying
         // Fill:true so the parity diff covers the new SectionNode wire field.
@@ -707,7 +717,7 @@ public class FeatureProbeController : ControllerBase
         // instead.
         pageChildren.Add(new SectionNode(
             Heading: "Fill section",
-            Variant: "card",
+            Variant: SectionVariant.Card,
             Fill: true,
             Children: new ViewNode[]
             {
@@ -721,7 +731,7 @@ public class FeatureProbeController : ControllerBase
         // the wire it's just the boolean, and false stays ABSENT (F2).
         pageChildren.Add(new SectionNode(
             Heading: "Follow-tail feed",
-            Variant: "card",
+            Variant: SectionVariant.Card,
             Fill: true,
             FollowTail: true,
             Children: new ViewNode[]
@@ -770,7 +780,7 @@ public class FeatureProbeController : ControllerBase
         // CLIENT-SIDE appearance/a11y is browser-only and NOT part of parity.
         pageChildren.Add(new SectionNode(
             Heading: "Navigation primitives",
-            Variant: "card",
+            Variant: SectionVariant.Card,
             Children: new ViewNode[]
             {
                 new BreadcrumbNode(new BreadcrumbItem[]
@@ -791,7 +801,7 @@ public class FeatureProbeController : ControllerBase
                     new StepItem("Draft", Description: "Compose the post"),
                     new StepItem("Review"),
                     new StepItem("Publish"),
-                }, Current: 1, Orientation: "vertical"),
+                }, Current: 1, Orientation: Orientation.Vertical),
             }));
         // Lookup field (LOOK-01/LOOK-06) — the two lookup inputTypes as static
         // view-shape captured by every GET step; byte-identical to the bun twin
@@ -824,7 +834,7 @@ public class FeatureProbeController : ControllerBase
         // lookup wire serializes identically across backends.
         pageChildren.Add(new SectionNode(
             Heading: "Lookup field",
-            Variant: "card",
+            Variant: SectionVariant.Card,
             Children: new ViewNode[]
             {
                 new FieldNode("lookup-owner", "lookup", Bind: "lookupOwner", Label: "Owner",
@@ -858,9 +868,9 @@ public class FeatureProbeController : ControllerBase
             Children: new ViewNode[] { new TextNode("Modal body for parity coverage.", null) },
             Footer: new ViewNode[] { new ButtonNode("OK", new ActionDescriptor("modal-ok")) },
             DismissAction: new ActionDescriptor("modal-dismiss"),
-            Size: "narrow"));
+            Size: ModalSize.Narrow));
         return new PageNode("Feature Probe", pageChildren,
-            Density: "compact", Layout: "cards");
+            Density: Density.Compact, Layout: Layout.Cards);
     }
 
     private static (List<TableItem> Page, int Total, int ClampedPage) Window(FeatureProbeState s)
@@ -926,6 +936,6 @@ public class FeatureProbeController : ControllerBase
 
         return new SectionNode("Table matrix",
             new List<ViewNode> { table },
-            Variant: "card");
+            Variant: SectionVariant.Card);
     }
 }

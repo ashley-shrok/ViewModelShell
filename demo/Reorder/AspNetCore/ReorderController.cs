@@ -154,7 +154,7 @@ public class ReorderController : ControllerBase
                 "Reorder within a group with Up / Down. Use Move… to relocate an " +
                 "item to another group. No drag-and-drop — every reorder is a named " +
                 "action, so it works for keyboard users and agents too.",
-                "muted"),
+                TextStyle.Muted),
         };
 
         foreach (var (key, label) in ReorderState.Folders)
@@ -163,7 +163,7 @@ public class ReorderController : ControllerBase
             ViewNode body;
             if (group.Count == 0)
             {
-                body = new TextNode("(empty)", "muted");
+                body = new TextNode("(empty)", TextStyle.Muted);
             }
             else
             {
@@ -175,16 +175,16 @@ public class ReorderController : ControllerBase
                     [
                         new TextNode(item.Label, null),
                         new ButtonNode("Up",   new ActionDescriptor($"move-up-{item.Id}"),
-                            Emphasis: "secondary", Size: "sm", Disabled: k == 0),
+                            Emphasis: Emphasis.Secondary, Size: ControlSize.Sm, Disabled: k == 0),
                         new ButtonNode("Down", new ActionDescriptor($"move-down-{item.Id}"),
-                            Emphasis: "secondary", Size: "sm", Disabled: k == group.Count - 1),
+                            Emphasis: Emphasis.Secondary, Size: ControlSize.Sm, Disabled: k == group.Count - 1),
                         new ButtonNode("Move…", new ActionDescriptor($"move-open-{item.Id}"),
-                            Emphasis: "secondary", Size: "sm"),
+                            Emphasis: Emphasis.Secondary, Size: ControlSize.Sm),
                     ]));
                 }
                 body = new ListNode(rows);
             }
-            children.Add(new SectionNode(label, [body], Variant: "card"));
+            children.Add(new SectionNode(label, [body], Variant: SectionVariant.Card));
         }
 
         // "Move to another group" modal (relocation). Lists every OTHER group.
@@ -199,7 +199,7 @@ public class ReorderController : ControllerBase
                     if (key == moving.Folder) continue;
                     dests.Add(new ButtonNode(label,
                         new ActionDescriptor($"move-to-{key}-{moving.Id}"),
-                        Emphasis: "primary", Width: "full"));
+                        Emphasis: Emphasis.Primary, Width: ControlWidth.Full));
                 }
                 children.Add(new ModalNode(
                     Title: $"Move “{moving.Label}” to…",

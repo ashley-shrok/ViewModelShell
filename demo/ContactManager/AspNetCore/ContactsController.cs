@@ -117,9 +117,9 @@ public class ContactsController : ControllerBase
     // state (detail). Replaces the old 3-full-page-swap navigation.
     private static ViewNode BuildVm(ContactsState state) => new PageNode(
         Title: "Contacts",
-        Density: "compact",      // a real contacts list is information-dense
-        Layout: "split",         // 2-up master/detail; collapses to stacked on narrow
-        Width: "wide",           // master+detail benefits from the 1440px cap — 0.7.0/#13
+        Density: Density.Compact,      // a real contacts list is information-dense
+        Layout: Layout.Split,         // 2-up master/detail; collapses to stacked on narrow
+        Width: PageWidth.Wide,           // master+detail benefits from the 1440px cap — 0.7.0/#13
         Children:
         [
             BuildMaster(state),
@@ -158,7 +158,7 @@ public class ContactsController : ControllerBase
                 new ButtonNode(
                     Label:   "+ Add Contact",
                     Action:  new ActionDescriptor("navigate-to-add"),
-                    Emphasis: "primary"),
+                    Emphasis: Emphasis.Primary),
 
                 new ListNode(
                     Id: "contact-list",
@@ -172,7 +172,7 @@ public class ContactsController : ControllerBase
                             Children:
                             [
                                 new TextNode(c.Name,  null),
-                                new TextNode(c.Email, "muted"),
+                                new TextNode(c.Email, TextStyle.Muted),
                                 // Per-row "Open" — unique action name per contact.
                                 new ButtonNode(
                                     Label:   "Open",
@@ -189,7 +189,7 @@ public class ContactsController : ControllerBase
         {
             return new SectionNode(
                 Heading: "New Contact",
-                Variant: "card",
+                Variant: SectionVariant.Card,
                 Children:
                 [
                     new FormNode(
@@ -214,16 +214,16 @@ public class ContactsController : ControllerBase
         {
             return new SectionNode(
                 Heading: "Details",
-                Variant: "card",
+                Variant: SectionVariant.Card,
                 Children:
                 [
-                    new TextNode("Select a contact to view details, or add a new one.", "muted")
+                    new TextNode("Select a contact to view details, or add a new one.", TextStyle.Muted)
                 ]);
         }
 
         return new SectionNode(
             Heading: contact.Name,
-            Variant: "card",
+            Variant: SectionVariant.Card,
             Children:
             [
                 new FormNode(
@@ -236,7 +236,7 @@ public class ContactsController : ControllerBase
                         new FieldNode("phone", "text",     "draftForm.phone", "Phone", null),
                         new FieldNode("notes", "textarea", "draftForm.notes", "Notes", null)
                     ]),
-                new ButtonNode("Delete", new ActionDescriptor($"delete-contact-{contact.Id}"), Tone: "danger")
+                new ButtonNode("Delete", new ActionDescriptor($"delete-contact-{contact.Id}"), Tone: Tone.Danger)
             ]);
     }
 }

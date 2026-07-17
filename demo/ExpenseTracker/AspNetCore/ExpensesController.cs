@@ -82,20 +82,20 @@ public class ExpensesController : ControllerBase
         // LEFT RAIL — at-a-glance summary + per-category budgets.
         var railChildren = new List<ViewNode>
         {
-            new TextNode($"${remaining:F2}", "heading"),
-            new TextNode("remaining this month", "muted"),
-            new TextNode($"Spent ${totalSpent:F2} of ${totalBudget:F2} · {pctUsed}% used", "muted")
+            new TextNode($"${remaining:F2}", TextStyle.Heading),
+            new TextNode("remaining this month", TextStyle.Muted),
+            new TextNode($"Spent ${totalSpent:F2} of ${totalBudget:F2} · {pctUsed}% used", TextStyle.Muted)
         };
         foreach (var c in state.Categories)
         {
             var spent = state.Transactions.Where(t => t.CategoryId == c.Id).Sum(t => t.Amount);
             var pct   = c.Budget == 0 ? 0 : (int)Math.Min(100, Math.Round(100m * spent / c.Budget));
             var over  = spent > c.Budget;
-            railChildren.Add(new TextNode(c.Name, "subheading"));
-            railChildren.Add(new TextNode($"${spent:F2} / ${c.Budget:F2}", over ? null : "muted", over ? "danger" : null));
+            railChildren.Add(new TextNode(c.Name, TextStyle.Subheading));
+            railChildren.Add(new TextNode($"${spent:F2} / ${c.Budget:F2}", over ? null : TextStyle.Muted, over ? Tone.Danger : null));
             railChildren.Add(new ProgressNode(pct));
         }
-        var rail = new SectionNode("Overview", railChildren, Variant: "card");
+        var rail = new SectionNode("Overview", railChildren, Variant: SectionVariant.Card);
 
         // MAIN — "+ Add" opens a modal; the main area is the ledger.
         // Each filter tab carries a unique action name (filter-{id}).
@@ -155,12 +155,12 @@ public class ExpensesController : ControllerBase
             Heading: null,
             Children:
             [
-                new TextNode("Transactions", "heading"),
-                new ButtonNode("+ Add Transaction", new ActionDescriptor("show-add"), Emphasis: "primary")
+                new TextNode("Transactions", TextStyle.Heading),
+                new ButtonNode("+ Add Transaction", new ActionDescriptor("show-add"), Emphasis: Emphasis.Primary)
             ],
-            Layout:  "row",
-            Arrange: "space-between",
-            Align:   "center");
+            Layout: Layout.Row,
+            Arrange: Arrange.SpaceBetween,
+            Align: Align.Center);
 
         var mainChildren = new List<ViewNode>
         {
@@ -188,13 +188,13 @@ public class ExpensesController : ControllerBase
                         ])
                 ],
                 DismissAction: new ActionDescriptor("hide-add"),
-                Size: "narrow"));
+                Size: ModalSize.Narrow));
         }
         var main = new SectionNode(null, mainChildren);
 
         return new PageNode(
             Title:    "Expenses",
             Children: [rail, main],
-            Layout:   "sidebar");
+            Layout: Layout.Sidebar);
     }
 }

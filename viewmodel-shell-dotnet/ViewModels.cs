@@ -11,9 +11,15 @@ namespace ViewModelShell;
 //   [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 // so the contract — "an unset optional is ABSENT, never \"field\": null" —
 // holds even under default ASP.NET JsonSerializerOptions with NO
-// DefaultIgnoreCondition configured. The host-side
-// DefaultIgnoreCondition = WhenWritingNull in Program.cs is now redundant
-// defense-in-depth, not load-bearing (it cannot be forgotten per-app).
+// DefaultIgnoreCondition configured, FOR THE TYPES IN THIS FILE.
+//
+// ⚠️ SCOPE — do not overstate this (the comment here previously did, and
+// AGENTS.md gotcha #8 had to be corrected on 2026-07-16 for the same reason):
+// the intrinsic attributes cover the framework's OWN wire types only. A
+// consumer's app STATE record is THEIR type and carries no attributes unless
+// they add them, so host-side DefaultIgnoreCondition = WhenWritingNull in
+// Program.cs remains LOAD-BEARING for `state` and must NOT be called
+// redundant or safe to omit.
 //
 // Maintainer rule: a NEW nullable field WITHOUT this attribute silently
 // re-introduces the cross-backend null-vs-absent drift this exists to kill.
@@ -21,6 +27,137 @@ namespace ViewModelShell;
 // keep serializing their value. JsonIgnoreAttribute is sealed — it cannot be
 // wrapped in a shorter alias; the attribute is spelled out in full on purpose.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─── Closed wire vocabularies ────────────────────────────────────────────────
+//
+// Every closed union in the TypeScript twin (viewmodel-shell/src/index.ts) is
+// an ENUM here, not `string?`. Before 6.0.0 these were all open `string?`: the
+// TS union was the only definition of validity and it did not bind this
+// backend, so a .NET app could emit any string for a closed-list field, the
+// renderer would silently ignore it, and parity could not catch it (two
+// backends emitting the same wrong value agree, and a diff passes). Audited
+// 2026-07-16: 39 of 39 were open. Enums make the invalid value a COMPILE
+// error, which is the same protection the TS side has always had.
+//
+// 🚨 MAINTAINER RULE — the converter MUST be intrinsic, via KebabEnum<T>.
+// System.Text.Json serializes a bare enum as a NUMBER ({"tone":0}) and the
+// stock JsonStringEnumConverter attribute (which takes no naming policy)
+// emits PascalCase ({"tone":"SpaceBetween"}). BOTH are silently wrong on the
+// wire and BOTH compile fine. Relying on the host to register a converter in
+// Program.cs re-creates exactly the per-app-forgettable footgun the null
+// contract above exists to avoid — and it fails SILENTLY, so no consumer can
+// "just remember" it. KebabEnum<T> bakes JsonNamingPolicy.KebabCaseLower into
+// a parameterless ctor so it can be named by an attribute, making correct
+// serialization intrinsic under default ASP.NET options with ZERO host setup.
+// Verified: SpaceBetween → "space-between", ThreeQuarters → "three-quarters",
+// Danger → "danger", byte-identical to the TS union strings.
+//
+// A NEW closed-union field MUST be an enum carrying [JsonConverter(
+// typeof(KebabEnum<TEnum>))]; a new VALUE is a plain additive enum member
+// (non-breaking for consumers). Deliberately NOT enums: freeform,
+// app-extensible fields — `state` on ListItemNode/TableRow — which are
+// `string` in the TS twin too, by design.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Serializes an enum as its kebab-case-lower name, matching the TypeScript
+/// union strings exactly. Baked into a parameterless ctor so it can be applied
+/// via [JsonConverter] — which makes it intrinsic to the type and independent
+/// of host JsonSerializerOptions. See the maintainer rule above.
+/// </summary>
+public sealed class KebabEnum<T> : JsonStringEnumConverter<T> where T : struct, Enum
+{
+    public KebabEnum() : base(JsonNamingPolicy.KebabCaseLower) { }
+}
+
+/// <summary>Semantic intent / severity — the universal status colour axis.</summary>
+[JsonConverter(typeof(KebabEnum<Tone>))]
+public enum Tone { Success, Warning, Danger, Info }
+
+/// <summary>Visual weight — filled vs outline. Orthogonal to Tone and Size.</summary>
+[JsonConverter(typeof(KebabEnum<Emphasis>))]
+public enum Emphasis { Primary, Secondary }
+
+/// <summary>Box geometry for buttons — the ONLY axis that changes metrics.</summary>
+[JsonConverter(typeof(KebabEnum<ControlSize>))]
+public enum ControlSize { Sm, Lg }
+
+/// <summary>Button/CopyButton width: "full" stretches to fill the container.</summary>
+[JsonConverter(typeof(KebabEnum<ControlWidth>))]
+public enum ControlWidth { Auto, Full }
+
+/// <summary>Design-system sizing hint for images.</summary>
+[JsonConverter(typeof(KebabEnum<ImageSize>))]
+public enum ImageSize { Small, Medium, Large, Full }
+
+/// <summary>Image mask shape.</summary>
+[JsonConverter(typeof(KebabEnum<ImageShape>))]
+public enum ImageShape { Circle }
+
+/// <summary>Modal width preset.</summary>
+[JsonConverter(typeof(KebabEnum<ModalSize>))]
+public enum ModalSize { Narrow, Medium, Wide, Fullscreen }
+
+/// <summary>Chart rendering kind.</summary>
+[JsonConverter(typeof(KebabEnum<ChartKind>))]
+public enum ChartKind { Line, Bar, Area, Pie, Donut }
+
+/// <summary>Form field arrangement.</summary>
+[JsonConverter(typeof(KebabEnum<FormLayout>))]
+public enum FormLayout { Stack, Inline }
+
+/// <summary>Page/Section layout preset. Responsiveness is intrinsic — see the
+/// layout policy in AGENTS.md (zero viewport breakpoints).</summary>
+[JsonConverter(typeof(KebabEnum<Layout>))]
+public enum Layout { Stack, Split, Cards, Sidebar, Switcher, Row }
+
+/// <summary>Page width cap opt-in.</summary>
+[JsonConverter(typeof(KebabEnum<PageWidth>))]
+public enum PageWidth { Wide, Full }
+
+/// <summary>Spacing rhythm.</summary>
+[JsonConverter(typeof(KebabEnum<Density>))]
+public enum Density { Comfortable, Compact }
+
+/// <summary>Main-axis distribution (justify-content).</summary>
+[JsonConverter(typeof(KebabEnum<Arrange>))]
+public enum Arrange { Start, Center, End, SpaceBetween, SpaceAround, SpaceEvenly }
+
+/// <summary>Cross-axis alignment (align-items).</summary>
+[JsonConverter(typeof(KebabEnum<Align>))]
+public enum Align { Start, Center, End, Baseline, Stretch }
+
+/// <summary>Per-item cross-axis override (align-self).</summary>
+[JsonConverter(typeof(KebabEnum<AlignSelf>))]
+public enum AlignSelf { Start, Center, End }
+
+/// <summary>Switcher row/stack flip threshold (content width).</summary>
+[JsonConverter(typeof(KebabEnum<Threshold>))]
+public enum Threshold { Sm, Md, Lg, Xl }
+
+/// <summary>Cards auto-fit minimum track size.</summary>
+[JsonConverter(typeof(KebabEnum<MinItem>))]
+public enum MinItem { Xs, Sm, Md, Lg, Xl }
+
+/// <summary>Section measure cap.</summary>
+[JsonConverter(typeof(KebabEnum<MaxWidth>))]
+public enum MaxWidth { Prose, Half, TwoThirds, ThreeQuarters }
+
+/// <summary>Divider/Steps orientation.</summary>
+[JsonConverter(typeof(KebabEnum<Orientation>))]
+public enum Orientation { Horizontal, Vertical }
+
+/// <summary>FitsNode measurement axis.</summary>
+[JsonConverter(typeof(KebabEnum<Axis>))]
+public enum Axis { Horizontal, Vertical, Both }
+
+/// <summary>Text typography role.</summary>
+[JsonConverter(typeof(KebabEnum<TextStyle>))]
+public enum TextStyle { Heading, Subheading, Body, Muted, Pre, Strikethrough }
+
+/// <summary>A section's structural surface kind.</summary>
+[JsonConverter(typeof(KebabEnum<SectionVariant>))]
+public enum SectionVariant { Card }
 
 // ─── Action types ─────────────────────────────────────────────────────────────
 
@@ -402,14 +539,14 @@ public abstract record ViewNode;
 public record PageNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Title,
     IReadOnlyList<ViewNode> Children,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Density = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Density? Density = null,
     // Layout preset arranging direct children — free-form string mirroring the
     // TS closed union "stack"|"split"|"cards"|"sidebar"|"row"|"switcher" (1.13.0
     // added "switcher": N equal items flipping all-row ↔ all-stack atomically
     // at a content-width threshold — the negative-flex-basis primitive a grid
     // cannot express). Omitted or "stack" = vertical flow (no modifier class);
     // any other value emits .vms-page--{value}.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Layout? Layout = null,
     // Fill / full-height app-shell axis. When true the page fills the viewport
     // height (height:100dvh) so a SectionNode.Fill child can claim the leftover
     // column height and scroll internally — the pinned footer/header + internally-
@@ -422,7 +559,7 @@ public record PageNode(
     // Page-shell max-width override (issue #13). null = default cap (--vms-page-max,
     // 1080px). "wide" = --vms-page-max-wide (1440px default). "full" = uncapped.
     // TUI ignores this — width caps are a browser concern.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Width = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] PageWidth? Width = null,
     // 1.12.0 — main-axis arrangement for layout:"row" (the cluster primitive) —
     // maps to justify-content. Free-form string mirroring the TS closed union
     // "start"|"center"|"end"|"space-between"|"space-around"|"space-evenly"
@@ -431,13 +568,13 @@ public record PageNode(
     // the Layout field's pattern. Omitted = no class → row default (flex-start,
     // left-pack) holds = byte-identical to today; any value emits
     // .vms-arrange--{value}. JsonIgnore-on-null per the file-header rule.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Arrange = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Arrange? Arrange = null,
     // 1.12.0 — cross-axis alignment for layout:"row" — maps to align-items.
     // Free-form string mirroring the TS closed union
     // "start"|"center"|"end"|"stretch"|"baseline" (Flutter CrossAxisAlignment;
     // ALIGN-02). Omitted = no class → row default (center) holds = byte-identical
     // to today; any value emits .vms-align--{value}.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Align = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Align? Align = null,
     // 1.13.0 — switcher flip width for layout:"switcher". Free-form string
     // mirroring the TS closed union "sm"|"md"|"lg"|"xl" (closed union enforced
     // on the TS side + validated by parity, matching the Layout field's
@@ -445,7 +582,7 @@ public record PageNode(
     // xl→48rem). Omitted = no class → the var(--vms-switch-threshold, 30rem) CSS
     // default (30rem) holds; any value emits .vms-switch--{value} which sets
     // --vms-switch-threshold. JsonIgnore-on-null per the file-header rule.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Threshold = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Threshold? Threshold = null,
     // 1.13.0 — switcher max-per-row count cap for layout:"switcher". int?
     // mirroring the TS bounded numeric union 2..8 (bounded scalar, not raw CSS,
     // per P2; the bound is enforced on the TS side + validated by parity). Once
@@ -462,7 +599,7 @@ public record PageNode(
     // inherited 16rem default holds = byte-identical to today; any value emits
     // .vms-cards-min--{value} which sets --vms-card-min. JsonIgnore-on-null per
     // the file-header rule.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MinItem = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MinItem? MinItem = null
 ) : ViewNode;
 
 // 1.4.0 — SectionNode.Link URL-wrapper variant of the clickable-card primitive
@@ -481,7 +618,7 @@ public record SectionLink(
 public record SectionNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Heading,
     IReadOnlyList<ViewNode> Children,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Variant = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SectionVariant? Variant = null,
     // Layout preset arranging direct children — free-form string mirroring the
     // TS closed union "stack"|"split"|"cards"|"sidebar"|"row"|"switcher" (1.11.0
     // added "row": a left-aligned wrapping horizontal row, items hug content;
@@ -489,7 +626,7 @@ public record SectionNode(
     // atomically at a content-width threshold — the negative-flex-basis primitive
     // a grid cannot express). Omitted or "stack" = vertical flow (no modifier
     // class); any other value emits .vms-section--{value}.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Layout? Layout = null,
     // Fill / full-height app-shell axis. When true (and inside a Fill page) this
     // section takes the remaining column height and scrolls internally
     // (flex:1 1 auto; min-height:0; overflow-y:auto) — the body region of a
@@ -547,13 +684,13 @@ public record SectionNode(
     // the Layout field's pattern. Omitted = no class → row default (flex-start,
     // left-pack) holds = byte-identical to today; any value emits
     // .vms-arrange--{value}. JsonIgnore-on-null per the file-header rule.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Arrange = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Arrange? Arrange = null,
     // 1.12.0 — cross-axis alignment for layout:"row" — maps to align-items.
     // Free-form string mirroring the TS closed union
     // "start"|"center"|"end"|"stretch"|"baseline" (Flutter CrossAxisAlignment;
     // ALIGN-02). Omitted = no class → row default (center) holds = byte-identical
     // to today; any value emits .vms-align--{value}.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Align = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Align? Align = null,
     // 1.13.0 — switcher flip width for layout:"switcher". Free-form string
     // mirroring the TS closed union "sm"|"md"|"lg"|"xl" (closed union enforced
     // on the TS side + validated by parity, matching the Layout field's
@@ -561,7 +698,7 @@ public record SectionNode(
     // xl→48rem). Omitted = no class → the var(--vms-switch-threshold, 30rem) CSS
     // default (30rem) holds; any value emits .vms-switch--{value} which sets
     // --vms-switch-threshold. JsonIgnore-on-null per the file-header rule.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Threshold = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Threshold? Threshold = null,
     // 1.13.0 — switcher max-per-row count cap for layout:"switcher". int?
     // mirroring the TS bounded numeric union 2..8 (bounded scalar, not raw CSS,
     // per P2; the bound is enforced on the TS side + validated by parity). Once
@@ -578,11 +715,11 @@ public record SectionNode(
     // inherited 16rem default holds = byte-identical to today; any value emits
     // .vms-cards-min--{value} which sets --vms-card-min. JsonIgnore-on-null per
     // the file-header rule.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MinItem = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MinItem? MinItem = null,
     // Semantic intent/severity tone — the universal status color axis, orthogonal
     // to Variant (a section can be a card AND tone:"warning"). Emits .vms-section--{tone}
     // (tinted surface + colored border). "danger"|"warning"|"success"|"info".
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
     // 3.2.0 — per-child cross-axis self-alignment (CHILD-01). Free-form string
     // mirroring the TS closed union "start"|"center"|"end" (closed union enforced
     // TS-side + validated by parity, matching the Layout/Arrange field pattern).
@@ -592,7 +729,7 @@ public record SectionNode(
     // bubble case). Omitted = no class → inherits parent alignment = byte-identical
     // to today; any value emits .vms-self--{value}. JsonIgnore-on-null per the
     // file-header rule.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AlignSelf = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] AlignSelf? AlignSelf = null,
     // 3.2.0 — bounded content-width cap (CHILD-02). Free-form string mirroring the
     // TS closed union "half"|"two-thirds"|"three-quarters"|"prose" (closed set, not
     // raw CSS, per P2; enforced TS-side + validated by parity). Maps to
@@ -601,7 +738,7 @@ public record SectionNode(
     // below the cap. Omitted = no class → no cap (full-width) = byte-identical to
     // today; any value emits .vms-maxw--{value}. JsonIgnore-on-null per the
     // file-header rule.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MaxWidth = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MaxWidth? MaxWidth = null,
     // Follow-the-tail append-only scroll axis. When true this section is a
     // growing feed (chat transcript, live log tail, activity/audit stream,
     // streamed job output) whose NEWEST content stays in view across
@@ -635,12 +772,12 @@ public record ListNode(
 // Thematic break / separator (#22). Horizontal (default) → <hr role="separator">;
 // vertical → a role="separator" div for row layouts. No content.
 public record DividerNode(
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Orientation = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Orientation? Orientation = null
 ) : ViewNode;
 
 public record FitsNode(
     IReadOnlyList<ViewNode> Children,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Axis = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Axis? Axis = null
 ) : ViewNode;
 
 public record ListItemNode(
@@ -653,7 +790,7 @@ public record ListItemNode(
     IReadOnlyList<ViewNode> Children,
     // Semantic intent/severity — universal tone axis ("danger"|"warning"|"success"|"info").
     // Emits .vms-list-item--{tone} (colored accent border). JsonIgnore-on-null per the file header.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null
 ) : ViewNode;
 
 public record FormNode(
@@ -663,7 +800,7 @@ public record FormNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? SubmitAction,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SubmitLabel,
     IReadOnlyList<ViewNode> Children,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Layout = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] FormLayout? Layout = null,
     // Multi-action submit buttons (#15). Populate with ButtonNodes — each
     // dispatches its declared action by name on activation. Field values
     // live in state at each input's bind path and travel with the dispatch's
@@ -929,17 +1066,17 @@ public record ButtonNode(
     ActionDescriptor Action,
     // Visual emphasis (how loud): "primary" (filled) | "secondary" (outline).
     // Orthogonal to Tone and Size. Emits .vms-button--{emphasis}.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Emphasis = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Emphasis? Emphasis = null,
     // Semantic intent/severity ("danger"|"warning"|"success"|"info") — the
     // universal status color axis, orthogonal to Emphasis. A destructive primary
     // button is Emphasis:"primary" + Tone:"danger". Emits .vms-button--{tone}.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
     // Box geometry ("sm"|"lg"; omit = md) — orthogonal to color/emphasis.
     // Emits .vms-button--{size}.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Size = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ControlSize? Size = null,
     // Width axis ("full" = stretch to fill the container's cross axis — the
     // standard full-width/block button). Emits .vms-button--full. Omit/"auto" = hug.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Width = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ControlWidth? Width = null,
     // Forms-completeness (3.4.0). Disabled greys the button + the renderer
     // refuses to dispatch its action; drops false (WhenWritingDefault).
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Disabled = false,
@@ -961,10 +1098,10 @@ public record TextNode(
     string Value,
     // Typography role only (NOT color) — emits .vms-text--{style}. Semantic color
     // moved to Tone (old "error"/"warning" style values are now Tone "danger"/"warning").
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Style = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TextStyle? Style = null,
     // Semantic intent/severity color — universal tone axis, orthogonal to Style.
     // Emits .vms-text--{tone}; wins over a Style color via source order.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null
 ) : ViewNode;
 
 public record StatItem(string Label, string Value);
@@ -997,13 +1134,13 @@ public record StatBarNode(IReadOnlyList<StatItem> Stats) : ViewNode;
 public record ChartSeries(
     string Name,
     IReadOnlyList<double> Data,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null
 );
 
 public record ChartNode(
     IReadOnlyList<string> Labels,
     IReadOnlyList<ChartSeries> Series,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Kind = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ChartKind? Kind = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Stacked = false,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Title = null
 ) : ViewNode;
@@ -1025,7 +1162,7 @@ public record StepItem(
 public record StepsNode(
     IReadOnlyList<StepItem> Steps,
     int Current,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Orientation = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Orientation? Orientation = null
 ) : ViewNode;
 
 public record TabItem(string Value, string Label, ActionDescriptor Action);
@@ -1043,7 +1180,7 @@ public record ModalNode(
     IReadOnlyList<ViewNode> Children,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Footer = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? DismissAction = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Size = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ModalSize? Size = null
 ) : ViewNode;
 
 public record TableColumn(
@@ -1081,7 +1218,7 @@ public record TableRow(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? State = null,
     // Semantic intent/severity — universal tone axis ("danger"|"warning"|"success"|"info").
     // Emits .vms-table__row--{tone} (subtle tinted row background).
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
     // Click-anywhere row dispatch primitive. When set, the renderer makes the
     // entire row clickable AND keyboard-activatable (Enter / Space — Space
     // preventDefaults page scroll) AND exposes accessibility (role="button",
@@ -1163,8 +1300,8 @@ public record BreadcrumbNode(IReadOnlyList<BreadcrumbItem> Items) : ViewNode;
 public record ImageNode(
     string Src,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Alt = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Size = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Shape = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ImageSize? Size = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ImageShape? Shape = null
 ) : ViewNode;
 
 public record CopyButtonNode(
@@ -1172,13 +1309,13 @@ public record CopyButtonNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? CopiedLabel = null,
     // Visual emphasis — mirrors ButtonNode.Emphasis ("primary"|"secondary").
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Emphasis = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Emphasis? Emphasis = null,
     // Semantic intent/severity — mirrors ButtonNode.Tone. Emits .vms-button--{tone}.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
     // Box geometry — mirrors ButtonNode.Size ("sm"|"lg"; omit = md).
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Size = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ControlSize? Size = null,
     // Width axis — mirrors ButtonNode.Width ("full" = stretch). Emits .vms-button--full.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Width = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ControlWidth? Width = null
 ) : ViewNode;
 
 // A first-class "nothing here" presentation (empty-state primitive). Heading is
@@ -1204,8 +1341,8 @@ public record EmptyStateNode(
 // ("primary" filled | "secondary" outline). Emits .vms-badge--{tone}/{emphasis}.
 public record BadgeNode(
     string Label,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tone = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Emphasis = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Emphasis? Emphasis = null
 ) : ViewNode;
 
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────

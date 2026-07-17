@@ -74,7 +74,7 @@ public class ChartNodeSerializationTests
         var chart = new ChartNode(
             Labels: new[] { "A" },
             Series: new[] { new ChartSeries("S1", new double[] { 5 }) },
-            Kind: "area",
+            Kind: ChartKind.Area,
             Stacked: true,
             Title: "T");
         var json = Serialize<ViewNode>(chart);
@@ -100,7 +100,7 @@ public class ChartNodeSerializationTests
     {
         var chart = new ChartNode(
             Labels: new[] { "A" },
-            Series: new[] { new ChartSeries("S1", new double[] { 5 }, Tone: "danger") });
+            Series: new[] { new ChartSeries("S1", new double[] { 5 }, Tone: Tone.Danger) });
         var json = Serialize<ViewNode>(chart);
         Assert.Contains("\"tone\":\"danger\"", json);
     }

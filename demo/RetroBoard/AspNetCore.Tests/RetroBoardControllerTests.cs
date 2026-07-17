@@ -75,7 +75,7 @@ public class RetroBoardControllerTests
     public void Get_PageUsesCardsLayout()
     {
         var page = Page(CreateController().Get().Vm);
-        Assert.Equal("cards", page.Layout);
+        Assert.Equal(Layout.Cards, page.Layout);
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public class RetroBoardControllerTests
     public void Get_SectionsAreCardVariantLanes()
     {
         foreach (var section in Sections(Page(CreateController().Get().Vm)))
-            Assert.Equal("card", section.Variant);
+            Assert.Equal(SectionVariant.Card, section.Variant);
     }
 
     [Fact]
@@ -202,7 +202,7 @@ public class RetroBoardControllerTests
                 var deleteBtn = node.Children.OfType<ButtonNode>()
                     .Single(b => b.Action.Name.StartsWith("delete-card-"));
                 Assert.Equal("✕", deleteBtn.Label);
-                Assert.Equal("danger", deleteBtn.Tone);
+                Assert.Equal(Tone.Danger, deleteBtn.Tone);
             }
         }
     }
@@ -226,7 +226,7 @@ public class RetroBoardControllerTests
     {
         var card = Cards(Sections(Page(CreateController().Get().Vm))[2]).First();
         Assert.Null(card.State);
-        Assert.DoesNotContain(card.Children.OfType<TextNode>(), t => t.Style == "strikethrough");
+        Assert.DoesNotContain(card.Children.OfType<TextNode>(), t => t.Style == TextStyle.Strikethrough);
     }
 
     // ── add-card-{section} ──────────────────────────────────────────────────────
@@ -372,7 +372,7 @@ public class RetroBoardControllerTests
         };
         var resp = Ok(Act(ctrl, staged, $"resolve-card-{actionId}"));
         var item = Cards(Sections(Page(resp.Vm))[2]).First();
-        Assert.Contains(item.Children.OfType<TextNode>(), t => t.Style == "strikethrough");
+        Assert.Contains(item.Children.OfType<TextNode>(), t => t.Style == TextStyle.Strikethrough);
     }
 
     [Fact]

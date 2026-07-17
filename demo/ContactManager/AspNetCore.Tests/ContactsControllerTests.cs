@@ -86,8 +86,8 @@ public class ContactsControllerTests
     {
         var page = Page(CreateController().Get().Vm);
         Assert.Equal("Contacts", page.Title);
-        Assert.Equal("compact", page.Density);
-        Assert.Equal("split", page.Layout);
+        Assert.Equal(Density.Compact, page.Density);
+        Assert.Equal(Layout.Split, page.Layout);
         Assert.Equal(2, page.Children.Count);
     }
 
@@ -127,7 +127,7 @@ public class ContactsControllerTests
         var addBtn = AddButton(Page(CreateController().Get().Vm));
         Assert.Equal("+ Add Contact", addBtn.Label);
         Assert.Equal("navigate-to-add", addBtn.Action.Name);
-        Assert.Equal("primary", addBtn.Emphasis);
+        Assert.Equal(Emphasis.Primary, addBtn.Emphasis);
     }
 
     [Fact]
@@ -186,10 +186,10 @@ public class ContactsControllerTests
     {
         var detail = Detail(Page(CreateController().Get().Vm));
         Assert.Equal("Details", detail.Heading);
-        Assert.Equal("card", detail.Variant);
+        Assert.Equal(SectionVariant.Card, detail.Variant);
         var hint = Assert.IsType<TextNode>(detail.Children.Single());
         Assert.Equal("Select a contact to view details, or add a new one.", hint.Value);
-        Assert.Equal("muted", hint.Style);
+        Assert.Equal(TextStyle.Muted, hint.Style);
     }
 
     // ── action: navigate-to-detail-{id} ──────────────────────────────────────────
@@ -209,7 +209,7 @@ public class ContactsControllerTests
         var resp = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-detail-c1"));
         var detail = Detail(Page(resp.Vm));
         Assert.Equal("Alice Johnson", detail.Heading);
-        Assert.Equal("card", detail.Variant);
+        Assert.Equal(SectionVariant.Card, detail.Variant);
     }
 
     [Fact]
@@ -265,7 +265,7 @@ public class ContactsControllerTests
         var ctrl = CreateController();
         var resp = Ok(Act(ctrl, ContactsState.Initial(), "navigate-to-detail-c1"));
         var del = Detail(Page(resp.Vm)).Children.OfType<ButtonNode>()
-            .Single(b => b.Tone == "danger");
+            .Single(b => b.Tone == Tone.Danger);
         Assert.Equal("Delete", del.Label);
         Assert.Equal("delete-contact-c1", del.Action.Name);
     }
@@ -288,7 +288,7 @@ public class ContactsControllerTests
         Assert.Equal("Contacts", Page(resp.Vm).Title);
         var detail = Detail(Page(resp.Vm));
         Assert.Equal("New Contact", detail.Heading);
-        Assert.Equal("card", detail.Variant);
+        Assert.Equal(SectionVariant.Card, detail.Variant);
         var form = DetailForm(Page(resp.Vm));
         Assert.NotNull(form.SubmitAction);
         Assert.Equal("save-contact-new", form.SubmitAction!.Name);

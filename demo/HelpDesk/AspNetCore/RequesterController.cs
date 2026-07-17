@@ -132,18 +132,18 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
             Tone:     TicketTone(t),
             Children:
             [
-                new TextNode(t.Title, "subheading"),
-                new TextNode($"{TypeLabel(t.Type)} · {PriorityLabel(t.Priority)}", "muted"),
-                new TextNode(StatusLabel(t.Status), "muted"),
+                new TextNode(t.Title, TextStyle.Subheading),
+                new TextNode($"{TypeLabel(t.Type)} · {PriorityLabel(t.Priority)}", TextStyle.Muted),
+                new TextNode(StatusLabel(t.Status), TextStyle.Muted),
                 // Per-row View — unique action name per ticket.
                 new ButtonNode("View",
                     new ActionDescriptor($"select-ticket-{t.Id}"),
-                    "secondary"),
+                    Emphasis.Secondary),
             ]
         )).ToList();
 
         if (items.Count == 0)
-            items.Add(new TextNode("No tickets found.", "muted"));
+            items.Add(new TextNode("No tickets found.", TextStyle.Muted));
 
         return new PageNode("Help Desk",
         [
@@ -165,7 +165,7 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
                 ]
             ),
             new ListNode(items),
-            new ButtonNode("New Ticket", new ActionDescriptor("start-create"), Emphasis: "primary"),
+            new ButtonNode("New Ticket", new ActionDescriptor("start-create"), Emphasis: Emphasis.Primary),
         ]);
     }
 
@@ -174,7 +174,7 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
         var formChildren = new List<ViewNode>();
 
         if (state.ValidationError != null)
-            formChildren.Add(new TextNode(state.ValidationError, Tone: "danger"));
+            formChildren.Add(new TextNode(state.ValidationError, Tone: Tone.Danger));
 
         formChildren.Add(new FieldNode("title", "text", "draftTitle", "Title",
             "Brief description of the issue", Required: true));
@@ -258,37 +258,37 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
 
         var info = new List<ViewNode>
         {
-            new TextNode($"Status: {StatusLabel(ticket.Status)}",     "muted"),
-            new TextNode($"Type: {TypeLabel(ticket.Type)}",           "muted"),
-            new TextNode($"Priority: {PriorityLabel(ticket.Priority)}", "muted"),
-            new TextNode($"Submitted: {FormatDate(ticket.CreatedAt)}", "muted"),
+            new TextNode($"Status: {StatusLabel(ticket.Status)}",     TextStyle.Muted),
+            new TextNode($"Type: {TypeLabel(ticket.Type)}",           TextStyle.Muted),
+            new TextNode($"Priority: {PriorityLabel(ticket.Priority)}", TextStyle.Muted),
+            new TextNode($"Submitted: {FormatDate(ticket.CreatedAt)}", TextStyle.Muted),
         };
 
         switch (ticket.Type)
         {
             case "hardware" when !string.IsNullOrEmpty(ticket.DeviceModel):
-                info.Add(new TextNode($"Device: {ticket.DeviceModel}", "muted"));
+                info.Add(new TextNode($"Device: {ticket.DeviceModel}", TextStyle.Muted));
                 break;
             case "software" when !string.IsNullOrEmpty(ticket.Application):
-                info.Add(new TextNode($"Application: {ticket.Application}", "muted"));
+                info.Add(new TextNode($"Application: {ticket.Application}", TextStyle.Muted));
                 break;
             case "access":
                 var accessInfo = ticket.SystemName ?? "";
                 if (!string.IsNullOrEmpty(ticket.AccessLevel))
                     accessInfo += $" ({ticket.AccessLevel} access)";
                 if (!string.IsNullOrEmpty(accessInfo))
-                    info.Add(new TextNode($"System: {accessInfo}", "muted"));
+                    info.Add(new TextNode($"System: {accessInfo}", TextStyle.Muted));
                 break;
         }
 
         if (!string.IsNullOrEmpty(ticket.DueDate))
-            info.Add(new TextNode($"Due: {ticket.DueDate}", "muted"));
+            info.Add(new TextNode($"Due: {ticket.DueDate}", TextStyle.Muted));
 
         if (!string.IsNullOrEmpty(ticket.Description))
-            info.Add(new TextNode(ticket.Description, "body"));
+            info.Add(new TextNode(ticket.Description, TextStyle.Body));
 
         if (!string.IsNullOrEmpty(ticket.AgentNotes))
-            info.Add(new TextNode($"Agent notes: {ticket.AgentNotes}", "muted"));
+            info.Add(new TextNode($"Agent notes: {ticket.AgentNotes}", TextStyle.Muted));
 
         return new PageNode(ticket.Title,
         [
@@ -305,8 +305,8 @@ public class RequesterController(HelpDeskDb db) : ControllerBase
         _          => t.Priority == "high" ? "high" : null,
     };
 
-    private static string? TicketTone(Ticket t) =>
-        t.Status != "resolved" && t.Priority == "critical" ? "danger" : null;
+    private static Tone? TicketTone(Ticket t) =>
+        t.Status != "resolved" && t.Priority == "critical" ? Tone.Danger : null;
 
     private static string TypeLabel(string type) => type switch
     {

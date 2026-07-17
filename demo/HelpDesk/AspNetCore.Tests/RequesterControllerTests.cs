@@ -152,7 +152,7 @@ public class RequesterControllerTests : IDisposable
         var step2 = Ok(Act(ctrl, staged, "create-ticket"));
         Assert.Equal("New Ticket", Page(step2.Vm).Title);
         var form = Page(step2.Vm).Children.OfType<FormNode>().Single();
-        var error = form.Children.OfType<TextNode>().FirstOrDefault(t => t.Tone == "danger");
+        var error = form.Children.OfType<TextNode>().FirstOrDefault(t => t.Tone == Tone.Danger);
         Assert.NotNull(error);
     }
 
@@ -269,7 +269,7 @@ public class RequesterControllerTests : IDisposable
         var step2 = Ok(Act(ctrl, staged, "create-ticket"));
         var item = Page(step2.Vm).Children.OfType<ListNode>().Single()
             .Children.OfType<ListItemNode>().Single();
-        Assert.Equal("danger", item.Tone);
+        Assert.Equal(Tone.Danger, item.Tone);
     }
 
     [Fact]

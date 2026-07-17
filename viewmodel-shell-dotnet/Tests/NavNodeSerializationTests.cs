@@ -120,7 +120,7 @@ public class NavNodeSerializationTests
         var node = new StepsNode(
             new[] { new StepItem("A") },
             Current: 0,
-            Orientation: "vertical");
+            Orientation: Orientation.Vertical);
         var json = Serialize<ViewNode>(node);
         Assert.Contains("\"orientation\":\"vertical\"", json);
     }

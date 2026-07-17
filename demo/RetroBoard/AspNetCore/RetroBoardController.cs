@@ -112,8 +112,8 @@ public class RetroBoardController : ControllerBase
         // Mirrors demo/RetroBoard-bun/server.ts byte-for-byte (parity-gated).
         return new PageNode(
             Title:   "Retro Board",
-            Layout:  "cards",
-            MinItem: "lg",
+            Layout: Layout.Cards,
+            MinItem: MinItem.Lg,
             Children:
             [
                 BuildSectionNode("Went Well",      "went-well",     "drafts.wentWell",    state.WentWell,    state.ActionItems, isActionItems: false),
@@ -131,7 +131,7 @@ public class RetroBoardController : ControllerBase
     {
         return new SectionNode(
             Heading: $"{label} ({cards.Count})",
-            Variant: "card",
+            Variant: SectionVariant.Card,
             Children:
             [
                 new FormNode(
@@ -176,7 +176,7 @@ public class RetroBoardController : ControllerBase
             ));
         }
 
-        children.Add(new TextNode(card.Text, card.Resolved ? "strikethrough" : null));
+        children.Add(new TextNode(card.Text, card.Resolved ? TextStyle.Strikethrough : null));
         children.Add(new ButtonNode(
             Label:   $"▲ {card.Votes}",
             Action:  new ActionDescriptor($"upvote-card-{card.Id}")
@@ -184,7 +184,7 @@ public class RetroBoardController : ControllerBase
         children.Add(new ButtonNode(
             Label:   "✕",
             Action:  new ActionDescriptor($"delete-card-{card.Id}"),
-            Tone: "danger"
+            Tone: Tone.Danger
         ));
 
         return new ListItemNode(

@@ -122,7 +122,7 @@ public class AgentController(HelpDeskDb db) : ControllerBase
 
         var children = new List<ViewNode>
         {
-            new TextNode($"{open} open · {inProgress} in progress · {resolved} resolved", "muted"),
+            new TextNode($"{open} open · {inProgress} in progress · {resolved} resolved", TextStyle.Muted),
             new TabsNode(
                 Selected: state.Filter,
                 Bind:     "filter",
@@ -149,12 +149,12 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         {
             children.Add(new SectionNode(null,
             [
-                new ButtonNode("Mark In Progress", new ActionDescriptor("bulk-start"),   "secondary"),
-                new ButtonNode("Mark Resolved",    new ActionDescriptor("bulk-resolve"), Emphasis: "primary"),
-                new ButtonNode("Reopen",           new ActionDescriptor("bulk-reopen"),  "secondary"),
+                new ButtonNode("Mark In Progress", new ActionDescriptor("bulk-start"),   Emphasis.Secondary),
+                new ButtonNode("Mark Resolved",    new ActionDescriptor("bulk-resolve"), Emphasis: Emphasis.Primary),
+                new ButtonNode("Reopen",           new ActionDescriptor("bulk-reopen"),  Emphasis.Secondary),
             ],
-            Layout:    "switcher",
-            Threshold: "md",
+            Layout: Layout.Switcher,
+            Threshold: Threshold.Md,
             Limit:     3));
         }
 
@@ -164,7 +164,7 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         {
             children.Add(new TextNode(
                 $"{matching} tickets match — refine the filter (max {Cap} shown).",
-                "warning"));
+                Tone: Tone.Warning));
         }
         else if (tickets.Count == 0 && !dbEmpty)
         {
@@ -172,14 +172,14 @@ public class AgentController(HelpDeskDb db) : ControllerBase
             // TableNode still renders below so the title filter input + status
             // tabs stay accessible — without this message the empty body is
             // ambiguous with "broken render".
-            children.Add(new TextNode("No tickets match your filter.", "muted"));
+            children.Add(new TextNode("No tickets match your filter.", TextStyle.Muted));
         }
 
         // Empty-state fallback for an empty queue (only when the DB itself is
         // empty — the "filter matches nothing" case is handled above).
         if (withinCap && tickets.Count == 0 && dbEmpty)
         {
-            children.Add(new TextNode("No tickets in queue.", "muted"));
+            children.Add(new TextNode("No tickets in queue.", TextStyle.Muted));
         }
         else
         {
@@ -234,32 +234,32 @@ public class AgentController(HelpDeskDb db) : ControllerBase
     {
         var info = new List<ViewNode>
         {
-            new TextNode($"Status: {StatusLabel(ticket.Status)}",      "muted"),
-            new TextNode($"Type: {TypeLabel(ticket.Type)}",            "muted"),
-            new TextNode($"Priority: {PriorityLabel(ticket.Priority)}", "muted"),
-            new TextNode($"Submitted: {FormatDate(ticket.CreatedAt)}",  "muted"),
+            new TextNode($"Status: {StatusLabel(ticket.Status)}",      TextStyle.Muted),
+            new TextNode($"Type: {TypeLabel(ticket.Type)}",            TextStyle.Muted),
+            new TextNode($"Priority: {PriorityLabel(ticket.Priority)}", TextStyle.Muted),
+            new TextNode($"Submitted: {FormatDate(ticket.CreatedAt)}",  TextStyle.Muted),
         };
 
         switch (ticket.Type)
         {
             case "hardware" when !string.IsNullOrEmpty(ticket.DeviceModel):
-                info.Add(new TextNode($"Device: {ticket.DeviceModel}", "muted"));
+                info.Add(new TextNode($"Device: {ticket.DeviceModel}", TextStyle.Muted));
                 break;
             case "software" when !string.IsNullOrEmpty(ticket.Application):
-                info.Add(new TextNode($"Application: {ticket.Application}", "muted"));
+                info.Add(new TextNode($"Application: {ticket.Application}", TextStyle.Muted));
                 break;
             case "access":
                 var sys = ticket.SystemName ?? "";
                 if (!string.IsNullOrEmpty(ticket.AccessLevel)) sys += $" ({ticket.AccessLevel} access)";
-                if (!string.IsNullOrEmpty(sys)) info.Add(new TextNode($"System: {sys}", "muted"));
+                if (!string.IsNullOrEmpty(sys)) info.Add(new TextNode($"System: {sys}", TextStyle.Muted));
                 break;
         }
 
         if (!string.IsNullOrEmpty(ticket.DueDate))
-            info.Add(new TextNode($"Due: {ticket.DueDate}", "muted"));
+            info.Add(new TextNode($"Due: {ticket.DueDate}", TextStyle.Muted));
 
         if (!string.IsNullOrEmpty(ticket.Description))
-            info.Add(new TextNode(ticket.Description, "body"));
+            info.Add(new TextNode(ticket.Description, TextStyle.Body));
 
         var actionChildren = new List<ViewNode>();
         switch (ticket.Status)
@@ -267,22 +267,22 @@ public class AgentController(HelpDeskDb db) : ControllerBase
             case "open":
                 actionChildren.Add(new ButtonNode("Mark In Progress",
                     new ActionDescriptor("start-ticket"),
-                    "primary",
+                    Emphasis.Primary,
                     PendingLabel: "Marking…"));
                 break;
             case "in-progress":
                 actionChildren.Add(new ButtonNode("Mark Resolved",
                     new ActionDescriptor("resolve-ticket"),
-                    "primary",
+                    Emphasis.Primary,
                     PendingLabel: "Resolving…"));
                 break;
             case "resolved":
                 actionChildren.Add(new ButtonNode("Reopen",
                     new ActionDescriptor("reopen-ticket"),
-                    "secondary",
+                    Emphasis.Secondary,
                     PendingLabel: "Reopening…"));
                 if (!string.IsNullOrEmpty(ticket.ResolvedAt))
-                    actionChildren.Add(new TextNode($"Resolved {FormatDate(ticket.ResolvedAt)}", "muted"));
+                    actionChildren.Add(new TextNode($"Resolved {FormatDate(ticket.ResolvedAt)}", TextStyle.Muted));
                 break;
         }
 
@@ -309,7 +309,7 @@ public class AgentController(HelpDeskDb db) : ControllerBase
             // Bound to state.AgentNotes; the renderer reads/writes from there.
             new FieldNode("agent_notes", "textarea", "agentNotes", null, "Add notes…"),
         };
-        if (saved) children.Add(new TextNode("Notes saved.", "muted"));
+        if (saved) children.Add(new TextNode("Notes saved.", TextStyle.Muted));
         return children;
     }
 
@@ -321,8 +321,8 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         _          => t.Priority == "high" ? "high" : null,
     };
 
-    private static string? TicketTone(Ticket t) =>
-        t.Status != "resolved" && t.Priority == "critical" ? "danger" : null;
+    private static Tone? TicketTone(Ticket t) =>
+        t.Status != "resolved" && t.Priority == "critical" ? Tone.Danger : null;
 
     private static string TypeLabel(string type) => type switch
     {

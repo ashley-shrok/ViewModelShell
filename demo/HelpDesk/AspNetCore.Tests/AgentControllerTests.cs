@@ -65,7 +65,7 @@ public class AgentControllerTests : IDisposable
         page.Children.OfType<TableNode>().Single();
 
     private static TextNode CountsLine(PageNode page) =>
-        page.Children.OfType<TextNode>().First(t => t.Style == "muted");
+        page.Children.OfType<TextNode>().First(t => t.Style == TextStyle.Muted);
 
     private long SeedTicket(string title = "Test ticket", string priority = "medium", string type = "software")
         => _db.Create(title, type, priority, null, null, null, null, null, null);
