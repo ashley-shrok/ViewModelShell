@@ -6,6 +6,33 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 6.0.0 — Closed wire unions are enums, not `string?` (NuGet only)
+
+**NuGet:** `6.0.0` (major, from `5.2.0`) · **npm:** unchanged at `5.2.0`. **BREAKING for .NET apps; the wire is byte-identical and TypeScript consumers are entirely unaffected.**
+
+⚠️ **Version alignment:** this is the first release where the packages' **majors diverge** (npm `5.2.0` / NuGet `6.0.0`). The "share major.minor" convention exists so that a **wire-format or ViewNode-shape change moves both sides together**; that is not what this is. The wire here is byte-identical (parity proves it across 8 fixtures / 3 backends), the TS types are untouched, and npm has **zero** code changes. Publishing an npm `6.0.0` would tell every TypeScript consumer "this is breaking, act now" when nothing changed for them — a major that lies is worse than a version gap. Pair npm `5.2.0` with NuGet `6.0.0`.
+
+### Changed (BREAKING, .NET only)
+
+- **Every closed union is now an enum instead of `string?`.** Audited: **39 of 39** closed unions in the TypeScript twin were typed `string?` in `ViewModels.cs`. The TS union was the only definition of validity and it did **not** bind the .NET backend — a .NET app could emit any string for a closed-list field, the renderer would silently ignore it, and the screen would quietly render wrong with no error anywhere. Parity could not catch it either: two backends emitting the same wrong value agree, and a diff passes. C# is strongly typed; it now carries the same protection TypeScript always had, and an invalid value is a **compile error**.
+
+  New enums: `Tone`, `Emphasis`, `ControlSize`, `ControlWidth`, `ImageSize`, `ImageShape`, `ModalSize`, `ChartKind`, `FormLayout`, `Layout`, `PageWidth`, `Density`, `Arrange`, `Align`, `AlignSelf`, `Threshold`, `MinItem`, `MaxWidth`, `Orientation`, `Axis`, `TextStyle`, `SectionVariant`.
+
+  **Still deliberately open:** `state` on `ListItemNode`/`TableRow` — freeform and app-extensible by design (`string` in the TS twin too).
+
+  **Adding a value later is NOT breaking** — a new enum member is additive and existing consumer code keeps compiling untouched.
+
+### Fixed
+
+- **`demo/HelpDesk` agent queue emitted drifted wire** — the migration found it on the first build. The over-cap "refine your filter" message passed `"warning"` as a text **style** (a value removed in 3.0.0, when severity moved to the `tone` axis) where the bun twin correctly emits `tone: "warning"`. This is the **canonical workflow demo consumers copy from**. Three things hid it: it renders correctly *by accident* (style and tone share the `.vms-text--{value}` class, and `.vms-text--warning` exists for tone); parity **structurally cannot reach it** (the harness sets `HELPDESK_SEED=0` for stable ids, so there are 2 tickets instead of ~80, the cap never trips, and the over-cap branch never executes); and a hand audit missed it (it scanned named arguments only — this one is positional).
+
+### Notes for adopters
+
+- The enum→string conversion is **intrinsic** to the types (`KebabEnum<T>`), so it works under default ASP.NET options with **zero host setup**. You do **not** need to register a converter in `Program.cs`. This is deliberate and load-bearing: a bare enum serializes as a **number** (`"tone": 0`) and the stock `JsonStringEnumConverter` attribute emits PascalCase (`"tone": "Danger"`) — both silently wrong on the wire, both compile fine. Mutation-proved: removing the attribute makes parity fail with `"tone": 2` vs `"danger"`.
+- `DefaultIgnoreCondition = WhenWritingNull` in your `Program.cs` remains **load-bearing** for your own state record — unchanged by this release, and still not optional (see gotcha #8).
+
+---
+
 ## 5.2.0 / 5.2.0 — Lookup / remote-search reference field: `lookup` + `lookup-multiple` (npm + NuGet)
 
 **npm:** `5.2.0` (minor, from `5.1.2`) · **NuGet:** `5.2.0` (minor, from `5.1.0`). **Additive** — the wire protocol token stays `viewmodel-shell/1.0`; existing apps and wire-driving agents are byte-unchanged. Both packages gain two new `FieldNode.inputType` values.

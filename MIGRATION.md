@@ -6,6 +6,48 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to NuGet `6.0.0` (.NET only) — BREAKING, mechanical, compiler-guided
+
+**npm consumers: nothing to do.** npm stays at `5.2.0`; the wire is byte-identical and no TypeScript type changed. Pair npm `5.2.0` with NuGet `6.0.0`.
+
+**.NET consumers: your code will not compile until you change it.** That is the point — every break is a loud compile error with an obvious fix, and there is **no silent failure mode**. There is nothing to hunt for: build, and the compiler lists every site.
+
+Every closed-union field that was `string?` is now an enum. Replace the string literal with the enum member (PascalCase of the kebab value):
+
+```csharp
+// before                                        // after
+new TextNode("Total", "heading")                 new TextNode("Total", TextStyle.Heading)
+new SectionNode("Card", kids, Variant: "card")   new SectionNode("Card", kids, Variant: SectionVariant.Card)
+new PageNode("T", kids, Layout: "split")         new PageNode("T", kids, Layout: Layout.Split)
+new ButtonNode("Go", a, Tone: "danger")          new ButtonNode("Go", a, Tone: Tone.Danger)
+new SectionNode(..., Arrange: "space-between")   new SectionNode(..., Arrange: Arrange.SpaceBetween)
+```
+
+Helpers that returned `string?` for one of these fields change their return type:
+
+```csharp
+// before                                        // after
+private static string? RowTone(Ticket t) =>      private static Tone? RowTone(Ticket t) =>
+    t.Critical ? "danger" : null;                    t.Critical ? Tone.Danger : null;
+```
+
+Test assertions comparing to strings become enum comparisons:
+
+```csharp
+Assert.Equal("compact", page.Density);           Assert.Equal(Density.Compact, page.Density);
+sections.Single(s => s.Layout == "row");         sections.Single(s => s.Layout == Layout.Row);
+```
+
+**The enums, and the value they map to on the wire:** the wire spelling is kebab-case-lower of the member name — `SpaceBetween` → `"space-between"`, `ThreeQuarters` → `"three-quarters"`, `Danger` → `"danger"`. `Tone`, `Emphasis`, `ControlSize` (buttons: `Sm`/`Lg`), `ControlWidth` (`Auto`/`Full`), `ImageSize`, `ImageShape`, `ModalSize`, `ChartKind`, `FormLayout`, `Layout`, `PageWidth`, `Density`, `Arrange`, `Align`, `AlignSelf`, `Threshold`, `MinItem`, `MaxWidth`, `Orientation`, `Axis`, `TextStyle`, `SectionVariant`.
+
+**Not changed:** `state` on `ListItemNode`/`TableRow` is still `string` — it is freeform and app-extensible by design.
+
+**Do NOT register a JSON converter.** The conversion is intrinsic to the types. If you already have a `JsonStringEnumConverter` registered globally in `Program.cs` for your own enums, that is fine and does not interfere — the attribute on each VMS enum takes precedence.
+
+**Watch for this one while migrating:** if the compiler rejects a value you have been shipping (e.g. `"warning"` as a `TextNode` *style*), that value was **never valid** — it was being silently ignored by the renderer, and your screen has been rendering wrong. Do not reach for a cast to make it compile; move it to the right axis. (`"error"`/`"warning"` as text *styles* were removed in 3.0.0 — severity is `Tone` now.) This exact bug was found in our own canonical demo by this migration.
+
+---
+
 ## Upgrading to `5.1.0` / `5.1.0` (npm + NuGet) — additive, no action required
 
 Two new optional `ViewNode` types — **`BreadcrumbNode`** and **`StepsNode`** — plus their renderers and styling. This release is **purely additive**: the wire protocol token stays `viewmodel-shell/1.0`, no existing type changed shape, and existing apps and wire-driving agents are byte-unchanged. Bump the packages and the new nodes are available; there is nothing else to do.
