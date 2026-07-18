@@ -671,3 +671,42 @@ describe('#17 — layout="cards"/"split" computed display is actually grid (casc
     expect(cs.flexDirection).toBe("row");
   });
 });
+
+describe('sidebar flex children get min-width: 0 (wide-table wrap regression)', () => {
+  // A flex item defaults to min-width: auto, so a sidebar child whose min-content
+  // exceeds its flex track (e.g. a plain section wrapping a wide/nowrap TableNode)
+  // could not shrink and forced the flex line to wrap — rail alone, main dropped
+  // below with dead space. The fix adds `min-width: 0` to `.vms-*--sidebar > *`,
+  // mirroring the split/cards rule that had explicitly skipped sidebar (#17).
+  // Unlike computed grid tracks, min-width is a plain cascaded value jsdom resolves
+  // from the injected stylesheet, so this is a real regression assertion.
+  beforeAll(() => injectStylesheet());
+
+  it('section layout="sidebar" child computes min-width: 0px', () => {
+    const el = renderSection({
+      type: "section",
+      children: [
+        { type: "text", value: "rail" },
+        { type: "text", value: "main" },
+      ],
+      layout: "sidebar",
+    });
+    // Assert on the SECOND child (main) — the one whose wide-table content used to
+    // force the wrap. The rule applies to every child, so first child is 0 too.
+    const mw = window.getComputedStyle(el.children[1] as Element).minWidth;
+    expect(mw === "0" || mw === "0px").toBe(true); // jsdom emits "0"; a browser "0px"
+  });
+
+  it('page layout="sidebar" child computes min-width: 0px', () => {
+    const el = renderPage({
+      type: "page",
+      children: [
+        { type: "text", value: "rail" },
+        { type: "text", value: "main" },
+      ],
+      layout: "sidebar",
+    });
+    const mw = window.getComputedStyle(el.children[1] as Element).minWidth;
+    expect(mw === "0" || mw === "0px").toBe(true); // jsdom emits "0"; a browser "0px"
+  });
+});

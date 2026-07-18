@@ -6,6 +6,20 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 6.2.1 — `layout:"sidebar"` no longer wraps a wide-table main below the rail (CSS fix, npm only)
+
+**npm:** `6.2.1` (patch, from `6.2.0`) · **NuGet:** unchanged (`6.3.0`). CSS-only bug fix; no wire/type change, so NuGet is untouched.
+
+### Fixed
+
+- **A `layout:"sidebar"` child whose min-content is wider than its flex track (e.g. a plain section wrapping a wide / `nowrap` `TableNode`) forced the flex line to wrap** — the rail sat alone on the first line and the main region dropped below it with dead space, instead of the intended rail │ main side-by-side. Flex items default to `min-width: auto`, so the wide child could not shrink to its track. Fixed by adding `min-width: 0` to `.vms-page--sidebar > *` / `.vms-section--sidebar > *`, so the child shrinks to its track and its inner overflow container (`.vms-table-wrapper { overflow-x: auto }`, long unbroken strings) scrolls instead of blowing out the layout. This mirrors the `split` / `cards` `min-width: 0` rule from #17 — which had **explicitly excluded** `sidebar`, leaving this latent. A jsdom regression test asserts the computed `min-width` on sidebar children (mutation-proved: red without the fix).
+
+### Notes for adopters
+
+- **npm only, purely a fix — no action required.** A three-region operator shell (`sidebar` outer + a nested `sidebar`/`split` main) and any `sidebar` whose main holds a wide table now fill correctly with no app change. Surfaced by a consumer (Metis) building an incident console; normal sidebar usage (rail + normal-width content) is byte-unchanged.
+
+---
+
 ## npm 6.2.0 / NuGet 6.3.0 — Rich copy (formatted + plain clipboard)
 
 **npm:** `6.2.0` (minor, from `6.1.0`) · **NuGet:** `6.3.0` (minor, from `6.2.0`). Purely additive on both sides.

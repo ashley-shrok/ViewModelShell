@@ -286,6 +286,14 @@ body:has(.vms-page--fill) { margin: 0; }
 }
 .vms-page--sidebar > .vms-page__title,
 .vms-section--sidebar > .vms-section__heading { flex: 0 0 100%; }
+/* Flex items default to min-width: auto, so a child whose MIN-content is wider than
+   its flex track (e.g. a plain section wrapping a wide/nowrap TableNode) can't shrink
+   and forces the flex line to wrap — rail alone on line 1, main dropped below with dead
+   space. min-width: 0 lets the child shrink to its track and the inner overflow
+   container (.vms-table-wrapper{overflow-x:auto}, long strings) scroll instead. Mirrors
+   the split/cards min-width:0 rule above, which was NOT applied to sidebar (#17). */
+.vms-page--sidebar > *,
+.vms-section--sidebar > * { min-width: 0; }
 
 /* ── Layout preset: row (D-30 / 1.11.0) — left-aligned wrapping horizontal row;
    children hug their content (no forced grow), wrap to the next line on overflow.
