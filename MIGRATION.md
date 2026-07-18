@@ -78,6 +78,16 @@ sections.Single(s => s.Layout == "row");         sections.Single(s => s.Layout =
 
 **Watch for this one while migrating:** if the compiler rejects a value you have been shipping (e.g. `"warning"` as a `TextNode` *style*), that value was **never valid** — it was being silently ignored by the renderer, and your screen has been rendering wrong. Do not reach for a cast to make it compile; move it to the right axis. (`"error"`/`"warning"` as text *styles* were removed in 3.0.0 — severity is `Tone` now.) This exact bug was found in our own canonical demo by this migration.
 
+**And when you move a style to `Tone`, pass it by NAME, not positionally.** `TextNode`'s signature is `TextNode(string Value, TextStyle? Style = null, Tone? Tone = null)` — positional-2 is `Style`, `Tone` is positional-3. So the muscle-memory conversion of `new TextNode("x", "error")` (old style-string in slot 2) into `new TextNode("x", Tone.Danger)` **will not compile** — a `Tone` cannot bind to the `TextStyle?` in slot 2. Use the named argument, which is also self-documenting:
+
+```csharp
+new TextNode("x", "error")                       // before (style-string, silently wrong)
+new TextNode("x", Tone: Tone.Danger)             // after  — named; the clean form
+new TextNode("x", null, Tone.Danger)             // after  — positional, explicit null Style
+```
+
+The same applies to any node where you're relocating a value from an earlier positional slot to `Tone` (Button/CopyButton/Section/ListItem/TableRow all take `Tone` as a named-only or later positional param): reach for `Tone: Tone.X`, don't reuse the old slot. (Surfaced by the Pantheon fleet migration.)
+
 ---
 
 ## Upgrading to `5.1.0` / `5.1.0` (npm + NuGet) — additive, no action required
