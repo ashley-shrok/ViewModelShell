@@ -2,7 +2,7 @@
   "name": "expenses",
   "endpoint": "/api/expenses",
   "actionEndpoint": "/api/expenses/action",
-  "$comment": "Phase 6 wire shape: _action carries {name} only. ExpenseTracker's filter and category-select handlers are no-ops (bind already wrote the value to state.filterCategory / state.addCategory) — the fixture mimics those bind writes via stateMutations. The 'delete' action no longer exists on the demo (the migrated handler doesn't expose one), so the delete-tx-3 step from the old fixture is dropped: parity tests the wire the demos actually speak.",
+  "$comment": "Phase 6 wire shape: _action carries {name} only. ExpenseTracker's filter and category-select handlers are no-ops (bind already wrote the value to state.filterCategory / state.addCategory) — the fixture mimics those bind writes via stateMutations. The 'delete' action no longer exists on the demo (the migrated handler doesn't expose one), so the delete-tx-3 step from the old fixture is dropped: parity tests the wire the demos actually speak. MODAL-SWAP-TO-SUCCESS coverage (show-add -> add-invalid -> add-success-render): a REAL valid 'add' is deliberately NOT dispatched here because it appends a transaction with a random id + wall-clock createdAt that would diff across backends (the same reason this fixture never added before). Instead we cover the three modal branches deterministically: the FORM branch (show-add), the VALIDATION branch (add-invalid — a real 'add' with amount '0', which adds nothing so it stays deterministic and returns ok:true per gotcha #4), and the SUCCESS-CARD render branch (add-success-render — inject addSuccessMessage then dispatch a no-op re-render). The success HANDLER (that a valid add SETS the message) is covered by the .NET unit tests; parity's job here is that both backends RENDER each branch identically. expectBodyContains is the per-branch coverage tripwire.",
   "steps": [
     { "id": "initial-load",     "method": "GET" },
     { "id": "filter-food",      "method": "POST", "action": { "name": "filter-food" },                  "stateMutations": [{ "path": "filterCategory", "value": "food" }] },
@@ -11,6 +11,22 @@
     { "id": "select-bills",     "method": "POST", "action": { "name": "select-category-bills" },        "stateMutations": [{ "path": "addCategory", "value": "bills" }] },
     { "id": "select-ent",       "method": "POST", "action": { "name": "select-category-entertainment" }, "stateMutations": [{ "path": "addCategory", "value": "entertainment" }] },
     { "id": "filter-bills",     "method": "POST", "action": { "name": "filter-bills" },                 "stateMutations": [{ "path": "filterCategory", "value": "bills" }] },
-    { "id": "filter-all-2",     "method": "POST", "action": { "name": "filter-all" },                   "stateMutations": [{ "path": "filterCategory", "value": "all" }] }
+    { "id": "filter-all-2",     "method": "POST", "action": { "name": "filter-all" },                   "stateMutations": [{ "path": "filterCategory", "value": "all" }] },
+
+    { "id": "show-add",           "method": "POST", "action": { "name": "show-add" },
+      "$branch": "modal FORM branch — the add modal is open showing the entry form",
+      "expectBodyContains": ["Amount ($)"] },
+    { "id": "add-invalid",        "method": "POST", "action": { "name": "add" },
+      "$branch": "VALIDATION branch (gotcha #4) — amount '0' is invalid; nothing is added (deterministic), response is ok:true with an inline error, modal stays on the form",
+      "stateMutations": [{ "path": "draftAmount", "value": "0" }],
+      "expectBodyContains": ["positive number"] },
+    { "id": "add-success-render", "method": "POST", "action": { "name": "filter-all" },
+      "$branch": "SUCCESS-CARD render branch — inject the state a valid add produces (addSuccessMessage + adding), then a no-op re-render; both backends must render the success card identically. Deterministic: no real transaction is appended.",
+      "stateMutations": [
+        { "path": "adding", "value": true },
+        { "path": "addSuccessMessage", "value": "Added $12.50 to Food." }
+      ],
+      "$coverageNote": "Assert the RENDER-ONLY modal title 'Transaction added' (emitted by buildVm's success branch, never present in state), NOT the injected addSuccessMessage — that string is echoed back in body.state regardless of what rendered, so asserting it would be vacuous. 'Transaction added' proves the success-card branch actually rendered.",
+      "expectBodyContains": ["Transaction added"] }
   ]
 }

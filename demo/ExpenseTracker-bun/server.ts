@@ -16,7 +16,6 @@
 // rather than a context payload.
 
 import {
-  BadRequestError,
   UnknownActionError,
   createAction,
   validateActionNames,
@@ -45,6 +44,14 @@ interface ExpensesState {
   // Phase 6 — bind slots for the add-transaction form. Reset on add/close.
   draftAmount: string;
   draftNote: string;
+  // modal-swap-to-success: when set, the add modal STAYS OPEN (adding=true) and
+  // swaps its body from the form to a success card. Set by a successful add;
+  // cleared by show-add / hide-add ([Done]). Optional => absent from the wire
+  // when unset, matching the .NET twin's [JsonIgnore(WhenWritingNull)].
+  addSuccessMessage?: string;
+  // gotcha #4: inline validation rides state (response stays ok:true), NOT a
+  // BadRequest — rendered as a danger TextNode in the form when set.
+  validationError?: string;
 }
 
 function initialState(): ExpensesState {
@@ -220,10 +227,26 @@ function buildVm(state: ExpensesState): ViewNode {
     ledger,
   ];
   if (state.adding) {
-    mainChildren.push({
-      type: "modal",
-      title: "Add Transaction",
-      children: [
+    // modal-swap-to-success: the SAME modal stays open across renders; only its
+    // title + children change. After a successful add the body is a success card
+    // + [Done]; otherwise the entry form (with an inline validation error when the
+    // last submit failed). See AGENTS.md "In-modal success feedback" — the durable
+    // outcome-in-view answer that (unlike a toast) survives the operator stepping
+    // away. Mirrors demo/ExpenseTracker/AspNetCore byte-for-byte (parity-gated).
+    let modalChildren: ViewNode[];
+    if (state.addSuccessMessage != null) {
+      modalChildren = [
+        { type: "text", value: state.addSuccessMessage, tone: "success" },
+        {
+          type: "button",
+          label: "Done",
+          action: { name: "hide-add" },
+          emphasis: "primary",
+          width: "full",
+        },
+      ];
+    } else {
+      modalChildren = [
         {
           type: "tabs",
           selected: state.addCategory,
@@ -234,32 +257,42 @@ function buildVm(state: ExpensesState): ViewNode {
             action: { name: `select-category-${c.id}` },
           })),
         },
-        {
-          type: "form",
-          submitAction: { name: "add" },
-          submitLabel: "Add",
-          children: [
-            {
-              type: "field",
-              name: "amount",
-              inputType: "number",
-              bind: "draftAmount",
-              label: "Amount ($)",
-              placeholder: "0.00",
-              required: true,
-            },
-            {
-              type: "field",
-              name: "note",
-              inputType: "text",
-              bind: "draftNote",
-              label: "Note",
-              placeholder: "Coffee, lunch…",
-            },
-          ],
-        },
-      ],
-      dismissAction: { name: "hide-add" },
+      ];
+      if (state.validationError != null)
+        modalChildren.push({ type: "text", value: state.validationError, tone: "danger" });
+      modalChildren.push({
+        type: "form",
+        submitAction: { name: "add" },
+        submitLabel: "Add",
+        children: [
+          {
+            type: "field",
+            name: "amount",
+            inputType: "number",
+            bind: "draftAmount",
+            label: "Amount ($)",
+            placeholder: "0.00",
+            required: true,
+          },
+          {
+            type: "field",
+            name: "note",
+            inputType: "text",
+            bind: "draftNote",
+            label: "Note",
+            placeholder: "Coffee, lunch…",
+          },
+        ],
+      });
+    }
+    mainChildren.push({
+      type: "modal",
+      title: state.addSuccessMessage != null ? "Transaction added" : "Add Transaction",
+      children: modalChildren,
+      // On the success branch [Done] IS the dismiss (it carries hide-add), so the
+      // modal omits its own X — a second hide-add in the same tree is a duplicate-
+      // action-name validator failure. On the form branch the X is the cancel.
+      ...(state.addSuccessMessage != null ? {} : { dismissAction: { name: "hide-add" } }),
       size: "narrow",
     });
   }
@@ -280,33 +313,53 @@ const actionHandler = createAction<ExpensesState>(async payload => {
   if (name === "add") {
     const amount = state.draftAmount ? parseFloat(state.draftAmount) : NaN;
     const note = state.draftNote ?? "";
-    if (!isFinite(amount) || amount <= 0)
-      throw new BadRequestError("amount must be a positive number");
-    const added: Transaction = {
-      id: Array.from({ length: 8 }, () =>
-        Math.floor(Math.random() * 16).toString(16),
-      ).join(""),
-      categoryId: state.addCategory,
-      amount,
-      note: note.trim(),
-      createdAt: new Date().toISOString(),
-    };
-    state = {
-      ...state,
-      transactions: [...state.transactions, added],
-      adding: false,
-      draftAmount: "",
-      draftNote: "",
-    };
+    if (!isFinite(amount) || amount <= 0) {
+      // gotcha #4 — routine inline validation the user CAN see rides the state
+      // record (response stays ok:true); it is NOT a BadRequest. The modal stays
+      // open on the form branch with the error shown.
+      state = { ...state, validationError: "Amount must be a positive number." };
+    } else {
+      const catName =
+        state.categories.find(c => c.id === state.addCategory)?.name ??
+        state.addCategory;
+      const added: Transaction = {
+        id: Array.from({ length: 8 }, () =>
+          Math.floor(Math.random() * 16).toString(16),
+        ).join(""),
+        categoryId: state.addCategory,
+        amount,
+        note: note.trim(),
+        createdAt: new Date().toISOString(),
+      };
+      state = {
+        ...state,
+        transactions: [...state.transactions, added],
+        // modal-swap-to-success: keep the modal OPEN and swap its body to a
+        // success card. [Done]/dismiss (hide-add) closes + clears.
+        adding: true,
+        draftAmount: "",
+        draftNote: "",
+        validationError: undefined,
+        addSuccessMessage: `Added $${f2(amount)} to ${catName}.`,
+      };
+    }
   } else if (name.startsWith("filter-")) {
     // filterCategory is already in state via the bind path; the server just
     // acknowledges by re-rendering against the new value.
   } else if (name.startsWith("select-category-")) {
     // addCategory is already in state via the bind path; same pattern.
   } else if (name === "show-add") {
-    state = { ...state, adding: true };
+    state = { ...state, adding: true, addSuccessMessage: undefined, validationError: undefined };
   } else if (name === "hide-add") {
-    state = { ...state, adding: false, draftAmount: "", draftNote: "" };
+    // Also the [Done] action on the success card — clears the swap state.
+    state = {
+      ...state,
+      adding: false,
+      draftAmount: "",
+      draftNote: "",
+      addSuccessMessage: undefined,
+      validationError: undefined,
+    };
   } else {
     throw new UnknownActionError(name);
   }

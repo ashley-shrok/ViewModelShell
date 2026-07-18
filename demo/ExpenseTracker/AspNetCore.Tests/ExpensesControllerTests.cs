@@ -292,7 +292,7 @@ public class ExpensesControllerTests
     // ── action: add ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Action_Add_IncreasesTransactionCount_AndClosesModal()
+    public void Action_Add_IncreasesTransactionCount_AndSwapsModalToSuccessCard()
     {
         var ctrl = CreateController();
         var opened = Ok(Act(ctrl, ExpensesState.Initial(), "show-add"));
@@ -303,34 +303,66 @@ public class ExpensesControllerTests
         Assert.NotNull(resp.State);
         Assert.Equal(before + 1, resp.State!.Transactions.Count);
         Assert.Equal(before + 1, LedgerTable(Page(resp.Vm)).Rows.Count);
-        Assert.False(resp.State.Adding); // add closes the modal
-        Assert.Null(AddModal(Page(resp.Vm)));
+        // modal-swap-to-success: the modal STAYS OPEN and swaps to a success card.
+        Assert.True(resp.State.Adding);
+        Assert.NotNull(resp.State.AddSuccessMessage);
+        Assert.Null(resp.State.ValidationError);
         Assert.Equal("", resp.State.DraftAmount);
         Assert.Equal("", resp.State.DraftNote);
+        var modal = AddModal(Page(resp.Vm));
+        Assert.NotNull(modal);
+        Assert.Equal("Transaction added", modal!.Title);
+        // Success card = a success-toned message + a full-width [Done] button; NO form.
+        var msg = modal.Children.OfType<TextNode>().Single();
+        Assert.Equal(Tone.Success, msg.Tone);
+        Assert.Equal(resp.State.AddSuccessMessage, msg.Value);
+        var done = modal.Children.OfType<ButtonNode>().Single();
+        Assert.Equal("Done", done.Label);
+        Assert.Equal("hide-add", done.Action.Name);
+        Assert.Equal(ControlWidth.Full, done.Width);
+        Assert.DoesNotContain(modal.Children, c => c is FormNode);
     }
 
     [Fact]
-    public void Action_Add_ZeroAmount_ReturnsBadRequest()
+    public void Action_Done_FromSuccessCard_ClosesModal_AndClearsSuccess()
     {
-        var state = ExpensesState.Initial() with { DraftAmount = "0", DraftNote = "" };
-        var result = Act(CreateController(), state, "add");
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        var ctrl = CreateController();
+        var staged = ExpensesState.Initial() with { Adding = true, DraftAmount = "25.00" };
+        var added = Ok(Act(ctrl, staged, "add"));
+        Assert.NotNull(added.State!.AddSuccessMessage);
+        // [Done] dispatches hide-add.
+        var done = Ok(Act(ctrl, added.State, "hide-add"));
+        Assert.NotNull(done.State);
+        Assert.False(done.State!.Adding);
+        Assert.Null(done.State.AddSuccessMessage);
+        Assert.Null(AddModal(Page(done.Vm)));
     }
 
-    [Fact]
-    public void Action_Add_NegativeAmount_ReturnsBadRequest()
+    // gotcha #4 — invalid amount is INLINE validation on the state record
+    // (response stays ok:true), NOT a BadRequest. The modal stays on the form
+    // branch with a danger TextNode; no transaction is added.
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-5")]
+    [InlineData("abc")]
+    public void Action_Add_InvalidAmount_SetsValidationError_KeepsForm_NoBadRequest(string amount)
     {
-        var state = ExpensesState.Initial() with { DraftAmount = "-5", DraftNote = "" };
-        var result = Act(CreateController(), state, "add");
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-    }
-
-    [Fact]
-    public void Action_Add_InvalidAmount_ReturnsBadRequest()
-    {
-        var state = ExpensesState.Initial() with { DraftAmount = "abc", DraftNote = "" };
-        var result = Act(CreateController(), state, "add");
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        var ctrl = CreateController();
+        var state = ExpensesState.Initial() with { Adding = true, DraftAmount = amount, DraftNote = "" };
+        var before = state.Transactions.Count;
+        var result = Act(ctrl, state, "add");
+        // ok:true state-based validation — a ShellResponse value, not a BadRequest.
+        var resp = Ok(result);
+        Assert.NotNull(resp.State);
+        Assert.Equal(before, resp.State!.Transactions.Count); // nothing added
+        Assert.NotNull(resp.State.ValidationError);
+        Assert.Null(resp.State.AddSuccessMessage);
+        var modal = AddModal(Page(resp.Vm));
+        Assert.NotNull(modal);
+        Assert.Equal("Add Transaction", modal!.Title); // still the form branch
+        Assert.Contains(modal.Children, c => c is FormNode);
+        var err = modal.Children.OfType<TextNode>().Single(t => t.Value == resp.State.ValidationError);
+        Assert.Equal(Tone.Danger, err.Tone);
     }
 
     [Fact]

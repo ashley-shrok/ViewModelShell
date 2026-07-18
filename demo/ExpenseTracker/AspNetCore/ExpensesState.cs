@@ -1,5 +1,7 @@
 namespace ExpenseTracker.State;
 
+using System.Text.Json.Serialization;
+
 public record Category(string Id, string Name, decimal Budget);
 public record Transaction(string Id, string CategoryId, decimal Amount, string Note, DateTimeOffset CreatedAt);
 
@@ -13,7 +15,21 @@ public record ExpensesState(
     // The renderer reads/writes these via bind paths on FieldNodes; the
     // "add" handler reads them and resets to "" after a successful add.
     string DraftAmount,
-    string DraftNote
+    string DraftNote,
+    // modal-swap-to-success pattern: when non-null, the add modal STAYS OPEN
+    // (Adding=true) and swaps its body from the form to a success card. Set by a
+    // successful "add"; cleared by show-add / hide-add ([Done]). This is the
+    // durable "outcome-in-view" confirmation — unlike a toast it survives the
+    // operator stepping away and coming back (it's state, round-tripped).
+    // gotcha #8: attributed WhenWritingNull so a null omits from the wire,
+    // matching the bun twin's optional `addSuccessMessage?` (absent when unset).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? AddSuccessMessage = null,
+    // gotcha #4: inline validation rides state (response stays ok:true), NOT
+    // BadRequest — rendered as a danger TextNode in the form when non-null.
+    // Cleared on a successful add and on show-add / hide-add.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? ValidationError = null
 )
 {
     public static ExpensesState Initial() => new(

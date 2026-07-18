@@ -33,20 +33,34 @@ public class ExpensesController : ControllerBase
         {
             var amountStr = state.DraftAmount;
             if (!decimal.TryParse(amountStr, out var amount) || amount <= 0)
-                return BadRequest("amount must be a positive number");
-            var added = new Transaction(
-                Id:         Guid.NewGuid().ToString("N")[..8],
-                CategoryId: state.AddCategory,
-                Amount:     amount,
-                Note:       (state.DraftNote ?? "").Trim(),
-                CreatedAt:  DateTimeOffset.UtcNow);
-            state = state with
             {
-                Transactions = [.. state.Transactions, added],
-                Adding = false,
-                DraftAmount = "",
-                DraftNote = "",
-            };
+                // gotcha #4 — routine inline validation the user CAN see rides the
+                // state record (response stays ok:true); it is NOT a BadRequest.
+                // The modal stays open on the form branch with the error shown.
+                state = state with { ValidationError = "Amount must be a positive number." };
+            }
+            else
+            {
+                var catName = state.Categories.FirstOrDefault(c => c.Id == state.AddCategory)?.Name
+                              ?? state.AddCategory;
+                var added = new Transaction(
+                    Id:         Guid.NewGuid().ToString("N")[..8],
+                    CategoryId: state.AddCategory,
+                    Amount:     amount,
+                    Note:       (state.DraftNote ?? "").Trim(),
+                    CreatedAt:  DateTimeOffset.UtcNow);
+                state = state with
+                {
+                    Transactions = [.. state.Transactions, added],
+                    // modal-swap-to-success: keep the modal OPEN and swap its body
+                    // to a success card. [Done]/dismiss (hide-add) closes + clears.
+                    Adding = true,
+                    DraftAmount = "",
+                    DraftNote = "",
+                    ValidationError = null,
+                    AddSuccessMessage = $"Added ${amount:F2} to {catName}.",
+                };
+            }
         }
         else if (name.StartsWith("filter-"))
         {
@@ -58,11 +72,16 @@ public class ExpensesController : ControllerBase
         }
         else if (name == "show-add")
         {
-            state = state with { Adding = true };
+            state = state with { Adding = true, AddSuccessMessage = null, ValidationError = null };
         }
         else if (name == "hide-add")
         {
-            state = state with { Adding = false, DraftAmount = "", DraftNote = "" };
+            // Also the [Done] action on the success card — clears the swap state.
+            state = state with
+            {
+                Adding = false, DraftAmount = "", DraftNote = "",
+                AddSuccessMessage = null, ValidationError = null,
+            };
         }
         else
         {
@@ -169,25 +188,51 @@ public class ExpensesController : ControllerBase
         };
         if (state.Adding)
         {
-            mainChildren.Add(new ModalNode(
-                Title: "Add Transaction",
-                Children:
+            // modal-swap-to-success: the SAME ModalNode stays open across renders;
+            // only its Title + Children change. After a successful add the body is
+            // a success card + [Done]; otherwise it's the entry form (with an
+            // inline validation error when the last submit failed). See AGENTS.md
+            // "In-modal success feedback" — the durable outcome-in-view answer that
+            // (unlike a toast) survives the operator stepping away.
+            List<ViewNode> modalChildren;
+            if (state.AddSuccessMessage != null)
+            {
+                modalChildren =
+                [
+                    new TextNode(state.AddSuccessMessage, Tone: Tone.Success),
+                    new ButtonNode("Done", new ActionDescriptor("hide-add"),
+                        Emphasis: Emphasis.Primary, Width: ControlWidth.Full)
+                ];
+            }
+            else
+            {
+                modalChildren =
                 [
                     new TabsNode(
                         Selected: state.AddCategory,
                         Bind:     "addCategory",
                         Tabs:     state.Categories.Select(c =>
-                            new TabItem(c.Id, c.Name, new ActionDescriptor($"select-category-{c.Id}"))).ToList()),
-                    new FormNode(
-                        SubmitAction: new ActionDescriptor("add"),
-                        SubmitLabel:  "Add",
-                        Children:
-                        [
-                            new FieldNode("amount", "number", "draftAmount", "Amount ($)", "0.00",          Required: true),
-                            new FieldNode("note",   "text",   "draftNote",   "Note",       "Coffee, lunch…")
-                        ])
-                ],
-                DismissAction: new ActionDescriptor("hide-add"),
+                            new TabItem(c.Id, c.Name, new ActionDescriptor($"select-category-{c.Id}"))).ToList())
+                ];
+                if (state.ValidationError != null)
+                    modalChildren.Add(new TextNode(state.ValidationError, Tone: Tone.Danger));
+                modalChildren.Add(new FormNode(
+                    SubmitAction: new ActionDescriptor("add"),
+                    SubmitLabel:  "Add",
+                    Children:
+                    [
+                        new FieldNode("amount", "number", "draftAmount", "Amount ($)", "0.00",          Required: true),
+                        new FieldNode("note",   "text",   "draftNote",   "Note",       "Coffee, lunch…")
+                    ]));
+            }
+            mainChildren.Add(new ModalNode(
+                Title: state.AddSuccessMessage != null ? "Transaction added" : "Add Transaction",
+                Children: modalChildren,
+                // On the success branch [Done] IS the dismiss (it carries hide-add),
+                // so the modal omits its own X — a second hide-add in the same tree
+                // is a duplicate-action-name validator failure. On the form branch
+                // the X (hide-add) is the cancel affordance.
+                DismissAction: state.AddSuccessMessage != null ? null : new ActionDescriptor("hide-add"),
                 Size: ModalSize.Narrow));
         }
         var main = new SectionNode(null, mainChildren);
