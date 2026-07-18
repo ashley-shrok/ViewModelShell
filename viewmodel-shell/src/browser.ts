@@ -18,7 +18,7 @@ import type {
   TextNode, LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
   ModalNode, TableNode, CopyButtonNode, DividerNode, FitsNode,
   EmptyStateNode, BadgeNode, ChartNode,
-  BreadcrumbNode, StepsNode,
+  BreadcrumbNode, StepsNode, TrackerNode,
 } from "./index.js";
 
 function legacyCopy(text: string): boolean {
@@ -556,6 +556,7 @@ export class BrowserAdapter implements Adapter {
       case "chart":        return this.chart(n, parent);
       case "breadcrumb":   return this.breadcrumb(n, parent, on);
       case "steps":        return this.steps(n, parent);
+      case "tracker":      return this.tracker(n, parent, on);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -3692,5 +3693,52 @@ export class BrowserAdapter implements Adapter {
       ol.appendChild(li);
     });
     parent.appendChild(ol);
+  }
+
+  /** TrackerNode — a status/heat strip: a tight horizontal row of discrete
+   *  colored cells, one per time bucket. The framework owns ALL appearance and
+   *  a11y (never on the wire): the hairline gap, the intrinsic
+   *  shrink-to-a-min-then-scroll overflow, and the baked colorblind-safe palette
+   *  (success=blue / danger=red / warning=amber / muted=gray) via the
+   *  .vms-tracker__cell--{state} classes. A cell with a `label` carries it as both
+   *  the native tooltip AND aria-label (meaning as text, not color-only). A cell
+   *  with an `action` becomes a role="button" tabstop with Enter/Space activation
+   *  (Space suppresses page scroll), mirroring TableRow.action / SectionNode.action. */
+  private tracker(n: TrackerNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const strip = document.createElement("div");
+    strip.className = "vms-tracker";
+    if (n.id != null) strip.id = n.id;
+    // The strip is a graphical status summary — expose it as an img group with a
+    // label so a screen reader announces it as one thing; per-cell state is on
+    // each cell's aria-label.
+    strip.setAttribute("role", "img");
+    strip.setAttribute("aria-label", "status tracker");
+    for (const cell of n.cells) {
+      const state = cell.state ?? "muted";
+      const el = document.createElement("div");
+      el.className = `vms-tracker__cell vms-tracker__cell--${state}`;
+      // label → native tooltip + aria-label (non-color channel). When absent,
+      // the state name is still the a11y fallback so a cell is never color-only.
+      const aria = cell.label != null && cell.label !== "" ? cell.label : state;
+      el.setAttribute("aria-label", aria);
+      if (cell.label != null && cell.label !== "") el.title = cell.label;
+      if (cell.action) {
+        const action = cell.action;
+        el.classList.add("vms-tracker__cell--clickable");
+        el.tabIndex = 0;
+        el.setAttribute("role", "button");
+        el.addEventListener("click", () => { on(action); });
+        el.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            on(action);
+          } else if (e.key === " " || e.key === "Spacebar") {
+            e.preventDefault(); // suppress page scroll
+            on(action);
+          }
+        });
+      }
+      strip.appendChild(el);
+    }
+    parent.appendChild(strip);
   }
 }

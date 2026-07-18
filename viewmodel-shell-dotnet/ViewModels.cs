@@ -74,6 +74,13 @@ public sealed class KebabEnum<T> : JsonStringEnumConverter<T> where T : struct, 
 [JsonConverter(typeof(KebabEnum<Tone>))]
 public enum Tone { Success, Warning, Danger, Info }
 
+/// <summary>Per-bucket status for a TrackerNode strip. A CLOSED set distinct from
+/// Tone: it INCLUDES Muted (the "no data / no run" bucket) and EXCLUDES Info
+/// (which would collide with Success=blue in the baked colorblind-safe palette).
+/// See TrackerCell.State.</summary>
+[JsonConverter(typeof(KebabEnum<TrackerState>))]
+public enum TrackerState { Success, Danger, Warning, Muted }
+
 /// <summary>Visual weight — filled vs outline. Orthogonal to Tone and Size.</summary>
 [JsonConverter(typeof(KebabEnum<Emphasis>))]
 public enum Emphasis { Primary, Secondary }
@@ -534,6 +541,7 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(ChartNode),      "chart")]
 [JsonDerivedType(typeof(BreadcrumbNode), "breadcrumb")]
 [JsonDerivedType(typeof(StepsNode),      "steps")]
+[JsonDerivedType(typeof(TrackerNode),    "tracker")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -1182,6 +1190,28 @@ public record StepsNode(
     IReadOnlyList<StepItem> Steps,
     int Current,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Orientation? Orientation = null
+) : ViewNode;
+
+/// <summary>One bucket in a TrackerNode strip. State drives the cell color via the
+/// framework's baked colorblind-safe palette (Success=blue, Danger=red,
+/// Warning=amber, Muted=gray); only the color diverges from the global tones — the
+/// state name stays semantic on the wire. Label is the hover tooltip + aria-label
+/// (carries meaning as TEXT, not color alone). Action is an optional per-bucket
+/// click-through (per-bucket identity in the action name, like TableRow.Action).</summary>
+public record TrackerCell(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TrackerState? State = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null
+);
+
+/// <summary>A status tracker / heat strip — a tight horizontal row of discrete
+/// colored cells, one per time bucket (uptime-strip / sentinel-history primitive;
+/// NOT a numeric value sparkline). The framework owns all appearance and a11y: the
+/// hairline gap, the intrinsic shrink-then-scroll overflow, and the baked
+/// colorblind-safe palette. Bucket count is simply Cells.Count.</summary>
+public record TrackerNode(
+    IReadOnlyList<TrackerCell> Cells,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id = null
 ) : ViewNode;
 
 public record TabItem(string Value, string Label, ActionDescriptor Action);

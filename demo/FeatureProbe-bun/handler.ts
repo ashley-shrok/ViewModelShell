@@ -767,6 +767,40 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // Tracker (TrackerNode) — a status/heat strip as static view-shape captured by
+  // every GET step; byte-identical to the .NET twin trackerSection. Covers the
+  // omitted-vs-present matrix: a cell with state OMITTED (proves absent = muted
+  // default on the wire), one cell per state (success/danger/warning/muted), a
+  // cell carrying a `label` (proves the string crosses), and a cell carrying an
+  // `action` whose UNIQUE name tracker-cell-probe proves the action-name
+  // uniqueness walk DESCENDS into TrackerCell.action (never POSTed by any step —
+  // pure static wire-shape proof, same convention as nav-crumb-probe /
+  // lookup-search-probe). The CLIENT-SIDE appearance (hairline gap, baked
+  // colorblind-safe palette, shrink-then-scroll overflow, hover/tooltip, keyboard
+  // activation) is browser-only and NOT part of parity — parity proves only that
+  // the {type:"tracker", id?, cells:[{state?, label?, action?}]} wire serializes
+  // identically across backends.
+  const trackerSection: ViewNode = {
+    type: "section",
+    heading: "Status tracker",
+    variant: "card",
+    children: [
+      {
+        type: "tracker",
+        id: "probe-tracker",
+        cells: [
+          {},                                                   // state OMITTED => muted default (absent on wire)
+          { state: "success" },
+          { state: "danger" },
+          { state: "warning" },
+          { state: "muted" },
+          { state: "success", label: "2026-07-15 14:02 UTC · Success" },
+          { state: "danger", label: "Failed", action: { name: "tracker-cell-probe" } },
+        ],
+      },
+    ],
+  };
+
   // Lookup field (LOOK-01/LOOK-06) — the two lookup inputTypes as static
   // view-shape captured by every GET step; byte-identical to the .NET twin
   // lookupSection. Covers the full omitted-vs-present matrix:
@@ -853,6 +887,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       followTailSection,
       blockingSection,
       navSection,
+      trackerSection,
       lookupSection,
       probeModal,
     ],

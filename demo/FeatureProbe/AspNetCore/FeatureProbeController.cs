@@ -853,6 +853,29 @@ public class FeatureProbeController : ControllerBase
         // announcements, and the non-blocking lane's coalescing/epoch behavior
         // are browser-only and NOT part of parity — parity proves only that the
         // lookup wire serializes identically across backends.
+        // Tracker (TrackerNode) — status/heat strip as static view-shape, byte-identical
+        // to the bun twin trackerSection. Omitted-vs-present matrix: a cell with State
+        // OMITTED (absent = muted default on the wire), one cell per state, a labeled
+        // cell, and a cell whose Action name tracker-cell-probe is UNIQUE — proving the
+        // Collect action-name walk DESCENDS into TrackerCell.Action (never POSTed). The
+        // client-side appearance/palette/a11y is browser-only and NOT part of parity.
+        pageChildren.Add(new SectionNode(
+            Heading: "Status tracker",
+            Variant: SectionVariant.Card,
+            Children: new ViewNode[]
+            {
+                new TrackerNode(new TrackerCell[]
+                {
+                    new TrackerCell(),                                  // State omitted => muted default
+                    new TrackerCell(TrackerState.Success),
+                    new TrackerCell(TrackerState.Danger),
+                    new TrackerCell(TrackerState.Warning),
+                    new TrackerCell(TrackerState.Muted),
+                    new TrackerCell(TrackerState.Success, Label: "2026-07-15 14:02 UTC · Success"),
+                    new TrackerCell(TrackerState.Danger, Label: "Failed",
+                        Action: new ActionDescriptor("tracker-cell-probe")),
+                }, Id: "probe-tracker"),
+            }));
         pageChildren.Add(new SectionNode(
             Heading: "Lookup field",
             Variant: SectionVariant.Card,

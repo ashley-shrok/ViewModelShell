@@ -24,6 +24,7 @@ import type {
   FitsNode,
   EmptyStateNode,
   BreadcrumbNode,
+  TrackerNode,
 } from "./index.js";
 
 // Re-export the ViewNode hierarchy and wire types so a backend can import
@@ -266,6 +267,19 @@ function collectActions(
       }
       return;
     }
+    case "tracker": {
+      // A TrackerCell can carry an optional per-bucket click-through action
+      // (per-bucket identity in the name, like row.action). Each is a
+      // dispatch-bearing descendant, so the uniqueness collector MUST descend
+      // into the cells — otherwise tracker actions are silently exempt from the
+      // one-name-one-operation rule (the missed-walk failure class). Guard the
+      // optional action the way the empty-state / breadcrumb arms do.
+      const tracker = node as TrackerNode;
+      for (const cell of tracker.cells) {
+        if (cell.action) recordAction(cell.action, enclosingForm, out);
+      }
+      return;
+    }
     // Nodes with no dispatch-bearing actions of their own:
     //   text, link, image, stat-bar, progress, copy-button, badge, chart, steps
     //   (breadcrumb crumb actions ARE recorded above via the "breadcrumb" arm)
@@ -450,8 +464,9 @@ function walkForSectionAction(
       return;
     }
     // Leaf-like nodes (field, checkbox, button, text, link, image, stat-bar,
-    // tabs, progress, table, copy-button, badge, chart, breadcrumb, steps) carry
-    // no SectionNode descendants — TableNode rows hold strings + per-row controls,
+    // tabs, progress, table, copy-button, badge, chart, breadcrumb, steps,
+    // tracker) carry no SectionNode descendants — TrackerNode cells hold plain
+    // { state, label, action } records; TableNode rows hold strings + per-row controls,
     // not sections; ChartNode (CHART-05) is a childless/action-free data leaf;
     // BreadcrumbNode/StepsNode (NAV-01..03) hold plain { label, ... } records,
     // not ViewNode children, so no recursion is needed here (deliberate, not a

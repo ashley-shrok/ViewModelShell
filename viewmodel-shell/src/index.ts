@@ -153,7 +153,8 @@ export type ViewNode =
   | BadgeNode
   | ChartNode
   | BreadcrumbNode
-  | StepsNode;
+  | StepsNode
+  | TrackerNode;
 
 export interface PageNode {
   type: "page";
@@ -1177,6 +1178,51 @@ export interface StepsNode {
    *  breakpoints). `"vertical"` = a deliberate vertical wizard (markers down the
    *  left, connector running down, descriptions beside each step). */
   orientation?: "horizontal" | "vertical";
+}
+
+/** One bucket in a TrackerNode strip — a single time slot's status. Carries only
+ *  display data: the semantic state, an optional hover label, and an optional
+ *  click-through action. */
+export interface TrackerCell {
+  /** Semantic status for this bucket. A CLOSED set specific to a status strip:
+   *  `success` (good), `danger` (bad), `warning` (soft flag), `muted` (no data /
+   *  no run this slot — the universal honest-uncertainty convention). Omitted =
+   *  `muted`. NOTE the color axis differs from the rest of the framework on
+   *  PURPOSE: a dense, color-ONLY strip must survive colorblindness by color
+   *  alone, so the framework bakes a colorblind-safe palette where `success`
+   *  renders BLUE (not the global green success tone), `danger` red, `warning`
+   *  amber, `muted` gray — no "colorblind mode" needed. Only the rendered color
+   *  diverges; the state NAME stays semantic on the wire (agent-legible). `info`
+   *  is intentionally NOT a member — it would collide with `success`=blue and has
+   *  no meaning in a pass/fail history. */
+  state?: "success" | "danger" | "warning" | "muted";
+  /** Optional hover label for this bucket (e.g. "2026-07-15 14:22 UTC · Success").
+   *  Rendered as the cell's native tooltip AND its aria-label, so the strip's
+   *  meaning is carried by TEXT, not color alone — the a11y + agent-legibility
+   *  channel a color-only glyph strip could never provide. */
+  label?: string;
+  /** Optional click-through: dispatches this action when the bucket is clicked or
+   *  keyboard-activated (Enter / Space — Space preventDefaults page scroll). Makes
+   *  the cell a `role="button"` tabstop. Per-bucket identity is encoded in the
+   *  action name (e.g. `open-run-4021`), consistent with `TableRow.action` — no
+   *  context field. Omitted = a non-interactive status swatch (no tabstop). */
+  action?: ActionEvent;
+}
+
+/** A status tracker / heat strip — a tight horizontal row of discrete colored
+ *  cells, one per time bucket, where color encodes each bucket's semantic status.
+ *  This is the "uptime strip" / "sentinel history" primitive (industry precedent:
+ *  Tremor Tracker, Grafana Status History, Statuspage), NOT a numeric value
+ *  sparkline (a tiny line chart — a separate, chart-family concern, deliberately
+ *  not built here). The framework owns ALL appearance and a11y: the hairline gap,
+ *  the intrinsic shrink-to-a-min-then-scroll overflow (zero viewport
+ *  breakpoints), and the baked colorblind-safe palette (see TrackerCell.state).
+ *  Bucket count is simply `cells.length` (60 slots, 24 hourly, 7 daily…). */
+export interface TrackerNode {
+  type: "tracker";
+  id?: string;
+  /** Ordered buckets, oldest → newest (rendered left → right). */
+  cells: TrackerCell[];
 }
 
 // ─── Shell ────────────────────────────────────────────────────────────────────

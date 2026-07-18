@@ -691,3 +691,77 @@ describe("v5.1 — StepsNode renders an optional description only when present",
     expect(steps[1]!.querySelector(".vms-steps__description")).toBeNull();
   });
 });
+
+describe("TrackerNode — status/heat strip", () => {
+  it("renders one cell per entry with its state class; omitted state = muted", () => {
+    const { container, render } = setup();
+    render({
+      type: "tracker",
+      id: "t1",
+      cells: [
+        {},
+        { state: "success" },
+        { state: "danger" },
+        { state: "warning" },
+        { state: "muted" },
+      ],
+    });
+    const strip = container.querySelector(".vms-tracker") as HTMLElement;
+    expect(strip).not.toBeNull();
+    expect(strip.id).toBe("t1");
+    expect(strip.getAttribute("role")).toBe("img");
+    const cells = strip.querySelectorAll(".vms-tracker__cell");
+    expect(cells.length).toBe(5);
+    // omitted state falls back to muted
+    expect(cells[0]!.classList.contains("vms-tracker__cell--muted")).toBe(true);
+    expect(cells[1]!.classList.contains("vms-tracker__cell--success")).toBe(true);
+    expect(cells[2]!.classList.contains("vms-tracker__cell--danger")).toBe(true);
+    expect(cells[3]!.classList.contains("vms-tracker__cell--warning")).toBe(true);
+    expect(cells[4]!.classList.contains("vms-tracker__cell--muted")).toBe(true);
+  });
+
+  it("label rides as both title tooltip and aria-label (non-color channel)", () => {
+    const { container, render } = setup();
+    render({ type: "tracker", cells: [{ state: "success", label: "14:02 UTC · Success" }] });
+    const cell = container.querySelector(".vms-tracker__cell") as HTMLElement;
+    expect(cell.title).toBe("14:02 UTC · Success");
+    expect(cell.getAttribute("aria-label")).toBe("14:02 UTC · Success");
+  });
+
+  it("a cell with no label still carries the state as aria-label (never color-only)", () => {
+    const { container, render } = setup();
+    render({ type: "tracker", cells: [{ state: "danger" }] });
+    const cell = container.querySelector(".vms-tracker__cell") as HTMLElement;
+    expect(cell.getAttribute("aria-label")).toBe("danger");
+    expect(cell.title).toBe(""); // no title when no label
+  });
+
+  it("a cell with an action is a role=button tabstop; click / Enter / Space dispatch (Space preventDefaults)", () => {
+    const { container, render, dispatched } = setup();
+    render({
+      type: "tracker",
+      cells: [
+        { state: "danger", action: { name: "open-run-42" } },
+        { state: "success" }, // no action
+      ],
+    });
+    const cells = container.querySelectorAll(".vms-tracker__cell");
+    const clickable = cells[0] as HTMLElement;
+    const plain = cells[1] as HTMLElement;
+    // clickable cell
+    expect(clickable.classList.contains("vms-tracker__cell--clickable")).toBe(true);
+    expect(clickable.getAttribute("role")).toBe("button");
+    expect(clickable.tabIndex).toBe(0);
+    clickable.dispatchEvent(new Event("click", { bubbles: true }));
+    expect(dispatched.map((a) => a.name)).toEqual(["open-run-42"]);
+    clickable.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(dispatched.length).toBe(2);
+    const spaceEvt = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true });
+    clickable.dispatchEvent(spaceEvt);
+    expect(dispatched.length).toBe(3);
+    expect(spaceEvt.defaultPrevented).toBe(true); // Space suppresses page scroll
+    // non-action cell: not a button, not a tabstop
+    expect(plain.classList.contains("vms-tracker__cell--clickable")).toBe(false);
+    expect(plain.getAttribute("role")).toBeNull();
+  });
+});

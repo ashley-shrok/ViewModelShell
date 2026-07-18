@@ -1724,3 +1724,54 @@ button.vms-breadcrumb__link {
     transform: translateX(-1px);
   }
 }
+
+/* ── Status tracker / heat strip (TrackerNode) ──
+   A tight horizontal row of discrete colored cells, one per time bucket (uptime
+   strip / sentinel history). The palette is a FIXED, colorblind-safe scheme —
+   blue=good / red=bad / amber=warn / gray=no-data — deliberately NOT the theme's
+   success(green)/danger(red) tones: a dense, color-ONLY strip has to survive
+   colorblindness by color alone (verified separable under deuteranopia /
+   protanopia / tritanopia), so "blue means good" is baked in and needs no mode.
+   It is intentionally the SAME across all themes for a11y consistency (only the
+   no-data gray adapts to the surface). Overflow is intrinsic: cells flex-shrink
+   to a min, then the strip scrolls (zero viewport breakpoints). Overridable via
+   the --vms-tracker-* seam like any other token. */
+:root {
+  /* Fixed palette, verified separable (deltaE >= 28 worst-pair) under normal +
+     deuteranopia + protanopia + tritanopia. fail is a deep red and warn a bright
+     amber ON PURPOSE — under red-green colorblindness red and amber converge in
+     hue, so they're separated by LIGHTNESS (deep vs bright), which the achromatic
+     channel preserves. pass(blue)/fail is the huge, always-obvious pair. */
+  --vms-tracker-pass:   #4a9eff;   /* good  — blue anchor */
+  --vms-tracker-fail:   #cc2936;   /* bad   — deep red */
+  --vms-tracker-warn:   #f2c94c;   /* warn  — bright amber */
+  /* no-data recedes into the surface, adapting per theme (light→light gray, dark→dark gray) */
+  --vms-tracker-nodata: color-mix(in srgb, var(--vms-text-muted) 42%, var(--vms-surface));
+}
+.vms-tracker {
+  display: flex;
+  gap: 1px;                 /* hairline separation — cells read as discrete, not one smeared bar */
+  align-items: stretch;
+  width: 100%;
+  overflow-x: auto;         /* shrink-to-a-min-then-scroll (see cell min-width) */
+  border-radius: var(--vms-radius);
+}
+.vms-tracker__cell {
+  flex: 1 1 0;
+  min-width: 3px;           /* legibility floor; once cells hit it the strip scrolls instead of vanishing */
+  height: 2rem;
+  background: var(--vms-tracker-nodata);
+}
+.vms-tracker__cell--success { background: var(--vms-tracker-pass); }
+.vms-tracker__cell--danger  { background: var(--vms-tracker-fail); }
+.vms-tracker__cell--warning { background: var(--vms-tracker-warn); }
+.vms-tracker__cell--muted   { background: var(--vms-tracker-nodata); }
+/* clickable cell: gentle brighten on hover (NO border), keyboard focus ring for a11y */
+.vms-tracker__cell--clickable { cursor: pointer; }
+.vms-tracker__cell--clickable:hover { filter: brightness(1.32); }
+.vms-tracker__cell--clickable:focus-visible {
+  outline: 2px solid var(--vms-accent);
+  outline-offset: 1px;
+  position: relative; /* lift the ring above neighbors */
+  z-index: 1;
+}

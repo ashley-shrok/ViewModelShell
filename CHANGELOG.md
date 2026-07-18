@@ -6,6 +6,24 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 6.3.0 / NuGet 6.4.0 — `TrackerNode`: status tracker / heat strip
+
+**npm:** `6.3.0` (minor, from `6.2.1`) · **NuGet:** `6.4.0` (minor, from `6.3.0`). New wire node type — additive on both sides (old apps/agents unaffected; wire protocol token stays `viewmodel-shell/1.0`).
+
+### Added
+
+- **`TrackerNode` — a status tracker / heat strip.** A tight horizontal row of discrete colored cells, one per time bucket, where color encodes each bucket's semantic status: the "uptime strip" / "sentinel history" primitive (industry precedent: Tremor Tracker, Grafana Status History, Atlassian Statuspage). This is **not** a numeric value-sparkline (a tiny line chart — a separate, chart-family concern deliberately not built here). Shape: `{ type: "tracker", id?, cells: TrackerCell[] }`; each `TrackerCell` is `{ state?, label?, action? }`. Bucket count is simply `cells.length` (60 slots, 24 hourly, 7 daily…).
+  - **`TrackerCell.state`** — a closed set specific to a status strip: `success` / `danger` / `warning` / `muted` (no-data / no-run — the universal honest-uncertainty convention; the default when omitted). Note `info` is intentionally excluded (it would collide with `success` in the palette). **The framework bakes a colorblind-safe palette** — `success` renders **blue** (not the global green success tone), `danger` red, `warning` amber, `muted` gray — verified separable (ΔE ≥ 28 worst-pair) under deuteranopia / protanopia / tritanopia, so it needs **no "colorblind mode."** Only the rendered color diverges from the global tones; the state *name* stays semantic on the wire (agent-legible). The palette is overridable via the `--vms-tracker-{pass,fail,warn,nodata}` token seam.
+  - **`TrackerCell.label`** — optional hover text (e.g. `"2026-07-15 14:02 UTC · Success"`), rendered as the cell's native tooltip **and** its `aria-label`, so the strip's meaning is carried by text, not color alone (a11y + agent-legibility).
+  - **`TrackerCell.action`** — optional per-bucket click-through; makes the cell a `role="button"` tabstop with Enter/Space activation (Space suppresses page scroll), mirroring `TableRow.action`. Per-bucket identity is encoded in the action name; the server-side action-name uniqueness walk descends into tracker cells.
+  - Appearance is 100% framework-owned: the hairline (1px) gap, square cells, the intrinsic shrink-to-a-min-then-scroll overflow (zero viewport breakpoints), the baked palette, and a keyboard focus ring. No hover border (a gentle brighten only).
+
+### Notes for adopters
+
+- **Both packages, purely additive — no action required.** Reach for `TrackerNode` for uptime/sentinel/run-history strips instead of composing many `TextNode`s in a `layout:"row"` section (which wraps and gaps by design — it's a navbar cluster, not a data strip). Asked for by a consumer (Metis, an incident-management console) but shipped as a general primitive.
+
+---
+
 ## npm 6.2.1 — `layout:"sidebar"` no longer wraps a wide-table main below the rail (CSS fix, npm only)
 
 **npm:** `6.2.1` (patch, from `6.2.0`) · **NuGet:** unchanged (`6.3.0`). CSS-only bug fix; no wire/type change, so NuGet is untouched.
