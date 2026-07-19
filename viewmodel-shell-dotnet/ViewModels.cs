@@ -1309,8 +1309,24 @@ public record TableNode(
     /// <summary>Per-column sort header click actions, keyed by column key. Each carries a unique action name.</summary>
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, ActionDescriptor>? SortActions = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? FilterAction = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TablePagination? Pagination = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TablePagination? Pagination = null,
+    /// <summary>Visible-scoped bulk-action toolbar (opt-in). The adapter renders Selection.Buttons
+    /// ABOVE the table; each button, on click, harvests the currently-CHECKED, currently-RENDERED row
+    /// ids and writes them (a string[] of TableRow.Id) to Selection.HarvestBind — OVERWRITING — before
+    /// dispatching its own action. The server reads that path to act, so a bulk action can only affect
+    /// rows the user can currently see (a row filtered/paginated out of view is not harvested). An app
+    /// wanting cross-page/persistent selection ignores this block and reads its own selectedIds map.
+    /// Selectable rows must carry TableRow.Id. Null = no bulk toolbar.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TableSelection? Selection = null
 ) : ViewNode;
+
+/// <summary>Visible-scoped bulk-action toolbar for a TableNode — see TableNode.Selection.
+/// Buttons is typed IReadOnlyList&lt;ViewNode&gt; (not ButtonNode) so the polymorphic "type":"button"
+/// discriminator emits (the 0.10.0/#15 maintainer rule).</summary>
+public record TableSelection(
+    IReadOnlyList<ViewNode> Buttons,
+    string HarvestBind
+);
 
 public record LinkNode(
     string Label,

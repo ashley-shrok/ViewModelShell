@@ -9,11 +9,12 @@ using HelpDesk.Controllers;
 using ViewModelShell;
 
 // Phase 6 (WIRE-07): per-row identity is encoded in action names
-// (select-ticket-{id}); bulk actions read truthy entries from
-// state.SelectedIds (the canonical workflow's "selection across the visible
-// chunk" is now expressed as per-row CheckboxNodes bound to that map).
-// Tests dispatch by action name; selection is modeled by populating
-// state.SelectedIds before dispatch.
+// (select-ticket-{id}). Bulk actions are VISIBLE-scoped: TableNode.Selection's
+// buttons harvest the currently-checked, currently-rendered row ids into
+// state.BulkSelection and the handler acts on THAT map-free array. Per-row
+// CheckboxNodes bound to selectedIds.{id} are only the checkbox check-state.
+// Tests dispatch by action name; the visible harvest is modeled by populating
+// state.BulkSelection before dispatch (what the renderer harvest writes).
 public class AgentControllerTests : IDisposable
 {
     private readonly SqliteConnection _anchor;
@@ -350,30 +351,29 @@ public class AgentControllerTests : IDisposable
     }
 
     // ── bulk actions (canonical workflow pattern) ──────────────────────────────
-    // Selection lives in state.SelectedIds keyed by ticket id; the per-row
-    // checkbox bind writes true to it. Bulk actions read truthy keys.
+    // VISIBLE-scoped selection: TableNode.Selection's bulk buttons harvest the
+    // currently-checked, currently-rendered row ids into state.BulkSelection and
+    // the handler acts on THAT (never the SelectedIds check-state map), so a bulk
+    // action can only touch rows on screen. The renderer does the harvest in the
+    // browser; here (no DOM) we stage BulkSelection directly, exactly what the
+    // harvest would have written — the same way an agent drives it over the wire.
 
     [Fact]
-    public void BulkResolve_AppliesToSelectedIds()
+    public void BulkResolve_AppliesToBulkSelection()
     {
         var id1 = SeedTicket("T1");
         var id2 = SeedTicket("T2");
         var id3 = SeedTicket("T3");
-        _ = id3; // unselected; should remain open
+        _ = id3; // not harvested; should remain open
 
         var staged = AgentState.Initial() with
         {
-            SelectedIds = new Dictionary<string, bool>
-            {
-                [id1.ToString()] = true,
-                [id2.ToString()] = true,
-                [id3.ToString()] = false,
-            },
+            BulkSelection = [id1.ToString(), id2.ToString()],
         };
         var resp = Ok(Act(CreateAgent(), staged, "bulk-resolve"));
         Assert.NotNull(resp.State);
-        // The handler clears selection after acting.
-        Assert.Empty(resp.State!.SelectedIds);
+        // The handler clears the harvest sink after acting.
+        Assert.Empty(resp.State!.BulkSelection);
 
         var rows = QueueTable(Page(resp.Vm)).Rows;
         Assert.Equal("Resolved", rows.First(r => r.Id == id1.ToString()).Cells["status"]);
@@ -382,12 +382,12 @@ public class AgentControllerTests : IDisposable
     }
 
     [Fact]
-    public void BulkStart_AppliesToSelectedIds()
+    public void BulkStart_AppliesToBulkSelection()
     {
         var id1 = SeedTicket();
         var staged = AgentState.Initial() with
         {
-            SelectedIds = new Dictionary<string, bool> { [id1.ToString()] = true },
+            BulkSelection = [id1.ToString()],
         };
         var resp = Ok(Act(CreateAgent(), staged, "bulk-start"));
         var row = QueueTable(Page(resp.Vm)).Rows.Single();
@@ -395,16 +395,33 @@ public class AgentControllerTests : IDisposable
     }
 
     [Fact]
+    public void BulkAction_IgnoresRowsNotInHarvest()
+    {
+        // A ticket truthy in the old-style SelectedIds map but NOT in the visible
+        // harvest is untouched — the footgun this feature closes.
+        var id1 = SeedTicket("T1");
+        var staged = AgentState.Initial() with
+        {
+            SelectedIds = new Dictionary<string, bool> { [id1.ToString()] = true },
+            BulkSelection = [], // nothing visible-checked was harvested
+        };
+        var resp = Ok(Act(CreateAgent(), staged, "bulk-resolve"));
+        var row = QueueTable(Page(resp.Vm)).Rows.Single();
+        Assert.Equal("Open", row.Cells["status"]); // NOT resolved
+    }
+
+    [Fact]
     public void BulkActionToolbar_Visible_WhenTicketsExist()
     {
         SeedTicket("T1");
         var page = Page(CreateAgent().Get().Vm);
-        // Bulk-action ButtonNodes live in a section above the table.
-        var bulkSection = page.Children.OfType<SectionNode>()
-            .First(s => s.Heading == null);
-        Assert.Contains(bulkSection.Children, c => c is ButtonNode b && b.Action.Name == "bulk-start");
-        Assert.Contains(bulkSection.Children, c => c is ButtonNode b && b.Action.Name == "bulk-resolve");
-        Assert.Contains(bulkSection.Children, c => c is ButtonNode b && b.Action.Name == "bulk-reopen");
+        // Bulk-action ButtonNodes live on the table's visible-scoped Selection.
+        var selection = QueueTable(page).Selection;
+        Assert.NotNull(selection);
+        Assert.Equal("bulkSelection", selection!.HarvestBind);
+        Assert.Contains(selection.Buttons, c => c is ButtonNode b && b.Action.Name == "bulk-start");
+        Assert.Contains(selection.Buttons, c => c is ButtonNode b && b.Action.Name == "bulk-resolve");
+        Assert.Contains(selection.Buttons, c => c is ButtonNode b && b.Action.Name == "bulk-reopen");
     }
 
     // ── shared DB across clients ──────────────────────────────────────────────

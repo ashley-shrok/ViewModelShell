@@ -30,11 +30,18 @@ public class AgentController(HelpDeskDb db) : ControllerBase
         // bound path; per-row identity is encoded in the action name itself.
         if (name.StartsWith("filter-") && name != "filter-text")
         {
-            // Filter is already in state via the TabsNode bind.
+            // Filter is already in state via the TabsNode bind. RESET-ON-NAV:
+            // a view change clears selection so no checks linger from rows the
+            // operator has navigated away from (the safe default for a server-
+            // driven app; the harvest already keeps bulk actions visible-scoped
+            // regardless — this just keeps the VISIBLE check-state honest too).
+            state = state with { SelectedIds = new Dictionary<string, bool>(), BulkSelection = [] };
         }
         else if (name == "filter-text")
         {
-            // TitleFilter is already in state via the column filterBind.
+            // TitleFilter is already in state via the column filterBind. Same
+            // reset-on-nav as the status tabs above.
+            state = state with { SelectedIds = new Dictionary<string, bool>(), BulkSelection = [] };
         }
         else if (name == "bulk-start" || name == "bulk-resolve" || name == "bulk-reopen")
         {
@@ -44,14 +51,21 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                 "bulk-resolve" => "resolved",
                 _              => "open",
             };
-            // The per-row checkbox bind has already written true/false to
-            // SelectedIds keyed by ticket id; read the truthy keys here.
-            foreach (var kv in state.SelectedIds)
+            // Read the VISIBLE-scoped harvest — TableNode.Selection's bulk
+            // button wrote the currently-checked, currently-rendered row ids to
+            // state.bulkSelection right before dispatching. We act on THAT, not
+            // the SelectedIds map, so a row selected under a prior filter and
+            // then filtered out of view is never touched.
+            foreach (var key in state.BulkSelection)
             {
-                if (kv.Value && long.TryParse(kv.Key, out var id))
+                if (long.TryParse(key, out var id))
                     db.UpdateStatus(id, bulkStatus);
             }
-            state = state with { SelectedIds = new Dictionary<string, bool>() };
+            state = state with
+            {
+                SelectedIds = new Dictionary<string, bool>(),
+                BulkSelection = [],
+            };
         }
         else if (name.StartsWith("select-ticket-"))
         {
@@ -137,26 +151,21 @@ public class AgentController(HelpDeskDb db) : ControllerBase
 
         var tickets = withinCap ? db.GetMatching(status, state.TitleFilter, Cap) : new List<Ticket>();
 
-        // Bulk action toolbar — visible when there are matches within the cap.
-        // 1.13.0 — laid out with Layout:"switcher": three equal-weight actions
-        // that flip all-row ↔ all-stack ATOMICALLY at a content-width threshold
-        // (never passing through an awkward 2-up intermediate the way `cards`
-        // auto-fit would). Limit:3 caps the row at the three buttons, and
-        // Threshold:"md" (30rem) sets the flip width. The canonical
-        // equal-action-toolbar exemplar — no app CSS, no @media. Mirrors
-        // demo/HelpDesk-bun/server.ts byte-for-byte (parity-gated).
-        if (withinCap && tickets.Count > 0)
-        {
-            children.Add(new SectionNode(null,
-            [
-                new ButtonNode("Mark In Progress", new ActionDescriptor("bulk-start"),   Emphasis.Secondary),
-                new ButtonNode("Mark Resolved",    new ActionDescriptor("bulk-resolve"), Emphasis: Emphasis.Primary),
-                new ButtonNode("Reopen",           new ActionDescriptor("bulk-reopen"),  Emphasis.Secondary),
-            ],
-            Layout: Layout.Switcher,
-            Threshold: Threshold.Md,
-            Limit:     3));
-        }
+        // Bulk-action toolbar now lives on TableNode.Selection (below) so it's
+        // VISIBLE-SCOPED: each button harvests the currently-checked, currently-
+        // rendered rows into state.bulkSelection and the handler acts on only
+        // those. Built here and threaded into the table when there are matches
+        // within the cap. Mirrors demo/HelpDesk-bun/server.ts (parity-gated).
+        var bulkSelection = withinCap && tickets.Count > 0
+            ? new TableSelection(
+                Buttons:
+                [
+                    new ButtonNode("Mark In Progress", new ActionDescriptor("bulk-start"),   Emphasis.Secondary),
+                    new ButtonNode("Mark Resolved",    new ActionDescriptor("bulk-resolve"), Emphasis: Emphasis.Primary),
+                    new ButtonNode("Reopen",           new ActionDescriptor("bulk-reopen"),  Emphasis.Secondary),
+                ],
+                HarvestBind: "bulkSelection")
+            : null;
 
         var dbEmpty = open + inProgress + resolved == 0;
 
@@ -224,7 +233,8 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                 ],
                 Rows: rows,
                 FilterBinds: new Dictionary<string, string> { ["title"] = "titleFilter" },
-                FilterAction: new ActionDescriptor("filter-text")));
+                FilterAction: new ActionDescriptor("filter-text"),
+                Selection: bulkSelection));
         }
 
         return new PageNode("Help Desk — Agent", children);

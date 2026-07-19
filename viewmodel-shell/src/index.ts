@@ -951,6 +951,32 @@ export interface TableNode {
    *  filter dispatches reset `page` to 1 on the server side, since
    *  the row window changes underneath them. */
   pagination?: TablePagination;
+  /** Visible-scoped bulk-action toolbar (opt-in). When set, the adapter renders
+   *  `selection.buttons[]` ABOVE the table; each button, on click, harvests the
+   *  currently-CHECKED, currently-RENDERED row ids (from the leading-column
+   *  per-row checkboxes) and writes them — a `string[]` of `TableRow.id` — to
+   *  `selection.harvestBind`, OVERWRITING, before dispatching its own action.
+   *  The server reads that path to act, so a bulk action can only ever affect
+   *  rows the user can currently see: a row selected under one filter and then
+   *  filtered/paginated out of view is NOT harvested. This is the safe default
+   *  for the common case; an app that genuinely wants cross-page/persistent
+   *  selection simply ignores this block and reads its own bound `selectedIds`
+   *  map instead (the framework never introspects app state, so that escape
+   *  hatch is always open). Selectable rows must carry `TableRow.id`. */
+  selection?: TableSelection;
+}
+
+/** Visible-scoped bulk-action toolbar for a `TableNode` — see `TableNode.selection`. */
+export interface TableSelection {
+  /** Bulk-action buttons rendered above the table. On click, each harvests the
+   *  visible-checked row ids into `harvestBind` (overwriting) and dispatches its
+   *  own `action` — name-only, per the Phase-6 wire. Full ButtonNodes, so they
+   *  carry their own emphasis/tone/confirm/disabled. */
+  buttons: ButtonNode[];
+  /** State path the harvest writes the visible-checked row-id array (`string[]`)
+   *  to right before dispatch. The server reads THIS to act — not a per-row
+   *  `selectedIds` map — which is what makes the action visible-scoped. */
+  harvestBind: string;
 }
 
 export interface CopyButtonNode {

@@ -884,6 +884,14 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   border-left: none;
   transform: rotate(40deg);
 }
+.vms-checkbox__input:indeterminate + .vms-checkbox__mark { background: var(--vms-accent); border-color: var(--vms-accent); }
+.vms-checkbox__input:indeterminate + .vms-checkbox__mark::after {
+  content: '';
+  position: absolute;
+  left: 3px; top: 7px;
+  width: 10px; height: 0;
+  border-top: 2px solid #fff;
+}
 .vms-checkbox__label { margin-left: var(--vms-space-xs); font-size: var(--vms-text-base); }
 
 /* ── Buttons — three orthogonal axes: emphasis (fill) × tone (color) × size

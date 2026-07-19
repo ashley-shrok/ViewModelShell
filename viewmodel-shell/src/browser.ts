@@ -3200,6 +3200,48 @@ export class BrowserAdapter implements Adapter {
     if (tableHasCheckboxes) {
       const selTh = document.createElement("th");
       selTh.className = "vms-table__th vms-table__th--select";
+      // Header "select all rendered rows" affordance. A pure client-side toggle
+      // over the leading-column checkboxes: it writes the SAME per-row binds the
+      // row checkboxes use, so the server learns the selection through the exact
+      // path it already knows — no new wire field, and agents (which set binds
+      // directly) never need it. Scope is deliberately "all RENDERED rows": under
+      // filter-narrow that equals all matches; under pagination it is the current
+      // page (selection accumulates via the round-tripped binds); over-cap /
+      // zero-match render no rows, so the control below simply is not drawn and
+      // can never claim to select rows that are not on screen. This re-adds ONLY
+      // the DOM toggle, never the per-toggle dispatch that got the old
+      // TableNode.selection seam removed in 0.15.0.
+      const rowCheckboxes = n.rows.flatMap(
+        r => (r.actions ?? []).filter((e): e is CheckboxNode => e.type === "checkbox"),
+      );
+      if (rowCheckboxes.length > 0) {
+        const lbl = document.createElement("label");
+        lbl.className = "vms-checkbox vms-table__select-all";
+        const inp = document.createElement("input");
+        inp.type = "checkbox";
+        inp.className = "vms-checkbox__input";
+        inp.setAttribute("aria-label", "Select all rows");
+        const states = rowCheckboxes.map(cb => Boolean(this.sa.read(cb.bind)));
+        const allChecked = states.every(Boolean);
+        inp.checked = allChecked;
+        inp.indeterminate = !allChecked && states.some(Boolean);
+        const mark = document.createElement("span");
+        mark.className = "vms-checkbox__mark";
+        inp.addEventListener("change", () => {
+          const target = inp.checked;
+          for (const cb of rowCheckboxes) {
+            this.sa.write(cb.bind, target);
+            const rowInp = document.getElementById(
+              `vms-checkbox-${cb.name}`,
+            ) as HTMLInputElement | null;
+            if (rowInp) rowInp.checked = target;
+          }
+          inp.indeterminate = false;
+        });
+        lbl.appendChild(inp);
+        lbl.appendChild(mark);
+        selTh.appendChild(lbl);
+      }
       headerRow.appendChild(selTh);
     }
 
@@ -3375,6 +3417,35 @@ export class BrowserAdapter implements Adapter {
     table.appendChild(tbody);
 
     wrapper.appendChild(table);
+
+    // Visible-scoped bulk-action toolbar (n.selection). Rendered ABOVE the table.
+    // Each button, on click, harvests the currently-CHECKED, currently-RENDERED
+    // rows (by walking tbody for a checked leading-column checkbox and reading the
+    // row's data-id) and writes that id array to n.selection.harvestBind —
+    // OVERWRITING — before dispatching. So the server only ever sees rows the user
+    // can currently see; a row selected then filtered/paginated out of view is not
+    // harvested. This revives the old selection.buttons[] harvest (removed with the
+    // `context` wire in Phase 6), adapted to write a BIND instead of context. It
+    // adds NONE of the per-toggle dispatch that got the 0.15.0 selection.action
+    // seam removed — selection stays a pure client concern until a bulk click.
+    if (n.selection && n.selection.buttons.length > 0) {
+      const sel = n.selection;
+      const toolbar = document.createElement("div");
+      toolbar.className = "vms-table__bulk-actions";
+      const harvest = (action: ActionEvent): void => {
+        const ids: string[] = [];
+        tbody.querySelectorAll<HTMLTableRowElement>("tr").forEach(tr => {
+          const box = tr.querySelector<HTMLInputElement>(
+            ".vms-table__td--select input.vms-checkbox__input",
+          );
+          if (box?.checked && tr.dataset.id) ids.push(tr.dataset.id);
+        });
+        this.sa.write(sel.harvestBind, ids);
+        on({ name: action.name });
+      };
+      for (const btn of sel.buttons) this.button(btn, toolbar, harvest);
+      wrapper.insertBefore(toolbar, table);
+    }
 
     if (n.pagination) {
       const pg = n.pagination;

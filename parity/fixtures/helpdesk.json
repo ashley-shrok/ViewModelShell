@@ -2,7 +2,7 @@
   "name": "helpdesk",
   "endpoint": "/api/requester",
   "actionEndpoint": "/api/requester/action",
-  "$comment": "Phase 6 wire shape: _action carries {name} only. Cross-controller fixture (Requester creates tickets; Agent acts on them via shared SQLite DB). The wire shape change moved every form-input value into a state slot — fixture steps that simulate a 'user typed → user clicked' interaction set those slots via stateMutations. Per-tab actions (filter-${value}, set-type-${value}, set-priority-${value}) carry the value in the action name AND the TabsNode bind writes it to state; the agent's filter handler is a pure no-op (bind alone is enough) while the requester's set-type handler clears validationError as a side effect. Per-row select-ticket-${id} reads the id from the action name; singular page-level actions (start-ticket / resolve-ticket / save-notes) read state.selectedTicketId. Bulk actions read state.selectedIds — fixture writes selection via stateMutations before each bulk dispatch.",
+  "$comment": "Phase 6 wire shape: _action carries {name} only. Cross-controller fixture (Requester creates tickets; Agent acts on them via shared SQLite DB). The wire shape change moved every form-input value into a state slot — fixture steps that simulate a 'user typed → user clicked' interaction set those slots via stateMutations. Per-tab actions (filter-${value}, set-type-${value}, set-priority-${value}) carry the value in the action name AND the TabsNode bind writes it to state; the agent's filter handler is a pure no-op (bind alone is enough) while the requester's set-type handler clears validationError as a side effect. Per-row select-ticket-${id} reads the id from the action name; singular page-level actions (start-ticket / resolve-ticket / save-notes) read state.selectedTicketId. Bulk actions read state.bulkSelection — the VISIBLE-scoped harvest sink that TableNode.selection's buttons write (the currently-checked, currently-rendered row ids); the fixture has no DOM so it writes that array via stateMutations before each bulk dispatch, exactly what the harvest would have written.",
   "steps": [
     { "id": "req-initial",          "method": "GET" },
     { "id": "req-start-create",     "method": "POST", "action": { "name": "start-create" } },
@@ -32,9 +32,9 @@
 
     { "id": "agt-filter-title",     "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "filter-text" }, "stateMutations": [{ "path": "titleFilter", "value": "outlook" }] },
     { "id": "agt-filter-title-clear","method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "filter-text" }, "stateMutations": [{ "path": "titleFilter", "value": "" }] },
-    { "id": "agt-bulk-reopen-1-2",  "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "bulk-reopen" },  "stateMutations": [{ "path": "selectedIds.1", "value": true }, { "path": "selectedIds.2", "value": true }] },
-    { "id": "agt-bulk-start-1",     "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "bulk-start" },   "stateMutations": [{ "path": "selectedIds.1", "value": true }] },
-    { "id": "agt-bulk-resolve-2",   "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "bulk-resolve" }, "stateMutations": [{ "path": "selectedIds.2", "value": true }] },
+    { "id": "agt-bulk-reopen-1-2",  "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "bulk-reopen" },  "stateMutations": [{ "path": "bulkSelection", "value": ["1", "2"] }] },
+    { "id": "agt-bulk-start-1",     "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "bulk-start" },   "stateMutations": [{ "path": "bulkSelection", "value": ["1"] }] },
+    { "id": "agt-bulk-resolve-2",   "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "bulk-resolve" }, "stateMutations": [{ "path": "bulkSelection", "value": ["2"] }] },
 
     { "id": "agt-filter-resolved",  "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "filter-resolved" }, "stateMutations": [{ "path": "filter", "value": "resolved" }] },
 

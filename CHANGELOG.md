@@ -6,6 +6,29 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 6.4.0 / NuGet 6.5.0 — Visible-scoped table selection: header select-all + `TableNode.selection`
+
+**npm:** `6.4.0` (minor, from `6.3.0`) · **NuGet:** `6.5.0` (minor, from `6.4.0`). Additive on both sides — old apps/agents unaffected; wire protocol token stays `viewmodel-shell/1.0`.
+
+### Added
+
+- **Header "select all" checkbox on tables (renderer, npm).** Whenever a `TableNode`'s rows carry per-row `CheckboxNode`s, the adapter auto-renders a tri-state (all / none / indeterminate) select-all checkbox in the leading header cell. It is a **pure client-side DOM toggle** over the *rendered* rows' checkbox binds — no new wire field, no dispatch, agent-irrelevant (agents set binds directly). Selects all rendered rows only (under filter-narrow that equals all matches; under pagination it's the current page).
+
+- **`TableNode.selection` — a visible-scoped bulk-action toolbar (both backends).** `TableNode.selection = { buttons: ButtonNode[]; harvestBind: string }`. The adapter renders `buttons[]` as a toolbar above the table; on a bulk-button click it **harvests the currently-checked, currently-rendered row ids**, writes that `string[]` to `harvestBind` (overwriting), then dispatches name-only. The server reads `state.{harvestBind}` and acts on **exactly the rows on screen** — a bulk action can never touch a row the operator can't see, even if the app's own `selectedIds` map still holds it. This closes the "selection carried across a filter/page change silently acts on invisible rows" footgun (surfaced by PBMInvoices) **by construction**, for the common case.
+  - Revives the old `selection.buttons[]` harvest (removed with the `context` wire in Phase 6), adapted to write a **bind** instead of `context`. It carries **none** of the per-*toggle* dispatch that got the 0.15.0 `selection.action` mode removed — selection stays a pure client concern until a bulk click.
+  - Per-row checkboxes remain app-composed (`CheckboxNode` bound to `selectedIds.{id}` in `row.actions`); the block only adds the toolbar + header box. Selectable rows must carry `TableRow.id`.
+  - **Whether the visual check-state persists across a view change is app policy** (the framework treats your selection map as opaque `TState`). The safe default is **reset-on-nav** — clear your selection map in the filter/paginate handler — demonstrated in `demo/HelpDesk` (both twins). An app wanting cross-page accumulation simply doesn't clear.
+
+- **`.vms-checkbox__input:indeterminate` styling** — the header select-all's indeterminate state renders a dash (CSS, npm).
+
+### Changed
+
+- `demo/HelpDesk` (both twins) adopt the safe pattern: bulk buttons moved into `TableNode.selection`; the `bulk-*` handlers read the visible-scoped `state.bulkSelection` harvest (not every truthy key of the `selectedIds` map); filter changes reset selection (reset-on-nav).
+
+### Consumers
+
+Nothing required — both additions are optional. To adopt: put your bulk buttons in `TableNode.selection` with a `harvestBind`, read that array in your handler, and clear your selection map on filter/page changes. See `MIGRATION.md`.
+
 ## npm 6.3.0 / NuGet 6.4.0 — `TrackerNode`: status tracker / heat strip
 
 **npm:** `6.3.0` (minor, from `6.2.1`) · **NuGet:** `6.4.0` (minor, from `6.3.0`). New wire node type — additive on both sides (old apps/agents unaffected; wire protocol token stays `viewmodel-shell/1.0`).

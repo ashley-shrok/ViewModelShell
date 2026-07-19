@@ -70,10 +70,15 @@ interface AgentState {
   // pagination. titleFilter is the free-text Title column input.
   titleFilter: string;
   // Phase 6 — bind slots:
-  //   selectedIds: keyed by ticket id, value true = selected (per-row
-  //   CheckboxNode binds to `selectedIds.${id}`).
+  //   selectedIds: keyed by ticket id, value true = selected — this is just the
+  //     checkbox CHECK STATE (per-row CheckboxNode binds to `selectedIds.${id}`).
+  //   bulkSelection: the VISIBLE-scoped harvest sink. TableNode.selection's bulk
+  //     buttons write the currently-checked, currently-RENDERED row ids here
+  //     (overwriting) right before dispatching; the bulk handler reads THIS, not
+  //     the selectedIds map, so a bulk action can only touch rows on screen.
   //   agentNotes: bound by the textarea in the ticket page's notes form.
   selectedIds: Record<string, boolean>;
+  bulkSelection: string[];
   agentNotes: string;
 }
 function agentInitial(): AgentState {
@@ -84,6 +89,7 @@ function agentInitial(): AgentState {
     notesSaved: false,
     titleFilter: "",
     selectedIds: {},
+    bulkSelection: [],
     agentNotes: "",
   };
 }
@@ -422,25 +428,9 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
   ];
 
   // Bulk action toolbar — visible when there are matches within the cap.
-  // 1.13.0 — laid out with layout:"switcher": three equal-weight actions that
-  // flip all-row ↔ all-stack ATOMICALLY at a content-width threshold (never
-  // passing through an awkward 2-up intermediate the way `cards` auto-fit
-  // would). `limit: 3` caps the row at the three buttons, and `threshold: "md"`
-  // (30rem) sets the flip width. This is the canonical equal-action-toolbar
-  // exemplar — no app CSS, no @media.
-  if (withinCap && rows.length > 0) {
-    children.push({
-      type: "section",
-      layout: "switcher",
-      threshold: "md",
-      limit: 3,
-      children: [
-        { type: "button", label: "Mark In Progress", action: { name: "bulk-start" },   emphasis: "secondary" },
-        { type: "button", label: "Mark Resolved",    action: { name: "bulk-resolve" }, emphasis: "primary" },
-        { type: "button", label: "Reopen",           action: { name: "bulk-reopen" },  emphasis: "secondary" },
-      ],
-    });
-  }
+  // Bulk-action toolbar now lives on TableNode.selection (below) so it's
+  // VISIBLE-SCOPED: each button harvests the currently-checked, currently-
+  // rendered rows into state.bulkSelection and the handler acts on only those.
 
   const dbEmpty = counts.open + counts.inProgress + counts.resolved === 0;
 
@@ -482,6 +472,20 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
       rows,
       filterBinds: { title: "titleFilter" },
       filterAction: { name: "filter-text" },
+      // Spread, not assignment: selection stays ABSENT (never null) when there
+      // are no matches within the cap — gotcha #8 / matches the .NET twin.
+      ...(withinCap && rows.length > 0
+        ? {
+            selection: {
+              buttons: [
+                { type: "button", label: "Mark In Progress", action: { name: "bulk-start" },   emphasis: "secondary" },
+                { type: "button", label: "Mark Resolved",    action: { name: "bulk-resolve" }, emphasis: "primary" },
+                { type: "button", label: "Reopen",           action: { name: "bulk-reopen" },  emphasis: "secondary" },
+              ],
+              harvestBind: "bulkSelection",
+            },
+          }
+        : {}),
     };
     children.push(table);
   }
@@ -589,21 +593,26 @@ const agentHandler = createAction<AgentState>(async (payload) => {
   const name = payload.name;
 
   if (name.startsWith("filter-") && name !== "filter-text") {
-    // filter is already in state via the TabsNode bind; no action needed.
+    // filter is already in state via the TabsNode bind. RESET-ON-NAV: a view
+    // change clears selection so no checks linger from rows navigated away from
+    // (the safe default; the harvest already keeps bulk actions visible-scoped).
+    state = { ...state, selectedIds: {}, bulkSelection: [] };
   } else if (name === "filter-text") {
-    // titleFilter is already in state via the column filterBind.
+    // titleFilter is already in state via the column filterBind. Same reset-on-nav.
+    state = { ...state, selectedIds: {}, bulkSelection: [] };
   } else if (name === "bulk-start" || name === "bulk-resolve" || name === "bulk-reopen") {
     const bulkStatus = name === "bulk-start" ? "in-progress"
                      : name === "bulk-resolve" ? "resolved" : "open";
-    // Read selected ticket IDs from state.selectedIds (set true via per-row
-    // checkbox binds). The bind path was `selectedIds.${id}`.
-    const ids = Object.entries(state.selectedIds ?? {})
-      .filter(([, v]) => v === true)
-      .map(([k]) => Number(k))
+    // Read the VISIBLE-scoped harvest — TableNode.selection's bulk button wrote
+    // the currently-checked, currently-rendered row ids to state.bulkSelection
+    // right before dispatching. Act on THAT, not the selectedIds map, so a row
+    // selected under a prior filter and then filtered out of view is untouched.
+    const ids = (state.bulkSelection ?? [])
+      .map(k => Number(k))
       .filter(n => !isNaN(n));
     for (const id of ids) dbUpdateStatus(id, bulkStatus);
     // Clear selection after the bulk action.
-    state = { ...state, selectedIds: {} };
+    state = { ...state, selectedIds: {}, bulkSelection: [] };
   } else if (name.startsWith("select-ticket-")) {
     const sid = Number(name.slice("select-ticket-".length));
     if (!isNaN(sid)) {

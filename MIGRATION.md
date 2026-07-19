@@ -6,6 +6,17 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `6.4.0` / NuGet `6.5.0` — nothing to do (additive visible-scoped selection)
+
+**Both packages: purely additive.** Existing tables are byte-unchanged. Two new capabilities:
+
+- **Header "select all"** auto-appears on any table whose rows have per-row `CheckboxNode`s — a pure client toggle over the rendered rows (tri-state). No wire field; nothing to adopt.
+- **`TableNode.selection = { buttons, harvestBind }`** — an opt-in bulk-action toolbar whose buttons harvest only the currently-visible checked rows into `harvestBind`. The server reads that array and acts on exactly the rows on screen. Selectable rows must carry `TableRow.id`.
+
+**Recommended when you adopt `selection`:** clear your selection map on filter/page changes (reset-on-nav) so no ticks linger from a view you've navigated away from — a one-line `state = state with { SelectedIds = new(), BulkSelection = [] }` in the filter/paginate handler (see `demo/HelpDesk/AspNetCore/AgentController.cs`). This is a UX policy, **not** a safety requirement: the harvest already guarantees a bulk action can only touch visible rows. An app that wants cross-page accumulation simply doesn't clear.
+
+---
+
 ## Upgrading to npm `6.2.0` / NuGet `6.3.0` — nothing to do (additive rich copy)
 
 **Both packages: purely additive.** Every existing `CopyButtonNode` is byte-unchanged. Two new optional fields let a copy carry a formatted representation alongside its plain text:
