@@ -18,7 +18,7 @@ import type {
   TextNode, LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
   ModalNode, TableNode, CopyButtonNode, DividerNode, FitsNode,
   EmptyStateNode, BadgeNode, ChartNode,
-  BreadcrumbNode, StepsNode, TrackerNode,
+  BreadcrumbNode, StepsNode, TrackerNode, DiffNode,
 } from "./index.js";
 
 function legacyCopy(text: string): boolean {
@@ -557,6 +557,7 @@ export class BrowserAdapter implements Adapter {
       case "breadcrumb":   return this.breadcrumb(n, parent, on);
       case "steps":        return this.steps(n, parent);
       case "tracker":      return this.tracker(n, parent, on);
+      case "diff":         return this.diff(n, parent);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -3811,5 +3812,106 @@ export class BrowserAdapter implements Adapter {
       strip.appendChild(el);
     }
     parent.appendChild(strip);
+  }
+
+  /** DiffNode — aligned before/after primitive. Row-kind (add/remove/context)
+   *  is derived client-side from the shape of DiffRow: old-only = remove,
+   *  new-only = add, matching text = context, differing text = modified pair
+   *  (side-by-side shows both cells; unified splits into remove-then-add).
+   *  Line-number cells carry the same kind class as their content cell so the
+   *  whole row-side reads as one connected colored band. Left-stripe lives only
+   *  on the leftmost cell of each colored row-side (linenum cell). In unified
+   *  mode the two linenum columns visually collapse into a single left margin
+   *  for context rows; for add/remove rows the second linenum keeps its tint so
+   *  the color band runs continuously, minus the stripe. Design of record:
+   *  `.planning/design/diff-node.md`. Spike-validated 2026-07-19. */
+  private diff(n: DiffNode, parent: HTMLElement): void {
+    const mode = n.mode ?? "side-by-side";
+    const root = document.createElement("div");
+    root.className = `vms-diff vms-diff--${mode}`;
+    if (n.id != null) root.id = n.id;
+    root.setAttribute("role", "group");
+    root.setAttribute("aria-label", "Diff");
+
+    // Optional header row(s) — file paths for old / new.
+    if (n.header) {
+      if (mode === "side-by-side") {
+        const hOld = document.createElement("div");
+        hOld.className = "vms-diff__header vms-diff__header--old";
+        hOld.textContent = n.header.old;
+        root.appendChild(hOld);
+        const hNew = document.createElement("div");
+        hNew.className = "vms-diff__header vms-diff__header--new";
+        hNew.textContent = n.header.new;
+        root.appendChild(hNew);
+      } else {
+        const h = document.createElement("div");
+        h.className = "vms-diff__header";
+        h.textContent = `${n.header.old}  →  ${n.header.new}`;
+        root.appendChild(h);
+      }
+    }
+
+    for (const row of n.rows) {
+      const oldCell = row.old ?? null;
+      const newCell = row.new ?? null;
+      const kindOld: "empty" | "remove" | "context" =
+        oldCell == null ? "empty"
+          : newCell == null ? "remove"
+            : oldCell.text === newCell.text ? "context"
+              : "remove";
+      const kindNew: "empty" | "add" | "context" =
+        newCell == null ? "empty"
+          : oldCell == null ? "add"
+            : newCell.text === oldCell.text ? "context"
+              : "add";
+
+      if (mode === "side-by-side") {
+        this._diffCell(root, oldCell?.lineNumber, kindOld, true, "old");
+        this._diffCell(root, oldCell?.text, kindOld, false, "old");
+        this._diffCell(root, newCell?.lineNumber, kindNew, true, "new");
+        this._diffCell(root, newCell?.text, kindNew, false, "new");
+      } else {
+        // Unified: context = one visual row; change = a remove row then an add row.
+        if (kindOld === "context") {
+          this._diffCell(root, oldCell?.lineNumber, "context", true, "old");
+          this._diffCell(root, newCell?.lineNumber, "context", true, "new");
+          this._diffCell(root, oldCell?.text, "context", false, "old");
+        } else {
+          if (oldCell !== null) {
+            this._diffCell(root, oldCell?.lineNumber, "remove", true, "old");
+            this._diffCell(root, "", "remove", true, "new");
+            this._diffCell(root, oldCell?.text, "remove", false, "old");
+          }
+          if (newCell !== null) {
+            this._diffCell(root, "", "add", true, "old");
+            this._diffCell(root, newCell?.lineNumber, "add", true, "new");
+            this._diffCell(root, newCell?.text, "add", false, "new");
+          }
+        }
+      }
+    }
+    parent.appendChild(root);
+  }
+
+  private _diffCell(
+    parent: HTMLElement,
+    content: string | number | undefined,
+    kind: "empty" | "add" | "remove" | "context",
+    isLinenum: boolean,
+    side: "old" | "new",
+  ): void {
+    const el = document.createElement("div");
+    const parts = ["vms-diff__cell", `vms-diff__cell--${kind}`];
+    if (isLinenum) {
+      parts.push("vms-diff__cell--linenum");
+      parts.push(side === "old" ? "vms-diff__cell--old-linenum" : "vms-diff__cell--new-linenum");
+      // Line numbers are visual gutter — hide from SR (the actual content
+      // announces on the content cell). Also mark unselectable via CSS.
+      el.setAttribute("aria-hidden", "true");
+    }
+    el.className = parts.join(" ");
+    el.textContent = content == null ? "" : String(content);
+    parent.appendChild(el);
   }
 }

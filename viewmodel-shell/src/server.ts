@@ -281,11 +281,11 @@ function collectActions(
       return;
     }
     // Nodes with no dispatch-bearing actions of their own:
-    //   text, link, image, stat-bar, progress, copy-button, badge, chart, steps
+    //   text, link, image, stat-bar, progress, copy-button, badge, chart, steps, diff
     //   (breadcrumb crumb actions ARE recorded above via the "breadcrumb" arm)
-    // ChartNode (CHART-05) and StepsNode (NAV-02) are DELIBERATE
-    // childless/action-free leaves — they carry only data, so they fall through
-    // here with no recursion (no fits-style blind spot).
+    // ChartNode (CHART-05), StepsNode (NAV-02), and DiffNode (DIFF-01) are
+    // DELIBERATE childless/action-free leaves — they carry only data, so they
+    // fall through here with no recursion (no fits-style blind spot).
     default:
       return;
   }

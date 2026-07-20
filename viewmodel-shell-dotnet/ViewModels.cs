@@ -542,6 +542,7 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(BreadcrumbNode), "breadcrumb")]
 [JsonDerivedType(typeof(StepsNode),      "steps")]
 [JsonDerivedType(typeof(TrackerNode),    "tracker")]
+[JsonDerivedType(typeof(DiffNode),       "diff")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -1214,6 +1215,61 @@ public record TrackerNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id = null
 ) : ViewNode;
 
+/// <summary>Optional header row for a DiffNode showing file paths (or any labels)
+/// for the old vs new side. In side-by-side mode the two labels appear above their
+/// respective column-groups; in unified mode they join into a single header row
+/// joined by " → ".</summary>
+public record DiffHeader(string Old, string New);
+
+/// <summary>One cell of a diff row (either the "old" side or the "new" side).
+/// Carries the cell's text plus an optional line number for the gutter. Text may
+/// be an empty string. The wire distinction "cell present but empty" vs "cell
+/// absent" (the null case on the parent DiffRow) carries meaning — see DiffRow.</summary>
+public record DiffCell(
+    string Text,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? LineNumber = null
+);
+
+/// <summary>One row of a DiffNode. Row-KIND (add / remove / context) is derived
+/// CLIENT-SIDE from the shape of the row itself — no separate `kind` wire field:
+/// old != null &amp;&amp; new == null → REMOVE; old == null &amp;&amp; new != null → ADD;
+/// old.Text == new.Text → CONTEXT; old.Text != new.Text → modified pair (both
+/// cells side-by-side and tinted in side-by-side mode; splits into REMOVE + ADD
+/// in unified mode). This "shape carries the meaning" pattern makes it impossible
+/// for a kind label to disagree with the content and keeps the wire compact.
+/// Line numbers are optional so diff sources that don't track them degrade to a
+/// content-only column.</summary>
+public record DiffRow(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DiffCell? Old = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DiffCell? New = null
+);
+
+/// <summary>DiffNode — aligned before/after primitive for review, audit, and
+/// change-comparison apps. Consumers compute the diff server-side (LibGit2Sharp,
+/// git diff --json, whatever they have) and hand VMS the structured rows — same
+/// server-computes / framework-renders doctrine as the markdown → tree pattern.
+/// The framework owns ALL appearance and a11y: the CSS-Grid alignment (4 tracks
+/// in side-by-side, 3 in unified), the tint + left-stripe row coloring, the
+/// long-line horizontal-scroll-per-cell that preserves row alignment, the
+/// empty-cell styling, the tinted line numbers, and the unified-mode collapse of
+/// the two linenum columns into a single left margin. Aligned side-by-side is a
+/// genuinely uncomposable capability that no combination of existing nodes
+/// produces — this is the CHARTS/TRACKER precedent applied to before/after
+/// content. Explicitly out of scope for v1: syntax highlighting on cells (a
+/// separate CodeBlockNode question), word-level intra-line highlighting (would
+/// need inline rich text, an open architectural question), in-line review
+/// comments, and collapse/expand of hunks (consumers who want that compute a
+/// smaller Rows array server-side).</summary>
+public record DiffNode(
+    IReadOnlyList<DiffRow> Rows,
+    // Layout mode. Free-form string mirroring the TS closed union
+    // "unified"|"side-by-side". Omitted = "side-by-side" (the default — the whole
+    // reason this primitive exists over composition of two `pre` blocks).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Mode = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DiffHeader? Header = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Id = null
+) : ViewNode;
+
 public record TabItem(string Value, string Label, ActionDescriptor Action);
 public record TabsNode(
     string Selected,
@@ -1740,11 +1796,14 @@ public static class ViewTreeValidation
 
             // No dispatch-bearing actions of their own:
             //   TextNode, LinkNode, ImageNode, StatBarNode, ProgressNode,
-            //   CopyButtonNode, BadgeNode, ChartNode, StepsNode.
-            // ChartNode (CHART-05) and StepsNode (NAV-02) are DELIBERATE
-            // childless/action-free data/nav leaves — they fall through here with
-            // no recursion (no fits-style blind spot). BreadcrumbNode is handled
-            // above (its crumbs carry dispatch actions).
+            //   CopyButtonNode, BadgeNode, ChartNode, StepsNode, DiffNode.
+            // ChartNode (CHART-05), StepsNode (NAV-02), and DiffNode (DIFF-01)
+            // are DELIBERATE childless/action-free data leaves — they fall
+            // through here with no recursion (no fits-style blind spot).
+            // BreadcrumbNode is handled above (its crumbs carry dispatch actions).
+            // ⚠️ TrackerNode is a known gap: TrackerCell can carry an optional
+            // per-bucket Action but this walker doesn't descend (the TS twin
+            // does — a real parity mismatch). Filed as `tracker-net-walker-gap`.
         }
     }
 

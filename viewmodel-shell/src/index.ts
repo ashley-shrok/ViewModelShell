@@ -154,7 +154,8 @@ export type ViewNode =
   | ChartNode
   | BreadcrumbNode
   | StepsNode
-  | TrackerNode;
+  | TrackerNode
+  | DiffNode;
 
 export interface PageNode {
   type: "page";
@@ -1249,6 +1250,76 @@ export interface TrackerNode {
   id?: string;
   /** Ordered buckets, oldest → newest (rendered left → right). */
   cells: TrackerCell[];
+}
+
+/** One cell of a diff row (either the "old" side or the "new" side). Carries the
+ *  cell's text plus an optional line number for the gutter. `text` may be an
+ *  empty string. The wire distinction "cell present but empty" vs "cell absent"
+ *  (the `null` case on the parent DiffRow) carries meaning — see DiffRow. */
+export interface DiffCell {
+  text: string;
+  lineNumber?: number;
+}
+
+/** One row of a DiffNode. Row-KIND (add / remove / context) is derived
+ *  client-side from the shape of the row itself — no separate `kind` wire field:
+ *
+ *    old != null && new == null  →  REMOVE  (left-side content, right side empty)
+ *    old == null && new != null  →  ADD     (right-side content, left side empty)
+ *    old.text === new.text       →  CONTEXT (unchanged; both sides identical)
+ *    old.text !== new.text       →  a modified pair — both cells shown side-by-side
+ *                                    and tinted in side-by-side mode; splits into
+ *                                    a REMOVE then ADD row-pair in unified mode
+ *
+ *  This "shape carries the meaning" pattern makes it impossible for a `kind`
+ *  label to disagree with the content, and keeps the wire compact. Line numbers
+ *  are optional so diff sources that don't track them (e.g. two prose versions)
+ *  degrade to a content-only column. */
+export interface DiffRow {
+  /** Old (pre-change) cell. OMIT to signal a pure addition (no left-side content).
+   *  Wire contract (gotcha #8): omit the key rather than emit `"old": null` — an
+   *  unset optional is ABSENT, never `"field": null`. The renderer treats a
+   *  missing key as "no old side" (pure add). */
+  old?: DiffCell;
+  /** New (post-change) cell. OMIT to signal a pure removal (no right-side content).
+   *  Same wire contract as `old` — omit the key rather than emit `null`. */
+  new?: DiffCell;
+}
+
+/** DiffNode — aligned before/after primitive for review, audit, and
+ *  change-comparison apps. Consumers compute the diff server-side (LibGit2Sharp
+ *  on .NET, `diff` lib on TS, `git diff --json`, whatever they have) and hand
+ *  VMS the structured rows — same server-computes / framework-renders doctrine
+ *  as the markdown → tree pattern. The framework owns ALL appearance and a11y:
+ *  the CSS-Grid alignment (4 tracks in side-by-side, 3 in unified), the tint +
+ *  left-stripe row coloring, the long-line horizontal-scroll-per-cell that
+ *  preserves row alignment, the empty-cell styling, the tinted line numbers,
+ *  and the unified-mode collapse of the two linenum columns into a single left
+ *  margin. This is the CHARTS/TRACKER precedent applied to before/after
+ *  content — aligned side-by-side is a genuinely uncomposable capability that
+ *  no combination of existing nodes produces (two `pre` blocks in `layout:"split"`
+ *  give you two independent walls of text with no row alignment). Explicitly
+ *  out of scope for v1: syntax highlighting on cells (a separate CodeBlockNode
+ *  question), word-level intra-line diff highlighting (would need inline rich
+ *  text, an open architectural question), in-line review comments, and
+ *  collapse/expand of hunks (consumers who want that compute a smaller `rows`
+ *  array server-side). Design of record: [design/diff-node.md](../../.planning/design/diff-node.md). */
+export interface DiffNode {
+  type: "diff";
+  id?: string;
+  /** Ordered rows, top → bottom (rendered in order). */
+  rows: DiffRow[];
+  /** Layout mode. Omitted = "side-by-side" (the default — the whole reason this
+   *  primitive exists over composition of two `pre` blocks). "unified" = a
+   *  single-column form with dual line-number columns, useful when horizontal
+   *  space is constrained or the app prefers the git-log-style presentation.
+   *  Closed union (DIFF-01). */
+  mode?: "unified" | "side-by-side";
+  /** Optional header row showing file paths (or any labels) for old/new. In
+   *  side-by-side mode: spans the two column-groups (2 tracks each). In unified
+   *  mode: spans all 3 tracks and joins the two labels with " → ". Omitted =
+   *  no header. */
+  header?: { old: string; new: string };
 }
 
 // ─── Shell ────────────────────────────────────────────────────────────────────

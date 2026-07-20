@@ -876,6 +876,50 @@ public class FeatureProbeController : ControllerBase
                         Action: new ActionDescriptor("tracker-cell-probe")),
                 }, Id: "probe-tracker"),
             }));
+        // Diff (DiffNode) — aligned before/after primitive as static view-shape,
+        // byte-identical to the bun twin diffSection. Covers the omitted-vs-present
+        // wire matrix: Mode OMITTED (absent = side-by-side default), Header OMITTED,
+        // Id OMITTED on the bare diff; a second diff sets Mode:"unified" and Header
+        // present + Id:"probe-diff-unified" so both fields cross the wire. Rows cover
+        // every kind the SHAPE-carries-meaning contract expresses: context (both
+        // sides present, identical text with lineNumber), pure remove (New:null =>
+        // ABSENT on the wire, NOT null — the whole point of gotcha #8), pure add
+        // (Old:null => absent), modified pair (both non-null with different text),
+        // and a prose row with NO LineNumber (LineNumber:null => absent on the wire).
+        // DiffNode is action-free (Collect falls through the same way as ChartNode /
+        // StepsNode); nothing to prove for uniqueness descent. The client-side
+        // appearance (Grid alignment, tint+stripe, unified linenum-collapse) is
+        // browser-only and NOT part of parity.
+        pageChildren.Add(new SectionNode(
+            Heading: "Diff",
+            Variant: SectionVariant.Card,
+            Children: new ViewNode[]
+            {
+                // Bare diff — mode/header/id ALL omitted.
+                new DiffNode(new DiffRow[]
+                {
+                    new DiffRow(Old: new DiffCell("context line", LineNumber: 1),
+                                New: new DiffCell("context line", LineNumber: 1)),
+                    new DiffRow(Old: new DiffCell("removed", LineNumber: 2), New: null),
+                    new DiffRow(Old: null, New: new DiffCell("added", LineNumber: 2)),
+                    new DiffRow(Old: new DiffCell("before", LineNumber: 3),
+                                New: new DiffCell("after", LineNumber: 3)),
+                    // Prose row — no line numbers on either side (LineNumber omitted).
+                    new DiffRow(Old: new DiffCell("Prose paragraph, version A."),
+                                New: new DiffCell("Prose paragraph, version B.")),
+                }),
+                // Unified with header — mode + header + id ALL present.
+                new DiffNode(
+                    Rows: new DiffRow[]
+                    {
+                        new DiffRow(Old: new DiffCell("same", LineNumber: 1),
+                                    New: new DiffCell("same", LineNumber: 1)),
+                        new DiffRow(Old: new DiffCell("gone", LineNumber: 2), New: null),
+                    },
+                    Mode: "unified",
+                    Header: new DiffHeader(Old: "before.txt", New: "after.txt"),
+                    Id: "probe-diff-unified"),
+            }));
         pageChildren.Add(new SectionNode(
             Heading: "Lookup field",
             Variant: SectionVariant.Card,

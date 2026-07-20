@@ -1783,3 +1783,109 @@ button.vms-breadcrumb__link {
   position: relative; /* lift the ring above neighbors */
   z-index: 1;
 }
+
+/* ── DiffNode ────────────────────────────────────────────────────────────────
+   Aligned before/after primitive. CSS Grid handles vertical alignment across
+   two columns naturally (each row's cells share a grid row). Long lines
+   overflow HORIZONTALLY within their cell (per-cell overflow-x: auto) — never
+   wrap, because wrapping would break the row-alignment guarantee. Row-kind
+   coloring is DUAL SIGNAL: background tint (22% alpha) + a 3px inset left
+   stripe on the leftmost cell of each colored row-side. Spike-validated
+   2026-07-19; design of record: .planning/design/diff-node.md. */
+.vms-diff {
+  display: grid;
+  font-family: var(--vms-font-mono, ui-monospace, SFMono-Regular, monospace);
+  font-size: var(--vms-text-sm);
+  line-height: 1.5;
+  border: 1px solid var(--vms-border);
+  border-radius: var(--vms-radius-md, 6px);
+  overflow: hidden;
+  background: var(--vms-surface);
+  color: var(--vms-text);
+}
+/* Side-by-side: 4 tracks (old-line#, old-content, new-line#, new-content). */
+.vms-diff--side-by-side {
+  grid-template-columns:
+    [old-line] max-content
+    [old-content] minmax(0, 1fr)
+    [new-line] max-content
+    [new-content] minmax(0, 1fr);
+}
+/* Unified: 3 tracks (dual line#s + one content column). */
+.vms-diff--unified {
+  grid-template-columns:
+    [line-old] max-content
+    [line-new] max-content
+    [content] minmax(0, 1fr);
+}
+.vms-diff__cell {
+  padding: 0.15em 0.6em;
+  white-space: pre;
+  overflow-x: auto;
+  min-width: 0; /* required inside minmax(0,1fr) so overflow doesn't blow the track */
+}
+/* Line-number cells (base — neutral tint; add/remove/empty override below). */
+.vms-diff__cell--linenum {
+  color: var(--vms-text-muted);
+  text-align: right;
+  user-select: none;
+  padding: 0.15em 0.5em;
+  border-right: 1px solid var(--vms-border);
+  background: color-mix(in srgb, var(--vms-text-muted) 4%, transparent);
+}
+/* Row-kind coloring — applied to BOTH linenum and content cells so each row-side
+   reads as one connected colored band. Stripe on the leftmost cell only. */
+.vms-diff__cell--add {
+  background: color-mix(in srgb, var(--vms-success) 22%, transparent);
+}
+.vms-diff__cell--remove {
+  background: color-mix(in srgb, var(--vms-error) 22%, transparent);
+}
+.vms-diff__cell--linenum.vms-diff__cell--add {
+  box-shadow: inset 3px 0 0 0 var(--vms-success);
+  color: var(--vms-success);
+}
+.vms-diff__cell--linenum.vms-diff__cell--remove {
+  box-shadow: inset 3px 0 0 0 var(--vms-error);
+  color: var(--vms-error);
+}
+.vms-diff__cell--context {
+  /* neutral — no fill */
+}
+.vms-diff__cell--empty {
+  background: color-mix(in srgb, var(--vms-text-muted) 6%, transparent);
+}
+/* Unified mode — collapse the two linenum columns visually into one left margin.
+   Context rows: only leftmost linenum keeps muted base + border-right (one clean
+   line-# margin). Add/remove rows: the second linenum keeps its row-tint so the
+   color band runs continuously across [line#][line#][content], but drops the
+   stripe (which belongs only on the leftmost cell of the row). */
+.vms-diff--unified .vms-diff__cell--new-linenum {
+  background: transparent;
+  border-right: none;
+}
+.vms-diff--unified .vms-diff__cell--new-linenum.vms-diff__cell--add {
+  background: color-mix(in srgb, var(--vms-success) 22%, transparent);
+  box-shadow: none;
+}
+.vms-diff--unified .vms-diff__cell--new-linenum.vms-diff__cell--remove {
+  background: color-mix(in srgb, var(--vms-error) 22%, transparent);
+  box-shadow: none;
+}
+/* Header (optional file-path row). */
+.vms-diff__header {
+  padding: 0.4em 0.8em;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--vms-text-muted) 8%, transparent);
+  border-bottom: 1px solid var(--vms-border);
+}
+.vms-diff--side-by-side .vms-diff__header--old { grid-column: old-line / span 2; }
+.vms-diff--side-by-side .vms-diff__header--new {
+  grid-column: new-line / span 2;
+  border-left: 1px solid var(--vms-border);
+}
+.vms-diff--unified .vms-diff__header { grid-column: 1 / -1; }
+/* Vertical divider between old and new in side-by-side mode. */
+.vms-diff--side-by-side .vms-diff__cell--new-linenum {
+  border-left: 1px solid var(--vms-border);
+}

@@ -6,6 +6,31 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 6.5.0 / NuGet 6.6.0 — `DiffNode`: aligned before/after primitive
+
+**npm:** `6.5.0` (minor, from `6.4.0`) · **NuGet:** `6.6.0` (minor, from `6.5.0`). New wire node type — additive on both sides (old apps/agents unaffected; wire protocol token stays `viewmodel-shell/1.0`).
+
+### Added
+
+- **`DiffNode` — an aligned before/after primitive.** Row-by-row aligned side-by-side (default) or single-column unified rendering for review, audit, and change-comparison apps. Consumers compute the diff **server-side** (LibGit2Sharp on .NET, `diff` on TS, `git diff --json`, whatever they have) and hand VMS the structured rows — same server-computes / framework-renders doctrine as the markdown → tree pattern. The framework owns all appearance: CSS-Grid alignment (4 tracks in side-by-side, 3 in unified), tint + left-stripe row coloring, long-line horizontal-scroll-per-cell that preserves row alignment, empty-cell styling, tinted line numbers, and unified-mode collapse of the two linenum columns into a single left margin for context rows (with a continuous color band across for add/remove).
+  - **Shape**: `{ type: "diff", id?, rows: DiffRow[], mode?: "unified" | "side-by-side", header?: { old: string, new: string } }`. Each `DiffRow` is `{ old?: DiffCell, new?: DiffCell }` where `DiffCell` is `{ text: string, lineNumber?: number }`. Row-**kind** (add / remove / context / modified pair) is derived client-side from the shape of the row itself — no separate `kind` wire field. Omit the `old` key for a pure addition, omit the `new` key for a pure removal, both present with identical `text` = context, both present with differing `text` = modified pair (side-by-side shows both cells tinted in the same visual row; unified splits into remove-then-add). "Shape carries the meaning" makes it impossible for a `kind` label to disagree with the content.
+  - **Line numbers are optional.** Diff sources that don't track them (e.g. two prose versions) render with a content-only column; the framework does not synthesize a gutter for missing line numbers.
+  - **Colorblind safety.** Color is one of THREE channels: color (green add, red remove — industry standard) + column position (left = old, right = new in side-by-side; row order = removed-then-added in unified) + line-number presence (removed rows have no new-side line#; added rows have no old-side line#). Safe to use the shared `--vms-success` / `--vms-error` tokens. Text on the tint layered over the surface is AA-safe across the default + all 12 themes.
+  - Appearance is 100% framework-owned: the grid tracks, the 22%-alpha tint background, the 3px inset left stripe on the leftmost cell of each colored row-side, the muted empty-cell fill, the unified-mode linenum-column collapse, and the header row shape. Design of record: [`.planning/design/diff-node.md`](.planning/design/diff-node.md).
+
+### Explicitly out of scope for this primitive
+
+- **Syntax highlighting on cell content.** That's the `CodeBlockNode` question (currently on hold — a polish primitive whose only genuine gap is highlighting, and uncolored monospace code IS a functional fallback via `TextNode style:"pre" + card + copy` composition). If we ever ship highlighting, `DiffNode` can compose richer cell content additively without a wire break.
+- **Word-level intra-line diff highlighting.** Would need inline rich text — an open architectural question.
+- **In-line review comments / collapse/expand of hunks.** Consumers who want collapsed hunks compute a smaller `rows` array server-side.
+
+### Notes for adopters
+
+- **Both packages, purely additive — no action required.** Reach for `DiffNode` for any before/after content comparison (code review, config audit, doc revision, change history). Requested by Amelia (Athena — the Pantheon IT-documentation viewer) for her review path; shipped as a general primitive.
+- **A parity gap surfaced during this build**: the `.NET` `Collect()` walker doesn't descend into `TrackerCell.Action` (the TS twin does — a real cross-backend inconsistency in the tree-validation contract). No consumer impact today (no fleet consumer has hit it), but it's tracked and will be closed in a follow-up.
+
+---
+
 ## npm 6.4.0 / NuGet 6.5.0 — Visible-scoped table selection: header select-all + `TableNode.selection`
 
 **npm:** `6.4.0` (minor, from `6.3.0`) · **NuGet:** `6.5.0` (minor, from `6.4.0`). Additive on both sides — old apps/agents unaffected; wire protocol token stays `viewmodel-shell/1.0`.

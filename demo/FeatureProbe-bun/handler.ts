@@ -801,6 +801,55 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // Diff (DiffNode) — aligned before/after primitive as static view-shape,
+  // byte-identical to the .NET twin diffSection. Covers the omitted-vs-present
+  // wire matrix: mode OMITTED (absent = side-by-side default), header OMITTED,
+  // id OMITTED on the bare diff; a second diff sets mode:"unified" and header
+  // present + id:"probe-diff-unified" so both fields cross the wire. Rows cover
+  // every kind the SHAPE-carries-meaning contract expresses: context (both
+  // sides present, identical text with lineNumber), pure remove (new:null =>
+  // ABSENT on the wire, NOT null — the whole point of gotcha #8), pure add
+  // (old:null => absent), modified pair (both non-null with different text),
+  // and a prose row with NO lineNumber (lineNumber omitted => absent on the
+  // wire). DiffNode is action-free (collectActions falls through the same way
+  // as ChartNode / StepsNode); nothing to prove for uniqueness descent. The
+  // CLIENT-SIDE appearance (Grid alignment, tint+stripe, unified linenum-
+  // collapse) is browser-only and NOT part of parity — parity proves only that
+  // the {type:"diff", id?, rows:[{old?, new?}], mode?, header?} wire
+  // serializes identically across backends.
+  const diffSection: ViewNode = {
+    type: "section",
+    heading: "Diff",
+    variant: "card",
+    children: [
+      // Bare diff — mode/header/id ALL omitted. Note: for pure-add / pure-remove
+      // rows we OMIT the missing side entirely (per gotcha #8 — an unset optional
+      // is ABSENT on the wire, never `"field": null`).
+      {
+        type: "diff",
+        rows: [
+          { old: { text: "context line", lineNumber: 1 }, new: { text: "context line", lineNumber: 1 } },
+          { old: { text: "removed", lineNumber: 2 } },                         // pure remove — `new` omitted
+          { new: { text: "added", lineNumber: 2 } },                           // pure add — `old` omitted
+          { old: { text: "before", lineNumber: 3 }, new: { text: "after", lineNumber: 3 } },
+          // Prose row — no line numbers on either side (lineNumber omitted).
+          { old: { text: "Prose paragraph, version A." }, new: { text: "Prose paragraph, version B." } },
+        ],
+      },
+      // Unified with header — mode + header + id ALL present.
+      {
+        type: "diff",
+        id: "probe-diff-unified",
+        mode: "unified",
+        header: { old: "before.txt", new: "after.txt" },
+        rows: [
+          { old: { text: "same", lineNumber: 1 }, new: { text: "same", lineNumber: 1 } },
+          { old: { text: "gone", lineNumber: 2 } },                            // pure remove — `new` omitted
+        ],
+      },
+    ],
+  };
+
   // Lookup field (LOOK-01/LOOK-06) — the two lookup inputTypes as static
   // view-shape captured by every GET step; byte-identical to the .NET twin
   // lookupSection. Covers the full omitted-vs-present matrix:
@@ -888,6 +937,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       blockingSection,
       navSection,
       trackerSection,
+      diffSection,
       lookupSection,
       probeModal,
     ],

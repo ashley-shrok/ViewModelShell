@@ -765,3 +765,149 @@ describe("TrackerNode — status/heat strip", () => {
     expect(plain.getAttribute("role")).toBeNull();
   });
 });
+
+describe("DiffNode — aligned before/after primitive", () => {
+  it("side-by-side (default mode) emits 4 cells per row with kind classes on BOTH linenum and content cells", () => {
+    const { container, render } = setup();
+    render({
+      type: "diff",
+      id: "d1",
+      rows: [
+        // context (identical)
+        { old: { text: "foo", lineNumber: 1 }, new: { text: "foo", lineNumber: 1 } },
+        // remove-only
+        { old: { text: "bar", lineNumber: 2 } },
+        // add-only
+        { new: { text: "baz", lineNumber: 2 } },
+      ],
+    });
+    const root = container.querySelector(".vms-diff") as HTMLElement;
+    expect(root).not.toBeNull();
+    expect(root.id).toBe("d1");
+    expect(root.classList.contains("vms-diff--side-by-side")).toBe(true);
+    expect(root.getAttribute("role")).toBe("group");
+    expect(root.getAttribute("aria-label")).toBe("Diff");
+    const cells = root.querySelectorAll(".vms-diff__cell");
+    // 3 rows × 4 cells = 12
+    expect(cells.length).toBe(12);
+    // Row 1 (context): all four cells carry --context
+    for (let i = 0; i < 4; i++) {
+      expect(cells[i]!.classList.contains("vms-diff__cell--context")).toBe(true);
+    }
+    // Row 2 (remove): old-line + old-content = --remove; new-line + new-content = --empty
+    expect(cells[4]!.classList.contains("vms-diff__cell--remove")).toBe(true);
+    expect(cells[4]!.classList.contains("vms-diff__cell--linenum")).toBe(true);
+    expect(cells[4]!.classList.contains("vms-diff__cell--old-linenum")).toBe(true);
+    expect(cells[5]!.classList.contains("vms-diff__cell--remove")).toBe(true);
+    expect(cells[6]!.classList.contains("vms-diff__cell--empty")).toBe(true);
+    expect(cells[6]!.classList.contains("vms-diff__cell--new-linenum")).toBe(true);
+    expect(cells[7]!.classList.contains("vms-diff__cell--empty")).toBe(true);
+    // Row 3 (add): old side --empty; new side --add
+    expect(cells[8]!.classList.contains("vms-diff__cell--empty")).toBe(true);
+    expect(cells[9]!.classList.contains("vms-diff__cell--empty")).toBe(true);
+    expect(cells[10]!.classList.contains("vms-diff__cell--add")).toBe(true);
+    expect(cells[11]!.classList.contains("vms-diff__cell--add")).toBe(true);
+  });
+
+  it("side-by-side — a modified pair (both non-null, different text) renders both cells tinted in the same visual row", () => {
+    const { container, render } = setup();
+    render({
+      type: "diff",
+      rows: [
+        { old: { text: "old-value", lineNumber: 1 }, new: { text: "new-value", lineNumber: 1 } },
+      ],
+    });
+    const cells = container.querySelectorAll(".vms-diff__cell");
+    expect(cells.length).toBe(4);
+    // old side → remove, new side → add (same visual row)
+    expect(cells[0]!.classList.contains("vms-diff__cell--remove")).toBe(true);
+    expect(cells[1]!.classList.contains("vms-diff__cell--remove")).toBe(true);
+    expect(cells[2]!.classList.contains("vms-diff__cell--add")).toBe(true);
+    expect(cells[3]!.classList.contains("vms-diff__cell--add")).toBe(true);
+    expect(cells[1]!.textContent).toBe("old-value");
+    expect(cells[3]!.textContent).toBe("new-value");
+  });
+
+  it("unified mode — context row emits 3 cells (both linenums + content); change rows split into remove + add pairs", () => {
+    const { container, render } = setup();
+    render({
+      type: "diff",
+      mode: "unified",
+      rows: [
+        { old: { text: "foo", lineNumber: 1 }, new: { text: "foo", lineNumber: 1 } },
+        { old: { text: "bar", lineNumber: 2 }, new: { text: "baz", lineNumber: 2 } },
+      ],
+    });
+    const root = container.querySelector(".vms-diff") as HTMLElement;
+    expect(root.classList.contains("vms-diff--unified")).toBe(true);
+    const cells = root.querySelectorAll(".vms-diff__cell");
+    // Row 1 context = 3 cells; row 2 modified pair = 3 remove cells + 3 add cells = 6.
+    // Total = 3 + 6 = 9.
+    expect(cells.length).toBe(9);
+    // Row 1 context
+    expect(cells[0]!.classList.contains("vms-diff__cell--context")).toBe(true);
+    expect(cells[1]!.classList.contains("vms-diff__cell--context")).toBe(true);
+    expect(cells[2]!.classList.contains("vms-diff__cell--context")).toBe(true);
+    // Row 2 remove half
+    expect(cells[3]!.classList.contains("vms-diff__cell--remove")).toBe(true);
+    expect(cells[3]!.classList.contains("vms-diff__cell--old-linenum")).toBe(true);
+    expect(cells[4]!.classList.contains("vms-diff__cell--remove")).toBe(true);
+    expect(cells[4]!.classList.contains("vms-diff__cell--new-linenum")).toBe(true);
+    expect(cells[5]!.classList.contains("vms-diff__cell--remove")).toBe(true);
+    expect(cells[5]!.textContent).toBe("bar");
+    // Row 2 add half
+    expect(cells[6]!.classList.contains("vms-diff__cell--add")).toBe(true);
+    expect(cells[6]!.classList.contains("vms-diff__cell--old-linenum")).toBe(true);
+    expect(cells[7]!.classList.contains("vms-diff__cell--add")).toBe(true);
+    expect(cells[8]!.classList.contains("vms-diff__cell--add")).toBe(true);
+    expect(cells[8]!.textContent).toBe("baz");
+  });
+
+  it("header — side-by-side emits two labeled header cells; unified emits one joined header", () => {
+    const { container, render } = setup();
+    render({
+      type: "diff",
+      header: { old: "before.txt", new: "after.txt" },
+      rows: [{ old: { text: "x" }, new: { text: "x" } }],
+    });
+    const sbs = container.querySelectorAll(".vms-diff__header");
+    expect(sbs.length).toBe(2);
+    expect(sbs[0]!.textContent).toBe("before.txt");
+    expect(sbs[0]!.classList.contains("vms-diff__header--old")).toBe(true);
+    expect(sbs[1]!.textContent).toBe("after.txt");
+    expect(sbs[1]!.classList.contains("vms-diff__header--new")).toBe(true);
+
+    container.replaceChildren();
+    render({
+      type: "diff",
+      mode: "unified",
+      header: { old: "before.txt", new: "after.txt" },
+      rows: [{ old: { text: "x" }, new: { text: "x" } }],
+    });
+    const uni = container.querySelectorAll(".vms-diff__header");
+    expect(uni.length).toBe(1);
+    expect(uni[0]!.textContent).toBe("before.txt  →  after.txt");
+  });
+
+  it("line numbers are aria-hidden (visual gutter only — actual content announces on the content cell)", () => {
+    const { container, render } = setup();
+    render({
+      type: "diff",
+      rows: [{ old: { text: "x", lineNumber: 42 }, new: { text: "x", lineNumber: 42 } }],
+    });
+    const linenums = container.querySelectorAll(".vms-diff__cell--linenum");
+    expect(linenums.length).toBe(2);
+    linenums.forEach((l) => expect(l.getAttribute("aria-hidden")).toBe("true"));
+  });
+
+  it("line-number cells are optional — omitted lineNumber renders an empty gutter cell (not the string 'undefined')", () => {
+    const { container, render } = setup();
+    render({
+      type: "diff",
+      rows: [{ old: { text: "prose diff — no line numbers" }, new: { text: "prose diff — no line numbers here either" } }],
+    });
+    const linenums = container.querySelectorAll(".vms-diff__cell--linenum");
+    expect(linenums.length).toBe(2);
+    linenums.forEach((l) => expect(l.textContent).toBe(""));
+  });
+});
