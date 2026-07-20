@@ -25,6 +25,6 @@ app.UseVmsShellStaticFiles();
 
 app.MapControllers();
 
-app.MapFallbackToFile("index.html");
+app.MapVmsShellFallbackToFile("index.html");
 
 app.Run();

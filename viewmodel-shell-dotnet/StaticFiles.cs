@@ -31,6 +31,7 @@
 namespace ViewModelShell;
 
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.StaticFiles;
 
 public static class VmsStaticFilesExtensions
@@ -100,5 +101,41 @@ public static class VmsStaticFilesExtensions
             }
         };
         return app.UseStaticFiles(options);
+    }
+
+    /// <summary>
+    /// Drop-in replacement for <c>endpoints.MapFallbackToFile(filePath)</c> that stamps
+    /// <c>Cache-Control: no-cache, must-revalidate</c> on the response — same header
+    /// treatment <see cref="UseVmsShellStaticFiles"/> gives to the shell HTML when served
+    /// through StaticFilesMiddleware. This is the SECOND half of the "revalidate the shell
+    /// on every load" contract: the fallback endpoint serves the shell HTML on any request
+    /// whose URL doesn't match a physical file (e.g. bare <c>/</c> and every SPA client
+    /// route), and it does so through its OWN internal file-sending pipeline that BYPASSES
+    /// StaticFilesMiddleware entirely — so the <see cref="UseVmsShellStaticFiles"/>
+    /// OnPrepareResponse never fires for the default-document case. Ship this helper on
+    /// EVERY app that uses <c>MapFallbackToFile</c> for its SPA shell, alongside the
+    /// <see cref="UseVmsShellStaticFiles"/> call. 6.7.1 fix; the prod-bug repro that
+    /// motivated it: a fresh deploy landed, Ashley loaded the site's root URL and got
+    /// yesterday's bundle because <c>MapFallbackToFile</c> served a heuristic-cached
+    /// <c>index.html</c> with NO Cache-Control header (Poppy 20 Jul 2026).
+    /// </summary>
+    /// <param name="endpoints">The endpoint route builder (typically <c>app</c> in Program.cs).</param>
+    /// <param name="filePath">
+    /// The file to serve as the SPA-shell fallback (typically <c>"index.html"</c>). Same
+    /// contract as <see cref="FallbackEndpointRouteBuilderExtensions.MapFallbackToFile(IEndpointRouteBuilder,string)"/>.
+    /// </param>
+    /// <returns>An <see cref="IEndpointConventionBuilder"/> for further endpoint configuration.</returns>
+    public static IEndpointConventionBuilder MapVmsShellFallbackToFile(
+        this IEndpointRouteBuilder endpoints,
+        string filePath)
+    {
+        var options = new StaticFileOptions
+        {
+            OnPrepareResponse = ctx =>
+            {
+                ctx.Context.Response.Headers.CacheControl = NoCacheValue;
+            }
+        };
+        return endpoints.MapFallbackToFile(filePath, options);
     }
 }

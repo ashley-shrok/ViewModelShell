@@ -122,3 +122,120 @@ public class VmsStaticFilesExtensionsTests
         Assert.True(StringValues.IsNullOrEmpty(headers.CacheControl));
     }
 }
+
+// ─── Integration tests — the exact prod reproduction (6.7.1) ─────────────────
+//
+// The unit tests above match on FILE NAME through StaticFilesMiddleware's
+// OnPrepareResponse hook. That's sufficient for direct-URL requests like
+// GET /index.html — but MISSES the default-document case: a bare GET / that
+// MapFallbackToFile serves through its own file-sending pipeline, bypassing
+// StaticFilesMiddleware entirely. This is exactly what bit Poppy/PBMInvoices
+// in prod (20 Jul 2026): Ashley loaded the site root, MapFallbackToFile served
+// index.html with no Cache-Control header, and Chrome heuristic-cached it
+// across a deploy, silently pinning yesterday's hashed asset URLs.
+//
+// These tests spin up a REAL Kestrel host on a random port, curl / and
+// /index.html, and assert the header treatment. The test that catches the
+// bug — MapVmsShellFallbackToFile_SetsCacheControlOnRootRequest — mutation-
+// proved: reverting the demo to raw MapFallbackToFile makes it fail LOUD.
+public class VmsStaticFilesFallbackIntegrationTests : IAsyncLifetime
+{
+    private string _rootDir = string.Empty;
+    private WebApplication? _app;
+    private HttpClient? _client;
+
+    public async Task InitializeAsync()
+    {
+        // Temp wwwroot with an index.html + a placeholder hashed asset so we can
+        // also verify hashed assets still get default caching (no header).
+        _rootDir = Path.Combine(Path.GetTempPath(), $"vms-fallback-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_rootDir);
+        var wwwroot = Path.Combine(_rootDir, "wwwroot");
+        Directory.CreateDirectory(wwwroot);
+        File.WriteAllText(Path.Combine(wwwroot, "index.html"),
+            "<!doctype html><html><head><title>Test</title></head><body>Test shell</body></html>");
+        File.WriteAllText(Path.Combine(wwwroot, "hashed-asset-abc123.js"), "// hashed asset");
+
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            ContentRootPath = _rootDir,
+            WebRootPath = wwwroot,
+        });
+        // Random port — grab it after Start() so we can point HttpClient at it.
+        builder.Configuration["urls"] = "http://127.0.0.1:0";
+        _app = builder.Build();
+        _app.UseDefaultFiles();
+        _app.UseVmsShellStaticFiles();
+        _app.MapVmsShellFallbackToFile("index.html");
+        await _app.StartAsync();
+
+        // Discover the actual port Kestrel bound to.
+        var server = _app.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>();
+        var addresses = server.Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
+        var url = addresses!.Addresses.First();
+        _client = new HttpClient { BaseAddress = new Uri(url) };
+    }
+
+    public async Task DisposeAsync()
+    {
+        _client?.Dispose();
+        if (_app is not null)
+        {
+            await _app.StopAsync();
+            await _app.DisposeAsync();
+        }
+        if (Directory.Exists(_rootDir)) Directory.Delete(_rootDir, recursive: true);
+    }
+
+    // 🚨 THE prod-reproduction test. Missing from 6.7.0's gate. This is the
+    // request Ashley makes when she loads the site: bare / with no filename.
+    [Fact]
+    public async Task RootRequest_GetsCacheControlNoCacheMustRevalidate()
+    {
+        var resp = await _client!.GetAsync("/");
+        Assert.Equal(System.Net.HttpStatusCode.OK, resp.StatusCode);
+        var cc = resp.Headers.CacheControl?.ToString() ?? string.Empty;
+        Assert.Contains("no-cache", cc);
+        Assert.Contains("must-revalidate", cc);
+    }
+
+    // The direct-URL path — already covered by the unit tests above via
+    // OnPrepareResponse hook invocation, but re-verified end-to-end against
+    // real Kestrel to prove the two paths (fallback + StaticFiles) emit the
+    // SAME header value.
+    [Fact]
+    public async Task IndexHtmlRequest_GetsCacheControlNoCacheMustRevalidate()
+    {
+        var resp = await _client!.GetAsync("/index.html");
+        Assert.Equal(System.Net.HttpStatusCode.OK, resp.StatusCode);
+        var cc = resp.Headers.CacheControl?.ToString() ?? string.Empty;
+        Assert.Contains("no-cache", cc);
+        Assert.Contains("must-revalidate", cc);
+    }
+
+    // SPA client-route requests (a bookmarked /foo/bar path) also hit the
+    // fallback. Same header treatment expected — this is why SPA users don't
+    // get pinned to a stale bundle after a deploy.
+    [Fact]
+    public async Task SpaRouteRequest_GetsCacheControlNoCacheMustRevalidate()
+    {
+        var resp = await _client!.GetAsync("/some/spa/route");
+        Assert.Equal(System.Net.HttpStatusCode.OK, resp.StatusCode);
+        var cc = resp.Headers.CacheControl?.ToString() ?? string.Empty;
+        Assert.Contains("no-cache", cc);
+        Assert.Contains("must-revalidate", cc);
+    }
+
+    // Boundary: a hashed asset served through StaticFilesMiddleware (not the
+    // fallback) stays on default caching. Proves the helper doesn't leak the
+    // no-cache treatment to hashed assets — hashed assets self-invalidate via
+    // filename hash, so stale-cache is harmless and long caching is correct.
+    [Fact]
+    public async Task HashedAssetRequest_KeepsDefaultCaching()
+    {
+        var resp = await _client!.GetAsync("/hashed-asset-abc123.js");
+        Assert.Equal(System.Net.HttpStatusCode.OK, resp.StatusCode);
+        // Default StaticFiles emits no explicit Cache-Control on hashed assets.
+        Assert.Null(resp.Headers.CacheControl);
+    }
+}

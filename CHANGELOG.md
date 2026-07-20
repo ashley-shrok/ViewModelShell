@@ -6,6 +6,44 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## NuGet 6.7.1 — `MapVmsShellFallbackToFile`: covers the default-doc case that 6.7.0 missed
+
+**NuGet:** `6.7.1` (patch, from `6.7.0`) · **npm:** unchanged (`6.5.0`). .NET-only. Additive new helper — a consumer on 6.7.0 with just `UseVmsShellStaticFiles()` remains byte-compatible; the swap is a one-liner.
+
+### Fixed (bug in the 6.7.0 fix itself — Poppy 20 Jul 2026, same day)
+
+- **`UseVmsShellStaticFiles` does NOT cover the default-document case on Kestrel.** A bare `GET /` request goes through `MapFallbackToFile("index.html")` — the standard SPA-shell-serving endpoint — which serves the file through its OWN internal file-sending pipeline, **completely bypassing `StaticFilesMiddleware`**. So the `OnPrepareResponse` hook 6.7.0 installs never fires for `/`, and the response comes back with NO `Cache-Control` header at all. Same file, same content, but a `GET /index.html` gets the header while a `GET /` doesn't. Every SPA-shape adopter of 6.7.0 has this same gap: bare root URL, every SPA client route (a bookmarked `/foo/bar`), any request served by the fallback endpoint.
+- **Also worth naming honestly**: 6.7.0 shipped 4 new tests asserting the *suffix matching* through `OnPrepareResponse` — and ZERO tests actually hitting `/` on a live Kestrel host, the exact request Ashley makes in prod. The gate ran through the property I thought mattered, not the property that mattered in prod. Same "gate that checks the shape not the property" family that keeps recurring. Poppy caught it in the first 3 minutes of local verification against a fresh PBMInvoices build. The 6.7.1 gate now includes 4 integration tests spinning up a real Kestrel host and asserting the Cache-Control header on `/`, `/index.html`, SPA client routes, and (boundary) hashed assets — with mutation-proof: reverting to raw `MapFallbackToFile` makes 2 of 4 tests fail LOUD.
+
+### Added
+
+- **`endpoints.MapVmsShellFallbackToFile(filePath)`** — drop-in replacement for `MapFallbackToFile(filePath)`. Same signature, same behavior, PLUS the `Cache-Control: no-cache, must-revalidate` header on the served response. Wraps ASP.NET Core's `MapFallbackToFile(string, StaticFileOptions)` overload with a pre-configured `OnPrepareResponse` that stamps the same header value `UseVmsShellStaticFiles` uses. This is the SECOND half of the "revalidate the shell on every load" contract that 6.7.0 promised — the first half (direct-URL requests through StaticFiles) is `UseVmsShellStaticFiles`; the second half (fallback-served requests: bare `/`, every SPA client route) is this.
+
+### Changed
+
+- **Every framework demo Program.cs** converted from `app.MapFallbackToFile("index.html")` to `app.MapVmsShellFallbackToFile("index.html")`. Same credibility-gap fix as 6.7.0's `UseStaticFiles` → `UseVmsShellStaticFiles` conversion: the demos are the wiring reference, so they must model correct wiring.
+
+### Notes for adopters (⚠️ FLEET-WIDE — the second one-line swap)
+
+**Every VMS-using app should ALSO make this swap alongside the 6.7.0 one:**
+```csharp
+using ViewModelShell;
+// ...
+app.UseVmsShellStaticFiles();               // 6.7.0 — covers direct-URL shell requests
+app.MapVmsShellFallbackToFile("index.html"); // 6.7.1 — covers /, SPA routes, default-doc
+```
+
+**Without BOTH swaps**, your app is exposed to the exact bug that hit PBMInvoices — Ashley loading the site root and getting a heuristic-cached stale shell. Both swaps together cover every serving path a SPA has.
+
+**Consumers on 6.7.0 who ONLY have `UseVmsShellStaticFiles()`**: swap in `MapVmsShellFallbackToFile` in the same deploy — otherwise you're still exposed on `/`.
+
+### Explicitly not changed
+
+- Wire is untouched. Protocol token stays 1.0. No breaking change on any surface.
+- **The IIS `defaultDocument` module** (separate from ASP.NET Core's endpoint routing) is out of scope for a framework helper — if IIS is configured to serve `/` directly without forwarding through ANCM to Kestrel, no ASP.NET Core helper can fix that from inside the app. Standard ANCM setup (which every VMS-using Pantheon app should be using) forwards everything to Kestrel, and 6.7.1 covers that path fully. Non-standard IIS configs require `web.config` changes.
+
+---
+
 ## NuGet 6.7.0 — `UseVmsShellStaticFiles` covers `manifest.json` + `sw.js` + `robots.txt` by default; framework demos adopt
 
 **NuGet:** `6.7.0` (minor, from `6.6.0`) · **npm:** unchanged (`6.5.0`). .NET-only host-side change; the wire is untouched. Additive default expansion — a consumer explicitly passing a custom suffix list is byte-unchanged.

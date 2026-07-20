@@ -10,6 +10,6 @@ var app     = builder.Build();
 app.UseDefaultFiles();
 app.UseVmsShellStaticFiles();
 
-app.MapFallbackToFile("index.html");
+app.MapVmsShellFallbackToFile("index.html");
 
 app.Run();
