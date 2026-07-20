@@ -29,7 +29,7 @@ builder.Services.AddSingleton(_ => new HelpDeskDb($"Data Source={dbPath}"));
 var app = builder.Build();
 
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseVmsShellStaticFiles();
 
 app.MapControllers();
 

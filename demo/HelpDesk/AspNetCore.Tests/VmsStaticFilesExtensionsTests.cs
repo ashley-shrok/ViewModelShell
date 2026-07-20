@@ -41,11 +41,46 @@ public class VmsStaticFilesExtensionsTests
         return http.Response.Headers;
     }
 
+    // 6.7.0 — the emitted Cache-Control is `no-cache, must-revalidate` (was
+    // just `no-cache` in 1.8.0). Kept as a constant so every assertion below
+    // fails LOUDLY if the header value regresses — mutation-proof: change the
+    // constant and the whole suite goes red.
+    private const string ExpectedNoCache = "no-cache, must-revalidate";
+
     [Fact]
     public void ShellHtml_GetsNoCache()
     {
         var headers = HeadersFor(Install(new StaticFileOptions()), "index.html");
-        Assert.Equal("no-cache", headers.CacheControl.ToString());
+        Assert.Equal(ExpectedNoCache, headers.CacheControl.ToString());
+    }
+
+    // 6.7.0 broadens defaults: manifest.json, sw.js, robots.txt now covered.
+    // Each test intentionally SEPARATE (not a Theory) so a regression on one
+    // file type reads as a specific failure, not a parameter-tuple.
+
+    [Fact]
+    public void ManifestJson_GetsNoCache_ByDefault()
+    {
+        // The precise bite from the 20 Jul 2026 PBMInvoices prod bug: Chrome
+        // heuristic-cached the manifest across a deploy and pinned yesterday's
+        // hashed asset URLs. Default coverage of manifest.json is what closes
+        // it — an adopter with default suffixes should NOT need to remember.
+        var headers = HeadersFor(Install(new StaticFileOptions()), "manifest.json");
+        Assert.Equal(ExpectedNoCache, headers.CacheControl.ToString());
+    }
+
+    [Fact]
+    public void ServiceWorker_GetsNoCache_ByDefault()
+    {
+        var headers = HeadersFor(Install(new StaticFileOptions()), "sw.js");
+        Assert.Equal(ExpectedNoCache, headers.CacheControl.ToString());
+    }
+
+    [Fact]
+    public void RobotsTxt_GetsNoCache_ByDefault()
+    {
+        var headers = HeadersFor(Install(new StaticFileOptions()), "robots.txt");
+        Assert.Equal(ExpectedNoCache, headers.CacheControl.ToString());
     }
 
     [Fact]
@@ -61,17 +96,29 @@ public class VmsStaticFilesExtensionsTests
         var priorRan = false;
         var options = new StaticFileOptions { OnPrepareResponse = _ => priorRan = true };
         var headers = HeadersFor(Install(options), "chat.html");
-        Assert.True(priorRan);                                       // caller's hook still fires
-        Assert.Equal("no-cache", headers.CacheControl.ToString());   // and our rule applied on top
+        Assert.True(priorRan);                                        // caller's hook still fires
+        Assert.Equal(ExpectedNoCache, headers.CacheControl.ToString()); // and our rule applied on top
     }
 
     [Fact]
     public void CustomSuffixes_OverrideTheDefault()
     {
         var onPrepare = Install(new StaticFileOptions(), new[] { "sw.js", "config.json" });
-        Assert.Equal("no-cache", HeadersFor(onPrepare, "sw.js").CacheControl.ToString());
-        Assert.Equal("no-cache", HeadersFor(onPrepare, "config.json").CacheControl.ToString());
+        Assert.Equal(ExpectedNoCache, HeadersFor(onPrepare, "sw.js").CacheControl.ToString());
+        Assert.Equal(ExpectedNoCache, HeadersFor(onPrepare, "config.json").CacheControl.ToString());
         // .html is not in the custom list, so it no longer gets no-cache
         Assert.True(StringValues.IsNullOrEmpty(HeadersFor(onPrepare, "index.html").CacheControl));
+        // Neither is manifest.json — an explicit custom list REPLACES the default set.
+        Assert.True(StringValues.IsNullOrEmpty(HeadersFor(onPrepare, "manifest.json").CacheControl));
+    }
+
+    [Fact]
+    public void UnknownStableFile_GetsDefaultCaching()
+    {
+        // A file not in the default suffix set (e.g. .txt that's not robots.txt)
+        // stays on default caching. Documents the boundary of what the helper
+        // covers vs what a consumer must add to a custom suffix list.
+        var headers = HeadersFor(Install(new StaticFileOptions()), "notes.txt");
+        Assert.True(StringValues.IsNullOrEmpty(headers.CacheControl));
     }
 }

@@ -6,6 +6,38 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## NuGet 6.7.0 — `UseVmsShellStaticFiles` covers `manifest.json` + `sw.js` + `robots.txt` by default; framework demos adopt
+
+**NuGet:** `6.7.0` (minor, from `6.6.0`) · **npm:** unchanged (`6.5.0`). .NET-only host-side change; the wire is untouched. Additive default expansion — a consumer explicitly passing a custom suffix list is byte-unchanged.
+
+### Fixed (prod bug — Ashley 20 Jul 2026)
+
+- **Stale-shell-on-deploy on PBMInvoices.** Ashley loaded `aithercloud.com/pbminvoices/` the morning of a fresh deploy and got yesterday's bundle. Root cause: `manifest.json` had no `Cache-Control` header at all, so Chrome fell back to heuristic freshness — `(now − last-modified) × 0.1` — and reused the cached manifest referencing yesterday's hashed asset URLs. Hard-refresh (Ctrl-Shift-R) was the workaround. `ETag` alone doesn't save a resource the browser never revalidates, and the `.html` shell is only half the surface — the PWA manifest silently pins the same old bundle if it isn't also revalidated.
+- **Diagnosis:** the primitive that was supposed to solve this class permanently (`UseVmsShellStaticFiles`, shipped 1.8.0) had two real gaps: **(1)** its default suffix list was `[".html"]`, so `manifest.json` / `sw.js` / `robots.txt` weren't covered even on adopters; **(2)** it was OPT-IN, and the framework's OWN demos (HelpDesk, Tasks, ContactManager, ExpenseTracker, RetroBoard, Showcase) all used raw `app.UseStaticFiles()` — so a consumer copying from the demos wired it exactly the way that just bit prod. Adoption failure was on the framework, not on the consuming app.
+
+### Changed
+
+- **`DefaultNoCacheSuffixes` broadened** from `[".html"]` to `[".html", "manifest.json", "sw.js", "robots.txt"]`. All four are stable-URL non-hashed SPA-shell files where a heuristic-cached copy silently pins the old bundle across a deploy. Hashed assets (`/assets/*-[hash].js`, `.css`) keep default caching — a stale cached asset is harmless because the new build references a new filename.
+- **Cache-Control value** changed from `no-cache` to `no-cache, must-revalidate`. `no-cache` alone already means "revalidate on every request," but some older proxies interpret them differently — `must-revalidate` is defense-in-depth. Composable and industry-standard.
+- **Every framework demo Program.cs** (HelpDesk, Tasks, ContactManager, ExpenseTracker, RetroBoard, Showcase) converted from `app.UseStaticFiles()` to `app.UseVmsShellStaticFiles()`. Closes the "framework's own demos don't use the primitive it ships" credibility gap so consumers copy the correct wiring.
+
+### Explicitly not changed
+
+- **No `immutable` on hashed assets.** The design comment in `StaticFiles.cs` flags this as fragile-to-detect (there's no reliable way to identify a hashed filename cross-toolchain), and hashed-asset caching isn't the correctness bug — the stale shell IS. Optimization ≠ correctness; scope discipline.
+
+### Notes for adopters (⚠️ FLEET-WIDE, every VMS-using app)
+
+- **Every consuming app should now call `app.UseVmsShellStaticFiles()` instead of `app.UseStaticFiles()`.** One-line change:
+  ```csharp
+  using ViewModelShell;
+  // ...
+  app.UseVmsShellStaticFiles();  // was: app.UseStaticFiles();
+  ```
+- Consumers **already** on 6.7.0 and calling `UseVmsShellStaticFiles()` with no custom suffix list **automatically pick up the new default coverage** (`manifest.json` etc.) on the next deploy — no code change needed.
+- Consumers passing a **custom** `noCacheSuffixes` list are byte-unchanged (custom overrides default entirely — the existing 1.8.0 contract). Add any missing suffixes to your list.
+
+---
+
 ## npm 6.5.0 / NuGet 6.6.0 — `DiffNode`: aligned before/after primitive
 
 **npm:** `6.5.0` (minor, from `6.4.0`) · **NuGet:** `6.6.0` (minor, from `6.5.0`). New wire node type — additive on both sides (old apps/agents unaffected; wire protocol token stays `viewmodel-shell/1.0`).

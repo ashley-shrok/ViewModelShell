@@ -1,3 +1,5 @@
+using ViewModelShell;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers(options =>
@@ -19,7 +21,7 @@ builder.Services.AddControllers(options =>
 var app = builder.Build();
 
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseVmsShellStaticFiles();
 
 app.MapControllers();
 
