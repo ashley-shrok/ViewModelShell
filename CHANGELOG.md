@@ -6,6 +6,23 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 6.8.0 — table select-all replays the per-row checkbox action
+
+**npm:** `6.8.0` (minor, from `6.5.0`) · **NuGet:** unchanged (`6.7.1`). Client renderer only — no wire-format change, no `.NET` change. Additive and backwards-compatible: a table whose row checkboxes carry no `action` behaves exactly as before. npm skips `6.6.0`/`6.7.0`/`6.7.1` (consumed by NuGet-side releases on the shared version line); the frontend now leads the backend, the safe asymmetry direction.
+
+### Fixed (consumer-driven — Poppy/PBMInvoices, 20 Jul 2026)
+
+- **The framework-owned header "select all" checkbox wrote the per-row binds but never dispatched**, so a consumer whose per-row `CheckboxNode` carries an `action` (the live-server-side selection pattern — each toggle dispatches so the server tracks a `SelectedMap` and re-renders bulk-button availability + a selected-stats row) saw select-all tick every box while the server-driven view went **stale** until some other action fired. Individual toggles dispatched N times; select-all dispatched zero. Ashley hit it in PBMInvoices prod UAT: select-all "didn't do what clicking rows one-by-one does."
+- **Root: an asymmetry, not a missing seam.** A per-row checkbox toggle writes its bind AND dispatches its `action`; the header select-all did only the bind-write half. Now, after writing every rendered row's bind, select-all **replays each checkbox's own `action`** — behaviorally identical to the user clicking each row by hand (same actions, same order, same blocking/coalescing). A checkbox with **no** `action` still dispatches nothing, so the pure client-harvest model (selection stays client-side until a bulk-button harvest) is untouched.
+- **Not the removed 0.15.0 `selection.action` seam.** That was the framework's *own* per-toggle seam racing with no coalescing loop. This reuses `CheckboxNode.action` — a shipped, app-declared capability — plus the non-blocking latest-wins loop (added post-0.15.0), and **never forces a dispatch semantic**: the replayed dispatch inherits the checkbox's own `blocking` choice. For the non-blocking selection-tracking pattern the coalescing loop collapses the burst to one server recompute; the app owns what a burst means, exactly as it already must for rapid manual clicking.
+
+### Notes for adopters
+
+- **No action needed if your table checkboxes have no `action`** (the pure client-harvest / `selection.buttons[]` bulk model) — behavior is byte-identical.
+- **If your per-row checkboxes carry an `action`** to track selection server-side, select-all now fires it just like individual toggles do — the stale-until-you-click-a-row drift is gone. Nothing to change in your code; upgrade the renderer.
+
+---
+
 ## NuGet 6.7.1 — `MapVmsShellFallbackToFile`: covers the default-doc case that 6.7.0 missed
 
 **NuGet:** `6.7.1` (patch, from `6.7.0`) · **npm:** unchanged (`6.5.0`). .NET-only. Additive new helper — a consumer on 6.7.0 with just `UseVmsShellStaticFiles()` remains byte-compatible; the swap is a one-liner.

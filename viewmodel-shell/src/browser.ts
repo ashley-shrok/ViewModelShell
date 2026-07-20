@@ -3209,9 +3209,13 @@ export class BrowserAdapter implements Adapter {
       // filter-narrow that equals all matches; under pagination it is the current
       // page (selection accumulates via the round-tripped binds); over-cap /
       // zero-match render no rows, so the control below simply is not drawn and
-      // can never claim to select rows that are not on screen. This re-adds ONLY
-      // the DOM toggle, never the per-toggle dispatch that got the old
-      // TableNode.selection seam removed in 0.15.0.
+      // can never claim to select rows that are not on screen. It writes the binds
+      // and — for checkboxes that carry an `action` — replays each one's dispatch,
+      // so select-all does EXACTLY what clicking each row by hand does (see the
+      // change handler below). It is NOT the removed 0.15.0 selection.action seam:
+      // that was the framework's own per-toggle seam racing with no coalescing loop;
+      // this reuses CheckboxNode.action (a shipped, app-declared capability) and the
+      // v4.2 non-blocking latest-wins loop, and never forces a dispatch semantic.
       const rowCheckboxes = n.rows.flatMap(
         r => (r.actions ?? []).filter((e): e is CheckboxNode => e.type === "checkbox"),
       );
@@ -3238,6 +3242,21 @@ export class BrowserAdapter implements Adapter {
             if (rowInp) rowInp.checked = target;
           }
           inp.indeterminate = false;
+          // Select-all is N per-row toggles expressed at once: after writing every
+          // bind, replay each checkbox's OWN dispatch. Behaviorally identical to the
+          // user clicking each row by hand — same actions, same order, same blocking/
+          // coalescing — so it introduces ZERO new dispatch semantics. A checkbox with
+          // no `action` dispatches nothing, so the pure client-harvest model (selection
+          // stays client-side until a bulk-button harvest) is untouched. The app owns
+          // what a burst means: the non-blocking latest-wins loop it opted into
+          // collapses N identical dispatches to one server recompute; a blocking
+          // checkbox serializes under the dispatch guard exactly as rapid manual
+          // clicking would. (Consumer-driven — Poppy/PBMInvoices 2026-07-20: a
+          // server-tracked SelectedMap went stale on select-all because only per-row
+          // toggles dispatched, not the header box.)
+          for (const cb of rowCheckboxes) {
+            if (cb.action) on(cb.action);
+          }
         });
         lbl.appendChild(inp);
         lbl.appendChild(mark);
