@@ -919,6 +919,83 @@ public class FeatureProbeController : ControllerBase
                     Mode: "unified",
                     Header: new DiffHeader(Old: "before.txt", New: "after.txt"),
                     Id: "probe-diff-unified"),
+                // Word-level intra-line highlighting via DiffCell.Runs — the feature
+                // DiffNode v1 deferred pending the inline-rich-text question. OLD side
+                // strikes the removed word, NEW side bolds the added one. Text stays
+                // required on both (plain reading + fallback + agent-legible form).
+                new DiffNode(
+                    Rows: new DiffRow[]
+                    {
+                        new DiffRow(
+                            Old: new DiffCell("the quick brown fox", LineNumber: 1, Runs: new[]
+                            {
+                                new InlineRun("the "),
+                                new InlineRun("quick", Strike: true),
+                                new InlineRun(" brown fox"),
+                            }),
+                            New: new DiffCell("the slow brown fox", LineNumber: 1, Runs: new[]
+                            {
+                                new InlineRun("the "),
+                                new InlineRun("slow", Bold: true),
+                                new InlineRun(" brown fox"),
+                            })),
+                    },
+                    Id: "probe-diff-wordlevel"),
+            }));
+        // Inline rich text (TextNode.Runs) — byte-identical to the bun twin
+        // richTextSection. Covers the absent-vs-present matrix for every optional on
+        // InlineRun, plus the two contract cases that are DECISIONS rather than
+        // mechanics: (a) Runs OMITTED entirely, proving absent-never-null and that
+        // the pre-runs shape is byte-identical; (b) the DELIBERATE DIVERGENCE case,
+        // where Value spells the URL out while Runs carries a proper link so
+        // link-less adapters still show the target — which is exactly why value/runs
+        // equality is a documented SHOULD and not a runtime check. Shipping it here
+        // makes that decision visible in code rather than only in a comment.
+        // Nothing here is action-bearing: an InlineRun CANNOT carry an action, which
+        // is why neither backend's walker needed a new arm. That is the point.
+        pageChildren.Add(new SectionNode(
+            Heading: "Inline rich text",
+            Variant: SectionVariant.Card,
+            Children: new ViewNode[]
+            {
+                // Runs OMITTED — absent on the wire, not null.
+                new TextNode("Plain paragraph — runs omitted entirely."),
+                // The full matrix, in order: bare run (all optionals absent), bold,
+                // italic, code, strike, all-four-combined, href WITHOUT external,
+                // href WITH external. FromRuns derives Value from the run texts.
+                TextNode.FromRuns(new[]
+                {
+                    new InlineRun("plain "),
+                    new InlineRun("bold", Bold: true),
+                    new InlineRun(" "),
+                    new InlineRun("italic", Italic: true),
+                    new InlineRun(" "),
+                    new InlineRun("code", Code: true),
+                    new InlineRun(" "),
+                    new InlineRun("struck", Strike: true),
+                    new InlineRun(" "),
+                    new InlineRun("everything", Bold: true, Italic: true, Code: true, Strike: true),
+                    new InlineRun(" "),
+                    new InlineRun("link", Href: "https://example.com/docs"),
+                    new InlineRun(" "),
+                    new InlineRun("external", Href: "https://example.com/out", External: true),
+                }),
+                // Adjacent runs sharing an identical Href — the renderer coalesces
+                // these into exactly ONE anchor (one tab stop, one SR announcement).
+                TextNode.FromRuns(new[]
+                {
+                    new InlineRun("see ", Href: "https://example.com/docs"),
+                    new InlineRun("the docs", Href: "https://example.com/docs", Bold: true),
+                    new InlineRun(" now", Href: "https://example.com/docs"),
+                }),
+                // DELIBERATE DIVERGENCE — Value spells the URL out; Runs carry the
+                // link. Built via the primary constructor, NOT FromRuns, precisely
+                // because the two readings are intended to differ here.
+                new TextNode("Docs: https://example.com/docs", Runs: new[]
+                {
+                    new InlineRun("Docs: "),
+                    new InlineRun("the docs", Href: "https://example.com/docs"),
+                }),
             }));
         pageChildren.Add(new SectionNode(
             Heading: "Lookup field",

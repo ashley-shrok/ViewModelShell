@@ -15,7 +15,7 @@ import type {
   ViewNode, ActionEvent, Adapter, StateAccess,
   PageNode, SectionNode, ListNode, ListItemNode,
   FormNode, FieldNode, CheckboxNode, ButtonNode,
-  TextNode, LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
+  TextNode, InlineRun, LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
   ModalNode, TableNode, CopyButtonNode, DividerNode, FitsNode,
   EmptyStateNode, BadgeNode, ChartNode,
   BreadcrumbNode, StepsNode, TrackerNode, DiffNode,
@@ -3011,8 +3011,68 @@ export class BrowserAdapter implements Adapter {
   private text(n: TextNode, parent: HTMLElement): void {
     const el = document.createElement(n.style === "pre" ? "pre" : "span");
     el.className = `vms-text${n.style ? ` vms-text--${n.style}` : ""}${n.tone ? ` vms-text--${n.tone}` : ""}`;
-    el.textContent = n.value;
+    // runs present => draw runs INSTEAD of value. Absent => byte-identical to the
+    // pre-runs rendering (a single text node), so every existing consumer is
+    // untouched. The rule is unconditional, so a value/runs mismatch is never
+    // ambiguous — see TextNode.value's TSDoc for why it isn't validated.
+    if (n.runs && n.runs.length > 0) this.inlineRuns(n.runs, el);
+    else el.textContent = n.value;
     parent.appendChild(el);
+  }
+
+  /** Render a flat inline-run list into `parent`. Two responsibilities:
+   *  (1) COALESCE adjacent runs sharing an identical href+external into ONE
+   *      anchor — otherwise "a link containing a bold word" renders as two
+   *      anchors, i.e. two tab stops and two screen-reader link announcements.
+   *  (2) Delegate per-run emphasis to `inlineEmphasis`, which nests in a FIXED
+   *      order so the same input always yields byte-identical DOM.
+   *  All text lands via createTextNode/textContent — never innerHTML. */
+  private inlineRuns(runs: InlineRun[], parent: HTMLElement): void {
+    let i = 0;
+    while (i < runs.length) {
+      const href = runs[i].href;
+      if (href === undefined) {
+        this.inlineEmphasis(runs[i], parent);
+        i++;
+        continue;
+      }
+      const external = runs[i].external === true;
+      const a = document.createElement("a");
+      a.className = "vms-text__link";
+      a.href = href;
+      if (external) {
+        // Identical to link() — kept byte-for-byte so the standalone and inline
+        // link paths cannot drift (the submitButton divergence lesson).
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+      }
+      // Absorb every adjacent run pointing at the same target.
+      while (i < runs.length && runs[i].href === href && (runs[i].external === true) === external) {
+        this.inlineEmphasis(runs[i], a);
+        i++;
+      }
+      parent.appendChild(a);
+    }
+  }
+
+  /** Wrap one run's text in its emphasis elements, innermost → outermost in a
+   *  FIXED order (code, strike, italic, bold) so nesting is deterministic and the
+   *  DOM is diffable. A run with no flags appends a BARE text node — no wrapper
+   *  span — so `runs:[{text:"hi"}]` renders exactly like `value:"hi"`. */
+  private inlineEmphasis(run: InlineRun, parent: HTMLElement | HTMLAnchorElement): void {
+    let node: Node = document.createTextNode(run.text);
+    if (run.code) node = this.wrapRun("code", "vms-text__code", node);
+    if (run.strike) node = this.wrapRun("s", "vms-text__strike", node);
+    if (run.italic) node = this.wrapRun("em", "vms-text__em", node);
+    if (run.bold) node = this.wrapRun("strong", "vms-text__strong", node);
+    parent.appendChild(node);
+  }
+
+  private wrapRun(tag: string, className: string, child: Node): HTMLElement {
+    const el = document.createElement(tag);
+    el.className = className;
+    el.appendChild(child);
+    return el;
   }
 
   private link(n: LinkNode, parent: HTMLElement): void {
@@ -3887,25 +3947,25 @@ export class BrowserAdapter implements Adapter {
 
       if (mode === "side-by-side") {
         this._diffCell(root, oldCell?.lineNumber, kindOld, true, "old");
-        this._diffCell(root, oldCell?.text, kindOld, false, "old");
+        this._diffCell(root, oldCell?.text, kindOld, false, "old", oldCell?.runs);
         this._diffCell(root, newCell?.lineNumber, kindNew, true, "new");
-        this._diffCell(root, newCell?.text, kindNew, false, "new");
+        this._diffCell(root, newCell?.text, kindNew, false, "new", newCell?.runs);
       } else {
         // Unified: context = one visual row; change = a remove row then an add row.
         if (kindOld === "context") {
           this._diffCell(root, oldCell?.lineNumber, "context", true, "old");
           this._diffCell(root, newCell?.lineNumber, "context", true, "new");
-          this._diffCell(root, oldCell?.text, "context", false, "old");
+          this._diffCell(root, oldCell?.text, "context", false, "old", oldCell?.runs);
         } else {
           if (oldCell !== null) {
             this._diffCell(root, oldCell?.lineNumber, "remove", true, "old");
             this._diffCell(root, "", "remove", true, "new");
-            this._diffCell(root, oldCell?.text, "remove", false, "old");
+            this._diffCell(root, oldCell?.text, "remove", false, "old", oldCell?.runs);
           }
           if (newCell !== null) {
             this._diffCell(root, "", "add", true, "old");
             this._diffCell(root, newCell?.lineNumber, "add", true, "new");
-            this._diffCell(root, newCell?.text, "add", false, "new");
+            this._diffCell(root, newCell?.text, "add", false, "new", newCell?.runs);
           }
         }
       }
@@ -3919,6 +3979,10 @@ export class BrowserAdapter implements Adapter {
     kind: "empty" | "add" | "remove" | "context",
     isLinenum: boolean,
     side: "old" | "new",
+    // Optional word-level inline runs (DiffCell.runs). Same contract as
+    // TextNode: present ⇒ drawn INSTEAD of `content`. Never passed for linenum
+    // gutter cells, which are numeric and aria-hidden.
+    runs?: InlineRun[],
   ): void {
     const el = document.createElement("div");
     const parts = ["vms-diff__cell", `vms-diff__cell--${kind}`];
@@ -3930,7 +3994,8 @@ export class BrowserAdapter implements Adapter {
       el.setAttribute("aria-hidden", "true");
     }
     el.className = parts.join(" ");
-    el.textContent = content == null ? "" : String(content);
+    if (runs && runs.length > 0) this.inlineRuns(runs, el);
+    else el.textContent = content == null ? "" : String(content);
     parent.appendChild(el);
   }
 }

@@ -847,6 +847,89 @@ function buildVm(state: FeatureProbeState): ViewNode {
           { old: { text: "gone", lineNumber: 2 } },                            // pure remove — `new` omitted
         ],
       },
+      // Word-level intra-line highlighting via DiffCell.runs — the feature
+      // DiffNode v1 deferred pending the inline-rich-text question. The OLD side
+      // strikes the removed word, the NEW side bolds the added one. `text` stays
+      // required on both (plain reading + fallback + agent-legible form).
+      {
+        type: "diff",
+        id: "probe-diff-wordlevel",
+        rows: [
+          {
+            old: {
+              text: "the quick brown fox",
+              lineNumber: 1,
+              runs: [{ text: "the " }, { text: "quick", strike: true }, { text: " brown fox" }],
+            },
+            new: {
+              text: "the slow brown fox",
+              lineNumber: 1,
+              runs: [{ text: "the " }, { text: "slow", bold: true }, { text: " brown fox" }],
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  // ── Inline rich text (TextNode.runs) ──
+  // Covers the absent-vs-present matrix for every optional on InlineRun, plus the
+  // two contract cases that are decisions rather than mechanics:
+  //   • runs OMITTED entirely  → proves absent-never-null and that the pre-runs
+  //     shape is byte-identical.
+  //   • the DELIBERATE DIVERGENCE case → `value` spells the URL out while `runs`
+  //     carries a proper link, so link-less adapters still show the target. This
+  //     is exactly why value/runs equality is a documented SHOULD and not a
+  //     runtime check; shipping it in the reference app makes that decision
+  //     visible in code rather than only in a comment.
+  // Nothing here is action-bearing — an InlineRun CANNOT carry an action, which
+  // is why neither backend's walker needed a new arm. That is the point.
+  const richTextSection: ViewNode = {
+    type: "section",
+    heading: "Inline rich text",
+    variant: "card",
+    children: [
+      // runs OMITTED — absent on the wire, not null.
+      { type: "text", value: "Plain paragraph — runs omitted entirely." },
+      // The full matrix, in order: bare run (all optionals absent), bold, italic,
+      // code, strike, all-four-combined, href WITHOUT external, href WITH external.
+      {
+        type: "text",
+        value: "plain bold italic code struck everything link external",
+        runs: [
+          { text: "plain " },
+          { text: "bold", bold: true },
+          { text: " " },
+          { text: "italic", italic: true },
+          { text: " " },
+          { text: "code", code: true },
+          { text: " " },
+          { text: "struck", strike: true },
+          { text: " " },
+          { text: "everything", bold: true, italic: true, code: true, strike: true },
+          { text: " " },
+          { text: "link", href: "https://example.com/docs" },
+          { text: " " },
+          { text: "external", href: "https://example.com/out", external: true },
+        ],
+      },
+      // Adjacent runs sharing an identical href — the renderer coalesces these
+      // into exactly ONE anchor (one tab stop, one screen-reader announcement).
+      {
+        type: "text",
+        value: "see the docs now",
+        runs: [
+          { text: "see ", href: "https://example.com/docs" },
+          { text: "the docs", href: "https://example.com/docs", bold: true },
+          { text: " now", href: "https://example.com/docs" },
+        ],
+      },
+      // DELIBERATE DIVERGENCE — value spells the URL out; runs carry the link.
+      {
+        type: "text",
+        value: "Docs: https://example.com/docs",
+        runs: [{ text: "Docs: " }, { text: "the docs", href: "https://example.com/docs" }],
+      },
     ],
   };
 
@@ -938,6 +1021,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       navSection,
       trackerSection,
       diffSection,
+      richTextSection,
       lookupSection,
       probeModal,
     ],

@@ -1108,15 +1108,108 @@ public record ButtonNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Confirm = null
 ) : ViewNode;
 
+/// <summary>One inline run — a contiguous piece of text inside a paragraph,
+/// carrying intra-paragraph emphasis and/or a link target. The unit of VMS's
+/// inline rich-text vocabulary (TextNode.Runs, DiffCell.Runs).
+///
+/// <para>WHY A FLAT RUN LIST, NOT A NESTED INLINE TREE: a nested model has
+/// combinatorially many encodings of one visual result (strong(em(x)) vs
+/// em(strong(x)); strong("a"),strong("b") vs strong("ab")). VMS keeps its two
+/// backends honest by STRUCTURALLY DIFFING the JSON they produce, so a model
+/// where both backends can be correct yet compare as different defeats the whole
+/// gate. Flat runs have exactly ONE encoding per result. (A nested model would
+/// also need a style-inheritance/merge rule implemented identically here and in
+/// TypeScript — two cascades diverging silently is the failure class we cannot
+/// detect.)</para>
+///
+/// <para>WHY FLAGS, NOT A MARKS ARRAY: not because an array has order (a sorted
+/// array is equally canonical). Because Href/External are already PARAMETERIZED
+/// marks in this same record, so the model is inherently a hybrid — valueless
+/// marks as flags, parameterized marks as named fields. A marks array would have
+/// to become an array of objects to carry a link target, i.e. a worse nested
+/// model. EXTENSION POLICY: a new valueless mark becomes a new bool here; a new
+/// parameterized mark becomes a named field, exactly as Href did. Another
+/// string-valued field that later wants rich text gains a SIBLING Runs field (as
+/// DiffCell did) — never a union type on the wire.</para>
+///
+/// <para>The four emphasis flags are non-nullable bool + WhenWritingDefault, so
+/// false is ABSENT on the wire and there is exactly ONE encoding of "off" —
+/// matching the TS twin, whose flags are typed literal `true` rather than
+/// `boolean` for the same reason. A bool? here would admit an explicit false,
+/// which normalize.ts does not drop and findNulls does not flag: a fresh
+/// cross-backend drift class in gotcha #8's family.</para>
+///
+/// <para>⚠️ A RUN CARRIES NO ACTION — Href only, and that is STRUCTURAL. A type
+/// needs an arm in ViewTreeValidation.Collect / WalkForSectionAction (and their
+/// TS twins) iff it holds child nodes or an ActionDescriptor. InlineRun holds
+/// NEITHER, so ZERO walker changes were needed — the requirement disappears
+/// structurally instead of having to be remembered. That matters because a
+/// missing walker arm fails SILENTLY on both backends and nothing gates walker
+/// parity (see the tracker-net-walker-gap note in Collect below). IF THIS RECORD
+/// EVER GAINS AN ACTION, BOTH WALKERS NEED AN ARM ON BOTH BACKENDS.</para></summary>
+public record InlineRun(
+    // The run's literal text. Always rendered via textContent — never as HTML.
+    string Text,
+    // Bold emphasis -> <strong class="vms-text__strong">.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Bold = false,
+    // Italic emphasis -> <em class="vms-text__em">.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Italic = false,
+    // Inline code -> <code class="vms-text__code">. A SEMANTIC run, not a font
+    // knob: for a whole monospace block use TextStyle.Pre.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Code = false,
+    // Struck text -> <s class="vms-text__strike">. Distinct from
+    // TextStyle.Strikethrough, which strikes the WHOLE node AND recolors it to the
+    // muted "done" tone; this is emphasis only and never recolors.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Strike = false,
+    // Link target -> wraps the run in <a class="vms-text__link">. Presence alone
+    // makes the run a link (shape carries the meaning; no kind discriminator).
+    // ADJACENT runs with an IDENTICAL Href + External coalesce into exactly ONE
+    // anchor, so "a link containing a bold word" is not two tab stops.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Href = null,
+    // true = open outside the current app context. Only meaningful with Href.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool External = false
+);
+
 public record TextNode(
+    // The plain-text reading. REQUIRED and unchanged — it is simultaneously the
+    // rendering when Runs is null, the FALLBACK for adapters that do not implement
+    // runs (the TUI renders it verbatim and needed no change), and the
+    // agent-legible form. When Runs is set, prefer TextNode.FromRuns(...) so this
+    // is DERIVED rather than typed twice. Nothing enforces the match at runtime,
+    // deliberately: enforcing it would criminalize the legitimate degradation
+    // pattern (spelling a URL out here while Runs carries a proper link), and a
+    // validator would give TextNode a walker arm on both backends — reintroducing
+    // the asymmetric-walker risk the no-actions rule eliminates. The framework's
+    // own reference usage is gated in CI (parity feature-probe fixture) instead.
     string Value,
     // Typography role only (NOT color) — emits .vms-text--{style}. Semantic color
     // moved to Tone (old "error"/"warning" style values are now Tone "danger"/"warning").
+    // Orthogonal to Runs: Style is the NODE-level typography role, Runs is
+    // intra-paragraph emphasis. With TextStyle.Pre the runs nest inside the <pre>.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TextStyle? Style = null,
     // Semantic intent/severity color — universal tone axis, orthogonal to Style.
     // Emits .vms-text--{tone}; wins over a Style color via source order.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null
-) : ViewNode;
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
+    // ⚠️ Runs is positional slot 4 — appended LAST on purpose. TextNode has ~96
+    // construction sites (max arity 3 in use), so a defaulted 4th parameter changes
+    // ZERO of them, whereas inserting it earlier would silently retype every 2- and
+    // 3-arg call. The TS twin declares `runs` before `style` for readability; JSON
+    // key ORDER is not load-bearing (the parity diff compares key sets, not order),
+    // which is what makes the two orderings safe. PASS IT BY NAME (Runs: [...]).
+    // Omit (null) for a plain paragraph — never pass an empty list, which would
+    // serialize as a present-but-empty [] and is a distinct wire state.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<InlineRun>? Runs = null
+) : ViewNode
+{
+    /// <summary>Build a TextNode from inline runs, DERIVING Value as the
+    /// concatenation of the run texts so the plain reading and the rich reading
+    /// cannot disagree. Prefer this over writing Value by hand whenever Runs is
+    /// set. (Use the primary constructor directly only for the deliberate
+    /// divergence case — e.g. spelling a URL out in Value so link-less adapters
+    /// still show the target.)</summary>
+    public static TextNode FromRuns(IReadOnlyList<InlineRun> runs, TextStyle? style = null, Tone? tone = null)
+        => new(string.Concat(runs.Select(r => r.Text)), style, tone, runs);
+}
 
 // StatItem.Value is `string` on BOTH backends by design — the TS twin narrowed
 // its `string | number` union to `string` in 6.0.0 so the two emit byte-identical
@@ -1227,7 +1320,15 @@ public record DiffHeader(string Old, string New);
 /// absent" (the null case on the parent DiffRow) carries meaning — see DiffRow.</summary>
 public record DiffCell(
     string Text,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? LineNumber = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? LineNumber = null,
+    // OPTIONAL inline runs for WORD-LEVEL intra-line highlighting — the feature
+    // DiffNode v1 deferred pending "the inline rich text architectural question",
+    // now answered. Same contract as TextNode.Runs: when present the renderer draws
+    // the runs instead of Text, and Text stays REQUIRED as the plain reading +
+    // fallback + agent-legible form. Consumers still compute the word-level diff
+    // themselves (server-computes / framework-renders) and express it as runs —
+    // typically Strike for removed words on the old side, Bold for added on the new.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<InlineRun>? Runs = null
 );
 
 /// <summary>One row of a DiffNode. Row-KIND (add / remove / context) is derived

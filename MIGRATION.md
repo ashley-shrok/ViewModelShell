@@ -6,6 +6,37 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `6.9.0` / NuGet `6.9.0` — nothing to do (additive inline rich text)
+
+**Both packages: purely additive.** Every existing `TextNode` and `DiffCell` is byte-unchanged on the wire and in the DOM. A new optional `runs` list lets a paragraph carry intra-paragraph emphasis and inline links:
+
+```csharp
+// .NET — derive Value from the runs so the plain and rich readings can't disagree
+TextNode.FromRuns(new[] {
+    new InlineRun("See the "),
+    new InlineRun("docs", Href: "https://example.com/docs", Bold: true),
+    new InlineRun(" before deploying."),
+})
+```
+
+```typescript
+// TypeScript — same idea
+richText([
+  { text: "See the " },
+  { text: "docs", href: "https://example.com/docs", bold: true },
+  { text: " before deploying." },
+])
+```
+
+⚠️ **.NET positional-slot note (the one thing to be careful about).** `TextNode.Runs` is positional **slot 4** — appended *after* `Tone` — and `DiffCell.Runs` is **slot 3**. They were appended last so that all existing positional construction sites (`new TextNode("x")`, `new TextNode("x", TextStyle.Muted)`, `new TextNode("x", TextStyle.Heading, Tone.Danger)`) compile completely unchanged; the ~96 sites across this repo needed zero edits. **Always pass `Runs` by name** (`Runs: [...]`), exactly as with `Tone:` in the 6.0.0 note below. Note the TypeScript twin declares `runs` before `style` for readability — JSON key order is not load-bearing (the parity diff compares key sets, not order), which is what makes the two orderings safe.
+
+**Two behaviours worth knowing, neither of which requires action:**
+
+- **`value` is still required, and still what non-browser adapters render.** When you set `runs`, `value` should be the concatenation of the run texts — the factories above derive it for you. Nothing enforces the match at runtime, deliberately: writing them differently is a *legitimate* pattern (e.g. spelling a URL out in `value` so an adapter that can't draw a link still shows the target). Just know that if they diverge, a browser reader and an agent/TUI reader see different text.
+- **Inline runs cannot carry an action** — `href` only. This is structural, not an oversight: it is what keeps the tree-walkers on both backends unchanged. If you need a dispatching inline element, raise it rather than working around it.
+
+---
+
 ## Upgrading to npm `6.4.0` / NuGet `6.5.0` — nothing to do (additive visible-scoped selection)
 
 **Both packages: purely additive.** Existing tables are byte-unchanged. Two new capabilities:

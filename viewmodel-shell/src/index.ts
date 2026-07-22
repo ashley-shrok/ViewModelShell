@@ -744,13 +744,158 @@ export interface ButtonNode {
   confirm?: string;
 }
 
+/** One inline run — a contiguous piece of text inside a paragraph, carrying
+ *  intra-paragraph emphasis and/or a link target. The unit of VMS's inline
+ *  rich-text vocabulary (`TextNode.runs`, `DiffCell.runs`).
+ *
+ *  ## Why a FLAT run list and not a nested inline tree
+ *  A nested model (`strong(em(x))`) has combinatorially MANY encodings of one
+ *  visual result — `strong(em(x))` vs `em(strong(x))`, `strong("a"),strong("b")`
+ *  vs `strong("ab")`. VMS keeps its two backends honest by STRUCTURALLY DIFFING
+ *  the JSON they produce (`parity/`), so a model where two backends can be
+ *  equally correct yet compare as different defeats the whole gate. A flat run
+ *  list has exactly ONE encoding per result, which keeps that diff meaningful.
+ *  (Every system surveyed for this design has a SINGLE implementation, so none
+ *  of them ever had to care — this constraint is ours alone. Note also that a
+ *  nested model needs a style-INHERITANCE/merge rule implemented identically in
+ *  TS and C#; two independent cascades diverging silently is exactly the failure
+ *  class we cannot detect.)
+ *
+ *  ## Why boolean flags and not a `marks: Mark[]` array
+ *  NOT because an array has order — a SORTED array is equally canonical, so that
+ *  argument does not distinguish them. The real reason: `href`/`external` are
+ *  already PARAMETERIZED marks living in this same record, so the model is
+ *  inherently a hybrid — valueless marks as flags, parameterized marks as named
+ *  fields. A `Mark[]` array would have to become an array of OBJECTS to carry a
+ *  link target, at which point it is a worse nested model.
+ *
+ *  **Extension policy (follow it, don't re-argue it):** a new VALUELESS mark
+ *  becomes a new optional flag here; a new PARAMETERIZED mark becomes a named
+ *  field, exactly as `href` did. A different string-valued field that later wants
+ *  rich text gains a SIBLING optional `runs` field (as `DiffCell` did) — NEVER a
+ *  union type on the wire.
+ *
+ *  ## Flags are typed `true`, not `boolean`, on purpose
+ *  `bold?: boolean` would admit an explicit `bold: false`, which is NOT null, so
+ *  `parity/normalize.ts` would not drop it and `findNulls` would not flag it —
+ *  giving two wire encodings of "not bold" and a fresh cross-backend drift class
+ *  (gotcha #8's family). Typed `true`, `false` is unrepresentable and ABSENT is
+ *  the only encoding of "off", matching the .NET twin's
+ *  `bool Bold = false` + `WhenWritingDefault`.
+ *
+ *  ## A run carries NO action — `href` only, and that is STRUCTURAL
+ *  A type needs an arm in `collectActions` (server.ts) / `ViewTreeValidation.Collect`
+ *  (.NET) iff it holds child nodes or an action. `InlineRun` holds NEITHER, so
+ *  ZERO walker changes are needed on either backend — the requirement disappears
+ *  structurally rather than having to be remembered. That matters because a
+ *  missing walker arm fails SILENTLY on both sides and nothing gates walker
+ *  parity (see the live `tracker-net-walker-gap` note in ViewModels.cs).
+ *  ⚠️ **If this record ever gains an `action`, BOTH walkers need an arm.**
+ *  Markdown links are always plain addresses, so dispatch buys the driving use
+ *  case nothing; a dispatching inline element is a separate, deliberate feature. */
+export interface InlineRun {
+  /** The run's literal text. Always rendered via textContent — never as HTML. */
+  text: string;
+  /** Bold emphasis → `<strong class="vms-text__strong">`. */
+  bold?: true;
+  /** Italic emphasis → `<em class="vms-text__em">`. */
+  italic?: true;
+  /** Inline code → `<code class="vms-text__code">`. A SEMANTIC run, not a font
+   *  knob: for a whole monospace/preformatted block use `TextNode.style:"pre"`. */
+  code?: true;
+  /** Struck text → `<s class="vms-text__strike">`. Distinct from
+   *  `TextNode.style:"strikethrough"`, which strikes the WHOLE node AND recolors
+   *  it to the muted "done" tone. This one is emphasis only and never recolors,
+   *  so the two are not interchangeable. Run flags are additive, never subtractive:
+   *  a run cannot UN-strike itself inside a struck node. */
+  strike?: true;
+  /** Link target → wraps the run in `<a class="vms-text__link">`. Presence alone
+   *  makes this run a link; there is no `kind` discriminator (shape carries the
+   *  meaning, same as `DiffRow`), so a label can never disagree with the content.
+   *  ⚠️ ADJACENT runs sharing an IDENTICAL `href` + `external` coalesce into
+   *  exactly ONE anchor — otherwise "a link containing a bold word" would render
+   *  as two anchors, i.e. two tab stops and two screen-reader announcements.
+   *  Emits `.vms-text__link`, NOT `.vms-link` — the latter is `display:inline-block`
+   *  + `align-self:flex-start` (correct for a standalone LinkNode that is a flex
+   *  child of a section, WRONG inside flowing text, where it breaks line wrapping). */
+  href?: string;
+  /** true = open outside the current app context (browser: new tab + noopener).
+   *  Only meaningful alongside `href`; ignored without it. */
+  external?: true;
+}
+
 export interface TextNode {
   type: "text";
+  /** The plain-text reading of this node. REQUIRED and unchanged — it does three
+   *  jobs at once: (1) the rendering when `runs` is absent, (2) the FALLBACK for
+   *  any adapter that does not implement runs (the TUI renders this verbatim and
+   *  needed no change for inline rich text), and (3) the agent-legible form — an
+   *  agent reads the sentence straight off the wire without reassembling runs.
+   *
+   *  When `runs` is present, `value` SHOULD be the concatenation of the run texts
+   *  — use the `richText()` helper (server subpath) / `TextNode.FromRuns(...)` (.NET)
+   *  to DERIVE it rather than typing the text twice. Nothing enforces this at
+   *  runtime, deliberately: enforcing it would criminalize the legitimate
+   *  degradation pattern (spelling a URL out in `value` while `runs` carries a
+   *  proper link, so link-less adapters still show the target), and a validator
+   *  would give `TextNode` a walker arm on both backends — reintroducing the very
+   *  asymmetric-walker risk the no-actions rule above eliminates. The framework's
+   *  own reference usage is gated in CI (`parity/fixtures/feature-probe.json`)
+   *  instead. A mismatch is not ambiguous — the renderer's rule is unconditional
+   *  — it just means browser readers and agent/TUI readers see different text. */
   value: string;
-  /** Typography role only (NOT color) — emits .vms-text--{style}. Semantic color moved to `tone` (the old `error`/`warning` style values are now `tone:"danger"`/`tone:"warning"`). Closed union. */
+  /** OPTIONAL inline rich-text runs. When present the BrowserAdapter draws these
+   *  INSTEAD of `value`; when absent, rendering is byte-identical to before runs
+   *  existed (a plain `<span>` with `value` as its only text node), so this field
+   *  is fully backward compatible for every existing consumer.
+   *
+   *  Scope note: runs are carried by `TextNode` and `DiffCell`. Everything that
+   *  holds `ViewNode[]` children (list items, sections, pages, modals, form
+   *  bodies) gets rich text for free by nesting a TextNode. `TableRow.cells` is
+   *  deliberately NOT covered — cells are a flat `Record<string,string>`, so
+   *  enriching them changes what a cell IS rather than adding a field, and that
+   *  is a separate design call (likely a purpose-built content-table primitive
+   *  rather than overloading the data-grid TableNode). Leaf label fields
+   *  (button/badge/breadcrumb/tab labels) are deliberately NOT covered either —
+   *  markdown never produces emphasis inside a control label. */
+  runs?: InlineRun[];
+  /** Typography role only (NOT color) — emits .vms-text--{style}. Semantic color moved to `tone` (the old `error`/`warning` style values are now `tone:"danger"`/`tone:"warning"`). Closed union.
+   *  Orthogonal to `runs`: `style` is the NODE-level typography role, `runs` is
+   *  intra-paragraph emphasis. Uniform emphasis over a whole paragraph should use
+   *  `style` and omit `runs` entirely. With `style:"pre"` the runs nest inside the
+   *  `<pre>` and its `white-space: pre` still applies. */
   style?: "heading" | "subheading" | "body" | "muted" | "strikethrough" | "pre";
-  /** Semantic intent/severity color — the universal status tone axis, orthogonal to `style` (a heading can be `tone:"danger"`). Emits .vms-text--{tone}; the tone color wins over a `style` color via source order. Omitted = default text color. Closed union. */
+  /** Semantic intent/severity color — the universal status tone axis, orthogonal to `style` (a heading can be `tone:"danger"`). Emits .vms-text--{tone}; the tone color wins over a `style` color via source order. Omitted = default text color. Closed union.
+   *  A run's `href` colors as a link (`.vms-text__link`) even inside a toned node —
+   *  a link that does not look like a link is worse than a tone that does not reach. */
   tone?: "danger" | "warning" | "success" | "info";
+}
+
+/** Build a TextNode from inline runs, DERIVING `value` as the concatenation of
+ *  the run texts so the plain reading and the rich reading cannot disagree.
+ *  Prefer this over writing `value` by hand whenever you set `runs` — a
+ *  hand-written pair is the one way this feature can lie, and both backends would
+ *  agree with each other while telling a human and an agent different things.
+ *  (The .NET twin is `TextNode.FromRuns(...)`.)
+ *
+ *  Build the object literal directly, NOT via this helper, for the deliberate
+ *  divergence case — e.g. spelling a URL out in `value` so that adapters which
+ *  cannot draw a link still show the target. That case is legitimate and is
+ *  exactly why the match is a documented SHOULD rather than a runtime check. */
+export function richText(
+  runs: InlineRun[],
+  opts?: { style?: TextNode["style"]; tone?: TextNode["tone"] },
+): TextNode {
+  return {
+    type: "text",
+    value: runs.map((r) => r.text).join(""),
+    runs,
+    // Conditional spread, not `style: opts?.style` — an explicit `undefined`
+    // would emit `"style": null` on some serializers and break the
+    // absent-never-null wire contract (gotcha #8).
+    ...(opts?.style ? { style: opts.style } : {}),
+    ...(opts?.tone ? { tone: opts.tone } : {}),
+  };
 }
 
 export interface LinkNode {
@@ -1259,6 +1404,15 @@ export interface TrackerNode {
 export interface DiffCell {
   text: string;
   lineNumber?: number;
+  /** OPTIONAL inline runs for WORD-LEVEL intra-line highlighting — the feature
+   *  DiffNode v1 deferred pending "the inline rich text architectural question",
+   *  now answered. Same contract as `TextNode.runs`: when present the renderer
+   *  draws the runs instead of `text`, and `text` remains REQUIRED as the plain
+   *  reading + fallback + agent-legible form. Consumers still compute the
+   *  word-level diff themselves (server-computes / framework-renders) and express
+   *  the result as runs — typically `strike` for removed words on the old side and
+   *  `bold` for added words on the new side. */
+  runs?: InlineRun[];
 }
 
 /** One row of a DiffNode. Row-KIND (add / remove / context) is derived

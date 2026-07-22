@@ -1100,6 +1100,50 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-text--success       { color: var(--vms-success); }
 .vms-text--info          { color: var(--vms-info); }
 
+/* ── Inline runs (TextNode.runs / DiffCell.runs) ──
+   Intra-paragraph emphasis. Additive only: a run flag never SUBTRACTS from the
+   node-level style, and __strike deliberately does NOT recolor the way the
+   node-level .vms-text--strikethrough does (that one means "done", this one
+   means emphasis), so the two are not interchangeable. */
+.vms-text__strong { font-weight: 700; }
+.vms-text__em     { font-style: italic; }
+.vms-text__strike { text-decoration: line-through; }
+/* Inline links are NOT .vms-link: that class is display:inline-block +
+   align-self:flex-start, which is right for a standalone LinkNode that is a flex
+   child of a section, and WRONG inside flowing text (it breaks line-wrapping
+   mid-word and align-self is meaningless). Plain inline, underlined so a link
+   still reads as a link even inside a toned paragraph. */
+.vms-text__link {
+  color: var(--vms-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+/* Inline code chip.
+   ⚠️ CONTRAST — HAND-CHECKED, NOT CI-GATED. check:aa-contrast validates a FIXED
+   pair list of --vms-* token names, so a composited chip background is
+   structurally invisible to it (same posture as the chart palette above).
+   The chip self-tints from currentColor rather than using a fixed surface token,
+   which is the structural win: the foreground/background pair then TRACKS the
+   already-gated text-on-surface pair instead of forming an independent
+   6-foreground x 13-theme matrix.
+   Worst-case ratios across the shipped default + all 12 themes, text on chip:
+     body 12.68 : 1   muted 4.75 : 1   danger 4.58 : 1   warning 5.02 : 1
+   All clear the 4.5:1 SC 1.4.3 bar for normal text. The tint is 6% and not more
+   because 8% drops danger to 4.46 and an opaque surface chip drops it to 4.35 —
+   i.e. a heavier chip would introduce an AA regression on toned text.
+   NOTE: success (3.02) and info (4.10) read as failing here, but they already
+   fail as TEXT colors on a plain surface today (3.23 / 4.42) — a pre-existing
+   gate misclassification tracked separately, NOT introduced by this chip. */
+.vms-text__code {
+  font-family: var(--vms-font-mono);
+  font-size: 0.9em;                 /* mono x-height compensation */
+  padding: 0.1em 0.35em;
+  border-radius: var(--vms-radius-sm);
+  color: inherit;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+}
+
 /* ── Link ── */
 .vms-link {
   color: var(--vms-accent);

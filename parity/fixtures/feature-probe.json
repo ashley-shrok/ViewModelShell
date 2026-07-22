@@ -24,7 +24,16 @@
         "\"id\":\"probe-diff-unified\"",
         "\"mode\":\"unified\"",
         "\"header\":{\"old\":\"before.txt\"",
-        "\"lineNumber\":3"
+        "\"lineNumber\":3",
+        "\"runs\":[",
+        "\"bold\":true",
+        "\"italic\":true",
+        "\"code\":true",
+        "\"strike\":true",
+        "\"href\":\"https://example.com/docs\"",
+        "\"external\":true",
+        "\"id\":\"probe-diff-wordlevel\"",
+        "Docs: https://example.com/docs"
       ]
     },
     {

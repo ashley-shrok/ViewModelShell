@@ -911,3 +911,184 @@ describe("DiffNode — aligned before/after primitive", () => {
     linenums.forEach((l) => expect(l.textContent).toBe(""));
   });
 });
+
+describe("TextNode inline runs", () => {
+  const textEl = (c: HTMLElement) => c.querySelector(".vms-text") as HTMLElement;
+
+  it("runs ABSENT renders byte-identically to before runs existed (single text node, zero child elements)", () => {
+    const { container, render } = setup();
+    render({ type: "text", value: "hello" });
+    const el = textEl(container);
+    expect(el.textContent).toBe("hello");
+    expect(el.children.length).toBe(0);
+    expect(el.childNodes.length).toBe(1);
+    expect(el.childNodes[0].nodeType).toBe(3); // Text node
+  });
+
+  it("runs PRESENT are drawn instead of value — value is not rendered", () => {
+    const { container, render } = setup();
+    render({ type: "text", value: "IGNORED", runs: [{ text: "shown" }] });
+    const el = textEl(container);
+    expect(el.textContent).toBe("shown");
+    expect(el.textContent).not.toContain("IGNORED");
+  });
+
+  it("a flag-free run emits a BARE text node — no wrapper element", () => {
+    const { container, render } = setup();
+    render({ type: "text", value: "plain", runs: [{ text: "plain" }] });
+    const el = textEl(container);
+    expect(el.querySelector("*")).toBeNull();
+    expect(el.childNodes[0].nodeType).toBe(3);
+  });
+
+  it("each flag alone maps to its semantic element + class", () => {
+    const cases: Array<[Record<string, unknown>, string, string]> = [
+      [{ bold: true }, "STRONG", "vms-text__strong"],
+      [{ italic: true }, "EM", "vms-text__em"],
+      [{ code: true }, "CODE", "vms-text__code"],
+      [{ strike: true }, "S", "vms-text__strike"],
+    ];
+    for (const [flag, tag, cls] of cases) {
+      const { container, render } = setup();
+      render({ type: "text", value: "x", runs: [{ text: "x", ...flag }] as never });
+      const el = textEl(container);
+      const child = el.firstElementChild as HTMLElement;
+      expect(child.tagName).toBe(tag);
+      expect(child.classList.contains(cls)).toBe(true);
+      expect(child.textContent).toBe("x");
+    }
+  });
+
+  it("combined flags nest in a FIXED order (strong > em > s > code > text) so the DOM is deterministic", () => {
+    const { container, render } = setup();
+    render({
+      type: "text",
+      value: "all",
+      runs: [{ text: "all", bold: true, italic: true, code: true, strike: true }],
+    });
+    const el = textEl(container);
+    const strong = el.firstElementChild as HTMLElement;
+    expect(strong.tagName).toBe("STRONG");
+    const em = strong.firstElementChild as HTMLElement;
+    expect(em.tagName).toBe("EM");
+    const s = em.firstElementChild as HTMLElement;
+    expect(s.tagName).toBe("S");
+    const code = s.firstElementChild as HTMLElement;
+    expect(code.tagName).toBe("CODE");
+    expect(code.textContent).toBe("all");
+  });
+
+  it("href emits an anchor with .vms-text__link and NOT .vms-link (which is inline-block and breaks line wrapping)", () => {
+    const { container, render } = setup();
+    render({ type: "text", value: "docs", runs: [{ text: "docs", href: "https://example.com/d" }] });
+    const a = textEl(container).querySelector("a") as HTMLAnchorElement;
+    expect(a.getAttribute("href")).toBe("https://example.com/d");
+    expect(a.classList.contains("vms-text__link")).toBe(true);
+    expect(a.classList.contains("vms-link")).toBe(false);
+  });
+
+  it("external adds target and rel exactly as the standalone link() path does; without it neither attribute is set", () => {
+    const { container: c1, render: r1 } = setup();
+    r1({ type: "text", value: "x", runs: [{ text: "x", href: "https://e.com", external: true }] });
+    const ext = textEl(c1).querySelector("a") as HTMLAnchorElement;
+    expect(ext.getAttribute("target")).toBe("_blank");
+    expect(ext.getAttribute("rel")).toBe("noopener noreferrer");
+
+    const { container: c2, render: r2 } = setup();
+    r2({ type: "text", value: "x", runs: [{ text: "x", href: "/internal" }] });
+    const int = textEl(c2).querySelector("a") as HTMLAnchorElement;
+    expect(int.getAttribute("target")).toBeNull();
+    expect(int.getAttribute("rel")).toBeNull();
+  });
+
+  it("adjacent runs sharing an identical href COALESCE into exactly ONE anchor (one tab stop, one SR announcement)", () => {
+    const { container, render } = setup();
+    render({
+      type: "text",
+      value: "see docs now",
+      runs: [
+        { text: "see ", href: "https://e.com/d" },
+        { text: "docs", href: "https://e.com/d", bold: true },
+        { text: " now", href: "https://e.com/d" },
+      ],
+    });
+    const el = textEl(container);
+    const anchors = el.querySelectorAll("a");
+    expect(anchors.length).toBe(1);
+    expect(anchors[0].textContent).toBe("see docs now");
+    expect(anchors[0].querySelector("strong")?.textContent).toBe("docs");
+  });
+
+  it("adjacent runs with DIFFERENT hrefs stay separate anchors", () => {
+    const { container, render } = setup();
+    render({
+      type: "text",
+      value: "ab",
+      runs: [
+        { text: "a", href: "https://e.com/1" },
+        { text: "b", href: "https://e.com/2" },
+      ],
+    });
+    expect(textEl(container).querySelectorAll("a").length).toBe(2);
+  });
+
+  it("the anchor is OUTERMOST when a run has both href and emphasis", () => {
+    const { container, render } = setup();
+    render({ type: "text", value: "x", runs: [{ text: "x", href: "https://e.com", bold: true }] });
+    const a = textEl(container).firstElementChild as HTMLElement;
+    expect(a.tagName).toBe("A");
+    expect((a.firstElementChild as HTMLElement).tagName).toBe("STRONG");
+  });
+
+  it("multiple runs concatenate in order with no separator", () => {
+    const { container, render } = setup();
+    render({ type: "text", value: "a b c", runs: [{ text: "a " }, { text: "b", bold: true }, { text: " c" }] });
+    expect(textEl(container).textContent).toBe("a b c");
+  });
+
+  it("run text and href are inert — set via textContent, never parsed as HTML", () => {
+    const { container, render } = setup();
+    render({
+      type: "text",
+      value: "x",
+      runs: [{ text: '<img src=x onerror=alert(1)>', href: "https://e.com/?a=<b>" }],
+    });
+    const el = textEl(container);
+    expect(el.querySelector("img")).toBeNull();
+    expect(el.textContent).toContain("<img src=x onerror=alert(1)>");
+    expect(el.innerHTML).toContain("&lt;img");
+  });
+
+  it("style:'pre' still renders a <pre> and nests the runs inside it", () => {
+    const { container, render } = setup();
+    render({ type: "text", value: "x", style: "pre", runs: [{ text: "x", code: true }] });
+    const el = textEl(container);
+    expect(el.tagName).toBe("PRE");
+    expect(el.classList.contains("vms-text--pre")).toBe(true);
+    expect(el.querySelector("code.vms-text__code")).not.toBeNull();
+  });
+
+  it("an empty runs array falls back to value (not an empty render)", () => {
+    const { container, render } = setup();
+    render({ type: "text", value: "fallback", runs: [] });
+    expect(textEl(container).textContent).toBe("fallback");
+  });
+
+  it("DiffCell.runs drive word-level highlighting; cells without runs still render their text", () => {
+    const { container, render } = setup();
+    render({
+      type: "diff",
+      rows: [
+        {
+          old: { text: "the quick fox", runs: [{ text: "the " }, { text: "quick", strike: true }, { text: " fox" }] },
+          new: { text: "the slow fox" },
+        },
+      ],
+    });
+    const cells = container.querySelectorAll(".vms-diff__cell:not(.vms-diff__cell--linenum)");
+    expect(cells[0].querySelector("s.vms-text__strike")?.textContent).toBe("quick");
+    expect(cells[0].textContent).toBe("the quick fox");
+    expect(cells[1].textContent).toBe("the slow fox");
+    expect(cells[1].querySelector("*")).toBeNull();
+  });
+});

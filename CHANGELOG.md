@@ -6,6 +6,45 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 6.9.0 / NuGet 6.9.0 — inline rich text (`TextNode.runs`, `DiffCell.runs`)
+
+**npm:** `6.9.0` (minor, from `6.8.0`) · **NuGet:** `6.9.0` (minor, from `6.7.1` — skips `6.8.0`, which npm consumed; both packages realign on one number). Wire-format **additive**; protocol token unchanged at `viewmodel-shell/1.0`. Fully backwards-compatible: a `TextNode` without `runs` serializes and renders **byte-identically** to 6.8.0, and no consumer changes anything.
+
+VMS has always kept text at the **block level** — `TextNode.value` is a plain string and `LinkNode` is a top-level node — so there was no way to say "this sentence contains a bold word," and no composition produced one. That gap blocked three consumers (an IT-docs viewer, a chat app rendering LLM markdown, and DiffNode's own word-level highlighting) and made a framework-shipped markdown converter impossible to build without flattening the most common things markdown says.
+
+### Added
+
+- **`InlineRun`** — a contiguous piece of text carrying `bold` / `italic` / `code` / `strike` and/or an `href` (+ `external`). Rendered as semantic elements: `<strong>` / `<em>` / `<code>` / `<s>` / `<a>`, classed `.vms-text__strong` / `__em` / `__code` / `__strike` / `__link`.
+- **`TextNode.runs?`** — when present the renderer draws the runs **instead of** `value`; when absent, output is byte-identical to before. Everything that holds `ViewNode[]` children (list items, sections, pages, modals, form bodies) therefore gets rich text for free by nesting a `TextNode`.
+- **`DiffCell.runs?`** — **word-level intra-line diff highlighting**, the feature DiffNode v1 explicitly deferred pending "the inline rich text architectural question." Consumers still compute the word diff themselves and express it as runs (server-computes / framework-renders).
+- **`richText(runs, opts?)`** (TS) / **`TextNode.FromRuns(runs, style?, tone?)`** (.NET) — derive `value` from the run texts so the plain and rich readings cannot disagree.
+
+### Design notes
+
+- **Flat runs, not a nested inline tree.** A nested model has combinatorially many encodings of one visual result (`strong(em(x))` vs `em(strong(x))`; `strong("a"),strong("b")` vs `strong("ab")`), which defeats the structural cross-backend diffing the parity suite is built on. Flat runs have exactly one canonical encoding. A nested model would also need a style-inheritance/merge rule implemented identically in TypeScript and C# — two cascades diverging silently is the failure class this project cannot detect.
+- **Boolean flags, not a `marks[]` array** — because `href`/`external` are already *parameterized* marks in the same record, making the model an inherent hybrid: valueless marks as flags, parameterized marks as named fields. A marks array would have to become an array of objects to carry a link target, i.e. a worse nested model. **Extension policy:** a new valueless mark becomes a new flag; a new parameterized mark becomes a named field; another string-valued field that wants rich text gains a *sibling* `runs` field — never a wire union.
+- **Flags are typed literal `true`** (TS) / **non-nullable `bool` + `WhenWritingDefault`** (.NET), so `false` is unrepresentable and **absent is the only encoding of "off"**. A plain optional boolean would admit an explicit `false`, which the parity normalizer does not drop and `findNulls` does not flag — two wire encodings of "not bold" and a fresh drift class in gotcha #8's family.
+- **`value` stays required** and does three jobs: the rendering when `runs` is absent, the fallback for adapters that don't implement runs (the TUI needed **no change**), and the agent-legible form. It **should** equal the concatenated run texts — use the factories — but this is a documented SHOULD, not a runtime check: enforcing it would criminalize the legitimate degradation pattern (spelling a URL out in `value` so link-less adapters still show the target), and a validator would give `TextNode` a walker arm on both backends. The framework's own reference usage is gated in CI instead.
+- **A run carries NO action — `href` only, and that is structural.** A type needs a tree-walker arm only if it holds child nodes or an action; `InlineRun` holds neither, so **zero walker changes** were needed on either backend. Markdown links are always plain addresses, so dispatch buys the driving use case nothing, while a missing walker arm fails *silently* on both sides with nothing gating walker parity. A dispatching inline element remains a separate, deliberate feature.
+- **Adjacent runs sharing an identical `href`+`external` coalesce into exactly one anchor** — otherwise "a link containing a bold word" renders as two anchors: two tab stops and two screen-reader announcements.
+- **v1 scope is deliberate.** `TableRow.cells` is a flat `Record<string,string>`, so enriching cells changes what a cell *is* rather than adding a field — a separate design call (likely a purpose-built content-table primitive rather than overloading the data-grid `TableNode`). Leaf control labels (button / badge / breadcrumb / tab) are excluded too: markdown never produces emphasis inside a control label.
+
+### Accessibility
+
+The inline-code chip is a **new foreground/background pair that `check:aa-contrast` structurally cannot cover** (it validates a fixed list of `--vms-*` token names, and the chip background is a composite). Hand-computed and verified across the shipped default + all 12 themes. The chip **self-tints from `currentColor` at 6%**, so its pair tracks the already-gated text-on-surface pair instead of forming an independent 6-foreground × 13-theme matrix.
+
+Worst-case ratios, text on chip: **body 12.68:1 · muted 4.75:1 · danger 4.58:1 · warning 5.02:1** — all clear the 4.5:1 bar for normal text. The tint is 6% and no heavier because 8% drops danger to 4.46 and an opaque-surface chip drops it to 4.35, i.e. a heavier chip would *introduce* an AA regression on toned text.
+
+⚠️ `--vms-success` (3.23:1) and `--vms-info` (4.42:1) already fail 4.5:1 **as text colours on a plain surface today** — a pre-existing gate misclassification (they are graded at the non-text 3.0:1 bar), **not introduced here**, and tracked separately.
+
+### Notes for adopters
+
+- **Nothing to do.** Existing trees are byte-unchanged on both backends; the TUI and every current consumer are untouched.
+- ⚠️ **.NET: `TextNode.Runs` is positional slot 4** (appended after `Tone`) and `DiffCell.Runs` is slot 3 — appended last so all ~96 existing construction sites compile unchanged. **Pass them by name** (`Runs: [...]`). Omit (null) for a plain paragraph — never pass an empty list, which serializes as a present-but-empty `[]`, a distinct wire state.
+- **Inline links emit `.vms-text__link`, not `.vms-link`.** The latter is `display:inline-block` + `align-self:flex-start` — right for a standalone `LinkNode` that is a flex child of a section, wrong inside flowing text, where it breaks line wrapping.
+
+---
+
 ## npm 6.8.0 — table select-all replays the per-row checkbox action
 
 **npm:** `6.8.0` (minor, from `6.5.0`) · **NuGet:** unchanged (`6.7.1`). Client renderer only — no wire-format change, no `.NET` change. Additive and backwards-compatible: a table whose row checkboxes carry no `action` behaves exactly as before. npm skips `6.6.0`/`6.7.0`/`6.7.1` (consumed by NuGet-side releases on the shared version line); the frontend now leads the backend, the safe asymmetry direction.
