@@ -606,6 +606,84 @@ describe('0.11.0 / #5 — ImageNode rendering', () => {
   });
 });
 
+describe("6.10.0 — CodeBlockNode: display-only <pre><code> with copy button + metadata", () => {
+  function renderCB(node: ViewNode): HTMLElement {
+    const container = freshContainer();
+    new BrowserAdapter(container).render({ type: "page", children: [node] }, () => {});
+    return container;
+  }
+
+  it("bare code (no metadata, copyable default) ⇒ header row with only the copy button + <pre><code>", () => {
+    const c = renderCB({ type: "code-block", code: "print('hi')" });
+    const wrap = c.querySelector(".vms-code-block") as HTMLElement;
+    expect(wrap).not.toBeNull();
+    // Header row still renders because copyable defaults on.
+    const header = wrap.querySelector(".vms-code-block__header");
+    expect(header).not.toBeNull();
+    expect(header!.querySelector(".vms-code-block__filename")).toBeNull();
+    expect(header!.querySelector(".vms-code-block__language")).toBeNull();
+    expect(header!.querySelector(".vms-button")).not.toBeNull(); // copy button
+    // <pre><code> pair with the code as textContent (no HTML interpretation).
+    const pre = wrap.querySelector("pre.vms-code-block__pre") as HTMLElement;
+    expect(pre).not.toBeNull();
+    const code = pre.querySelector("code.vms-code-block__code") as HTMLElement;
+    expect(code).not.toBeNull();
+    expect(code.textContent).toBe("print('hi')");
+  });
+
+  it("copyable: false ⇒ NO header row when filename/language also absent (byte-clean bare block)", () => {
+    const c = renderCB({ type: "code-block", code: "x", copyable: false });
+    const wrap = c.querySelector(".vms-code-block") as HTMLElement;
+    expect(wrap.querySelector(".vms-code-block__header")).toBeNull();
+    // Just <pre><code> — the display-only excerpt shape.
+    expect(wrap.querySelector("pre.vms-code-block__pre code.vms-code-block__code")).not.toBeNull();
+  });
+
+  it("language set ⇒ badge in header + .language-{name} class on <code>", () => {
+    const c = renderCB({ type: "code-block", code: "let x = 1;", language: "typescript" });
+    const wrap = c.querySelector(".vms-code-block") as HTMLElement;
+    const badge = wrap.querySelector(".vms-code-block__language") as HTMLElement;
+    expect(badge).not.toBeNull();
+    expect(badge.textContent).toBe("typescript");
+    const code = wrap.querySelector("code.vms-code-block__code") as HTMLElement;
+    expect(code.classList.contains("language-typescript")).toBe(true);
+  });
+
+  it("filename set ⇒ label in header before the language badge", () => {
+    const c = renderCB({ type: "code-block", code: "x", filename: "handler.ts", language: "typescript" });
+    const wrap = c.querySelector(".vms-code-block") as HTMLElement;
+    const header = wrap.querySelector(".vms-code-block__header") as HTMLElement;
+    // Order: filename first, then language, then spacer, then copy button.
+    const kids = Array.from(header.children);
+    expect(kids[0].className).toContain("vms-code-block__filename");
+    expect(kids[0].textContent).toBe("handler.ts");
+    expect(kids[1].className).toContain("vms-code-block__language");
+    expect(kids[2].className).toContain("vms-code-block__spacer");
+    expect(kids[3].className).toContain("vms-button"); // copy button
+  });
+
+  it("copy button reuses the standalone .vms-button emission (shared behavior code)", () => {
+    // The code-block's built-in copy button MUST render as a .vms-button —
+    // proof it routed through the shared this.copyButton() render path, not
+    // a parallel implementation (the "provide-your-own-X divergence" lesson).
+    const c = renderCB({ type: "code-block", code: "x" });
+    const btn = c.querySelector(".vms-code-block__header .vms-button") as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    expect(btn.tagName).toBe("BUTTON");
+    expect(btn.type).toBe("button");
+    expect(btn.textContent).toBe("Copy");
+  });
+
+  it("no HTML interpretation — code containing <script> lands as text, not as a DOM node", () => {
+    // Safety property: the code text is set via textContent, so a malicious
+    // string can't inject an element into the page.
+    const c = renderCB({ type: "code-block", code: "<script>alert(1)</script>" });
+    const code = c.querySelector("code.vms-code-block__code") as HTMLElement;
+    expect(code.textContent).toBe("<script>alert(1)</script>");
+    expect(code.querySelector("script")).toBeNull();
+  });
+});
+
 describe("6.10.0 — ListItemNode.completed: task-list marker (GFM checklist)", () => {
   function renderLI(node: ViewNode): HTMLElement {
     const container = freshContainer();

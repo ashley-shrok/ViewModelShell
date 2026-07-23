@@ -261,6 +261,23 @@ function componentsView(): ViewNode[] {
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90'%3E%3Crect width='160' height='90' fill='%2310b981'/%3E%3C/svg%3E", alt: "Sample banner", size: "large" },
     ]},
 
+    { type: "section", heading: "Code block (CodeBlockNode)", children: [
+      { type: "text", value: "Display-only <pre><code> with a header row for the optional filename, the optional language badge, and a built-in copy button. Plain monospace in v1 — no syntax highlighting yet (deferred to keep the AA-contrast gate honest until it's rewritten to cover new token/bg pairs). Copy behavior routes through the same shared code path as CopyButtonNode.", style: "muted" },
+      { type: "code-block",
+        code: "console.log('hello, world');",
+      },
+      { type: "code-block",
+        code: "def fibonacci(n):\n    a, b = 0, 1\n    for _ in range(n):\n        a, b = b, a + b\n    return a",
+        language: "python",
+        filename: "fibonacci.py",
+      },
+      { type: "code-block",
+        code: "// display-only excerpt — no copy button\nconst x = 42;",
+        language: "typescript",
+        copyable: false,
+      },
+    ]},
+
     { type: "section", heading: "Task list (ListItemNode.completed)", children: [
       { type: "text", value: "Setting `completed: true|false` on a list item draws a fixed check glyph — the GFM task-list affordance. Non-interactive: this is a static checklist display, not a form input. For an interactive check that dispatches on toggle, put a CheckboxNode inside the item's children instead.", style: "muted" },
       { type: "list", children: [

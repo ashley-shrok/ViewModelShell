@@ -240,6 +240,25 @@ function buildVm(state: FeatureProbeState): ViewNode {
       },
     ],
   });
+  // 6.10.0 — CodeBlockNode parity coverage. Static view-shape captured by every
+  // GET step: a bare code-block (only Code set, proves language/filename/copyable
+  // OMITTED cross as absent, WhenWritingNull posture), a code-block with all
+  // three optional fields set (proves the strings/bool cross), and a code-block
+  // with copyable:false (proves the JSON `false` boolean crosses on both
+  // backends — the value is meaningful, not a default).
+  children.push({ type: "code-block", code: "print('hello world')" });
+  children.push({
+    type: "code-block",
+    code: "def add(a, b):\n    return a + b",
+    language: "python",
+    filename: "add.py",
+  });
+  children.push({
+    type: "code-block",
+    code: "// static excerpt — no copy button",
+    language: "typescript",
+    copyable: false,
+  });
   // 6.10.0 — ListItemNode.completed parity coverage. Static view-shape captured
   // by every GET step: a small list with completed:true, completed:false, and
   // completed OMITTED — proving the wire carries the JSON `true` and JSON

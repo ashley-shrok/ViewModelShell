@@ -1209,6 +1209,59 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-list-item--task-done .vms-list-item__marker { color: var(--vms-success, var(--vms-accent, currentColor)); }
 /* Todo items keep neutral color — no styling change beyond the glyph. */
 
+/* ── Code block (CodeBlockNode) ── */
+/* A display-only <pre><code> wrapped in a container with an optional header
+   row (filename + language + copy button). Plain monospace text, no syntax
+   highlighting in v1 — the fenced code stays legible in every theme.
+   Container background + border render even without a header, so a bare
+   code block (no filename/language, copyable:false) still reads as a
+   distinct block. */
+.vms-code-block {
+  display: flex;
+  flex-direction: column;
+  background: var(--vms-surface-2, rgba(127, 127, 127, 0.06));
+  border: 1px solid var(--vms-border, rgba(127, 127, 127, 0.15));
+  border-radius: 4px;
+  overflow: hidden;
+  font-family: var(--vms-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+}
+.vms-code-block__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  background: var(--vms-surface-3, rgba(127, 127, 127, 0.08));
+  border-bottom: 1px solid var(--vms-border, rgba(127, 127, 127, 0.15));
+  font-family: var(--vms-font-body, system-ui, sans-serif);
+  font-size: 0.85em;
+  color: var(--vms-ink-muted, currentColor);
+}
+.vms-code-block__filename { font-weight: 600; }
+.vms-code-block__language {
+  padding: 0.1rem 0.45rem;
+  border-radius: 99px;
+  background: var(--vms-surface-2, rgba(127, 127, 127, 0.06));
+  border: 1px solid var(--vms-border, rgba(127, 127, 127, 0.15));
+  font-size: 0.85em;
+  text-transform: lowercase;
+}
+.vms-code-block__spacer { flex: 1; }
+.vms-code-block__pre {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  overflow-x: auto;
+  white-space: pre;
+  font-size: 0.92em;
+  line-height: 1.5;
+  color: var(--vms-ink, currentColor);
+}
+.vms-code-block__code {
+  font-family: inherit;
+  background: transparent;
+  padding: 0;
+  border: 0;
+}
+
 /* ── Blockquote ── */
 /* A real <blockquote> holding block-level children (paragraphs, lists, nested
    blockquotes). Left accent bar + slight left inset + subtle tinted background

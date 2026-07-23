@@ -540,6 +540,7 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(BadgeNode),      "badge")]
 [JsonDerivedType(typeof(ChartNode),      "chart")]
 [JsonDerivedType(typeof(BlockquoteNode), "blockquote")]
+[JsonDerivedType(typeof(CodeBlockNode),  "code-block")]
 [JsonDerivedType(typeof(BreadcrumbNode), "breadcrumb")]
 [JsonDerivedType(typeof(StepsNode),      "steps")]
 [JsonDerivedType(typeof(TrackerNode),    "tracker")]
@@ -809,6 +810,34 @@ public record FitsNode(
 // check.
 public record BlockquoteNode(
     IReadOnlyList<ViewNode> Children
+) : ViewNode;
+
+// A display-only code block — the standard fenced-code primitive (markdown
+// ```language...```). Renders as a real semantic <pre><code> pair with an
+// optional header row for Filename + Language badge + built-in copy button.
+// Non-interactive (no bind, no action) — for an EDITABLE code input use
+// FieldNode with InputType "code" instead.
+//
+// v1 ships with NO syntax highlighting — plain monospace + language/filename
+// metadata (agent-legibility: an agent reading the wire sees "python"/"handler.ts",
+// not just "a code block"). Deferring highlighting keeps the surface small and
+// avoids the AA-contrast gate hole (the fixed-13-pair check:aa-contrast gate
+// cannot cover new token/bg pairs; see the AGENTS.md "gate that checks shape
+// not property" family of banked lessons).
+//
+// Copyable defaults to true (copy button shown). Set Copyable:false to hide it
+// for a display-only excerpt. The copy button lives inside the header row and
+// uses the framework's shared clipboard-write path (behavior parity with
+// CopyButtonNode — the "provide-your-own-X embedded slots are divergence
+// risks" lesson: share the render, don't parallel-implement).
+public record CodeBlockNode(
+    string Code,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Language = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Filename = null,
+    // Nullable bool: absent = default (copy button shown), true = redundant but
+    // valid, false = explicitly hidden. WhenWritingNull ⇒ omitted absent on the
+    // wire; false is a MEANINGFUL value and MUST cross (matches the TS twin).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Copyable = null
 ) : ViewNode;
 
 public record ListItemNode(

@@ -341,6 +341,21 @@ public class FeatureProbeController : ControllerBase
             }),
         }));
 
+        // 6.10.0 — CodeBlockNode parity coverage. Static view-shape captured
+        // by every GET step: bare (Language/Filename/Copyable omitted, proves
+        // WhenWritingNull posture), full (all three set), copyable:false
+        // (proves the JSON false literal crosses). Twins pin the same three
+        // shapes with identical field values so the byte-diff verifies.
+        children.Add(new CodeBlockNode("print('hello world')"));
+        children.Add(new CodeBlockNode(
+            "def add(a, b):\n    return a + b",
+            Language: "python",
+            Filename: "add.py"));
+        children.Add(new CodeBlockNode(
+            "// static excerpt — no copy button",
+            Language: "typescript",
+            Copyable: false));
+
         // 6.10.0 — ListItemNode.Completed parity coverage. Static view-shape
         // captured by every GET step: one item with Completed:true, one with
         // Completed:false, one with Completed OMITTED. Proves JSON true /

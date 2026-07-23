@@ -153,6 +153,7 @@ export type ViewNode =
   | BadgeNode
   | ChartNode
   | BlockquoteNode
+  | CodeBlockNode
   | BreadcrumbNode
   | StepsNode
   | TrackerNode
@@ -1324,6 +1325,44 @@ export interface DividerNode {
 export interface BlockquoteNode {
   type: "blockquote";
   children: ViewNode[];
+}
+
+/** A display-only code block — the standard fenced-code primitive (markdown
+ *  ```` ```language ````). Renders as a real semantic `<pre><code>` pair
+ *  (a11y landmark + agent-legible from the DOM tag) with a header row for the
+ *  optional `filename`, the optional `language` badge, and the built-in copy
+ *  button. Non-interactive (no bind, no action) — for an EDITABLE code input
+ *  use FieldNode with inputType: "code" instead.
+ *
+ *  v1 ships with NO syntax highlighting — plain monospace over the shipped
+ *  `--vms-mono-font`. Language and filename are metadata (agent-legibility:
+ *  an agent reading the wire sees this is Python, not just "a code block").
+ *  Syntax highlighting is a deliberate v2 — deferring keeps the surface small
+ *  AND avoids the AA-contrast gate hole (the fixed-13-pair `check:aa-contrast`
+ *  gate cannot cover new token/bg pairs; see the "gate that checks shape not
+ *  property" family of banked lessons).
+ *
+ *  Copy button is on by default. Set `copyable: false` to hide it (rare —
+ *  the operator likely wants a display-only excerpt, e.g. a snippet inside a
+ *  static tutorial). The copy button lives inside the header row and uses the
+ *  framework's shared clipboard-write path (behavior parity with CopyButtonNode,
+ *  per the "provide-your-own-X embedded slots are divergence risks" lesson —
+ *  the shared behavior code is what keeps them from drifting). */
+export interface CodeBlockNode {
+  type: "code-block";
+  /** The code text. Rendered verbatim in a `<pre><code>`; no HTML interpretation. */
+  code: string;
+  /** Optional language name (e.g. "python", "typescript"). Rendered as a small
+   *  badge in the header row. Also drives the language class on the `<code>`
+   *  element (`.language-{name}`) — a convention external syntax highlighters
+   *  can adopt, though the framework itself ships none. */
+  language?: string;
+  /** Optional filename shown in the header row (e.g. "handler.ts", "config.py").
+   *  Purely a caption — not linked to any real file resolution. */
+  filename?: string;
+  /** true (or absent) = the copy button is drawn in the header row. Set false
+   *  to suppress it for a display-only excerpt. */
+  copyable?: boolean;
 }
 
 export interface FitsNode {

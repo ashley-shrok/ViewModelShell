@@ -18,7 +18,7 @@ import type {
   TextNode, InlineRun, LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
   ModalNode, TableNode, CopyButtonNode, DividerNode, FitsNode,
   EmptyStateNode, BadgeNode, ChartNode,
-  BlockquoteNode, BreadcrumbNode, StepsNode, TrackerNode, DiffNode,
+  BlockquoteNode, CodeBlockNode, BreadcrumbNode, StepsNode, TrackerNode, DiffNode,
 } from "./index.js";
 
 function legacyCopy(text: string): boolean {
@@ -552,6 +552,7 @@ export class BrowserAdapter implements Adapter {
       case "divider":      return this.divider(n, parent);
       case "fits":         return this.fits(n, parent, on);
       case "blockquote":   return this.blockquote(n, parent, on);
+      case "code-block":   return this.codeBlock(n, parent);
       case "empty-state":  return this.emptyState(n, parent, on);
       case "badge":        return this.badge(n, parent);
       case "chart":        return this.chart(n, parent);
@@ -3764,6 +3765,71 @@ export class BrowserAdapter implements Adapter {
     el.className = "vms-blockquote";
     this.kids(n.children, el, on);
     parent.appendChild(el);
+  }
+
+  /** CodeBlockNode — a display-only <pre><code> block with an optional header
+   *  row (filename + language badge + copy button). Non-interactive; the copy
+   *  button reuses the existing this.copyButton() renderer with a synthesized
+   *  CopyButtonNode so the copy behavior can never drift from the standalone
+   *  copy-button primitive (the "provide-your-own-X embedded slots are
+   *  divergence risks" lesson: share the render, don't parallel-implement). */
+  private codeBlock(n: CodeBlockNode, parent: HTMLElement): void {
+    const wrap = document.createElement("div");
+    wrap.className = "vms-code-block";
+
+    const showCopy = n.copyable !== false;
+    const hasHeader = n.filename != null || n.language != null || showCopy;
+    if (hasHeader) {
+      const header = document.createElement("div");
+      header.className = "vms-code-block__header";
+
+      if (n.filename != null) {
+        const fn = document.createElement("span");
+        fn.className = "vms-code-block__filename";
+        fn.textContent = n.filename;
+        header.appendChild(fn);
+      }
+
+      if (n.language != null) {
+        const lang = document.createElement("span");
+        lang.className = "vms-code-block__language";
+        lang.textContent = n.language;
+        header.appendChild(lang);
+      }
+
+      // Push the copy button to the far right of the header.
+      const spacer = document.createElement("span");
+      spacer.className = "vms-code-block__spacer";
+      header.appendChild(spacer);
+
+      if (showCopy) {
+        // Synthesize a CopyButtonNode so the copy path routes through the
+        // exact same code as the standalone primitive. size:"sm" fits the
+        // header row visually; emphasis:"secondary" keeps it visually quiet.
+        this.copyButton({
+          type: "copy-button",
+          text: n.code,
+          emphasis: "secondary",
+          size: "sm",
+        }, header);
+      }
+
+      wrap.appendChild(header);
+    }
+
+    const pre = document.createElement("pre");
+    pre.className = "vms-code-block__pre";
+    const code = document.createElement("code");
+    // .language-{name} is a convention external highlighters (Prism, hljs)
+    // adopt; the framework itself ships no coloring in v1 (deferred, see
+    // AGENTS.md AA-contrast gate hole rationale in the design report).
+    code.className = "vms-code-block__code" + (n.language != null ? ` language-${n.language}` : "");
+    // textContent, not innerHTML — code is untrusted display content.
+    code.textContent = n.code;
+    pre.appendChild(code);
+    wrap.appendChild(pre);
+
+    parent.appendChild(wrap);
   }
 
   /** BadgeNode — a compact inline status pill / count. Leaf node: label text +
