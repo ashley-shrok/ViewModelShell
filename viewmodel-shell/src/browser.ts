@@ -1243,6 +1243,31 @@ export class BrowserAdapter implements Adapter {
     if (bind != null) this.sa.write(bind, value);
   }
 
+  /** 6.12.0 (TOOL-01) — apply a hover-only info tooltip to any rendered element.
+   *  Sets three things: (a) the native `title=` attribute, which is the
+   *  agent-legible + headless fallback + touch long-press affordance and
+   *  always works without CSS; (b) the `.vms-has-tooltip` class hook and (c)
+   *  the `data-vms-tooltip` attribute, which the shipped default.css uses to
+   *  render a styled bubble via `:hover::after` / `:focus-visible::after`. All
+   *  three go together so a stylesheet-stripped page still shows the browser's
+   *  native tooltip; a page with the shipped CSS additionally shows the styled
+   *  version. Non-dismissible, hover-only — the string field enforces
+   *  info-only at the wire level (no ViewNode can nest inside it). Absent =
+   *  no tooltip; the helper no-ops on null/empty.
+   *
+   *  Note on `title=`: for interactive controls that already carry an
+   *  aria-label (Buttons), `title` complements it as visual + long-press UX
+   *  without changing the accessible name. For non-interactive nodes
+   *  (Text/Badge), `title` is the only stopgap for touch users and for
+   *  keyboard users where `:focus-visible` won't fire on non-focusable
+   *  elements. */
+  private applyTooltip(el: HTMLElement, tooltip: string | undefined): void {
+    if (tooltip == null || tooltip === "") return;
+    el.title = tooltip;
+    el.classList.add("vms-has-tooltip");
+    el.dataset.vmsTooltip = tooltip;
+  }
+
   private field(n: FieldNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const stateValue = this.readBind(n.bind);
 
@@ -2846,6 +2871,7 @@ export class BrowserAdapter implements Adapter {
     }
 
     this.decorateField(wrapper, n);
+    this.applyTooltip(wrapper, n.tooltip);
     parent.appendChild(wrapper);
   }
 
@@ -3005,6 +3031,7 @@ export class BrowserAdapter implements Adapter {
       this.sa.write(n.bind, inp.checked);
       if (n.action) on(n.action);
     });
+    this.applyTooltip(lbl, n.tooltip);
     parent.appendChild(lbl);
   }
 
@@ -3055,6 +3082,7 @@ export class BrowserAdapter implements Adapter {
     btn.type = "button";
     const activate = this.applyButtonBehavior(btn, n, on);
     btn.addEventListener("click", activate);
+    this.applyTooltip(btn, n.tooltip);
     parent.appendChild(btn);
   }
 
@@ -3076,6 +3104,7 @@ export class BrowserAdapter implements Adapter {
     // ambiguous — see TextNode.value's TSDoc for why it isn't validated.
     if (n.runs && n.runs.length > 0) this.inlineRuns(n.runs, el);
     else el.textContent = n.value;
+    this.applyTooltip(el, n.tooltip);
     parent.appendChild(el);
   }
 
@@ -3144,6 +3173,7 @@ export class BrowserAdapter implements Adapter {
       a.target = "_blank";
       a.rel = "noopener noreferrer";
     }
+    this.applyTooltip(a, n.tooltip);
     parent.appendChild(a);
   }
 
@@ -3434,6 +3464,7 @@ export class BrowserAdapter implements Adapter {
           on(sortAction);
         });
       }
+      this.applyTooltip(th, col.tooltip);
       headerRow.appendChild(th);
     });
     thead.appendChild(headerRow);
@@ -3762,6 +3793,7 @@ export class BrowserAdapter implements Adapter {
       }
     });
 
+    this.applyTooltip(btn, n.tooltip);
     parent.appendChild(btn);
   }
 
@@ -3873,6 +3905,7 @@ export class BrowserAdapter implements Adapter {
     span.className = `vms-badge${n.tone ? ` vms-badge--${n.tone}` : ""}${
       n.emphasis ? ` vms-badge--${n.emphasis}` : ""}`;
     span.textContent = n.label;
+    this.applyTooltip(span, n.tooltip);
     parent.appendChild(span);
   }
 

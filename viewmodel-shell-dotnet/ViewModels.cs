@@ -1130,7 +1130,11 @@ public record FieldNode(
     /// Dropped from the wire when false (WhenWritingDefault) → ABSENT, matching the TS
     /// optional `allowCustom?: boolean`. Omitted = false (custom entries rejected; only
     /// offered candidates commit).</summary>
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool AllowCustom = false
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool AllowCustom = false,
+    // 6.12.0 (TOOL-01) — hover-only info tooltip. String only (no interaction
+    // shape possible on the wire). See FieldNode.tooltip in src/index.ts for
+    // full semantics. WhenWritingNull ⇒ absent, matching the TS twin.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null
 ) : ViewNode;
 
 public record CheckboxNode(
@@ -1138,7 +1142,9 @@ public record CheckboxNode(
     /// <summary>Path into state where this input reads its current value and writes user changes (e.g. "fields.acceptedTos").</summary>
     string Bind,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action,
+    // 6.12.0 (TOOL-01) — hover-only info tooltip. See FieldNode.Tooltip.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null
 ) : ViewNode;
 
 public record ButtonNode(
@@ -1171,7 +1177,9 @@ public record ButtonNode(
     // state — no modal node, nothing to round-trip) + client-only: an agent
     // dispatches the action directly and is never gated. TUI dispatches as normal.
     // Null = instant dispatch.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Confirm = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Confirm = null,
+    // 6.12.0 (TOOL-01) — hover-only info tooltip. See FieldNode.Tooltip.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null
 ) : ViewNode;
 
 /// <summary>One inline run — a contiguous piece of text inside a paragraph,
@@ -1281,7 +1289,9 @@ public record TextNode(
     // for out-of-range values, so a wire value of 7 renders as a fallback span
     // rather than an invalid <h7>. Wire posture: WhenWritingNull => omitted
     // absent, matching the closed-union convention (TS twin: `level?: 1|2|3|4|5|6`).
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Level = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Level = null,
+    // 6.12.0 (TOOL-01) — hover-only info tooltip. See FieldNode.Tooltip.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null
 ) : ViewNode
 {
     /// <summary>Build a TextNode from inline runs, DERIVING Value as the
@@ -1481,7 +1491,11 @@ public record TableColumn(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Filterable = false,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FilterValue = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LinkLabel = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool LinkExternal = false
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool LinkExternal = false,
+    // 6.12.0 (TOOL-01) — hover-only info tooltip on the column HEADER. Useful
+    // for annotating short header labels ("MTD", "Δ 7d") with a full
+    // explanation. See FieldNode.Tooltip.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null
 );
 
 public record TableRow(
@@ -1577,7 +1591,9 @@ public record LinkNode(
     /// <summary>true = current location ("you are here"): emits .vms-link--active
     /// + aria-current="page". Server-owned. Nullable + omitted-when-null so the wire
     /// matches the TS `active?: boolean` posture (absent = not active).</summary>
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Active = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Active = null,
+    // 6.12.0 (TOOL-01) — hover-only info tooltip. See FieldNode.Tooltip.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null
 ) : ViewNode;
 
 // Breadcrumb (NAV-01) — .NET byte-identical twin of the TS BreadcrumbItem/
@@ -1657,7 +1673,9 @@ public record EmptyStateNode(
     // serializing through the [JsonPolymorphic] base ViewNode. The same
     // maintainer rule as FormNode.SubmitButton / FormNode.Buttons; without it the
     // wire drifts from the TS twin (which always includes type:"button").
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Action = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Action = null,
+    // 6.12.0 (TOOL-01) — hover-only info tooltip. See FieldNode.Tooltip.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null
 ) : ViewNode;
 
 // A compact status pill / count (badge primitive). Leaf node — Label required,
@@ -1667,7 +1685,11 @@ public record EmptyStateNode(
 public record BadgeNode(
     string Label,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Emphasis? Emphasis = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Emphasis? Emphasis = null,
+    // 6.12.0 (TOOL-01) — hover-only info tooltip. Useful for annotating short
+    // badge labels ("!!!", "3", "Beta") with a full explanation. See
+    // FieldNode.Tooltip.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null
 ) : ViewNode;
 
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────

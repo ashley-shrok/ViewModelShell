@@ -761,7 +761,11 @@ public class FeatureProbeController : ControllerBase
                 new FieldNode("fc-locked", "text", "note", "Account ID", null,
                     Readonly: true),
                 new FieldNode("fc-region", "text", "note", "Region", null,
-                    Disabled: true),
+                    Disabled: true,
+                    // 6.12.0 (TOOL-01) — a FIELD carrying a tooltip. Static
+                    // view-shape so every GET byte-diffs the tooltip on a
+                    // FieldNode across .NET/bun/node.
+                    Tooltip: "The region code from the customer's billing address."),
                 // 6.12.0 (RADIO-01) — the radio inputType exercised as static
                 // view-shape. Options carry {value,label} so parity byte-diffs
                 // the {type:"field", inputType:"radio", options:[…]} wire across
@@ -783,7 +787,11 @@ public class FeatureProbeController : ControllerBase
                 new FieldNode("fc-range", "range", "note", "Level", null,
                     Min: "0", Max: "100", Step: "5"),
                 new ButtonNode("Submit (disabled)", new ActionDescriptor("fc-submit"),
-                    Emphasis: Emphasis.Primary, Disabled: true),
+                    Emphasis: Emphasis.Primary, Disabled: true,
+                    // 6.12.0 (TOOL-01) — a BUTTON carrying a tooltip. Static
+                    // view-shape so every GET byte-diffs the tooltip on a
+                    // ButtonNode across .NET/bun/node.
+                    Tooltip: "Currently disabled — complete required fields first."),
             }));
         // 3.9.0 — FieldNode.Bind optional (file inputs). A file field with
         // Bind: null: its binary rides the multipart side channel (fileRegistry

@@ -704,6 +704,16 @@ export interface FieldNode {
    *  (there is no positional fallback); the browser warns `[vms:orphan-file]`
    *  when a file is picked with no `uploadOn`. Ignored on non-file inputs. */
   uploadOn?: string[];
+  /** Hover-only info tooltip (6.12.0, TOOL-01). A short informational string
+   *  shown when the user hovers or keyboard-focuses this control. **Info-only
+   *  by construction:** the field holds a string, so no interaction (button,
+   *  link, form) can be structurally expressed inside it. Renderer emits both
+   *  the native `title=` attribute (the agent-legible + headless fallback +
+   *  touch long-press affordance) AND a `.vms-has-tooltip` class with
+   *  `data-vms-tooltip=` for the shipped CSS to render a styled bubble on
+   *  `:hover` / `:focus-visible`. Non-dismissible; unhover to close. Omitted =
+   *  no tooltip. */
+  tooltip?: string;
 }
 
 export interface CheckboxNode {
@@ -715,6 +725,8 @@ export interface CheckboxNode {
   /** Dispatched immediately on change. Carries an action name only — the new
    *  checked value is already in state at the bind path. */
   action?: ActionEvent;
+  /** Hover-only info tooltip (6.12.0, TOOL-01). See FieldNode.tooltip. */
+  tooltip?: string;
 }
 
 export interface ButtonNode {
@@ -755,6 +767,8 @@ export interface ButtonNode {
    *  never gated by it (the confirm exists only at browser render time). The
    *  TUI has no confirm() and dispatches as normal. Omitted = instant dispatch. */
   confirm?: string;
+  /** Hover-only info tooltip (6.12.0, TOOL-01). See FieldNode.tooltip. */
+  tooltip?: string;
 }
 
 /** One inline run — a contiguous piece of text inside a paragraph, carrying
@@ -905,6 +919,8 @@ export interface TextNode {
    *  A run's `href` colors as a link (`.vms-text__link`) even inside a toned node —
    *  a link that does not look like a link is worse than a tone that does not reach. */
   tone?: "danger" | "warning" | "success" | "info";
+  /** Hover-only info tooltip (6.12.0, TOOL-01). See FieldNode.tooltip. */
+  tooltip?: string;
 }
 
 /** Build a TextNode from inline runs, DERIVING `value` as the concatenation of
@@ -945,6 +961,8 @@ export interface LinkNode {
    *  backend decides which nav item is active from its route/state, exactly
    *  like every other view decision — there is no client-side route matching. */
   active?: boolean;
+  /** Hover-only info tooltip (6.12.0, TOOL-01). See FieldNode.tooltip. */
+  tooltip?: string;
 }
 
 /** One crumb in a BreadcrumbNode trail. Mirrors LinkNode's nav model:
@@ -1068,6 +1086,10 @@ export interface TableColumn {
   linkLabel?: string;
   /** true = open outside current app context (browser: new tab + noopener) */
   linkExternal?: boolean;
+  /** Hover-only info tooltip on the column HEADER (6.12.0, TOOL-01). See
+   *  FieldNode.tooltip. Useful for annotating short header labels ("MTD",
+   *  "Δ 7d") with a full explanation. */
+  tooltip?: string;
 }
 
 export interface TableRow {
@@ -1222,6 +1244,8 @@ export interface CopyButtonNode {
    *  `block`, Chakra `width="full"`). Emits `.vms-button--full`. Omitted/`"auto"`
    *  = content-width (the default hug). Orthogonal to emphasis/tone/size. */
   width?: "auto" | "full";
+  /** Hover-only info tooltip (6.12.0, TOOL-01). See FieldNode.tooltip. */
+  tooltip?: string;
 }
 
 /**
@@ -1265,6 +1289,10 @@ export interface BadgeNode {
    *  Mirrors ButtonNode's emphasis semantics. Emits .vms-badge--{emphasis}.
    *  Omitted = the default filled tint. Closed union. */
   emphasis?: "primary" | "secondary";
+  /** Hover-only info tooltip (6.12.0, TOOL-01). See FieldNode.tooltip.
+   *  Useful for annotating short badge labels ("!!!", "3", "Beta") with a
+   *  full explanation. */
+  tooltip?: string;
 }
 
 /**

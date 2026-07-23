@@ -59,7 +59,9 @@
         "\"label\":\"Medium\"",
         "\"inputType\":\"range\"",
         "\"name\":\"fc-range\"",
-        "\"max\":\"100\""
+        "\"max\":\"100\"",
+        "\"tooltip\":\"The region code from the customer's billing address.\"",
+        "\"tooltip\":\"Currently disabled — complete required fields first.\""
       ]
     },
     {

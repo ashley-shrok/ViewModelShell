@@ -1204,3 +1204,109 @@ describe("6.12.0 — range inputType", () => {
     expect(state).toEqual({ level: "75" });
   });
 });
+
+// 6.12.0 (TOOL-01) — the tooltip prop cluster on 8 node types. Renderer stamps
+// three things per tooltip-carrying element: native title=, .vms-has-tooltip
+// class, data-vms-tooltip attribute. Absence = no attribute (null-omission).
+describe("6.12.0 — tooltip prop cluster", () => {
+  it("ButtonNode with tooltip renders title + .vms-has-tooltip + data-vms-tooltip on the <button>", () => {
+    const { container, render } = setup();
+    render({
+      type: "button",
+      label: "Delete",
+      action: { name: "delete" },
+      tooltip: "Removes the record permanently — cannot be undone.",
+    });
+    const btn = container.querySelector<HTMLButtonElement>("button.vms-button")!;
+    expect(btn.title).toBe("Removes the record permanently — cannot be undone.");
+    expect(btn.classList.contains("vms-has-tooltip")).toBe(true);
+    expect(btn.dataset.vmsTooltip).toBe("Removes the record permanently — cannot be undone.");
+  });
+
+  it("BadgeNode with tooltip renders the three tooltip attributes on the <span>", () => {
+    const { container, render } = setup();
+    render({
+      type: "badge",
+      label: "!!!",
+      tone: "danger",
+      tooltip: "3 tickets past SLA",
+    });
+    const span = container.querySelector<HTMLSpanElement>("span.vms-badge")!;
+    expect(span.title).toBe("3 tickets past SLA");
+    expect(span.classList.contains("vms-has-tooltip")).toBe(true);
+    expect(span.dataset.vmsTooltip).toBe("3 tickets past SLA");
+  });
+
+  it("LinkNode with tooltip stamps the tooltip on the <a>", () => {
+    const { container, render } = setup();
+    render({
+      type: "link",
+      label: "Docs",
+      href: "https://example.com",
+      tooltip: "Open the framework docs",
+    });
+    const a = container.querySelector<HTMLAnchorElement>("a.vms-link")!;
+    expect(a.title).toBe("Open the framework docs");
+    expect(a.classList.contains("vms-has-tooltip")).toBe(true);
+    expect(a.dataset.vmsTooltip).toBe("Open the framework docs");
+  });
+
+  it("TextNode with tooltip stamps the tooltip on the emitted element", () => {
+    const { container, render } = setup();
+    render({
+      type: "text",
+      value: "MTD",
+      style: "heading",
+      tooltip: "Month-to-date",
+    });
+    const el = container.querySelector<HTMLElement>(".vms-text")!;
+    expect(el.title).toBe("Month-to-date");
+    expect(el.classList.contains("vms-has-tooltip")).toBe(true);
+  });
+
+  it("TableColumn with tooltip stamps the tooltip on the header <th>", () => {
+    const { container, render } = setup();
+    render({
+      type: "table",
+      columns: [
+        { key: "name", label: "Name" },
+        { key: "mtd", label: "MTD", tooltip: "Month-to-date" },
+      ],
+      rows: [{ id: "1", cells: { name: "Alice", mtd: "1200" } }],
+    });
+    const ths = container.querySelectorAll<HTMLTableCellElement>("th.vms-table__th");
+    // First TH has no tooltip; second does.
+    expect(ths[0]!.title).toBe("");
+    expect(ths[0]!.classList.contains("vms-has-tooltip")).toBe(false);
+    expect(ths[1]!.title).toBe("Month-to-date");
+    expect(ths[1]!.classList.contains("vms-has-tooltip")).toBe(true);
+    expect(ths[1]!.dataset.vmsTooltip).toBe("Month-to-date");
+  });
+
+  it("a node WITHOUT tooltip does not stamp any of the three attributes (null-omission)", () => {
+    const { container, render } = setup();
+    render({
+      type: "button",
+      label: "Save",
+      action: { name: "save" },
+    });
+    const btn = container.querySelector<HTMLButtonElement>("button.vms-button")!;
+    expect(btn.title).toBe("");
+    expect(btn.classList.contains("vms-has-tooltip")).toBe(false);
+    expect(btn.hasAttribute("data-vms-tooltip")).toBe(false);
+  });
+
+  it("empty-string tooltip is treated as absent (helper no-ops)", () => {
+    const { container, render } = setup();
+    render({
+      type: "button",
+      label: "Save",
+      action: { name: "save" },
+      tooltip: "",
+    });
+    const btn = container.querySelector<HTMLButtonElement>("button.vms-button")!;
+    expect(btn.title).toBe("");
+    expect(btn.classList.contains("vms-has-tooltip")).toBe(false);
+    expect(btn.hasAttribute("data-vms-tooltip")).toBe(false);
+  });
+});

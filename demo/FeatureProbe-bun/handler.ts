@@ -696,7 +696,9 @@ function buildVm(state: FeatureProbeState): ViewNode {
       { type: "field", name: "fc-locked", inputType: "text", bind: "note", label: "Account ID",
         readonly: true },
       { type: "field", name: "fc-region", inputType: "text", bind: "note", label: "Region",
-        disabled: true },
+        disabled: true,
+        // 6.12.0 (TOOL-01) — twin of the .NET FieldNode.Tooltip, byte-identical.
+        tooltip: "The region code from the customer's billing address." },
       // 6.12.0 (RADIO-01) — twin of the .NET fc-radio, byte-identical wire.
       { type: "field", name: "fc-radio", inputType: "radio", bind: "note", label: "Priority",
         options: [
@@ -708,7 +710,9 @@ function buildVm(state: FeatureProbeState): ViewNode {
       { type: "field", name: "fc-range", inputType: "range", bind: "note", label: "Level",
         min: "0", max: "100", step: "5" },
       { type: "button", label: "Submit (disabled)", action: { name: "fc-submit" },
-        emphasis: "primary", disabled: true },
+        emphasis: "primary", disabled: true,
+        // 6.12.0 (TOOL-01) — twin of the .NET ButtonNode.Tooltip, byte-identical.
+        tooltip: "Currently disabled — complete required fields first." },
     ],
   };
 
