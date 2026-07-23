@@ -117,22 +117,29 @@ public class DocsViewerController : ControllerBase
         }
 
         var md = ReadDoc(entry.Id);
-        // Markdown -> ViewNode subtree, spread into the page's children.
+        // Markdown → ViewNode subtree, wrapped in a `variant: "prose"` section
+        // so the whole rendered body picks up the prose-typography scope
+        // (`.vms-section--prose`): block layout with collapsing margins,
+        // asymmetric heading spacing, real <ul>/<ol> bullets with hanging
+        // indent, prose blockquote/code/figure treatment. This is the
+        // canonical adopter pattern for markdown-converter output —
+        // consumers copy this shape.
         var body = MarkdownConverter.ToViewNodes(md);
-
-        var children = new List<ViewNode>
-        {
-            new ButtonNode(
-                Label: "← Back",
-                Action: new ActionDescriptor("back-to-list")),
-            new DividerNode(),
-        };
-        children.AddRange(body);
 
         return new PageNode(
             Title: entry.Title,
             Width: PageWidth.Wide,
-            Children: children
+            Children:
+            [
+                new ButtonNode(
+                    Label: "← Back",
+                    Action: new ActionDescriptor("back-to-list")),
+                new DividerNode(),
+                new SectionNode(
+                    Heading: null,
+                    Children: body,
+                    Variant: SectionVariant.Prose),
+            ]
         );
     }
 
