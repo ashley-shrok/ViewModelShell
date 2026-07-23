@@ -261,6 +261,26 @@ function componentsView(): ViewNode[] {
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90'%3E%3Crect width='160' height='90' fill='%2310b981'/%3E%3C/svg%3E", alt: "Sample banner", size: "large" },
     ]},
 
+    { type: "section", heading: "Heading levels (TextNode.level 1–6)", children: [
+      { type: "text", value: "Setting `level: 1..6` on a TextNode emits a real semantic <h1>..<h6> tag — the standard heading landmark screen readers use for document outlines. The existing `style: \"heading\" | \"subheading\"` still works (backward compatible) but is deprecated: new code uses `level`.", style: "muted" },
+      { type: "text", value: "H1 — level 1 (document title)",        level: 1 },
+      { type: "text", value: "H2 — level 2 (top-level section)",     level: 2 },
+      { type: "text", value: "H3 — level 3 (subsection)",            level: 3 },
+      { type: "text", value: "H4 — level 4",                          level: 4 },
+      { type: "text", value: "H5 — level 5",                          level: 5 },
+      { type: "text", value: "H6 — level 6 (deepest)",                level: 6 },
+      { type: "text", value: "Composes with tone: H2 in the danger tone", level: 2, tone: "danger" },
+      { type: "text",
+        value: "Composes with runs: an H3 containing a bold word and a link",
+        level: 3,
+        runs: [
+          { text: "Composes with runs: an H3 containing a " },
+          { text: "bold word", bold: true },
+          { text: " and a " },
+          { text: "link", href: "https://github.com/ashley-shrok/ViewModelShell", external: true },
+        ] },
+    ]},
+
     { type: "section", heading: "Image with caption (figure + figcaption)", children: [
       { type: "text", value: "Setting `caption` on ImageNode wraps the image and its caption in a real <figure>/<figcaption> — the standard captioned-figure landmark screen readers announce as one unit. Absent caption ⇒ bare <img> as before.", style: "muted" },
       { type: "image",

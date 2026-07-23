@@ -1170,6 +1170,14 @@ public record InlineRun(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool External = false
 );
 
+// TextNode with a Level (1–6) emits a real <h1>–<h6> tag on the browser side —
+// the standard heading landmark screen readers announce with the right depth
+// and agents read directly from the DOM tag. Composes with Runs, Tone, and
+// Style; precedence rule: Level wins over Style.Pre when both are set (level
+// names a semantic outline element; style is a typography role). Existing
+// TextStyle.Heading / TextStyle.Subheading remain supported (backward compat)
+// but are deprecated in favor of Level for new code — they render as styled
+// <span>s with no landmark semantics.
 public record TextNode(
     // The plain-text reading. REQUIRED and unchanged — it is simultaneously the
     // rendering when Runs is null, the FALLBACK for adapters that do not implement
@@ -1198,7 +1206,16 @@ public record TextNode(
     // which is what makes the two orderings safe. PASS IT BY NAME (Runs: [...]).
     // Omit (null) for a plain paragraph — never pass an empty list, which would
     // serialize as a present-but-empty [] and is a distinct wire state.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<InlineRun>? Runs = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<InlineRun>? Runs = null,
+    // Semantic outline level 1–6. When set, the renderer emits a real <h1>–<h6>
+    // HTML tag (screen-reader landmark; agent-legible from DOM tag alone) instead
+    // of the default <span>. Same last-slot rule as Runs — appended so no
+    // existing 2-/3-/4-arg construction site is retyped. PASS BY NAME (Level: 2).
+    // Valid range 1–6; the renderer clamps at runtime and falls back to <span>
+    // for out-of-range values, so a wire value of 7 renders as a fallback span
+    // rather than an invalid <h7>. Wire posture: WhenWritingNull => omitted
+    // absent, matching the closed-union convention (TS twin: `level?: 1|2|3|4|5|6`).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Level = null
 ) : ViewNode
 {
     /// <summary>Build a TextNode from inline runs, DERIVING Value as the

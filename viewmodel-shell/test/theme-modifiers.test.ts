@@ -606,6 +606,83 @@ describe('0.11.0 / #5 — ImageNode rendering', () => {
   });
 });
 
+describe("6.10.0 — TextNode.level: semantic h1–h6 emission (heading landmark)", () => {
+  function renderTextRaw(node: ViewNode): HTMLElement {
+    const container = freshContainer();
+    new BrowserAdapter(container).render({ type: "page", children: [node] }, () => {});
+    return container;
+  }
+  // Cover every valid level 1–6: each must emit its own <hN> tag (screen-reader
+  // landmark), still carry the .vms-text class (so all existing typography +
+  // tone rules keep applying), and render the value the same way TextNode
+  // always has.
+  for (const lvl of [1, 2, 3, 4, 5, 6] as const) {
+    it(`level: ${lvl} ⇒ <h${lvl} class="vms-text">value`, () => {
+      const c = renderTextRaw({ type: "text", value: `Level ${lvl}`, level: lvl });
+      const el = c.querySelector(`h${lvl}.vms-text`) as HTMLElement;
+      expect(el).not.toBeNull();
+      expect(el.tagName).toBe(`H${lvl}`);
+      expect(el.textContent).toBe(`Level ${lvl}`);
+    });
+  }
+
+  it("level absent ⇒ <span class=vms-text> (byte-identical baseline)", () => {
+    const c = renderTextRaw({ type: "text", value: "paragraph" });
+    const el = c.querySelector(".vms-text") as HTMLElement;
+    expect(el.tagName).toBe("SPAN");
+  });
+
+  it("level composes with tone: <h2 class='vms-text vms-text--danger'>", () => {
+    const c = renderTextRaw({ type: "text", value: "warning heading", level: 2, tone: "danger" });
+    const el = c.querySelector("h2.vms-text") as HTMLElement;
+    expect(el).not.toBeNull();
+    expect(el.classList.contains("vms-text--danger")).toBe(true);
+  });
+
+  it("level composes with runs: <h3> contains the rich-run <strong>", () => {
+    const c = renderTextRaw({
+      type: "text",
+      value: "Section one",
+      level: 3,
+      runs: [{ text: "Section " }, { text: "one", bold: true }],
+    });
+    const el = c.querySelector("h3.vms-text") as HTMLElement;
+    expect(el).not.toBeNull();
+    expect(el.textContent).toBe("Section one");
+    expect(el.querySelector("strong.vms-text__strong")).not.toBeNull();
+  });
+
+  it("level wins over style: 'pre' (level = semantic outline; style:pre = typography)", () => {
+    const c = renderTextRaw({ type: "text", value: "heading beats pre", level: 2, style: "pre" });
+    // The semantic tag is h2; style="pre" still emits its class for CSS but
+    // does NOT force a <pre> tag when level is set.
+    const el = c.querySelector("h2.vms-text.vms-text--pre") as HTMLElement;
+    expect(el).not.toBeNull();
+  });
+
+  it("level out-of-range (e.g. 7 from a less-strict backend) ⇒ fallback <span>, NOT <h7>", () => {
+    // Simulate a wire-drift value the compile-time union would reject but the
+    // .NET twin's int? does not gate. Cast escapes the TS union check.
+    const c = renderTextRaw({ type: "text", value: "invalid", level: 7 as unknown as 1 });
+    // No invalid <h7>.
+    expect(c.querySelector("h7")).toBeNull();
+    // Falls back to the span baseline.
+    const el = c.querySelector("span.vms-text") as HTMLElement;
+    expect(el).not.toBeNull();
+    expect(el.textContent).toBe("invalid");
+  });
+
+  it("existing style: 'heading' still renders as <span class=vms-text--heading> (backward compat)", () => {
+    const c = renderTextRaw({ type: "text", value: "old-style", style: "heading" });
+    const el = c.querySelector("span.vms-text.vms-text--heading") as HTMLElement;
+    expect(el).not.toBeNull();
+    // NOT a semantic heading — this is the deprecation contract: the old
+    // style values keep working as styled spans (no landmark), while `level`
+    // is the new path for semantic headings.
+    expect(c.querySelector("h1,h2,h3,h4,h5,h6")).toBeNull();
+  });
+});
+
 describe("6.10.0 — ImageNode.caption: figure/figcaption emission when caption present", () => {
   // Local render helper — we can't reuse renderImage() because a captioned
   // image emits <figure> wrapping <img>, so the "img.vms-image" selector still

@@ -3009,7 +3009,16 @@ export class BrowserAdapter implements Adapter {
   }
 
   private text(n: TextNode, parent: HTMLElement): void {
-    const el = document.createElement(n.style === "pre" ? "pre" : "span");
+    // Tag precedence: level (semantic heading) wins over style:"pre" (typography
+    // role), style:"pre" wins over the default <span>. Level is clamped to 1–6
+    // at runtime — a wire-drift value like 7 falls back to <span> rather than
+    // emitting an invalid <h7> element (defense against a less-strictly-typed
+    // backend). Level itself always emits the real semantic tag so screen
+    // readers see the heading landmark, not a generic span.
+    const tag = (typeof n.level === "number" && n.level >= 1 && n.level <= 6)
+      ? `h${n.level}`
+      : (n.style === "pre" ? "pre" : "span");
+    const el = document.createElement(tag);
     el.className = `vms-text${n.style ? ` vms-text--${n.style}` : ""}${n.tone ? ` vms-text--${n.tone}` : ""}`;
     // runs present => draw runs INSTEAD of value. Absent => byte-identical to the
     // pre-runs rendering (a single text node), so every existing consumer is

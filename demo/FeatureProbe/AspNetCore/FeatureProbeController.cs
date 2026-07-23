@@ -308,6 +308,20 @@ public class FeatureProbeController : ControllerBase
                 new InlineRun("the docs", Href: "https://example.com/docs", External: true),
             }));
 
+        // 6.10.0 — TextNode.Level parity coverage. Static view-shape captured
+        // by every GET step: one TextNode per level 1..6 (proves the integer
+        // serializes as a JSON number 1..6 on both backends), plus a level-2
+        // combined with tone (proves Level composes with Tone). Level is
+        // positional slot 5 (after Runs) — pass by NAME per the record's
+        // "Runs is slot 4, appended last" convention.
+        children.Add(new TextNode("H1 level", Level: 1));
+        children.Add(new TextNode("H2 level", Level: 2));
+        children.Add(new TextNode("H3 level", Level: 3));
+        children.Add(new TextNode("H4 level", Level: 4));
+        children.Add(new TextNode("H5 level", Level: 5));
+        children.Add(new TextNode("H6 level", Level: 6));
+        children.Add(new TextNode("H2 danger heading", Tone: Tone.Danger, Level: 2));
+
         if (state.LastSubmit != null)
             children.Add(new TextNode($"Last submit: {state.LastSubmit}", TextStyle.Muted));
 

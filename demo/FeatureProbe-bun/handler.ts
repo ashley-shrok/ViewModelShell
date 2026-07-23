@@ -200,6 +200,20 @@ function buildVm(state: FeatureProbeState): ViewNode {
       { text: "the docs", href: "https://example.com/docs", external: true },
     ],
   });
+  // 6.10.0 — TextNode.level parity coverage. Static view-shape captured by every
+  // GET step: one TextNode per level 1..6 (proves the integer serializes as a
+  // JSON number 1..6 on both backends), plus a level-2 combined with tone
+  // (proves level composes with tone), plus a level absent (proves omitted =
+  // absent, WhenWritingNull posture). The initial step's expectBodyContains
+  // asserts "level":1 and "level":6 cross the wire as bare integers so the
+  // branch can't go vacuous.
+  children.push({ type: "text", value: "H1 level", level: 1 });
+  children.push({ type: "text", value: "H2 level", level: 2 });
+  children.push({ type: "text", value: "H3 level", level: 3 });
+  children.push({ type: "text", value: "H4 level", level: 4 });
+  children.push({ type: "text", value: "H5 level", level: 5 });
+  children.push({ type: "text", value: "H6 level", level: 6 });
+  children.push({ type: "text", value: "H2 danger heading", level: 2, tone: "danger" });
   if (state.lastSubmit != null) {
     children.push({ type: "text", value: `Last submit: ${state.lastSubmit}`, style: "muted" });
   }

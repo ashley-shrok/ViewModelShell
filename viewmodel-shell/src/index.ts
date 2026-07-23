@@ -859,11 +859,34 @@ export interface TextNode {
    *  (button/badge/breadcrumb/tab labels) are deliberately NOT covered either —
    *  markdown never produces emphasis inside a control label. */
   runs?: InlineRun[];
+  /** Semantic outline level (1–6). When set, the renderer emits a real
+   *  `<h1>`–`<h6>` HTML tag instead of the default `<span>`, giving screen
+   *  readers the correct heading landmark and giving agents an unambiguous
+   *  semantic signal from the DOM tag itself (not just a class name). Closed
+   *  union — the compile-time check keeps this in the intended range; the
+   *  renderer additionally clamps at runtime and falls back to `<span>` for
+   *  out-of-range values, so wire drift from a less-strictly-typed backend
+   *  cannot produce an invalid `<h7>` element.
+   *
+   *  Composes with `runs`, `tone`, and `style` orthogonally: `{ level: 2,
+   *  tone: "danger" }` is an `<h2>` in the danger color; `{ level: 3, runs: [
+   *  { text: "Section ", bold: true }, { text: "one" } ] }` is an `<h3>`
+   *  whose content contains a bold run.
+   *
+   *  Precedence when both `level` and `style: "pre"` are set: `level` wins
+   *  (semantic outline beats typography role). Don't set both — they name
+   *  different content shapes; the rule is only a defensive tie-breaker. */
+  level?: 1 | 2 | 3 | 4 | 5 | 6;
   /** Typography role only (NOT color) — emits .vms-text--{style}. Semantic color moved to `tone` (the old `error`/`warning` style values are now `tone:"danger"`/`tone:"warning"`). Closed union.
    *  Orthogonal to `runs`: `style` is the NODE-level typography role, `runs` is
    *  intra-paragraph emphasis. Uniform emphasis over a whole paragraph should use
    *  `style` and omit `runs` entirely. With `style:"pre"` the runs nest inside the
-   *  `<pre>` and its `white-space: pre` still applies. */
+   *  `<pre>` and its `white-space: pre` still applies.
+   *
+   *  @deprecated `"heading"` and `"subheading"` remain SUPPORTED for backward
+   *  compatibility but new code should use the `level` axis above instead.
+   *  Level emits real semantic `<h1>`–`<h6>` tags; these style values only
+   *  produce a `<span class="vms-text--heading">` with no landmark semantics. */
   style?: "heading" | "subheading" | "body" | "muted" | "strikethrough" | "pre";
   /** Semantic intent/severity color — the universal status tone axis, orthogonal to `style` (a heading can be `tone:"danger"`). Emits .vms-text--{tone}; the tone color wins over a `style` color via source order. Omitted = default text color. Closed union.
    *  A run's `href` colors as a link (`.vms-text__link`) even inside a toned node —
