@@ -762,6 +762,26 @@ public class FeatureProbeController : ControllerBase
                     Readonly: true),
                 new FieldNode("fc-region", "text", "note", "Region", null,
                     Disabled: true),
+                // 6.12.0 (RADIO-01) — the radio inputType exercised as static
+                // view-shape. Options carry {value,label} so parity byte-diffs
+                // the {type:"field", inputType:"radio", options:[…]} wire across
+                // .NET/bun/node. The initial step's expectBodyContains asserts
+                // "inputType":"radio" + one option value string, so if a backend
+                // dropped options or emitted a different inputType casing the
+                // step fails LOUDLY instead of going vacuous.
+                new FieldNode("fc-radio", "radio", "note", "Priority", null,
+                    Options: new FieldOption[]
+                    {
+                        new FieldOption("low", "Low"),
+                        new FieldOption("med", "Medium"),
+                        new FieldOption("high", "High"),
+                    }),
+                // 6.12.0 (RANGE-01) — the range inputType exercised as static
+                // view-shape reusing the existing min/max/step string fields.
+                // The default renderer branch handles it via inp.type = "range"
+                // + decorateField applying min/max/step; no new renderer arm.
+                new FieldNode("fc-range", "range", "note", "Level", null,
+                    Min: "0", Max: "100", Step: "5"),
                 new ButtonNode("Submit (disabled)", new ActionDescriptor("fc-submit"),
                     Emphasis: Emphasis.Primary, Disabled: true),
             }));

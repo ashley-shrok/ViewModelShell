@@ -1092,3 +1092,115 @@ describe("TextNode inline runs", () => {
     expect(cells[1].querySelector("*")).toBeNull();
   });
 });
+
+// 6.12.0 (RADIO-01) — the radio inputType, additive to the FieldNode.inputType
+// closed union. Renders a role="radiogroup" wrapping one <input type="radio"> per
+// option; clicks write opt.value into bind. Options carry {value,label}; no
+// new fields on the wire.
+describe("6.12.0 — radio inputType", () => {
+  it("renders one <input type='radio'> per option; the option matching stateValue is checked", () => {
+    const { container, render } = setup({ priority: "med" });
+    render({
+      type: "field",
+      name: "priority",
+      inputType: "radio",
+      bind: "priority",
+      label: "Priority",
+      options: [
+        { value: "low", label: "Low" },
+        { value: "med", label: "Medium" },
+        { value: "high", label: "High" },
+      ],
+    });
+    const group = container.querySelector<HTMLElement>(".vms-field--radio[role='radiogroup']");
+    expect(group).not.toBeNull();
+    const radios = Array.from(container.querySelectorAll<HTMLInputElement>("input[type='radio']"));
+    expect(radios).toHaveLength(3);
+    expect(radios.map(r => r.name)).toEqual(["priority", "priority", "priority"]);
+    expect(radios.map(r => r.value)).toEqual(["low", "med", "high"]);
+    expect(radios.map(r => r.checked)).toEqual([false, true, false]);
+    // Option labels rendered next to the input.
+    const labels = Array.from(container.querySelectorAll<HTMLElement>(".vms-field__radio-label"));
+    expect(labels.map(l => l.textContent)).toEqual(["Low", "Medium", "High"]);
+  });
+
+  it("clicking a radio writes its value to state at the bind path", () => {
+    const { container, render, state } = setup({ priority: "low" });
+    render({
+      type: "field",
+      name: "priority",
+      inputType: "radio",
+      bind: "priority",
+      options: [
+        { value: "low", label: "Low" },
+        { value: "med", label: "Medium" },
+        { value: "high", label: "High" },
+      ],
+    });
+    const radios = Array.from(container.querySelectorAll<HTMLInputElement>("input[type='radio']"));
+    // Simulate the browser's native behavior: checking one unchecks its siblings.
+    radios.forEach(r => { r.checked = false; });
+    radios[2]!.checked = true;
+    radios[2]!.dispatchEvent(new Event("change"));
+    expect(state).toEqual({ priority: "high" });
+  });
+
+  it("radio renders with no option checked when stateValue matches nothing", () => {
+    const { container, render } = setup({ priority: "unknown" });
+    render({
+      type: "field",
+      name: "priority",
+      inputType: "radio",
+      bind: "priority",
+      options: [
+        { value: "low", label: "Low" },
+        { value: "high", label: "High" },
+      ],
+    });
+    const radios = Array.from(container.querySelectorAll<HTMLInputElement>("input[type='radio']"));
+    expect(radios.map(r => r.checked)).toEqual([false, false]);
+  });
+});
+
+// 6.12.0 (RANGE-01) — the range inputType, additive to the FieldNode.inputType
+// closed union. Falls through the default renderer branch (inp.type = "range")
+// with min/max/step applied by decorateField. No new wire fields.
+describe("6.12.0 — range inputType", () => {
+  it("renders <input type='range'> with min/max/step applied and value bound to state", () => {
+    const { container, render } = setup({ level: "42" });
+    render({
+      type: "field",
+      name: "level",
+      inputType: "range",
+      bind: "level",
+      label: "Level",
+      min: "0",
+      max: "100",
+      step: "5",
+    });
+    const inp = container.querySelector<HTMLInputElement>("input.vms-field__input");
+    expect(inp).not.toBeNull();
+    expect(inp!.type).toBe("range");
+    expect(inp!.min).toBe("0");
+    expect(inp!.max).toBe("100");
+    expect(inp!.step).toBe("5");
+    expect(inp!.value).toBe("42");
+  });
+
+  it("dragging the slider writes the new value (as a string) back to state on 'input'", () => {
+    const { container, render, state } = setup({ level: "10" });
+    render({
+      type: "field",
+      name: "level",
+      inputType: "range",
+      bind: "level",
+      min: "0",
+      max: "100",
+    });
+    const inp = container.querySelector<HTMLInputElement>("input.vms-field__input")!;
+    inp.value = "75";
+    inp.dispatchEvent(new Event("input"));
+    // Native <input type=range>.value is always a string; state carries that string.
+    expect(state).toEqual({ level: "75" });
+  });
+});

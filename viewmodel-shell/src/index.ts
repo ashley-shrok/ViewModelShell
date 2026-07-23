@@ -409,6 +409,7 @@ export interface FieldNode {
     | "date" | "time" | "datetime-local"
     | "textarea" | "hidden" | "file"
     | "select" | "select-multiple" | "checkbox"
+    | "radio" | "range"
     | "lookup" | "lookup-multiple"
     | "code";
   /** Path into state where this input reads its current value and writes user

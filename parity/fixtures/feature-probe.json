@@ -51,7 +51,15 @@
         "\"language\":\"python\"",
         "\"filename\":\"add.py\"",
         "\"copyable\":false",
-        "def add(a, b)"
+        "def add(a, b)",
+        "\"inputType\":\"radio\"",
+        "\"name\":\"fc-radio\"",
+        "\"value\":\"low\"",
+        "\"value\":\"med\"",
+        "\"label\":\"Medium\"",
+        "\"inputType\":\"range\"",
+        "\"name\":\"fc-range\"",
+        "\"max\":\"100\""
       ]
     },
     {

@@ -2756,6 +2756,40 @@ export class BrowserAdapter implements Adapter {
       if (n.required) ta.required = true;
       ta.addEventListener("input", () => { this.writeBind(n.bind, ta.value); });
       wrapper.appendChild(ta);
+    } else if (n.inputType === "radio") {
+      // Radio group — the ≤5-option mutually-exclusive input. The outer wrapper's
+      // <label> already emits with htmlFor pointing at vms-${name}; we give the
+      // group that id (parallels the <select> case), so a click on the label is a
+      // no-op (correct — the label labels the group, not a specific option), and
+      // aria wiring via decorateField's aria-describedby still lands on the
+      // group. Options render as <label> wrapping <input type="radio"> + <span>,
+      // the checkbox-style label-follows-input arrangement browsers make focusable
+      // by clicking anywhere in the label.
+      const group = document.createElement("div");
+      group.className = "vms-field__input vms-field--radio";
+      group.setAttribute("role", "radiogroup");
+      group.id = `vms-${n.name}`;
+      const selectedValue: string = stateValue == null ? "" : String(stateValue);
+      (n.options ?? []).forEach((opt) => {
+        const optLabel = document.createElement("label");
+        optLabel.className = "vms-field__radio-option";
+        const inp = document.createElement("input");
+        inp.type = "radio";
+        inp.className = "vms-field__radio-input";
+        inp.name = n.name;
+        inp.value = opt.value;
+        inp.checked = opt.value === selectedValue;
+        inp.addEventListener("change", () => {
+          if (inp.checked) this.writeBind(n.bind, opt.value);
+        });
+        const span = document.createElement("span");
+        span.className = "vms-field__radio-label";
+        span.textContent = opt.label;
+        optLabel.appendChild(inp);
+        optLabel.appendChild(span);
+        group.appendChild(optLabel);
+      });
+      wrapper.appendChild(group);
     } else if (n.inputType === "code") {
       // Monospaced editable text. Tab inserts a literal tab instead of moving
       // focus. Apps wanting syntax highlighting attach their own library

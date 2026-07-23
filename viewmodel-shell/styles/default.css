@@ -632,6 +632,30 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   overflow: auto;
 }
 
+/* Radio group (FieldNode inputType="radio", 6.12.0) — stacked options with a
+   click-anywhere-on-the-label affordance. The group container is .vms-field__input
+   so decorateField's disabled propagation reaches it; the actual radios inherit
+   the browser's native rendering (no custom-styled dot — native pattern is
+   fine agent-legibly + a11y-correctly + zero JS). */
+.vms-field--radio {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vms-space-2xs);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.vms-field__radio-option {
+  display: flex;
+  align-items: center;
+  gap: var(--vms-space-xs);
+  cursor: pointer;
+  font-size: var(--vms-text-base);
+  color: var(--vms-text);
+}
+.vms-field__radio-input { cursor: pointer; }
+.vms-field--disabled .vms-field__radio-option { cursor: not-allowed; opacity: 0.6; }
+
 /* Lookup / reference picker (FieldNode inputType="lookup" / "lookup-multiple",
    Phase 21) — an editable combobox whose listbox popup floats over the page.
    Built entirely from the existing .vms-field__* tokens: no new colors, no new
