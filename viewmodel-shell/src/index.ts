@@ -311,6 +311,16 @@ export interface ListItemNode {
   state?: string;
   /** Semantic intent/severity — the universal status tone axis (closed). Emits .vms-list-item--{tone} (colored accent border, reusing the shared tokens). Omitted = neutral. */
   tone?: "danger" | "warning" | "success" | "info";
+  /** Task-list marker (GFM `- [ ]` / `- [x]`). Non-interactive — the framework
+   *  draws a FIXED check glyph in front of the item content (a filled check
+   *  when `true`, an empty box when `false`, no glyph when absent). Distinct
+   *  from a CheckboxNode child: this is a semantic checklist ITEM, not a form
+   *  input, so it has no bind and no action and is never clickable — a
+   *  screen reader announces it as content, not as a control.
+   *
+   *  For an interactive check that dispatches on toggle, use a CheckboxNode
+   *  inside `children` instead. */
+  completed?: boolean;
   children: ViewNode[];
 }
 

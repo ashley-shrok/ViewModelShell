@@ -341,6 +341,23 @@ public class FeatureProbeController : ControllerBase
             }),
         }));
 
+        // 6.10.0 — ListItemNode.Completed parity coverage. Static view-shape
+        // captured by every GET step: one item with Completed:true, one with
+        // Completed:false, one with Completed OMITTED. Proves JSON true /
+        // JSON false literals cross the wire AND that omitted = absent
+        // (WhenWritingNull ⇒ absent, not null) on the .NET side too.
+        children.Add(new ListNode(Children: new List<ViewNode>
+        {
+            new ListItemNode(Id: null, State: null,
+                Children: new List<ViewNode> { new TextNode("Task done") },
+                Completed: true),
+            new ListItemNode(Id: null, State: null,
+                Children: new List<ViewNode> { new TextNode("Task todo") },
+                Completed: false),
+            new ListItemNode(Id: null, State: null,
+                Children: new List<ViewNode> { new TextNode("Plain item (no marker)") }),
+        }));
+
         if (state.LastSubmit != null)
             children.Add(new TextNode($"Last submit: {state.LastSubmit}", TextStyle.Muted));
 

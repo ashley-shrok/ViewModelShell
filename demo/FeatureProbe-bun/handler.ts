@@ -240,6 +240,19 @@ function buildVm(state: FeatureProbeState): ViewNode {
       },
     ],
   });
+  // 6.10.0 — ListItemNode.completed parity coverage. Static view-shape captured
+  // by every GET step: a small list with completed:true, completed:false, and
+  // completed OMITTED — proving the wire carries the JSON `true` and JSON
+  // `false` literals AND that omitted crosses as absent (WhenWritingNull ⇒
+  // absent, not null). The initial step's expectBodyContains asserts
+  // "completed":true and "completed":false cross as bare booleans so if a
+  // backend serializes the field as a string, drops it, or emits `null` for
+  // absent, the step fails LOUDLY.
+  children.push({ type: "list", children: [
+    { type: "list-item", completed: true,  children: [{ type: "text", value: "Task done" }] },
+    { type: "list-item", completed: false, children: [{ type: "text", value: "Task todo" }] },
+    { type: "list-item",                   children: [{ type: "text", value: "Plain item (no marker)" }] },
+  ]});
   if (state.lastSubmit != null) {
     children.push({ type: "text", value: `Last submit: ${state.lastSubmit}`, style: "muted" });
   }

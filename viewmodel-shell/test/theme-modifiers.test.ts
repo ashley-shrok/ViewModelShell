@@ -606,6 +606,74 @@ describe('0.11.0 / #5 — ImageNode rendering', () => {
   });
 });
 
+describe("6.10.0 — ListItemNode.completed: task-list marker (GFM checklist)", () => {
+  function renderLI(node: ViewNode): HTMLElement {
+    const container = freshContainer();
+    new BrowserAdapter(container).render({ type: "page", children: [node] }, () => {});
+    return container;
+  }
+
+  it("completed absent ⇒ NO marker glyph rendered (byte-identical baseline)", () => {
+    const c = renderLI({ type: "list", children: [
+      { type: "list-item", children: [{ type: "text", value: "plain item" }] },
+    ]});
+    const li = c.querySelector("li.vms-list-item") as HTMLElement;
+    expect(li).not.toBeNull();
+    expect(li.querySelector(".vms-list-item__marker")).toBeNull();
+    expect(li.classList.contains("vms-list-item--task-done")).toBe(false);
+    expect(li.classList.contains("vms-list-item--task-todo")).toBe(false);
+  });
+
+  it("completed: true ⇒ filled ☑ glyph + .vms-list-item--task-done modifier", () => {
+    const c = renderLI({ type: "list", children: [
+      { type: "list-item", completed: true, children: [{ type: "text", value: "done thing" }] },
+    ]});
+    const li = c.querySelector("li.vms-list-item") as HTMLElement;
+    expect(li.classList.contains("vms-list-item--task-done")).toBe(true);
+    const marker = li.querySelector(".vms-list-item__marker") as HTMLElement;
+    expect(marker).not.toBeNull();
+    expect(marker.textContent).toBe("☑");
+    // aria-hidden — the glyph is a visual cue only; the a11y-readable text
+    // lives in the item's content nodes.
+    expect(marker.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("completed: false ⇒ empty ☐ glyph + .vms-list-item--task-todo modifier", () => {
+    const c = renderLI({ type: "list", children: [
+      { type: "list-item", completed: false, children: [{ type: "text", value: "todo thing" }] },
+    ]});
+    const li = c.querySelector("li.vms-list-item") as HTMLElement;
+    expect(li.classList.contains("vms-list-item--task-todo")).toBe(true);
+    const marker = li.querySelector(".vms-list-item__marker") as HTMLElement;
+    expect(marker).not.toBeNull();
+    expect(marker.textContent).toBe("☐");
+  });
+
+  it("completed composes with tone + state (all three axes together)", () => {
+    const c = renderLI({ type: "list", children: [
+      { type: "list-item", completed: true, state: "active", tone: "success",
+        children: [{ type: "text", value: "priority done" }] },
+    ]});
+    const li = c.querySelector("li.vms-list-item") as HTMLElement;
+    expect(li.classList.contains("vms-list-item--task-done")).toBe(true);
+    expect(li.classList.contains("vms-list-item--active")).toBe(true);
+    expect(li.classList.contains("vms-list-item--success")).toBe(true);
+  });
+
+  it("mixed list — completed / not-completed / absent renders all three cases correctly", () => {
+    const c = renderLI({ type: "list", children: [
+      { type: "list-item", completed: true,  children: [{ type: "text", value: "done" }] },
+      { type: "list-item", completed: false, children: [{ type: "text", value: "todo" }] },
+      { type: "list-item",                   children: [{ type: "text", value: "plain" }] },
+    ]});
+    const items = c.querySelectorAll("li.vms-list-item");
+    expect(items.length).toBe(3);
+    expect(items[0].querySelector(".vms-list-item__marker")?.textContent).toBe("☑");
+    expect(items[1].querySelector(".vms-list-item__marker")?.textContent).toBe("☐");
+    expect(items[2].querySelector(".vms-list-item__marker")).toBeNull();
+  });
+});
+
 describe("6.10.0 — BlockquoteNode: semantic <blockquote> holding block-level children", () => {
   function renderBQ(node: ViewNode): HTMLElement {
     const container = freshContainer();

@@ -261,6 +261,17 @@ function componentsView(): ViewNode[] {
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90'%3E%3Crect width='160' height='90' fill='%2310b981'/%3E%3C/svg%3E", alt: "Sample banner", size: "large" },
     ]},
 
+    { type: "section", heading: "Task list (ListItemNode.completed)", children: [
+      { type: "text", value: "Setting `completed: true|false` on a list item draws a fixed check glyph — the GFM task-list affordance. Non-interactive: this is a static checklist display, not a form input. For an interactive check that dispatches on toggle, put a CheckboxNode inside the item's children instead.", style: "muted" },
+      { type: "list", children: [
+        { type: "list-item", completed: true,  children: [{ type: "text", value: "Design the primitive" }] },
+        { type: "list-item", completed: true,  children: [{ type: "text", value: "Ship both backends + parity" }] },
+        { type: "list-item", completed: false, children: [{ type: "text", value: "Write the verification page" }] },
+        { type: "list-item", completed: false, children: [{ type: "text", value: "Batched release ritual" }] },
+        { type: "list-item",                   children: [{ type: "text", value: "A plain item (no marker) mixes fine" }] },
+      ]},
+    ]},
+
     { type: "section", heading: "Blockquote (BlockquoteNode)", children: [
       { type: "text", value: "A dedicated primitive for quoted content — a real semantic <blockquote> holding block-level children. Composes with lists, headings, and other blockquotes; the walker descends into children so any actions inside a quoted callout still participate in the action-name uniqueness check.", style: "muted" },
       { type: "blockquote", children: [

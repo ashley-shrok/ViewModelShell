@@ -1185,6 +1185,30 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   line-height: 1.4;
 }
 
+/* ── List item task marker (ListItemNode.completed) ── */
+/* Non-interactive check glyph rendered in front of the item content when
+   completed is set. Filled ☑ = done, empty ☐ = todo. Absent completed = no
+   marker (byte-identical to pre-task-list rendering). Sizing keeps the glyph
+   visually aligned with the item text on all shipped densities. */
+.vms-list-item__marker {
+  display: inline-block;
+  margin-right: 0.5em;
+  font-size: 1.05em;
+  line-height: 1;
+  color: var(--vms-accent, currentColor);
+  user-select: none;
+}
+/* Completed items dim their content slightly + strike-through the text to
+   match the standard "done" affordance of GFM task lists. Applied via a
+   descendant selector on the vms-text/vms-link classes so a completed item
+   containing a section or a button doesn't strike its whole interior. */
+.vms-list-item--task-done .vms-text {
+  text-decoration: line-through;
+  color: var(--vms-ink-muted, inherit);
+}
+.vms-list-item--task-done .vms-list-item__marker { color: var(--vms-success, var(--vms-accent, currentColor)); }
+/* Todo items keep neutral color — no styling change beyond the glyph. */
+
 /* ── Blockquote ── */
 /* A real <blockquote> holding block-level children (paragraphs, lists, nested
    blockquotes). Left accent bar + slight left inset + subtle tinted background

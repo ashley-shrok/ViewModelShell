@@ -821,7 +821,16 @@ public record ListItemNode(
     IReadOnlyList<ViewNode> Children,
     // Semantic intent/severity — universal tone axis ("danger"|"warning"|"success"|"info").
     // Emits .vms-list-item--{tone} (colored accent border). JsonIgnore-on-null per the file header.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
+    // Task-list marker (GFM `- [ ]` / `- [x]`). Non-interactive — the framework
+    // draws a FIXED check glyph in front of the item content when set (filled
+    // check when true, empty box when false, nothing when absent). Distinct
+    // from a CheckboxNode child: this is a semantic checklist ITEM, not a form
+    // input, so it has no bind and no action and is never clickable. For an
+    // interactive check that dispatches on toggle, use a CheckboxNode child.
+    // Wire posture: WhenWritingNull => omitted absent (nullable bool so `false`
+    // is meaningful as "explicitly unchecked" and MUST cross the wire).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Completed = null
 ) : ViewNode;
 
 public record FormNode(

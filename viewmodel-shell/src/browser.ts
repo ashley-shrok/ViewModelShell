@@ -1101,8 +1101,22 @@ export class BrowserAdapter implements Adapter {
   private listItem(n: ListItemNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const li = document.createElement("li");
     li.className = `vms-list-item${n.state ? ` vms-list-item--${n.state}` : ""}${
-      n.tone ? ` vms-list-item--${n.tone}` : ""}`;
+      n.tone ? ` vms-list-item--${n.tone}` : ""}${
+      n.completed === true ? " vms-list-item--task-done" :
+      n.completed === false ? " vms-list-item--task-todo" : ""}`;
     if (n.id) li.dataset.id = n.id;
+    // Task-list marker: fixed check glyph in front of the content when
+    // `completed` is set. Filled check for done, empty box for todo, nothing
+    // when absent (byte-identical to the pre-task-list rendering).
+    // aria-hidden on the glyph — the assistive-tech-readable text lives in
+    // the item's actual content nodes; the glyph is a visual cue only.
+    if (n.completed !== undefined) {
+      const glyph = document.createElement("span");
+      glyph.className = "vms-list-item__marker";
+      glyph.setAttribute("aria-hidden", "true");
+      glyph.textContent = n.completed ? "☑" : "☐"; // ☑ / ☐
+      li.appendChild(glyph);
+    }
     this.kids(n.children, li, on);
     parent.appendChild(li);
   }
