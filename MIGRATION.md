@@ -6,6 +6,71 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `6.10.0` / NuGet `6.10.0` — nothing to do (additive; one soft-deprecation)
+
+**All three packages: purely additive.** Every existing `TextNode`, `ImageNode`, `ListItemNode` is byte-unchanged on the wire and in the DOM. Five new primitives (`TextNode.level`, `ImageNode.caption`/`captionRuns`, `BlockquoteNode`, `ListItemNode.completed`, `CodeBlockNode`) are additive optional fields / new nodes; two new companion packages (`@ashley-shrok/viewmodel-shell/markdown` npm subpath + `AshleyShrok.ViewModelShell.Markdown` v0.1.0 NuGet) ship the reference markdown-to-`ViewNode` walker and are opt-in — a consumer that never renders markdown pulls nothing new.
+
+### One soft-deprecation: `TextNode.style: "heading" | "subheading"` → `TextNode.level`
+
+The old `style` values keep working — a `TextNode { style: "heading" }` still renders as a `<span class="vms-text--heading">` byte-identically to 6.9.0. But they have no landmark semantics (screen readers see a styled `<span>`, not a heading), so **new code should use `level` instead** — which emits real `<h1>`–`<h6>` HTML tags. A one-field rename per site:
+
+```csharp
+// .NET — before
+new TextNode("Section title", Style: TextStyle.Heading)
+// .NET — after
+new TextNode("Section title", Level: 2)          // real <h2>
+```
+
+```typescript
+// TypeScript — before
+{ type: "text", value: "Section title", style: "heading" }
+// TypeScript — after
+{ type: "text", value: "Section title", level: 2 }        // real <h2>
+```
+
+Pick a `level` (1–6) matching the outline position — top of a page is 1, a section heading is usually 2, subsection 3, etc. `TextNode.level` composes with `tone` and `runs` orthogonally (`{ level: 2, tone: "danger", runs: [...] }` is a danger-toned `<h2>` with rich inline text). Nothing forces the migration — the old style values remain supported — but page landmarks and heading-navigation accessibility only work via `level`.
+
+### Optional: adopt the markdown converter
+
+Two companion packages ship the reference implementation for turning markdown source into a `ViewNode` subtree. Both are opt-in.
+
+**TypeScript / Bun / Node:**
+
+```bash
+npm install marked            # peer dep of the subpath (chart.js seam pattern)
+```
+
+```typescript
+import { markdownToViewNodes } from "@ashley-shrok/viewmodel-shell/markdown";
+
+// Feed markdown source; get a ViewNode[] to drop into any children slot.
+const nodes = markdownToViewNodes(md);
+return { type: "page", title: "Docs", children: nodes };
+```
+
+**.NET (ASP.NET Core):**
+
+```bash
+dotnet add package AshleyShrok.ViewModelShell.Markdown
+```
+
+```csharp
+using ViewModelShell;
+using ViewModelShell.Markdown;
+
+var nodes = MarkdownConverter.ToViewNodes(md);
+return new ShellResponse<DocsState>(
+    new PageNode(Title: "Docs", Children: nodes),
+    state
+).Validate();
+```
+
+Both converters are **byte-parallel by construction** — tested against the same markdown corpus — so a hybrid app whose two backends render docs identically. See the new `demo/DocsViewer/` for the full wiring reference.
+
+Deferred v1 constructs (silently skipped by both converters): raw HTML blocks, tables, footnotes, definition lists. If you need one of these, hand-write the `ViewNode` tree for it or wait for the next design pass.
+
+---
+
 ## Upgrading to npm `6.9.0` / NuGet `6.9.0` — nothing to do (additive inline rich text)
 
 **Both packages: purely additive.** Every existing `TextNode` and `DiffCell` is byte-unchanged on the wire and in the DOM. A new optional `runs` list lets a paragraph carry intra-paragraph emphasis and inline links:

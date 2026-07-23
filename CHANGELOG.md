@@ -6,6 +6,67 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 6.10.0 / NuGet 6.10.0 — markdown-primitives family + companion converter packages
+
+**npm:** `6.10.0` (minor, from `6.9.0`) · **NuGet AshleyShrok.ViewModelShell:** `6.10.0` (minor, from `6.9.0`) · **NuGet AshleyShrok.ViewModelShell.Markdown:** `0.1.0` (initial release, companion package). Wire-format **additive**; protocol token unchanged at `viewmodel-shell/1.0`. Fully backwards-compatible — every existing tree serializes and renders **byte-identically** to 6.9.0, and no consumer changes anything.
+
+The 6.9.0 inline-rich-text ship unblocked the architectural half of Amelia's (Athena) markdown brief. This release completes the family: the remaining primitives markdown produces, plus two companion converter packages that walk a markdown source into the equivalent `ViewNode` subtree. A consumer can now describe any markdown document — headings, blockquotes, task lists, fenced code, images with captions — in framework vocabulary, and either wire a converter for `.md` files or hand-write the same tree from any other source. Poppy's stale-intel `MarkdownToViewNodes.cs` renderer is superseded; Amelia's viewer + CRUD can render docs end-to-end without inventing app-specific primitives.
+
+### Added — primitives (`viewmodel-shell/src/index.ts` + `viewmodel-shell-dotnet/ViewModels.cs`)
+
+- **`TextNode.level?: 1|2|3|4|5|6`** — semantic outline axis. When set the renderer emits a real `<h1>`–`<h6>` tag instead of `<span>`, giving screen readers the correct heading landmark and giving agents an unambiguous semantic signal from the DOM tag itself. Composes with `runs`, `tone`, and `style` orthogonally. The renderer clamps out-of-range values at runtime and falls back to `<span>`, so wire drift from a less-strictly-typed backend cannot produce an invalid `<h7>`.
+- **`ImageNode.caption?: string`** + **`ImageNode.captionRuns?: InlineRun[]`** — an image + caption render together as a `<figure><img><figcaption>` unit, the standard HTML pattern screen readers announce as a single captioned figure. Maps to markdown's `![alt](src "caption")` third argument. When absent, rendering is byte-identical to the pre-caption output.
+- **`BlockquoteNode { children: ViewNode[] }`** — the standard blockquote primitive, holding arbitrary block-level `children` (paragraphs, lists, nested blockquotes, any `ViewNode`). Renders as a real semantic `<blockquote>` — the standard HTML landmark. Chosen as a **dedicated primitive** (not a `SectionNode.variant`) because section variants describe surface KIND (`card`) while blockquote is a semantic content KIND, and mixing the two axes blurs concepts; and chosen as a **children-bearing node** (not a `TextNode.style`) because quotes hold block-level content, not just formatted text. Walker arms on both backends descend into `children` so a button/action inside a quoted callout participates in the action-name uniqueness check.
+- **`ListItemNode.completed?: boolean`** — GFM task-list marker (`- [x]` / `- [ ]`). The framework draws a fixed check glyph in front of the item content: ☑ when `true` (with strike-through on the text and success-tinted glyph), ☐ when `false`, no glyph when absent. **Non-interactive by design** — this is the semantic checklist ITEM, not a form input. For an interactive check that dispatches on toggle, put a `CheckboxNode` inside the item's `children` instead.
+- **`CodeBlockNode { code, language?, filename?, copyable? }`** — the standard fenced-code primitive (markdown `` ```language ``). Renders as a real semantic `<pre><code>` pair (a11y landmark + agent-legible from the DOM tag) with a header row for the optional filename, the optional language badge, and the built-in copy button. Non-interactive; for an EDITABLE code input use `FieldNode` with `inputType: "code"`. Copy button reuses the standalone `CopyButtonNode` render path — one shared behavior, no divergence risk (banked "provide-your-own-X embedded slots are divergence risks" lesson). v1 ships with **no syntax highlighting** — plain monospace + language/filename metadata. Deferring highlighting keeps the surface small and avoids the AA-contrast gate hole (the fixed-13-pair `check:aa-contrast` gate cannot cover new token/bg pairs).
+
+### Added — companion converter packages
+
+The doctrine head hasn't moved: **markdown → tree is a server-side transform an app does with any parser and describes in framework vocabulary** — not a client-side `MarkdownNode`. The framework itself carries **zero markdown code**; two optional companion packages ship the reference implementation on each side. A consumer who never uses markdown pulls in nothing new.
+
+- **`@ashley-shrok/viewmodel-shell/markdown`** (npm subpath) — new subpath export on the existing package. Public API: `markdownToViewNodes(md, opts?): ViewNode[]`. `marked` declared as an **OPTIONAL peer dependency** (chart.js seam pattern) and imported only from this subpath, so a consumer who never imports the subpath never loads it and the core npm package's runtime graph is unchanged. Fail-loud on a missing peer: the subpath's static `import { marked }` throws `ERR_MODULE_NOT_FOUND` at load rather than degrading silently.
+- **`AshleyShrok.ViewModelShell.Markdown` v0.1.0** (NEW, separate NuGet package) — companion package whose `MarkdownConverter.ToViewNodes(md, opts?)` walks the `Markdig` AST into the same `ViewNode` subtree shape. Ships as a **SEPARATE NuGet** (not a nested namespace inside the core) so a consumer that never renders markdown never pulls `Markdig` into their build graph. Core `AshleyShrok.ViewModelShell` remains at ZERO `PackageReference`s (only `FrameworkReference`) — this is the **first we-author-companion NuGet with a hard `PackageReference`**, a precedent to preserve: any future dep with a real runtime cost ships as a companion package on the same seam.
+- **Byte-parallel by construction.** Both converters are tested against the SAME markdown corpus (`viewmodel-shell/test/markdown-corpus/*.md` — a README section, a technical doc, a GitHub-issue body). A drift between them fingerprints which walker arm diverged rather than "markdown is off."
+
+### Coverage v1 (identical on both sides)
+
+- Headings 1–6 → `TextNode.level` (real `<h1>`–`<h6>`)
+- Paragraphs → `TextNode`, with inline `runs` only when formatting is present (plain paragraphs collapse to a bare `{ value }` — no wire pollution)
+- Ordered / unordered / nested lists → `ListNode` + `ListItemNode`
+- GFM task-list markers → `ListItemNode.completed`
+- Blockquotes → `BlockquoteNode`
+- Fenced code blocks → `CodeBlockNode` with language
+- Images → `ImageNode` (a paragraph containing only an image unwraps to a standalone image; the markdown-title third argument becomes `caption`)
+- Horizontal rules → `DividerNode`
+- Inline bold / italic / strikethrough / inline code / links → `InlineRun` flags + `href`
+
+**Deferred v1** (silently skipped, not a hard failure so the page still renders the parts we do understand): raw HTML blocks, tables (rich table cells are a separate design pass — `TableRow.cells` is a flat `Record<string,string>` and enriching them changes what a cell IS), footnotes, definition lists.
+
+### Added — new framework demo
+
+- **`demo/DocsViewer/`** — a small doc browser (`AspNetCore` + `frontend`) that references BOTH `AshleyShrok.ViewModelShell` and `AshleyShrok.ViewModelShell.Markdown`, lists three corpus docs on a picker page, and renders the picked doc end-to-end through `MarkdownConverter.ToViewNodes`. Adoption reference — the "demos ARE the wiring reference" story for the companion package. A consumer copies one file (`DocsViewerController.cs`) and has the whole pattern.
+
+### Design notes
+
+- **Semantic HTML on new primitives (policy).** Every new primitive in this ship (`TextNode.level`, `BlockquoteNode`, `CodeBlockNode`, `<figure>`/`<figcaption>` for `ImageNode.caption`) emits the real semantic HTML tag, not a class-styled `<div>`/`<span>`. Existing nodes are NOT retrofitted (that would break class-scoped consumer CSS); the policy applies going forward.
+- **Skip syntax highlighting in `CodeBlockNode` v1 (policy).** Highlighting introduces new fg/bg token pairs the `check:aa-contrast` gate structurally cannot cover — a fresh instance of the banked "gate that checks shape not property" family. Deferring it keeps AA discipline honest and lets the primitive ship without opening a hole; language metadata already gives the agent-legibility win.
+- **Task-list marker is non-interactive on purpose.** `ListItemNode.completed` names the CONTENT type ("this bullet IS a checklist item"), not a form input. For an actual toggleable check that dispatches, put a `CheckboxNode` in the item's children — the same axis separation as `state`/`tone` vs. `action` elsewhere.
+- **Converters live in companion packages, not the core.** The framework has never bundled transforms; keeping the converter opt-in preserves the "core is zero-runtime-deps on either side" invariant. A consumer using a different markdown parser (or a different structured source entirely — JSON docs, a database) simply hand-writes the `ViewNode` tree the way any other backend would.
+- **Byte-parallel converters via shared fixtures, not runtime cross-checks.** The test corpus is authored once and linked from both test projects; both walkers are asserted against the same structural properties on the same input. This is stronger than any runtime diff — the two converters cannot secretly special-case a fixture the other doesn't see.
+
+### Accessibility
+
+No new fg/bg color pairs introduced by any primitive in this ship — `check:aa-contrast` still validates all 13 pairs on the shipped default + all 12 themes. The `CodeBlockNode` header background reuses the existing muted-surface token; language badge color inherits `--vms-fg-muted` on the same surface (already gated). `<h1>`–`<h6>` and `<blockquote>` inherit body foreground on the page background — no new pair.
+
+### Notes for adopters
+
+- **Nothing to do for existing code.** Every existing `TextNode`, `ImageNode`, `ListItemNode` serializes and renders byte-identically; the new primitives are additive.
+- **`TextNode.style: "heading" | "subheading"` is now soft-deprecated.** They remain SUPPORTED (a `.vms-text--heading` `<span>` with no landmark semantics, as before) but new code should use `TextNode.level` — real semantic `<h1>`–`<h6>` with screen-reader landmarks. Migration is a one-field rename per usage; see MIGRATION.md.
+- ⚠️ **.NET: `TextNode.Level` is positional slot 5** (appended after `Runs`, itself slot 4 from 6.9.0). Same last-slot rule as `Runs` — appended so all existing 2-/3-/4-arg construction sites compile unchanged. **Pass it by name** (`Level: 2`).
+- **Markdown consumers install the companion package:** on the TS side, add `marked` alongside the framework, then `import { markdownToViewNodes } from "@ashley-shrok/viewmodel-shell/markdown"`. On the .NET side, `dotnet add package AshleyShrok.ViewModelShell.Markdown` and reference `ViewModelShell.Markdown.MarkdownConverter`. Consumers who never render markdown pull nothing new.
+
+---
+
 ## npm 6.9.0 / NuGet 6.9.0 — inline rich text (`TextNode.runs`, `DiffCell.runs`)
 
 **npm:** `6.9.0` (minor, from `6.8.0`) · **NuGet:** `6.9.0` (minor, from `6.7.1` — skips `6.8.0`, which npm consumed; both packages realign on one number). Wire-format **additive**; protocol token unchanged at `viewmodel-shell/1.0`. Fully backwards-compatible: a `TextNode` without `runs` serializes and renders **byte-identically** to 6.8.0, and no consumer changes anything.
