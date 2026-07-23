@@ -539,6 +539,7 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(EmptyStateNode), "empty-state")]
 [JsonDerivedType(typeof(BadgeNode),      "badge")]
 [JsonDerivedType(typeof(ChartNode),      "chart")]
+[JsonDerivedType(typeof(BlockquoteNode), "blockquote")]
 [JsonDerivedType(typeof(BreadcrumbNode), "breadcrumb")]
 [JsonDerivedType(typeof(StepsNode),      "steps")]
 [JsonDerivedType(typeof(TrackerNode),    "tracker")]
@@ -792,6 +793,22 @@ public record DividerNode(
 public record FitsNode(
     IReadOnlyList<ViewNode> Children,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Axis? Axis = null
+) : ViewNode;
+
+// A quoted block of content — the standard blockquote primitive. Holds arbitrary
+// block-level Children (paragraphs, lists, nested blockquotes, any ViewNode).
+// Renders as a real semantic <blockquote> HTML element (screen-reader landmark;
+// agent-legible from the DOM tag). Maps to markdown's `> ...`. Chosen as a
+// dedicated primitive (not a SectionNode variant) because section variants
+// describe surface KIND, whereas blockquote is a semantic content KIND —
+// mixing them on one axis blurs concepts. And chosen as a children-bearing
+// node (not a TextNode style) because quotes hold block-level content, not
+// just formatted text. Children is a dispatch-bearing descendant path: both
+// walker arms (Collect + WalkForSectionAction) descend into it so any button/
+// action inside a quoted callout participates in the action-name uniqueness
+// check.
+public record BlockquoteNode(
+    IReadOnlyList<ViewNode> Children
 ) : ViewNode;
 
 public record ListItemNode(
@@ -1783,6 +1800,12 @@ public static class ViewTreeValidation
                 foreach (var child in fits.Children) WalkForSectionAction(child, outerInteractive);
                 break;
 
+            case BlockquoteNode blockquote:
+                // A blockquote's children can hold interactive sections, so the
+                // nested-section-interaction rules must descend into it.
+                foreach (var child in blockquote.Children) WalkForSectionAction(child, outerInteractive);
+                break;
+
             case EmptyStateNode emptyState:
                 // EmptyStateNode.Action is a ButtonNode (no SectionNode
                 // descendants), but descend for consistency with every other
@@ -1900,6 +1923,15 @@ public static class ViewTreeValidation
                 // at runtime but every candidate ships on the wire, so all must
                 // be validated for action-name uniqueness.
                 foreach (var child in fits.Children) Collect(child, enclosingForm, sink);
+                break;
+
+            case BlockquoteNode blockquote:
+                // BlockquoteNode.Children can hold interactive descendants
+                // (buttons, forms). Missing this arm would silently exempt every
+                // action inside a quote from the one-name-one-operation rule
+                // (the missed-walk failure class). Same shape as the FitsNode /
+                // SectionNode arms above.
+                foreach (var child in blockquote.Children) Collect(child, enclosingForm, sink);
                 break;
 
             case EmptyStateNode emptyState:

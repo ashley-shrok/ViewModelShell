@@ -23,6 +23,7 @@ import type {
   ListItemNode,
   FitsNode,
   EmptyStateNode,
+  BlockquoteNode,
   BreadcrumbNode,
   TrackerNode,
 } from "./index.js";
@@ -244,6 +245,16 @@ function collectActions(
       for (const child of fits.children) collectActions(child, enclosingForm, out);
       return;
     }
+    case "blockquote": {
+      // BlockquoteNode.children are full ViewNode[] — a quoted callout can
+      // hold paragraphs, lists, and interactive descendants (buttons, forms).
+      // Missing this arm would silently exempt every action inside a quote
+      // from the one-name-one-operation rule (the 3.3.0 missed-walk failure
+      // class). Same shape as the SectionNode / ListNode arms above.
+      const bq = node as BlockquoteNode;
+      for (const child of bq.children) collectActions(child, enclosingForm, out);
+      return;
+    }
     case "empty-state": {
       // EmptyStateNode.action is an optional ButtonNode carrying a real action
       // name. It is a dispatch-bearing descendant, so the uniqueness collector
@@ -453,6 +464,14 @@ function walkForSectionAction(
       // one), so the nested-section-interaction rules must descend here too.
       const fits = node as FitsNode;
       for (const child of fits.children) walkForSectionAction(child, outerInteractive);
+      return;
+    }
+    case "blockquote": {
+      // A blockquote's children can hold interactive sections, so the
+      // nested-section-interaction rules must descend into it — modeled on
+      // the section/list arms above.
+      const bq = node as BlockquoteNode;
+      for (const child of bq.children) walkForSectionAction(child, outerInteractive);
       return;
     }
     case "empty-state": {

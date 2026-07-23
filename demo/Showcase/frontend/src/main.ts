@@ -261,6 +261,20 @@ function componentsView(): ViewNode[] {
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90'%3E%3Crect width='160' height='90' fill='%2310b981'/%3E%3C/svg%3E", alt: "Sample banner", size: "large" },
     ]},
 
+    { type: "section", heading: "Blockquote (BlockquoteNode)", children: [
+      { type: "text", value: "A dedicated primitive for quoted content — a real semantic <blockquote> holding block-level children. Composes with lists, headings, and other blockquotes; the walker descends into children so any actions inside a quoted callout still participate in the action-name uniqueness check.", style: "muted" },
+      { type: "blockquote", children: [
+        { type: "text", value: "The most important thing about designing an API is that it should look boring." },
+        { type: "text", value: "— maybe someone", style: "muted" },
+      ]},
+      { type: "blockquote", children: [
+        { type: "text", value: "Blockquotes nest naturally — you can put a quote inside a quote:" },
+        { type: "blockquote", children: [
+          { type: "text", value: "Nested quotes stack their accents so quote depth is visible." },
+        ]},
+      ]},
+    ]},
+
     { type: "section", heading: "Heading levels (TextNode.level 1–6)", children: [
       { type: "text", value: "Setting `level: 1..6` on a TextNode emits a real semantic <h1>..<h6> tag — the standard heading landmark screen readers use for document outlines. The existing `style: \"heading\" | \"subheading\"` still works (backward compatible) but is deprecated: new code uses `level`.", style: "muted" },
       { type: "text", value: "H1 — level 1 (document title)",        level: 1 },

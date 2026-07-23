@@ -241,6 +241,25 @@ describe("validateActionNames", () => {
     expect(() => validateActionNames(tree)).toThrow(/Duplicate action name 'delete'/);
   });
 
+  // ─── BlockquoteNode (6.10.0) ──────────────────────────────────────────────
+  // BlockquoteNode.children can hold interactive descendants (buttons, forms).
+  // Missing the walker arm would silently exempt every action inside a quote
+  // from the one-name-one-operation rule (the missed-walk failure class).
+
+  it("collects: an action inside a BlockquoteNode collides with a top-level button", () => {
+    const bq: ViewNode = { type: "blockquote", children: [button("dismiss")] };
+    const tree = page(bq, button("dismiss"));
+    expect(() => validateActionNames(tree)).toThrow(/Duplicate action name 'dismiss'/);
+  });
+
+  it("throws: duplicate action names inside a nested BlockquoteNode", () => {
+    // A nested blockquote — the walker must descend recursively.
+    const inner: ViewNode = { type: "blockquote", children: [button("save")] };
+    const outer: ViewNode = { type: "blockquote", children: [inner, button("save")] };
+    const tree = page(outer);
+    expect(() => validateActionNames(tree)).toThrow(/Duplicate action name 'save'/);
+  });
+
   // ─── BreadcrumbNode / StepsNode (NAV-01..03) ──────────────────────────────
   // A crumb can navigate by DISPATCHING AN ACTION (not just an href). Those
   // action names must be uniqueness-checked or we reintroduce the

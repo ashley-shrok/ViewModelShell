@@ -18,7 +18,7 @@ import type {
   TextNode, InlineRun, LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
   ModalNode, TableNode, CopyButtonNode, DividerNode, FitsNode,
   EmptyStateNode, BadgeNode, ChartNode,
-  BreadcrumbNode, StepsNode, TrackerNode, DiffNode,
+  BlockquoteNode, BreadcrumbNode, StepsNode, TrackerNode, DiffNode,
 } from "./index.js";
 
 function legacyCopy(text: string): boolean {
@@ -551,6 +551,7 @@ export class BrowserAdapter implements Adapter {
       case "copy-button":  return this.copyButton(n, parent);
       case "divider":      return this.divider(n, parent);
       case "fits":         return this.fits(n, parent, on);
+      case "blockquote":   return this.blockquote(n, parent, on);
       case "empty-state":  return this.emptyState(n, parent, on);
       case "badge":        return this.badge(n, parent);
       case "chart":        return this.chart(n, parent);
@@ -3736,6 +3737,18 @@ export class BrowserAdapter implements Adapter {
 
     if (n.action) this.button(n.action, el, on);
 
+    parent.appendChild(el);
+  }
+
+  /** BlockquoteNode — a real semantic <blockquote> holding arbitrary block-level
+   *  children. Every child renders through the standard child-dispatch (nested
+   *  blockquotes, lists, paragraphs, interactive descendants — all supported).
+   *  Emits <blockquote class="vms-blockquote"> for the shipped indent + accent
+   *  bar styling. */
+  private blockquote(n: BlockquoteNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const el = document.createElement("blockquote");
+    el.className = "vms-blockquote";
+    this.kids(n.children, el, on);
     parent.appendChild(el);
   }
 

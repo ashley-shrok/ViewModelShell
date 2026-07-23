@@ -322,6 +322,25 @@ public class FeatureProbeController : ControllerBase
         children.Add(new TextNode("H6 level", Level: 6));
         children.Add(new TextNode("H2 danger heading", Tone: Tone.Danger, Level: 2));
 
+        // 6.10.0 — BlockquoteNode parity coverage. Static view-shape captured
+        // by every GET step: a bare blockquote + a NESTED blockquote whose
+        // inner children include a ButtonNode with the UNIQUE action name
+        // `blockquote-action-probe`, proving the action-name uniqueness walk
+        // descends into BlockquoteNode.Children on the .NET side too.
+        children.Add(new BlockquoteNode(new List<ViewNode>
+        {
+            new TextNode("A quoted paragraph inside a blockquote."),
+        }));
+        children.Add(new BlockquoteNode(new List<ViewNode>
+        {
+            new TextNode("Outer quote — nested one below plus an action inside."),
+            new BlockquoteNode(new List<ViewNode>
+            {
+                new TextNode("Nested inner quote."),
+                new ButtonNode("Probe", new ActionDescriptor("blockquote-action-probe")),
+            }),
+        }));
+
         if (state.LastSubmit != null)
             children.Add(new TextNode($"Last submit: {state.LastSubmit}", TextStyle.Muted));
 

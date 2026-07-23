@@ -606,6 +606,55 @@ describe('0.11.0 / #5 — ImageNode rendering', () => {
   });
 });
 
+describe("6.10.0 — BlockquoteNode: semantic <blockquote> holding block-level children", () => {
+  function renderBQ(node: ViewNode): HTMLElement {
+    const container = freshContainer();
+    new BrowserAdapter(container).render({ type: "page", children: [node] }, () => {});
+    return container;
+  }
+
+  it("emits <blockquote class='vms-blockquote'> with children", () => {
+    const c = renderBQ({
+      type: "blockquote",
+      children: [{ type: "text", value: "quoted paragraph" }],
+    });
+    const bq = c.querySelector("blockquote.vms-blockquote") as HTMLElement;
+    expect(bq).not.toBeNull();
+    expect(bq.tagName).toBe("BLOCKQUOTE");
+    expect(bq.textContent).toBe("quoted paragraph");
+  });
+
+  it("holds arbitrary block-level children (list, text, nested blockquote)", () => {
+    const c = renderBQ({
+      type: "blockquote",
+      children: [
+        { type: "text", value: "outer intro" },
+        { type: "list", children: [
+          { type: "list-item", children: [{ type: "text", value: "item A" }] },
+        ]},
+        { type: "blockquote", children: [
+          { type: "text", value: "inner nested quote" },
+        ]},
+      ],
+    });
+    const outer = c.querySelector("blockquote.vms-blockquote") as HTMLElement;
+    expect(outer).not.toBeNull();
+    // The nested blockquote lives INSIDE the outer one.
+    const nested = outer.querySelector("blockquote.vms-blockquote") as HTMLElement;
+    expect(nested).not.toBeNull();
+    expect(nested.textContent).toBe("inner nested quote");
+    // The list and its item also render inside.
+    expect(outer.querySelector("ul.vms-list li.vms-list-item")).not.toBeNull();
+  });
+
+  it("empty children ⇒ empty <blockquote> (still valid — quote with no visible content)", () => {
+    const c = renderBQ({ type: "blockquote", children: [] });
+    const bq = c.querySelector("blockquote.vms-blockquote") as HTMLElement;
+    expect(bq).not.toBeNull();
+    expect(bq.children.length).toBe(0);
+  });
+});
+
 describe("6.10.0 — TextNode.level: semantic h1–h6 emission (heading landmark)", () => {
   function renderTextRaw(node: ViewNode): HTMLElement {
     const container = freshContainer();

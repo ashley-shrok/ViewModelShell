@@ -1185,6 +1185,25 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   line-height: 1.4;
 }
 
+/* ── Blockquote ── */
+/* A real <blockquote> holding block-level children (paragraphs, lists, nested
+   blockquotes). Left accent bar + slight left inset + subtle tinted background
+   distinguish quoted content from surrounding flow. Reset the browser default
+   margin so nesting composes cleanly and doesn't compound. */
+.vms-blockquote {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  border-left: 3px solid var(--vms-accent, #7c5cff);
+  background: var(--vms-surface-2, rgba(127, 127, 127, 0.05));
+  color: var(--vms-ink-muted, inherit);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-radius: 0 3px 3px 0;
+}
+/* Nested blockquotes stack their accents so quote depth is visible. */
+.vms-blockquote .vms-blockquote { margin-top: 0.25rem; }
+
 /* ── Progress ── */
 .vms-progress { height: 3px; background: var(--vms-surface-2); border-radius: 99px; overflow: hidden; }
 .vms-progress__bar { height: 100%; background: var(--vms-accent); border-radius: 99px; transition: width 0.3s ease; }

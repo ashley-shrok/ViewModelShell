@@ -152,6 +152,7 @@ export type ViewNode =
   | EmptyStateNode
   | BadgeNode
   | ChartNode
+  | BlockquoteNode
   | BreadcrumbNode
   | StepsNode
   | TrackerNode
@@ -1292,6 +1293,27 @@ export interface BadgeNode {
 export interface DividerNode {
   type: "divider";
   orientation?: "horizontal" | "vertical";
+}
+
+/** A quoted block of content — the standard blockquote primitive. Holds
+ *  arbitrary block-level `children` (paragraphs, lists, nested blockquotes,
+ *  any ViewNode). Renders as a real semantic `<blockquote>` element, the
+ *  standard HTML landmark screen readers and outline tools treat as a quote.
+ *  Maps to markdown's `> ...` construct.
+ *
+ *  Chosen as a dedicated primitive (not a `SectionNode.variant`) because
+ *  section variants describe surface KIND (card, etc.) — blockquote is a
+ *  semantic content KIND, and mixing the two axes blurs concepts. And chosen
+ *  as a children-bearing node (not a `TextNode.style`) because quotes hold
+ *  block-level content, not just formatted text.
+ *
+ *  `children` is a dispatch-bearing descendant path — the walker arms in
+ *  `server.ts` (collectActions) and `ViewModels.cs` (Collect) MUST descend
+ *  into it so buttons/actions inside a quoted callout participate in the
+ *  action-name uniqueness check. */
+export interface BlockquoteNode {
+  type: "blockquote";
+  children: ViewNode[];
 }
 
 export interface FitsNode {

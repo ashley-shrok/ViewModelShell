@@ -214,6 +214,32 @@ function buildVm(state: FeatureProbeState): ViewNode {
   children.push({ type: "text", value: "H5 level", level: 5 });
   children.push({ type: "text", value: "H6 level", level: 6 });
   children.push({ type: "text", value: "H2 danger heading", level: 2, tone: "danger" });
+  // 6.10.0 — BlockquoteNode parity coverage. Static view-shape captured by
+  // every GET step: one bare blockquote holding a paragraph (proves the new
+  // {type:"blockquote", children[]} wire serializes byte-identically), and a
+  // NESTED blockquote inside another (proves recursive children work). The
+  // inner blockquote also carries a ButtonNode with the UNIQUE action name
+  // `blockquote-action-probe`, proving the action-name uniqueness walk
+  // DESCENDS into blockquote.children on BOTH backends (never POSTed — pure
+  // static wire-shape proof, same convention as fits-* / nav-crumb-probe /
+  // tracker-cell-probe).
+  children.push({
+    type: "blockquote",
+    children: [{ type: "text", value: "A quoted paragraph inside a blockquote." }],
+  });
+  children.push({
+    type: "blockquote",
+    children: [
+      { type: "text", value: "Outer quote — nested one below plus an action inside." },
+      {
+        type: "blockquote",
+        children: [
+          { type: "text", value: "Nested inner quote." },
+          { type: "button", label: "Probe", action: { name: "blockquote-action-probe" } },
+        ],
+      },
+    ],
+  });
   if (state.lastSubmit != null) {
     children.push({ type: "text", value: `Last submit: ${state.lastSubmit}`, style: "muted" });
   }
