@@ -1209,16 +1209,21 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   flex: initial;
 }
 
-/* (2) Heading margins — MUST come after .vms-text above. Top margins from
-   @tailwindcss/typography defaults; bottom margins tightened ~30% from
-   Tailwind's values (operator A/B: Tailwind's 1em under h2 read as too much
-   air between heading and content). */
-.vms-section--prose h1 { margin-top: 0;     margin-bottom: 0.62em; }
-.vms-section--prose h2 { margin-top: 2em;   margin-bottom: 0.7em; }
-.vms-section--prose h3 { margin-top: 1.6em; margin-bottom: 0.42em; }
-.vms-section--prose h4 { margin-top: 1.5em; margin-bottom: 0.35em; }
-.vms-section--prose h5 { margin-top: 1.5em; margin-bottom: 0.35em; }
-.vms-section--prose h6 { margin-top: 1.5em; margin-bottom: 0.35em; }
+/* (2) Heading margins — the double-class `.vms-section--prose.vms-section--prose`
+   bumps this rule's specificity to (0,2,1) so it beats the `.vms-text`
+   paragraph rule at (0,2,0). Rule (1) above matches every TextNode-emitted
+   element because the renderer stamps `class="vms-text"` on h1..h6 as well
+   as spans; two-classes-plus-one-element (0,2,1) is the minimum that beats
+   two-classes (0,2,0). Documented inline because "why is my heading margin
+   double-selector'd" is not obvious without the specificity math.
+   Top margins from @tailwindcss/typography defaults; bottom margins tightened
+   ~30% (operator A/B: Tailwind's 1em under h2 read as too much air). */
+.vms-section--prose.vms-section--prose h1 { margin-top: 0;     margin-bottom: 0.62em; }
+.vms-section--prose.vms-section--prose h2 { margin-top: 2em;   margin-bottom: 0.7em; }
+.vms-section--prose.vms-section--prose h3 { margin-top: 1.6em; margin-bottom: 0.42em; }
+.vms-section--prose.vms-section--prose h4 { margin-top: 1.5em; margin-bottom: 0.35em; }
+.vms-section--prose.vms-section--prose h5 { margin-top: 1.5em; margin-bottom: 0.35em; }
+.vms-section--prose.vms-section--prose h6 { margin-top: 1.5em; margin-bottom: 0.35em; }
 
 /* (3) Element-specific overrides — MUST all come between the paragraph/heading
    base rules above and the resets below, so the resets (:first-child /
@@ -1320,28 +1325,27 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   height: auto;
 }
 
-/* (4a) First/last-child resets — MUST come after (2) heading margins AND (3)
-   element-specific overrides so they always win the same-specificity race
-   for the first/last child of the prose block. Without this ordering a
-   first-child .vms-code-block would keep its 1.714em top-margin. */
-.vms-section--prose > :first-child { margin-top: 0; }
-.vms-section--prose > :last-child  { margin-bottom: 0; }
+/* (4a) First/last-child resets — same double-class specificity bump as the
+   heading rules above (0,3,0) so they beat every (0,2,0) element rule
+   regardless of source order. Without the bump, `.vms-section--prose > .vms-text`
+   (0,2,0) would tie and (source-order-dependent) potentially lose. */
+.vms-section--prose.vms-section--prose > :first-child { margin-top: 0; }
+.vms-section--prose.vms-section--prose > :last-child  { margin-bottom: 0; }
 
 /* (4b) Heading-adjacent reset — kills the following element's margin-top so
-   heading bottom-margin alone controls the visible gap. MUST come after all
-   element rules above — otherwise a `<div class="vms-code-block">` right
-   after a heading keeps its 1.714em top-margin, a `<ul class="vms-list">`
-   keeps its 1.25em, a `<span class="vms-text">` keeps its 1.25em, etc.
-   Same rationale for hr + *. Every element-margin under prose is silently
-   overridden by this reset when it sits directly after a heading — that's
-   the whole "heading owns the gap to its next sibling" contract. */
-.vms-section--prose h1 + *,
-.vms-section--prose h2 + *,
-.vms-section--prose h3 + *,
-.vms-section--prose h4 + *,
-.vms-section--prose h5 + *,
-.vms-section--prose h6 + *,
-.vms-section--prose hr + * { margin-top: 0; }
+   heading bottom-margin alone controls the visible gap. Same double-class
+   bump (0,2,1) — beats `.vms-text` (0,2,0), `.vms-code-block` (0,2,0),
+   `.vms-list` (0,2,0), etc. Without the bump the reset silently loses to
+   any 2-class selector on the following element, so a `<div class="vms-code-block">`
+   right after a heading keeps its 1.714em top-margin (measured in real Chrome —
+   my jsdom diagnostic false-positived this ordering). */
+.vms-section--prose.vms-section--prose h1 + *,
+.vms-section--prose.vms-section--prose h2 + *,
+.vms-section--prose.vms-section--prose h3 + *,
+.vms-section--prose.vms-section--prose h4 + *,
+.vms-section--prose.vms-section--prose h5 + *,
+.vms-section--prose.vms-section--prose h6 + *,
+.vms-section--prose.vms-section--prose hr + * { margin-top: 0; }
 
 /* ── Inline runs (TextNode.runs / DiffCell.runs) ──
    Intra-paragraph emphasis. Additive only: a run flag never SUBTRACTS from the
