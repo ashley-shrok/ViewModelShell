@@ -177,6 +177,29 @@ function buildVm(state: FeatureProbeState): ViewNode {
     { type: "copy-button", text: "npx @ashley-shrok/viewmodel-shell", label: "Copy install command", copiedLabel: "Copied!", emphasis: "secondary", html: "<code>npx @ashley-shrok/viewmodel-shell</code>" },
   );
   children.push({ type: "image", src: "/logo.png", alt: "ViewModel Shell logo", size: "small", shape: "circle" });
+  // 6.10.0 — ImageNode.caption + captionRuns parity coverage. Static view-shape
+  // captured by every GET step, so the byte-diff covers the two new optional
+  // fields (WhenWritingNull ⇒ omitted absent on the wire) across all backends.
+  // First image: plain caption (proves the string field crosses). Second image:
+  // captionRuns present (proves the InlineRun[] alongside caption crosses).
+  children.push({
+    type: "image",
+    src: "/logo.png",
+    alt: "ViewModel Shell logo",
+    size: "medium",
+    caption: "Figure 1: the framework logo",
+  });
+  children.push({
+    type: "image",
+    src: "/logo.png",
+    alt: "ViewModel Shell logo",
+    size: "medium",
+    caption: "See the docs",
+    captionRuns: [
+      { text: "See " },
+      { text: "the docs", href: "https://example.com/docs", external: true },
+    ],
+  });
   if (state.lastSubmit != null) {
     children.push({ type: "text", value: `Last submit: ${state.lastSubmit}`, style: "muted" });
   }

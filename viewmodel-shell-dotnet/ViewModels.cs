@@ -1515,15 +1515,24 @@ public record BreadcrumbItem(
 
 public record BreadcrumbNode(IReadOnlyList<BreadcrumbItem> Items) : ViewNode;
 
-// Image / media (issue #5). Src is required; Alt/Size/Shape are nullable wire
-// optionals (the maintainer null-omission rule applies — absent, never null).
-// Size ("small"/"medium"/"large"/"full") and Shape ("circle") are design-system
-// hints → .vms-image--{size}/{shape}; non-browser adapters (TUI) degrade to Alt.
+// Image / media (issue #5). Src is required; Alt/Size/Shape/Caption/CaptionRuns
+// are nullable wire optionals (the maintainer null-omission rule applies —
+// absent, never null). Size ("small"/"medium"/"large"/"full") and Shape
+// ("circle") are design-system hints → .vms-image--{size}/{shape}; non-browser
+// adapters (TUI) degrade to Alt.
+// Caption: optional caption text. When present, the image and caption render as
+// a <figure><img><figcaption> unit (a single captioned figure landmark). When
+// absent, rendering is byte-identical to the pre-caption output.
+// CaptionRuns: optional inline rich-text runs for the caption (same contract as
+// TextNode.Runs). When present, drawn INSTEAD of the plain Caption string;
+// meaningless without Caption (used as fallback + agent-legible plain reading).
 public record ImageNode(
     string Src,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Alt = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ImageSize? Size = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ImageShape? Shape = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ImageShape? Shape = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Caption = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<InlineRun>? CaptionRuns = null
 ) : ViewNode;
 
 public record CopyButtonNode(

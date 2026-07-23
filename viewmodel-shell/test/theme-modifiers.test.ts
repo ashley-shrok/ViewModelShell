@@ -606,6 +606,109 @@ describe('0.11.0 / #5 — ImageNode rendering', () => {
   });
 });
 
+describe("6.10.0 — ImageNode.caption: figure/figcaption emission when caption present", () => {
+  // Local render helper — we can't reuse renderImage() because a captioned
+  // image emits <figure> wrapping <img>, so the "img.vms-image" selector still
+  // works but the parent structure matters.
+  function renderCaptionedImage(node: ViewNode): HTMLElement {
+    const container = freshContainer();
+    new BrowserAdapter(container).render({ type: "page", children: [node] }, () => {});
+    return container;
+  }
+
+  it("caption absent ⇒ bare <img>, NO <figure> wrapper (byte-identical baseline)", () => {
+    const c = renderCaptionedImage({ type: "image", src: "/a.png", alt: "a" });
+    expect(c.querySelector("figure")).toBeNull();
+    expect(c.querySelector("figcaption")).toBeNull();
+    const img = c.querySelector("img.vms-image");
+    expect(img).not.toBeNull();
+    expect(img!.parentElement!.tagName).not.toBe("FIGURE");
+  });
+
+  it("caption present ⇒ <figure class=vms-figure><img><figcaption class=vms-figcaption>", () => {
+    const c = renderCaptionedImage({
+      type: "image",
+      src: "/a.png",
+      alt: "a",
+      caption: "Figure 1: the setup",
+    });
+    const fig = c.querySelector("figure.vms-figure") as HTMLElement;
+    expect(fig).not.toBeNull();
+    // <img> is the first child; <figcaption> is the second.
+    const img = fig.querySelector("img.vms-image") as HTMLImageElement;
+    expect(img).not.toBeNull();
+    expect(img.src).toContain("/a.png");
+    const cap = fig.querySelector("figcaption.vms-figcaption") as HTMLElement;
+    expect(cap).not.toBeNull();
+    expect(cap.textContent).toBe("Figure 1: the setup");
+  });
+
+  it("caption + size/shape modifiers compose: <img> classes unchanged; figure wraps regardless", () => {
+    const c = renderCaptionedImage({
+      type: "image",
+      src: "/a.png",
+      size: "small",
+      shape: "circle",
+      caption: "avatar",
+    });
+    const img = c.querySelector("figure.vms-figure > img.vms-image") as HTMLImageElement;
+    expect(img).not.toBeNull();
+    expect(img.classList.contains("vms-image--small")).toBe(true);
+    expect(img.classList.contains("vms-image--circle")).toBe(true);
+  });
+
+  it("captionRuns present ⇒ figcaption renders runs INSTEAD of plain caption text", () => {
+    const c = renderCaptionedImage({
+      type: "image",
+      src: "/a.png",
+      caption: "figure from the paper",
+      captionRuns: [
+        { text: "figure from " },
+        { text: "the paper", bold: true },
+      ],
+    });
+    const cap = c.querySelector("figcaption.vms-figcaption") as HTMLElement;
+    expect(cap).not.toBeNull();
+    // Text content is the sum of runs (the derivation contract).
+    expect(cap.textContent).toBe("figure from the paper");
+    // Bold run emits <strong class="vms-text__strong">.
+    const strong = cap.querySelector("strong.vms-text__strong");
+    expect(strong).not.toBeNull();
+    expect(strong!.textContent).toBe("the paper");
+  });
+
+  it("captionRuns present + href ⇒ figcaption anchor wraps the run (link inside caption)", () => {
+    const c = renderCaptionedImage({
+      type: "image",
+      src: "/a.png",
+      caption: "see the docs",
+      captionRuns: [
+        { text: "see " },
+        { text: "the docs", href: "https://example.com/docs", external: true },
+      ],
+    });
+    const cap = c.querySelector("figcaption.vms-figcaption") as HTMLElement;
+    const a = cap.querySelector("a.vms-text__link") as HTMLAnchorElement;
+    expect(a).not.toBeNull();
+    expect(a.href).toBe("https://example.com/docs");
+    expect(a.target).toBe("_blank");
+    expect(a.rel).toBe("noopener noreferrer");
+    expect(a.textContent).toBe("the docs");
+  });
+
+  it("caption present but captionRuns EMPTY array ⇒ falls back to plain caption text (matches TextNode rule)", () => {
+    const c = renderCaptionedImage({
+      type: "image",
+      src: "/a.png",
+      caption: "fallback",
+      captionRuns: [],
+    });
+    const cap = c.querySelector("figcaption.vms-figcaption") as HTMLElement;
+    expect(cap.textContent).toBe("fallback");
+    expect(cap.querySelector("strong,em,code,s,a")).toBeNull();
+  });
+});
+
 describe('#17 — layout="cards"/"split" computed display is actually grid (cascade regression)', () => {
   // The pre-existing describe blocks above are class-emission assertions: they
   // verify the renderer emits e.g. `vms-section--cards`, but never load the

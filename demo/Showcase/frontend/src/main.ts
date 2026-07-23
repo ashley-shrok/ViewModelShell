@@ -261,6 +261,27 @@ function componentsView(): ViewNode[] {
       { type: "image", src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90'%3E%3Crect width='160' height='90' fill='%2310b981'/%3E%3C/svg%3E", alt: "Sample banner", size: "large" },
     ]},
 
+    { type: "section", heading: "Image with caption (figure + figcaption)", children: [
+      { type: "text", value: "Setting `caption` on ImageNode wraps the image and its caption in a real <figure>/<figcaption> — the standard captioned-figure landmark screen readers announce as one unit. Absent caption ⇒ bare <img> as before.", style: "muted" },
+      { type: "image",
+        src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='140'%3E%3Crect width='240' height='140' fill='%237c5cff'/%3E%3C/svg%3E",
+        alt: "Purple demo banner",
+        size: "medium",
+        caption: "Figure 1: a captioned figure — the standard landmark for images with attribution or explanation." },
+      { type: "image",
+        src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='140'%3E%3Crect width='240' height='140' fill='%2310b981'/%3E%3C/svg%3E",
+        alt: "Green demo banner",
+        size: "medium",
+        caption: "Captions carry inline rich text too — see the docs.",
+        captionRuns: [
+          { text: "Captions carry " },
+          { text: "inline rich text", bold: true },
+          { text: " too — " },
+          { text: "see the docs", href: "https://github.com/ashley-shrok/ViewModelShell", external: true },
+          { text: "." },
+        ] },
+    ]},
+
     { type: "section", heading: "Buttons — three orthogonal axes", children: [
       { type: "text", value: "emphasis (how loud) × tone (what it means) × size (geometry). They compose: a destructive primary CTA is emphasis:\"primary\" + tone:\"danger\". Crucially, tone and emphasis NEVER change size — only the size axis does, so a Default and a Danger button below are exactly the same size.", style: "muted" },
       { type: "text", value: "emphasis", style: "subheading" },

@@ -3159,7 +3159,23 @@ export class BrowserAdapter implements Adapter {
     // string for decorative ones (alt="" tells assistive tech to skip it,
     // whereas a missing alt may make it announce the src/URL).
     img.alt = n.alt ?? "";
-    parent.appendChild(img);
+    // Caption: when present, wrap the image + caption in a <figure>/<figcaption>
+    // pair — the standard captioned-figure landmark. When absent, emit the bare
+    // <img> exactly as before (byte-identical to pre-caption consumers). Rich
+    // runs on the caption follow TextNode's rule: runs override plain text.
+    if (n.caption !== undefined) {
+      const fig = document.createElement("figure");
+      fig.className = "vms-figure";
+      fig.appendChild(img);
+      const cap = document.createElement("figcaption");
+      cap.className = "vms-figcaption";
+      if (n.captionRuns && n.captionRuns.length > 0) this.inlineRuns(n.captionRuns, cap);
+      else cap.textContent = n.caption;
+      fig.appendChild(cap);
+      parent.appendChild(fig);
+    } else {
+      parent.appendChild(img);
+    }
   }
   private progress(n: ProgressNode, parent: HTMLElement): void {
     const track = document.createElement("div");

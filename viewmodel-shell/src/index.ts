@@ -957,6 +957,18 @@ export interface ImageNode {
   size?: "small" | "medium" | "large" | "full";
   /** `"circle"` → square-cropped circular image (avatars). */
   shape?: "circle";
+  /** Optional caption text. When present, the image and its caption are drawn
+   *  together as a `<figure><img><figcaption>` unit — the standard HTML pattern
+   *  screen readers announce as a single captioned figure. When absent, the
+   *  rendering is byte-identical to the pre-caption output (a bare `<img>`).
+   *  Maps to markdown's `![alt](src "caption")` third-argument title. */
+  caption?: string;
+  /** OPTIONAL inline rich-text runs for the caption. Same contract as
+   *  `TextNode.runs`: when present, the BrowserAdapter draws these INSTEAD of
+   *  `caption`; when absent, the plain `caption` string renders. Meaningless
+   *  without `caption` (used as the fallback + agent-legible plain reading);
+   *  the renderer ignores `captionRuns` if `caption` is missing. */
+  captionRuns?: InlineRun[];
 }
 
 export interface StatBarNode {

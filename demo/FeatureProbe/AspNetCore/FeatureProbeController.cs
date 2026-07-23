@@ -287,6 +287,26 @@ public class FeatureProbeController : ControllerBase
             Html: "<code>npx @ashley-shrok/viewmodel-shell</code>"));
 
         children.Add(new ImageNode("/logo.png", Alt: "ViewModel Shell logo", Size: ImageSize.Small, Shape: ImageShape.Circle));
+        // 6.10.0 — ImageNode.Caption + CaptionRuns parity coverage. Static view-
+        // shape captured by every GET step, so the byte-diff covers the two new
+        // optional fields (WhenWritingNull ⇒ omitted absent on the wire) across
+        // all backends. First: plain caption (proves the string crosses). Second:
+        // captionRuns present (proves the InlineRun[] alongside caption crosses).
+        children.Add(new ImageNode(
+            "/logo.png",
+            Alt: "ViewModel Shell logo",
+            Size: ImageSize.Medium,
+            Caption: "Figure 1: the framework logo"));
+        children.Add(new ImageNode(
+            "/logo.png",
+            Alt: "ViewModel Shell logo",
+            Size: ImageSize.Medium,
+            Caption: "See the docs",
+            CaptionRuns: new List<InlineRun>
+            {
+                new InlineRun("See "),
+                new InlineRun("the docs", Href: "https://example.com/docs", External: true),
+            }));
 
         if (state.LastSubmit != null)
             children.Add(new TextNode($"Last submit: {state.LastSubmit}", TextStyle.Muted));

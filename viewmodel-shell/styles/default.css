@@ -1173,6 +1173,18 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 /* Avatars: square-crop to a circle (object-fit avoids distortion on non-square sources). */
 .vms-image--circle { border-radius: 50%; aspect-ratio: 1; object-fit: cover; }
 
+/* Figure wrapper — emitted only when ImageNode.caption is present. The <img>
+   inside keeps its .vms-image classes verbatim, so every size/shape modifier
+   composes with a caption without new rules. Figure resets browser margins
+   (UA default is 40px on both sides) so the captioned image aligns to the
+   flow of its container. */
+.vms-figure { margin: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.vms-figcaption {
+  font-size: 0.9em;
+  color: var(--vms-ink-muted, var(--vms-muted, #777));
+  line-height: 1.4;
+}
+
 /* ── Progress ── */
 .vms-progress { height: 3px; background: var(--vms-surface-2); border-radius: 99px; overflow: hidden; }
 .vms-progress__bar { height: 100%; background: var(--vms-accent); border-radius: 99px; transition: width 0.3s ease; }
