@@ -162,9 +162,20 @@ public enum Axis { Horizontal, Vertical, Both }
 [JsonConverter(typeof(KebabEnum<TextStyle>))]
 public enum TextStyle { Heading, Subheading, Body, Muted, Pre, Strikethrough }
 
-/// <summary>A section's structural surface kind.</summary>
+/// <summary>
+/// A section's structural surface kind. `Card` = grouped surface
+/// (background/border/padding/radius, .vms-section--card). `Prose` = block-flow
+/// prose-typography scope for markdown/rich-text content (.vms-section--prose,
+/// the Tailwind Typography "prose" plugin ported into VMS tokens: block layout
+/// with collapsing margins, asymmetric heading spacing, real &lt;ul&gt;/&lt;ol&gt; bullets
+/// with hanging indent, prose blockquote/code-block/figure treatment). Wrap
+/// markdown-converter output in a prose section:
+/// `new SectionNode(Heading: null, Children: MarkdownConverter.ToViewNodes(md), Variant: SectionVariant.Prose)`.
+/// App UI (dashboards, forms, tables) does NOT use prose — the default flex+gap
+/// page layout is correct there.
+/// </summary>
 [JsonConverter(typeof(KebabEnum<SectionVariant>))]
-public enum SectionVariant { Card }
+public enum SectionVariant { Card, Prose }
 
 // ─── Action types ─────────────────────────────────────────────────────────────
 
