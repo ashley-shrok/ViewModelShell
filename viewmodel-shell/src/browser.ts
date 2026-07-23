@@ -1243,29 +1243,105 @@ export class BrowserAdapter implements Adapter {
     if (bind != null) this.sa.write(bind, value);
   }
 
-  /** 6.12.0 (TOOL-01) — apply a hover-only info tooltip to any rendered element.
-   *  Sets three things: (a) the native `title=` attribute, which is the
-   *  agent-legible + headless fallback + touch long-press affordance and
-   *  always works without CSS; (b) the `.vms-has-tooltip` class hook and (c)
-   *  the `data-vms-tooltip` attribute, which the shipped default.css uses to
-   *  render a styled bubble via `:hover::after` / `:focus-visible::after`. All
-   *  three go together so a stylesheet-stripped page still shows the browser's
-   *  native tooltip; a page with the shipped CSS additionally shows the styled
-   *  version. Non-dismissible, hover-only — the string field enforces
-   *  info-only at the wire level (no ViewNode can nest inside it). Absent =
-   *  no tooltip; the helper no-ops on null/empty.
+  /** 6.12.1 (TOOL-01) — apply a hover-only info tooltip to any rendered element.
    *
-   *  Note on `title=`: for interactive controls that already carry an
-   *  aria-label (Buttons), `title` complements it as visual + long-press UX
-   *  without changing the accessible name. For non-interactive nodes
-   *  (Text/Badge), `title` is the only stopgap for touch users and for
-   *  keyboard users where `:focus-visible` won't fire on non-focusable
-   *  elements. */
+   *  🚨 REVISED FROM 6.12.0 CSS-pseudo-element approach after Ashley's first-use
+   *  verification found two real bugs the pure-CSS shape structurally couldn't
+   *  fix: (a) tooltip on a Save button near the page edge got clipped by the
+   *  viewport (no CSS-only way to detect the edge and shift); (b) tooltip on a
+   *  TableColumn header was clipped by `.vms-table-wrapper { overflow-x: auto }`
+   *  because the `::after` pseudo lives INSIDE the wrapper's overflow context.
+   *  Also latent: `.vms-table__th--asc/desc::after` sort arrows would collide
+   *  with a tooltip `::after` on the same header. The pure-CSS v1 was too
+   *  limited; the fix is a body-appended singleton positioned by JS — the
+   *  same shape MUI/Ant use.
+   *
+   *  Stamps THREE things on the anchor element:
+   *  (a) the native `title=` attribute (agent-legible + headless fallback +
+   *      touch long-press affordance; always works without JS/CSS);
+   *  (b) the `.vms-has-tooltip` class hook (for consumers who want to target
+   *      the anchor CSS-wise);
+   *  (c) `data-vms-tooltip=` for parity introspection.
+   *  Then attaches `mouseenter`/`mouseleave`/`focusin`/`focusout` handlers
+   *  that show/hide a SINGLETON `.vms-tooltip-host` element appended to
+   *  `document.body`. Because the host is a body child (NOT a descendant of
+   *  the anchor's wrapper), no `overflow:hidden` / `overflow:auto` on any
+   *  ancestor of the anchor can clip it — table wrappers, modal frames,
+   *  scroll containers all pass through.
+   *
+   *  Positioning strategy on show:
+   *    1. Measure the anchor's viewport rect.
+   *    2. Measure the (temporarily rendered) tooltip's own rect.
+   *    3. Prefer ABOVE the anchor; flip BELOW if `anchor.top < tt.height + 8`
+   *       — closes the top-of-viewport clip that CSS-only couldn't detect.
+   *    4. Center horizontally under/over the anchor.
+   *    5. Clamp the horizontal offset into the viewport with an 8px margin —
+   *       closes the horizontal edge clip Ashley hit on the Save button.
+   *    6. Convert viewport-relative to document-relative via `scrollX`/`Y`
+   *       for `position: absolute` on body (survives page scroll).
+   *
+   *  Non-dismissible, hover-only. The string wire field enforces info-only
+   *  structurally (no ViewNode can nest inside a `string`). Absent = no
+   *  tooltip; the helper no-ops on null/empty. */
   private applyTooltip(el: HTMLElement, tooltip: string | undefined): void {
     if (tooltip == null || tooltip === "") return;
     el.title = tooltip;
     el.classList.add("vms-has-tooltip");
     el.dataset.vmsTooltip = tooltip;
+
+    const show = (): void => {
+      const host = this.ensureTooltipHost();
+      host.textContent = tooltip;
+      host.hidden = false;
+      // Two-phase measure: force layout with an offscreen top/left so the
+      // measurement is stable, then re-position with the real coordinates.
+      host.style.top = "0px";
+      host.style.left = "0px";
+      const anchor = el.getBoundingClientRect();
+      const tt = host.getBoundingClientRect();
+      const margin = 8;
+      const gap = 6;
+      const preferAbove = anchor.top >= tt.height + gap + margin;
+      const viewportY = preferAbove
+        ? anchor.top - tt.height - gap
+        : anchor.bottom + gap;
+      let viewportX = anchor.left + anchor.width / 2 - tt.width / 2;
+      viewportX = Math.max(
+        margin,
+        Math.min(viewportX, window.innerWidth - tt.width - margin),
+      );
+      // Convert viewport-relative → document-relative so the tooltip stays
+      // pinned to the anchor even after the user scrolls the page.
+      host.style.top = `${viewportY + window.scrollY}px`;
+      host.style.left = `${viewportX + window.scrollX}px`;
+    };
+    const hide = (): void => {
+      if (this.tooltipHost) this.tooltipHost.hidden = true;
+    };
+
+    el.addEventListener("mouseenter", show);
+    el.addEventListener("mouseleave", hide);
+    // Keyboard disclosure: keeps the a11y property that a keyboard user can
+    // reach the same info as a mouse user (mirrors :focus-visible in the old
+    // CSS approach, but now works even for non-natively-focusable elements
+    // if the app makes them focusable via tabindex).
+    el.addEventListener("focusin", show);
+    el.addEventListener("focusout", hide);
+  }
+
+  /** Lazy-create the singleton `.vms-tooltip-host` appended to `document.body`.
+   *  One per adapter instance; survives adapter re-renders (the container's
+   *  innerHTML wipe doesn't touch body children). */
+  private tooltipHost: HTMLElement | undefined;
+  private ensureTooltipHost(): HTMLElement {
+    if (this.tooltipHost) return this.tooltipHost;
+    const host = document.createElement("div");
+    host.className = "vms-tooltip-host";
+    host.setAttribute("role", "tooltip");
+    host.hidden = true;
+    document.body.appendChild(host);
+    this.tooltipHost = host;
+    return host;
   }
 
   private field(n: FieldNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
@@ -3102,9 +3178,32 @@ export class BrowserAdapter implements Adapter {
     // pre-runs rendering (a single text node), so every existing consumer is
     // untouched. The rule is unconditional, so a value/runs mismatch is never
     // ambiguous — see TextNode.value's TSDoc for why it isn't validated.
-    if (n.runs && n.runs.length > 0) this.inlineRuns(n.runs, el);
-    else el.textContent = n.value;
-    this.applyTooltip(el, n.tooltip);
+    // Tooltip anchoring: `.vms-text` carries `flex: 1` in default.css so it
+    // fills flex-row containers. That means the outer element's bounding box
+    // is much wider than the actual text (Ashley 2026-07-23 verification: the
+    // tooltip appeared floating far to the right of "MTD" because the span
+    // stretched across the whole row's remaining space). When a tooltip is
+    // set, wrap the text in an inner `.vms-text__anchor` span so the tooltip
+    // measures its position against the LETTERS, not the flex-stretched span.
+    // The `runs` path doesn't hit this because inlineRuns emits its own
+    // per-run inline elements sized to their content; the plain-value path
+    // is the one that emitted a bare text node.
+    if (n.runs && n.runs.length > 0) {
+      this.inlineRuns(n.runs, el);
+      // Runs on the outer with tooltip: apply to the outer because inlineRuns
+      // emits multiple children — no single inner element to attach to.
+      // Accepts the flex-width anchor; the value case (below) is the common
+      // path and the one that got the fix.
+      this.applyTooltip(el, n.tooltip);
+    } else if (n.tooltip != null && n.tooltip !== "") {
+      const inner = document.createElement("span");
+      inner.className = "vms-text__anchor";
+      inner.textContent = n.value;
+      this.applyTooltip(inner, n.tooltip);
+      el.appendChild(inner);
+    } else {
+      el.textContent = n.value;
+    }
     parent.appendChild(el);
   }
 

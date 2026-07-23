@@ -1207,9 +1207,12 @@ describe("6.12.0 — range inputType", () => {
 
 // 6.12.0 (TOOL-01) — the tooltip prop cluster on 8 node types. Renderer stamps
 // three things per tooltip-carrying element: native title=, .vms-has-tooltip
-// class, data-vms-tooltip attribute. Absence = no attribute (null-omission).
+// class, data-vms-tooltip attribute. On mouseenter/focusin, a body-appended
+// .vms-tooltip-host shows the tooltip; on mouseleave/focusout, it hides.
+// (Body-appended in 6.12.1 to escape overflow contexts + edge clipping —
+// Ashley's first-use verification found real bugs the CSS-only v1 couldn't fix.)
 describe("6.12.0 — tooltip prop cluster", () => {
-  it("ButtonNode with tooltip renders title + .vms-has-tooltip + data-vms-tooltip on the <button>", () => {
+  it("ButtonNode with tooltip stamps title + .vms-has-tooltip + data-vms-tooltip on the <button>", () => {
     const { container, render } = setup();
     render({
       type: "button",
@@ -1223,7 +1226,7 @@ describe("6.12.0 — tooltip prop cluster", () => {
     expect(btn.dataset.vmsTooltip).toBe("Removes the record permanently — cannot be undone.");
   });
 
-  it("BadgeNode with tooltip renders the three tooltip attributes on the <span>", () => {
+  it("BadgeNode with tooltip stamps the three tooltip attributes on the <span>", () => {
     const { container, render } = setup();
     render({
       type: "badge",
@@ -1251,7 +1254,7 @@ describe("6.12.0 — tooltip prop cluster", () => {
     expect(a.dataset.vmsTooltip).toBe("Open the framework docs");
   });
 
-  it("TextNode with tooltip stamps the tooltip on the emitted element", () => {
+  it("TextNode with tooltip wraps text in .vms-text__anchor inner span (6.12.1 anchor fix)", () => {
     const { container, render } = setup();
     render({
       type: "text",
@@ -1259,9 +1262,26 @@ describe("6.12.0 — tooltip prop cluster", () => {
       style: "heading",
       tooltip: "Month-to-date",
     });
-    const el = container.querySelector<HTMLElement>(".vms-text")!;
-    expect(el.title).toBe("Month-to-date");
-    expect(el.classList.contains("vms-has-tooltip")).toBe(true);
+    // The tooltip is on the INNER anchor span, not the outer .vms-text — so the
+    // hover trigger + JS position measurement lands on the letters, not the
+    // flex-stretched outer span (`.vms-text { flex: 1 }` in default.css).
+    const outer = container.querySelector<HTMLElement>(".vms-text")!;
+    expect(outer.title).toBe("");  // outer no longer carries the tooltip
+    const anchor = container.querySelector<HTMLElement>(".vms-text__anchor")!;
+    expect(anchor).not.toBeNull();
+    expect(anchor.textContent).toBe("MTD");
+    expect(anchor.title).toBe("Month-to-date");
+    expect(anchor.classList.contains("vms-has-tooltip")).toBe(true);
+    expect(anchor.dataset.vmsTooltip).toBe("Month-to-date");
+  });
+
+  it("TextNode WITHOUT tooltip renders bare text (no inner anchor wrapper — byte-identical to pre-6.12)", () => {
+    const { container, render } = setup();
+    render({ type: "text", value: "MTD", style: "heading" });
+    const outer = container.querySelector<HTMLElement>(".vms-text")!;
+    expect(outer.textContent).toBe("MTD");
+    // No inner wrapper when tooltip absent — the pre-6.12 rendering path.
+    expect(container.querySelector(".vms-text__anchor")).toBeNull();
   });
 
   it("TableColumn with tooltip stamps the tooltip on the header <th>", () => {
@@ -1275,7 +1295,6 @@ describe("6.12.0 — tooltip prop cluster", () => {
       rows: [{ id: "1", cells: { name: "Alice", mtd: "1200" } }],
     });
     const ths = container.querySelectorAll<HTMLTableCellElement>("th.vms-table__th");
-    // First TH has no tooltip; second does.
     expect(ths[0]!.title).toBe("");
     expect(ths[0]!.classList.contains("vms-has-tooltip")).toBe(false);
     expect(ths[1]!.title).toBe("Month-to-date");
@@ -1283,13 +1302,9 @@ describe("6.12.0 — tooltip prop cluster", () => {
     expect(ths[1]!.dataset.vmsTooltip).toBe("Month-to-date");
   });
 
-  it("a node WITHOUT tooltip does not stamp any of the three attributes (null-omission)", () => {
+  it("a node WITHOUT tooltip stamps NONE of the three attributes (null-omission)", () => {
     const { container, render } = setup();
-    render({
-      type: "button",
-      label: "Save",
-      action: { name: "save" },
-    });
+    render({ type: "button", label: "Save", action: { name: "save" } });
     const btn = container.querySelector<HTMLButtonElement>("button.vms-button")!;
     expect(btn.title).toBe("");
     expect(btn.classList.contains("vms-has-tooltip")).toBe(false);
@@ -1298,15 +1313,74 @@ describe("6.12.0 — tooltip prop cluster", () => {
 
   it("empty-string tooltip is treated as absent (helper no-ops)", () => {
     const { container, render } = setup();
-    render({
-      type: "button",
-      label: "Save",
-      action: { name: "save" },
-      tooltip: "",
-    });
+    render({ type: "button", label: "Save", action: { name: "save" }, tooltip: "" });
     const btn = container.querySelector<HTMLButtonElement>("button.vms-button")!;
     expect(btn.title).toBe("");
     expect(btn.classList.contains("vms-has-tooltip")).toBe(false);
     expect(btn.hasAttribute("data-vms-tooltip")).toBe(false);
+  });
+
+  // 6.12.1 (TOOL-02) — the body-appended tooltip host + mouseenter/mouseleave
+  // behavior. Replaces the pure-CSS ::after v1 that couldn't escape overflow
+  // contexts or detect viewport edges.
+  it("mouseenter on a tooltip anchor appends a .vms-tooltip-host to <body> with the tooltip text", () => {
+    const { container, render } = setup();
+    render({
+      type: "button",
+      label: "Save",
+      action: { name: "save" },
+      tooltip: "Persists all fields",
+    });
+    const btn = container.querySelector<HTMLButtonElement>("button.vms-button")!;
+    // Before mouseenter: no visible tooltip host.
+    let host = document.body.querySelector<HTMLElement>(".vms-tooltip-host");
+    expect(host === null || host.hidden === true).toBe(true);
+    btn.dispatchEvent(new MouseEvent("mouseenter"));
+    host = document.body.querySelector<HTMLElement>(".vms-tooltip-host")!;
+    expect(host).not.toBeNull();
+    expect(host.hidden).toBe(false);
+    expect(host.textContent).toBe("Persists all fields");
+    expect(host.getAttribute("role")).toBe("tooltip");
+    // mouseleave hides it (host stays in DOM as a singleton — hidden=true).
+    btn.dispatchEvent(new MouseEvent("mouseleave"));
+    expect(host.hidden).toBe(true);
+  });
+
+  it("tooltip host is a SINGLETON — showing a second tooltip reuses the same host", () => {
+    const { container, render } = setup();
+    render({
+      type: "section",
+      children: [
+        { type: "button", label: "A", action: { name: "a" }, tooltip: "first" },
+        { type: "button", label: "B", action: { name: "b" }, tooltip: "second" },
+      ],
+    });
+    const btns = container.querySelectorAll<HTMLButtonElement>("button.vms-button");
+    btns[0]!.dispatchEvent(new MouseEvent("mouseenter"));
+    const hostsAfterFirst = document.body.querySelectorAll(".vms-tooltip-host");
+    expect(hostsAfterFirst).toHaveLength(1);
+    expect(hostsAfterFirst[0]!.textContent).toBe("first");
+    btns[0]!.dispatchEvent(new MouseEvent("mouseleave"));
+    btns[1]!.dispatchEvent(new MouseEvent("mouseenter"));
+    const hostsAfterSecond = document.body.querySelectorAll(".vms-tooltip-host");
+    expect(hostsAfterSecond).toHaveLength(1);  // still ONE
+    expect(hostsAfterSecond[0]!.textContent).toBe("second");
+  });
+
+  it("focusin/focusout show/hide the tooltip (keyboard-a11y parity with hover)", () => {
+    const { container, render } = setup();
+    render({
+      type: "button",
+      label: "Save",
+      action: { name: "save" },
+      tooltip: "Persists all fields",
+    });
+    const btn = container.querySelector<HTMLButtonElement>("button.vms-button")!;
+    btn.dispatchEvent(new FocusEvent("focusin"));
+    const host = document.body.querySelector<HTMLElement>(".vms-tooltip-host")!;
+    expect(host.hidden).toBe(false);
+    expect(host.textContent).toBe("Persists all fields");
+    btn.dispatchEvent(new FocusEvent("focusout"));
+    expect(host.hidden).toBe(true);
   });
 });

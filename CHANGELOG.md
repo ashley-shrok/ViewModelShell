@@ -6,6 +6,53 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 6.12.1 / NuGet 6.12.1 — tooltip: JS-positioned body-appended host (fixes edge-clip + overflow-clip + wrong-anchor)
+
+**npm:** `6.12.1` (patch, from `6.12.0`) · **NuGet:** `6.12.1` (patch, from `6.12.0`). Wire-format **unchanged** — protocol token still `viewmodel-shell/1.0`, `tooltip?: string` on the same 8 nodes, byte-identical serialization. **This is a client-only render fix**; every existing tree renders `tooltip` correctly now.
+
+**Motivation.** The 6.12.0 CSS-`::after`-pseudo-element approach shipped a v1 whose limitations Ashley hit on FIRST use of the verification page. Three real bugs, all things the CSS-only shape structurally could not fix:
+
+1. **Tooltip near the page edge clipped off the viewport.** The `left: 50%; transform: translateX(-50%)` centered under the anchor with no edge detection; a Save button near the left edge had half its bubble hidden. CSS-only cannot measure the viewport width relative to the anchor.
+2. **Tooltip on a TableColumn header was clipped by `.vms-table-wrapper { overflow-x: auto }`.** The wrapper's overflow context clips any absolutely-positioned `::after` pseudo that extends above the wrapper — the bubble was rendering but immediately clipped, showing only a sliver of shadow.
+3. **Tooltip on a `TextNode` appeared far to the right of the letters.** `.vms-text { flex: 1 }` (existing default.css rule) stretches the outer span across the flex container; the `::after` centered under the wide box, not the letters. Hovering blank space next to "MTD" also triggered the bubble.
+
+Also latent — never hit but real: `.vms-table__th--asc/desc::after` sort arrows use the same pseudo-element as the tooltip did; a sortable column with a tooltip would have collided.
+
+### Fixed — tooltip now uses a body-appended host + JS positioning
+
+- **Renderer:** `applyTooltip` now attaches `mouseenter` / `mouseleave` / `focusin` / `focusout` handlers on every tooltip anchor. On show, it lazily creates a **singleton `.vms-tooltip-host` appended to `document.body`** (one per adapter, reused forever after), sets `textContent` to the tooltip string, measures both the anchor's viewport rect and the host's own rect, then positions the host absolutely via inline `top`/`left` styles:
+  - **Prefers ABOVE** the anchor; **flips BELOW** when `anchor.top < tt.height + gap + margin` — closes the top-of-viewport clip that CSS couldn't detect.
+  - **Centers horizontally**; **clamps to the viewport** with an 8px margin so an anchor near either edge shifts to stay visible.
+  - **Document-relative** (`viewportY + window.scrollY`) so the bubble stays pinned to its anchor across page scroll.
+- Because the host is a **direct child of `<body>`**, no ancestor's `overflow:hidden` / `overflow-x:auto` on the anchor's wrapper can clip it — table wrappers, modal frames, and scroll containers all pass through.
+- **`title=` still stamped** on every tooltip anchor and remains the agent-legible + headless + touch long-press fallback that works with no JS and no CSS. `.vms-has-tooltip` and `data-vms-tooltip=` still stamped as class hook + parity introspection attribute.
+
+### Fixed — `TextNode` tooltip anchors to an inner `.vms-text__anchor` span
+
+- When `TextNode.tooltip` is set (and `runs` is not — that path is unchanged), the renderer wraps the plain value in `<span class="vms-text__anchor">` and applies the tooltip attributes + event handlers to that inner span instead of the outer `.vms-text` element. The inner span is `display: inline`, so its bounding box hugs the LETTERS — the tooltip's JS positioning then measures against the actual text width, not the flex-stretched outer box.
+- Consequence Ashley specifically asked for: hovering the blank space next to a TextNode's letters no longer fires the tooltip; only hovering the letters themselves does.
+
+### CSS
+
+- Removed: `.vms-has-tooltip { position: relative }` + `.vms-has-tooltip:hover::after` / `:focus-visible::after` rule block.
+- Added: `.vms-tooltip-host { position: absolute; ... }` — the singleton bubble; positioned via inline `top`/`left` set by JS; `z-index: 10000`, `pointer-events: none`.
+- Added: `.vms-text__anchor { display: inline; }` — inline anchor for the TextNode fix.
+- Retained: `--vms-tooltip-bg` / `--vms-tooltip-fg` tokens (unchanged defaults).
+
+### Wire, migration
+
+**Wire: unchanged.** All 8 node types still carry the same `tooltip?: string` field with identical WhenWritingNull posture; the parity FeatureProbe fixture is unchanged and passes byte-identically across 17 backends.
+
+**Migration: none.** A pure client render fix. Any consumer app on 6.12.0 gets the correct rendering with zero code change on `npm install @ashley-shrok/viewmodel-shell@6.12.1`. Consumers targeting the 6.12.0 pseudo-element (`.vms-has-tooltip::after` in an app-level stylesheet, which was against the "no app CSS" rule anyway) will lose that hook; they should not have been styling it.
+
+### Verification-page note (not the framework, but banked for the record)
+
+The 6.12.0 verification page also uncovered a fourth apparent issue — the range slider only moving one tick per drag. Root cause: the in-page reducer was calling `renderAll()` on every `stateAccess.write`, interrupting the drag on every input event. **The real shell doesn't do that** — it only re-renders on dispatch responses (`shell.load()` / `shell.dispatch()`), never on state writes. The verification page was misbehaving, not the framework. The 6.12.1 verification page is fixed to mirror the real shell; the slider drags freely across the full range in one motion.
+
+Green tree at HEAD: 954 vitest / 6 check:* / 182 framework .NET / 191 across 5 demo test projects / 27 Markdown / parity 17 backends.
+
+---
+
 ## npm 6.12.0 / NuGet 6.12.0 — `radio` + `range` inputTypes, `tooltip?: string` prop cluster
 
 **npm:** `6.12.0` (minor, from `6.11.0`) · **NuGet:** `6.12.0` (minor, from `6.11.0`). Wire-format **additive** (`FieldNode.inputType` closed union gains two values; eight nodes gain an optional `tooltip?: string`); protocol token unchanged at `viewmodel-shell/1.0`. Fully backwards-compatible — every existing tree renders **byte-identically** to 6.11.0, and no consumer changes anything.

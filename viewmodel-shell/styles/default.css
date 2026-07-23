@@ -1860,33 +1860,34 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 /* fade-out applied just before removal. */
 .vms-toast--leaving { opacity: 0; transform: translateY(0.25rem); }
 
-/* ── Hover-only info tooltip (6.12.0, TOOL-01) ──
-   Applied via `.vms-has-tooltip` + `data-vms-tooltip=` (set together by
-   BrowserAdapter.applyTooltip). The native `title=` attribute is ALSO set on
-   every tooltip-carrying element and is the agent-legible / headless
-   fallback / touch long-press affordance — this CSS is purely the styled
-   layer for hover/focus users of the shipped BrowserAdapter.
+/* ── Hover-only info tooltip (6.12.1, TOOL-01) ──
+   The 6.12.0 CSS-pseudo-element approach shipped a v1 whose limitations
+   Ashley hit on FIRST use: a save button near the page edge got clipped
+   because CSS-only positioning cannot detect viewport edges; a TableColumn
+   header tooltip got clipped by `.vms-table-wrapper { overflow-x: auto }`
+   because the `::after` pseudo lived inside the wrapper's overflow context.
+   6.12.1 replaces the ::after with a body-appended `.vms-tooltip-host`
+   positioned by JS in `BrowserAdapter.applyTooltip` — the same shape mature
+   frameworks (MUI, Ant) use, and the same primitive we'll reuse for the
+   Popover / Drawer follow-ons.
 
-   The bubble uses ::after so the wire node's own DOM structure is untouched
-   (no wrapper span, no z-index war with children). Anchored to the host via
-   `position: absolute` on the pseudo-element relative to the host's own
-   `position: relative`. Shows on `:hover` for pointer users, on
-   `:focus-visible` for keyboard users (only fires on natively focusable
-   elements — buttons, links, form fields — so non-interactive nodes
-   Badge/Text fall back to the native `title=` for keyboard SR users).
+   The host is a DIRECT CHILD OF <body>, so no ancestor's `overflow:hidden`
+   or `overflow-x:auto` on the anchor's wrapper can clip it. Positioned
+   via inline `top`/`left` styles set on show; the CSS here only carries the
+   visual token/shape rules.
 
-   No JS positioning (v1 accepts that a tooltip at a viewport edge can clip);
-   `max-width` keeps long strings readable. Not dismissible — unhover / blur
-   closes it. `pointer-events: none` guarantees the bubble never intercepts
-   clicks. */
-.vms-has-tooltip { position: relative; }
-.vms-has-tooltip:hover::after,
-.vms-has-tooltip:focus-visible::after {
-  content: attr(data-vms-tooltip);
+   `hidden` is a real HTML attribute (renders as `display: none`); the JS
+   toggles it on mouseenter/focusin and mouseleave/focusout. `pointer-events:
+   none` guarantees the bubble never intercepts clicks even when visible.
+
+   `.vms-has-tooltip` is kept as a class HOOK on the anchor for consumers who
+   want to target it (e.g. a subtle underline hint) — no rules ship here by
+   default. `data-vms-tooltip=` is likewise kept on the anchor for parity
+   introspection. The native `title=` attribute is still stamped on every
+   tooltip anchor and is the agent-legible / headless / touch long-press
+   fallback that works with NO JS and NO CSS. */
+.vms-tooltip-host {
   position: absolute;
-  bottom: calc(100% + 4px);
-  left: 50%;
-  transform: translateX(-50%);
   background: var(--vms-tooltip-bg, #1f2937);
   color: var(--vms-tooltip-fg, #f9fafb);
   padding: 0.375rem 0.625rem;
@@ -1898,9 +1899,14 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   width: max-content;
   white-space: normal;
   pointer-events: none;
-  z-index: 1000;
+  z-index: 10000;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
 }
+/* Inline anchor for TextNode tooltips (6.12.1) — the outer .vms-text has
+   `flex: 1` and stretches across flex containers, so a plain-value TextNode
+   with a tooltip needs an inline inner span for the positioning JS to
+   measure against the LETTERS instead of the flex-stretched box. */
+.vms-text__anchor { display: inline; }
 
 /* ── Empty state (first-class "nothing here" presentation) ──
    A centered block: heading, optional message, optional CTA button. */
