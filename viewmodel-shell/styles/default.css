@@ -63,6 +63,15 @@
   --vms-chart-6: #1f8fa3;
   --vms-chart-7: #767a1f;
   --vms-chart-8: #c23fa0;
+  /* Code block palette — CodeBlockNode inverts against the page surface for the
+     classic "code sits in its own dark card" prose treatment (matches Tailwind
+     Typography's `bg-gray-800` code blocks). Fixed dark values on the shipped
+     light default; dark themes override in-file to a darker-than-body surface so
+     the block still reads as a distinct code region without blending. */
+  --vms-code-bg:        #1f2937;   /* Tailwind gray-800 */
+  --vms-code-fg:        #e5e7eb;   /* Tailwind gray-200 */
+  --vms-code-header-bg: #111827;   /* Tailwind gray-900 — one step darker */
+  --vms-code-header-fg: #9ca3af;   /* Tailwind gray-400 — muted */
   --vms-radius:      10px;
   --vms-radius-sm:   6px;
   --vms-image-small:   4rem;
@@ -1122,108 +1131,79 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   line-height: 1.25;
   color: inherit;
 }
-.vms-page h1 { font-size: var(--vms-text-2xl); font-weight: 700; letter-spacing: -0.02em; }
-.vms-page h2 { font-size: var(--vms-text-xl);  font-weight: 700; letter-spacing: -0.01em; }
-.vms-page h3 { font-size: var(--vms-text-lg);  font-weight: 600; }
-.vms-page h4 { font-size: var(--vms-text-md);  font-weight: 600; }
-.vms-page h5 { font-size: var(--vms-text-base); font-weight: 600; }
-.vms-page h6 { font-size: var(--vms-text-sm); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--vms-text-muted); }
+/* Asymmetric top margin per level — the "space above > space below" prose
+   typography move that groups a heading with its following content. In
+   .vms-page's flex+gap layout the margin ADDS to --vms-space-lg (page gap),
+   so total space above = gap + margin-top while space below = gap alone.
+   Tuned smaller than Tailwind Typography's block-flow values (2em/1.6em/1.5em)
+   since we're composing with an already-generous gap. The first heading in
+   the page loses its margin-top via the > :first-child rule below. */
+.vms-page h1 { font-size: var(--vms-text-2xl); font-weight: 700; letter-spacing: -0.02em; margin-top: 0; }
+.vms-page h2 { font-size: var(--vms-text-xl);  font-weight: 700; letter-spacing: -0.01em; margin-top: var(--vms-space-md); }
+.vms-page h3 { font-size: var(--vms-text-lg);  font-weight: 600; margin-top: var(--vms-space-sm); }
+.vms-page h4 { font-size: var(--vms-text-md);  font-weight: 600; margin-top: var(--vms-space-sm); }
+.vms-page h5 { font-size: var(--vms-text-base); font-weight: 600; margin-top: var(--vms-space-sm); }
+.vms-page h6 { font-size: var(--vms-text-sm); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--vms-text-muted); margin-top: var(--vms-space-sm); }
+/* First-child kill — the top of a page never has extra space above its first
+   element, so an h2/h3 at the top of a page hugs the top edge. Pairs with the
+   asymmetric heading top-margins above. */
+.vms-page > :first-child { margin-top: 0; }
 
-/* ── SectionNode variant:"prose" — prose typography scope ──
-   Ported from @tailwindcss/typography default (prose-base — the medium/default
-   prose size). Reference: https://github.com/tailwindlabs/tailwindcss-typography
-   src/styles.js defaultModifiers.base. Values kept em-based so scaling
-   composes naturally with the parent context's font-size.
+/* ── SectionNode variant:"prose" — the NARROW prose scope ──
+   Most of the "prose typography" treatment (heading font scale + asymmetric
+   top margins, blockquote treatment, dark code-block inversion, figure/hr
+   tuning, inline code chip) now lives GLOBALLY on .vms-page / on the element
+   classes themselves — so any VMS page emitting these elements gets good
+   typography by default, no wrapper needed.
 
-   Applies ONLY inside a .vms-section--prose scope — the default .vms-page
-   flex+gap layout is untouched for dashboards/forms/tables. Consumers wrap
-   markdown/rich-text content in { type:"section", variant:"prose", children:... }
-   and get standard prose rendering: block layout with collapsing margins,
-   asymmetric heading spacing (top > bottom), the load-bearing `h_ + *`
-   first-child reset (so the following element's margin-top zeroes and only
-   the heading's bottom-margin controls the gap), real <ul>/<ol> bullets with
-   hanging indent, prose blockquote/code/figure treatment.
+   This scope handles ONLY what genuinely cannot go global without breaking
+   existing dashboard/app usage:
 
-   These rules override the earlier .vms-page h1..h6 { margin:0 } via
-   same-specificity, later-in-file wins — that reset stays correct for
-   non-prose contexts (dashboard headings inside .vms-page flex+gap where a
-   heading margin would double the page gap). */
+   (a) BLOCK LAYOUT with collapsing margins — kills .vms-section's flex+gap
+       base so prose relies on standard block flow. Required for (b).
+   (b) THE `h_ + *` FIRST-CHILD RESET — kills the following element's
+       margin-top so heading bottom-margin alone controls the gap. Only
+       possible in block layout (flex `gap` isn't a margin).
+   (c) `.vms-text` → BLOCK PARAGRAPH — .vms-text is used INLINE across many
+       existing surfaces (form labels, badges, button interiors); promoting
+       it globally would break those. Scoped to prose only.
+   (d) `.vms-list` → REAL <ul>/<ol> BULLETS — .vms-list is a shipped
+       card-widget primitive (border/hover/tone variants) used by every
+       existing dashboard queue/task list. Turning it into bullets globally
+       would break every one. Scoped to prose only.
+
+   Consumers making docs viewers wrap markdown output in
+   { type:"section", variant:"prose", children: markdownToViewNodes(md) }
+   to get the full treatment. Consumers making dashboards get ~80% of good
+   typography for free without wrapping anything. */
 
 .vms-section--prose {
-  /* Kill the .vms-section flex+gap base — prose relies on standard block
-     flow with collapsing margins for its whole spacing model. */
+  /* Kill the .vms-section flex+gap base — prose relies on standard block flow
+     with collapsing margins for its spacing model. */
   display: block;
   gap: 0;
   line-height: 1.75;
   font-family: var(--vms-font-body);
 }
 
-/* Top/bottom of the prose block never has extra space (the standard Tailwind
-   Typography reset). */
+/* Top/bottom of the prose block never has extra space. */
 .vms-section--prose > :first-child { margin-top: 0; }
 .vms-section--prose > :last-child  { margin-bottom: 0; }
 
-/* Heading spacing — asymmetric top > bottom, groups a heading with its
-   following content. */
-.vms-section--prose h1 {
-  margin-top: 0;
-  margin-bottom: 0.889em;
-  font-size: 2.25em;
-  font-weight: 800;
-  line-height: 1.111;
-  letter-spacing: -0.02em;
-}
-.vms-section--prose h2 {
-  margin-top: 2em;
-  margin-bottom: 1em;
-  font-size: 1.5em;
-  font-weight: 700;
-  line-height: 1.333;
-  letter-spacing: -0.01em;
-}
-.vms-section--prose h3 {
-  margin-top: 1.6em;
-  margin-bottom: 0.6em;
-  font-size: 1.25em;
-  font-weight: 600;
-  line-height: 1.6;
-}
-.vms-section--prose h4 {
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
-  font-weight: 600;
-  line-height: 1.5;
-}
-.vms-section--prose h5 {
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
-  font-weight: 600;
-  line-height: 1.5;
-}
-.vms-section--prose h6 {
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
-  font-weight: 600;
-  line-height: 1.5;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--vms-text-muted);
-}
+/* Prose heading margins — fuller than the global .vms-page rules (which are
+   tuned for flex+gap composition) because prose is block-flow with collapsing
+   margins, so these values ARE the spacing (not additive to a gap). Values
+   from @tailwindcss/typography default (defaultModifiers.base). */
+.vms-section--prose h1 { margin-top: 0;     margin-bottom: 0.889em; }
+.vms-section--prose h2 { margin-top: 2em;   margin-bottom: 1em; }
+.vms-section--prose h3 { margin-top: 1.6em; margin-bottom: 0.6em; }
+.vms-section--prose h4 { margin-top: 1.5em; margin-bottom: 0.5em; }
+.vms-section--prose h5 { margin-top: 1.5em; margin-bottom: 0.5em; }
+.vms-section--prose h6 { margin-top: 1.5em; margin-bottom: 0.5em; }
 
-/* Heading-adjacent reset — the LOAD-BEARING move. Without this the following
-   element's margin-top adds to (or collapses against) the heading's
-   margin-bottom, eating the asymmetric intent. */
-.vms-section--prose h1 + *,
-.vms-section--prose h2 + *,
-.vms-section--prose h3 + *,
-.vms-section--prose h4 + *,
-.vms-section--prose h5 + *,
-.vms-section--prose h6 + *,
-.vms-section--prose hr + * { margin-top: 0; }
-
-/* Paragraphs — TextNode without level renders as <span class="vms-text">.
-   Promote to block flow with prose spacing under this scope. The .vms-text
-   base rule sets flex:1 which only makes sense in a flex parent — reset it. */
+/* .vms-text → block paragraph. .vms-text is inline (<span>) elsewhere; under
+   prose it's a paragraph-like block with its own margins. flex:initial resets
+   the base .vms-text { flex: 1 } which only makes sense in flex parents. */
 .vms-section--prose > .vms-text {
   display: block;
   margin-top: 1.25em;
@@ -1231,6 +1211,20 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   line-height: 1.75;
   flex: initial;
 }
+
+/* Heading-adjacent reset — the LOAD-BEARING move. MUST come AFTER
+   .vms-section--prose > .vms-text above so it wins the same-specificity tie
+   (later rule wins by source order). Without this, a paragraph immediately
+   after a heading gets its full 1.25em top-margin, eating the heading's
+   asymmetric intent (the visible bug that made "less padding under headers"
+   look wrong before). */
+.vms-section--prose h1 + *,
+.vms-section--prose h2 + *,
+.vms-section--prose h3 + *,
+.vms-section--prose h4 + *,
+.vms-section--prose h5 + *,
+.vms-section--prose h6 + *,
+.vms-section--prose hr + * { margin-top: 0; }
 
 /* Lists — override the .vms-list dashboard-queue card treatment with real
    <ul>/<ol> bullets and hanging indent. Outside a prose scope, ListNode
@@ -1243,27 +1237,18 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   list-style-type: disc;
   gap: 0;
 }
-.vms-section--prose .vms-list--ordered {
-  list-style-type: decimal;
-}
+.vms-section--prose .vms-list--ordered { list-style-type: decimal; }
 /* The framework's manual counter-based numbering (used for the card
    treatment) is redundant under prose — the browser's native
    list-style-type: decimal handles it. Disable both. */
-.vms-section--prose .vms-list--ordered > .vms-list-item {
-  counter-increment: none;
-}
-.vms-section--prose .vms-list--ordered > .vms-list-item::before {
-  content: none;
-}
+.vms-section--prose .vms-list--ordered > .vms-list-item          { counter-increment: none; }
+.vms-section--prose .vms-list--ordered > .vms-list-item::before  { content: none; }
 
 .vms-section--prose .vms-list-item {
   display: list-item;
   margin-top: 0.5em;
   margin-bottom: 0.5em;
-  padding-inline-start: 0.375em;
-  padding-top: 0;
-  padding-bottom: 0;
-  padding-inline-end: 0;
+  padding: 0 0 0 0.375em;
   background: transparent;
   border: none;
   border-radius: 0;
@@ -1289,29 +1274,16 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-section--prose .vms-list-item > .vms-text:first-child { margin-top: 0; }
 .vms-section--prose .vms-list-item > .vms-text:last-child  { margin-bottom: 0; }
 
-/* Blockquote — the base .vms-blockquote already has border-left + padding.
-   Under prose, tune margin/padding to Tailwind values and remove the card
-   surface (rounded background) so it reads as inline quoted flow. */
+/* Blockquote — the GLOBAL .vms-blockquote treatment (italic, muted border,
+   no background) is already correct for prose. Inside prose scope, override
+   the outer margins (prose values) + display: block + paragraph flow for
+   inner text. */
 .vms-section--prose .vms-blockquote {
   display: block;
   margin-top: 1.6em;
   margin-bottom: 1.6em;
-  padding-top: 0;
-  padding-bottom: 0;
-  padding-inline-start: 1em;
-  padding-inline-end: 0;
-  border-inline-start-width: 0.25rem;
-  border-inline-start-style: solid;
-  border-inline-start-color: var(--vms-accent);
-  border-radius: 0;
-  background: transparent;
-  color: var(--vms-text-muted, inherit);
-  font-style: italic;
-  font-weight: 500;
   gap: 0;
-  quotes: "\201C" "\201D" "\2018" "\2019";
 }
-/* Blockquote's inner TextNode children behave as prose paragraphs. */
 .vms-section--prose .vms-blockquote > .vms-text {
   display: block;
   margin-top: 1.25em;
@@ -1321,44 +1293,25 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-section--prose .vms-blockquote > .vms-text:first-child { margin-top: 0; }
 .vms-section--prose .vms-blockquote > .vms-text:last-child  { margin-bottom: 0; }
 
-/* Code block — the .vms-code-block already has its own surface/border/header;
-   under prose we only tune the outer margin and text-size to match. */
+/* Code block outer margin under prose — the container's own dark surface +
+   header treatment is global (see .vms-code-block above). Just tune the
+   outer margin to prose values. */
 .vms-section--prose .vms-code-block {
   margin-top: 1.714em;
   margin-bottom: 1.714em;
-  font-size: 0.875em;
 }
 
-/* Inline code inside runs — sized down slightly to match prose expectations. */
-.vms-section--prose .vms-text__code {
-  font-size: 0.875em;
-  font-weight: 600;
-}
-
-/* Figure + figcaption — ImageNode.caption emission (<figure><img><figcaption>). */
+/* Figure/HR under prose — outer margins tuned. Base .vms-figure/.vms-divider
+   are unchanged; only the block-flow spacing needs the prose treatment. */
 .vms-section--prose .vms-figure {
   display: block;
   margin-top: 2em;
   margin-bottom: 2em;
-  gap: 0;
+  gap: 0.5rem;
 }
-.vms-section--prose .vms-figcaption {
-  font-size: 0.875em;
-  line-height: 1.429;
-  margin-top: 0.857em;
-  text-align: center;
-  color: var(--vms-text-muted);
-}
-
-/* Horizontal rule — DividerNode renders as <hr class="vms-divider">. Under
-   prose, override the tighter .vms-divider margin-block with Tailwind's 3em. */
 .vms-section--prose .vms-divider {
   margin-top: 3em;
   margin-bottom: 3em;
-  border: 0;
-  border-top-width: 1px;
-  border-top-style: solid;
-  border-top-color: var(--vms-border);
 }
 
 /* Images — sensible fluid sizing so an oversized image doesn't blow out
@@ -1482,15 +1435,22 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 /* A display-only <pre><code> wrapped in a container with an optional header
    row (filename + language + copy button). Plain monospace text, no syntax
    highlighting in v1 — the fenced code stays legible in every theme.
-   Container background + border render even without a header, so a bare
-   code block (no filename/language, copyable:false) still reads as a
-   distinct block. */
+   Container background + light text render even without a header, so a bare
+   code block (no filename/language, copyable:false) still reads as a distinct
+   dark code region.
+
+   PROSE INVERSION (6.11): --vms-code-bg / --vms-code-fg are fixed dark on the
+   shipped light default (Tailwind gray-800 / gray-200) so code sits in its
+   own inverted card — the canonical prose treatment for fenced code that
+   Tailwind Typography's `prose pre` does globally. Dark themes override these
+   tokens to a darker-than-body surface so the code block still reads as
+   distinct. No border (Tailwind pattern — the dark surface IS the boundary). */
 .vms-code-block {
   display: flex;
   flex-direction: column;
-  background: var(--vms-surface-2, rgba(127, 127, 127, 0.06));
-  border: 1px solid var(--vms-border, rgba(127, 127, 127, 0.15));
-  border-radius: 4px;
+  background: var(--vms-code-bg);
+  color: var(--vms-code-fg);
+  border-radius: 6px;
   overflow: hidden;
   font-family: var(--vms-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
 }
@@ -1498,57 +1458,67 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.35rem 0.6rem;
-  background: var(--vms-surface-3, rgba(127, 127, 127, 0.08));
-  border-bottom: 1px solid var(--vms-border, rgba(127, 127, 127, 0.15));
+  padding: 0.35rem 0.7rem;
+  background: var(--vms-code-header-bg);
+  color: var(--vms-code-header-fg);
   font-family: var(--vms-font-body, system-ui, sans-serif);
   font-size: 0.85em;
-  color: var(--vms-ink-muted, currentColor);
 }
-.vms-code-block__filename { font-weight: 600; }
+.vms-code-block__filename { font-weight: 600; color: var(--vms-code-fg); }
 .vms-code-block__language {
   padding: 0.1rem 0.45rem;
   border-radius: 99px;
-  background: var(--vms-surface-2, rgba(127, 127, 127, 0.06));
-  border: 1px solid var(--vms-border, rgba(127, 127, 127, 0.15));
+  background: color-mix(in srgb, var(--vms-code-fg) 8%, transparent);
+  color: var(--vms-code-header-fg);
   font-size: 0.85em;
   text-transform: lowercase;
 }
 .vms-code-block__spacer { flex: 1; }
 .vms-code-block__pre {
   margin: 0;
-  padding: 0.75rem 0.9rem;
+  padding: 0.85rem 1rem;
   overflow-x: auto;
   white-space: pre;
-  font-size: 0.92em;
-  line-height: 1.5;
-  color: var(--vms-ink, currentColor);
+  font-size: 0.875em;
+  line-height: 1.714;
+  color: inherit;
 }
 .vms-code-block__code {
   font-family: inherit;
   background: transparent;
   padding: 0;
   border: 0;
+  color: inherit;
 }
 
 /* ── Blockquote ── */
 /* A real <blockquote> holding block-level children (paragraphs, lists, nested
-   blockquotes). Left accent bar + slight left inset + subtle tinted background
-   distinguish quoted content from surrounding flow. Reset the browser default
-   margin so nesting composes cleanly and doesn't compound. */
+   blockquotes). PROSE TREATMENT (6.11): styled like Tailwind Typography's
+   default — italic + weight 500 + a thin muted left rule, no background
+   surface. This is the standard prose blockquote look and works cleanly in
+   both flex+gap page contexts (as one of a page's children) and block-flow
+   prose contexts (inside .vms-section--prose, where the scope re-declares
+   display: block and adds asymmetric margins). Reset the browser default
+   margin so nesting composes cleanly. */
 .vms-blockquote {
   margin: 0;
-  padding: 0.5rem 1rem;
-  border-left: 3px solid var(--vms-accent, #7c5cff);
-  background: var(--vms-surface-2, rgba(127, 127, 127, 0.05));
-  color: var(--vms-ink-muted, inherit);
+  padding: 0.25rem 0 0.25rem 1rem;
+  border-inline-start: 0.25rem solid var(--vms-border);
+  background: transparent;
+  color: var(--vms-text-muted, inherit);
+  font-style: italic;
+  font-weight: 500;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  border-radius: 0 3px 3px 0;
+  border-radius: 0;
+  quotes: "\201C" "\201D" "\2018" "\2019";
 }
-/* Nested blockquotes stack their accents so quote depth is visible. */
-.vms-blockquote .vms-blockquote { margin-top: 0.25rem; }
+/* Nested blockquotes get a slightly stronger left rule so quote depth is visible. */
+.vms-blockquote .vms-blockquote {
+  margin-top: 0.5rem;
+  border-inline-start-color: var(--vms-text-muted);
+}
 
 /* ── Progress ── */
 .vms-progress { height: 3px; background: var(--vms-surface-2); border-radius: 99px; overflow: hidden; }
