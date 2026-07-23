@@ -1192,14 +1192,18 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 
 /* Prose heading margins — fuller than the global .vms-page rules (which are
    tuned for flex+gap composition) because prose is block-flow with collapsing
-   margins, so these values ARE the spacing (not additive to a gap). Values
-   from @tailwindcss/typography default (defaultModifiers.base). */
-.vms-section--prose h1 { margin-top: 0;     margin-bottom: 0.889em; }
-.vms-section--prose h2 { margin-top: 2em;   margin-bottom: 1em; }
-.vms-section--prose h3 { margin-top: 1.6em; margin-bottom: 0.6em; }
-.vms-section--prose h4 { margin-top: 1.5em; margin-bottom: 0.5em; }
-.vms-section--prose h5 { margin-top: 1.5em; margin-bottom: 0.5em; }
-.vms-section--prose h6 { margin-top: 1.5em; margin-bottom: 0.5em; }
+   margins, so these values ARE the spacing (not additive to a gap). Top
+   margins ported from @tailwindcss/typography default (defaultModifiers.base).
+   Bottom margins tightened ~30% from Tailwind's values — operator tuning:
+   Tailwind's 1em under h2 read as too much air between a heading and its
+   content in the A/B run-through, so 0.7em holds the grouping closer without
+   crowding. */
+.vms-section--prose h1 { margin-top: 0;     margin-bottom: 0.62em; }
+.vms-section--prose h2 { margin-top: 2em;   margin-bottom: 0.7em; }
+.vms-section--prose h3 { margin-top: 1.6em; margin-bottom: 0.42em; }
+.vms-section--prose h4 { margin-top: 1.5em; margin-bottom: 0.35em; }
+.vms-section--prose h5 { margin-top: 1.5em; margin-bottom: 0.35em; }
+.vms-section--prose h6 { margin-top: 1.5em; margin-bottom: 0.35em; }
 
 /* .vms-text → block paragraph. .vms-text is inline (<span>) elsewhere; under
    prose it's a paragraph-like block with its own margins. flex:initial resets
