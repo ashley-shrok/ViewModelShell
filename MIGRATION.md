@@ -6,6 +6,50 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `6.12.0` / NuGet `6.12.0` — nothing to do (additive)
+
+**Both packages: purely additive.** Every existing tree renders byte-identically. `FieldNode.inputType` gains two new valid tokens (`"radio"`, `"range"`); eight nodes gain an optional `tooltip?: string` (Button, CopyButton, Link, Field, Checkbox, Badge, Text, TableColumn). No existing consumer changes anything.
+
+### Optional new capabilities
+
+If you want to use any of the three new capabilities, they're one-field additions:
+
+```csharp
+// Radio group — reuses existing Options
+new FieldNode("priority", "radio", "priority", "Priority", null,
+    Options: new FieldOption[] {
+        new FieldOption("low", "Low"),
+        new FieldOption("med", "Medium"),
+        new FieldOption("high", "High"),
+    });
+
+// Range / slider — reuses existing min/max/step
+new FieldNode("level", "range", "level", "Level", null, Min: "0", Max: "100", Step: "5");
+
+// Tooltip on an existing node — pure decoration
+new ButtonNode("Delete", new ActionDescriptor("delete"),
+    Tone: Tone.Danger,
+    Tooltip: "Removes the record permanently — cannot be undone.");
+```
+
+```typescript
+// Same three shapes in TypeScript:
+{ type: "field", name: "priority", inputType: "radio", bind: "priority",
+  options: [{ value: "low", label: "Low" }, { value: "med", label: "Medium" }, { value: "high", label: "High" }] }
+{ type: "field", name: "level", inputType: "range", bind: "level", min: "0", max: "100", step: "5" }
+{ type: "button", label: "Delete", action: { name: "delete" }, tone: "danger",
+  tooltip: "Removes the record permanently — cannot be undone." }
+```
+
+### Notes on `tooltip`
+
+- **Hover-only info.** No click state, no dismissible-by-X panel. The string-only wire field enforces info-only at the wire level (no ViewNode can nest inside a `string`).
+- **Applies to:** Button, CopyButton, Link, Field, Checkbox (standalone), Badge, Text, TableColumn (for column-header tooltips).
+- The renderer stamps three things when set: the native `title=` attribute (works without CSS + gives touch users the long-press affordance + agent-legible from the DOM), the `.vms-has-tooltip` class, and `data-vms-tooltip=` for the shipped CSS to render a styled bubble. Empty-string is treated as absent.
+- v1 has no JS positioning; a bubble at a viewport edge can clip. Precedent-set by every mature framework's v1.
+
+---
+
 ## Upgrading to npm `6.11.0` / NuGet `6.11.0` — nothing to do (additive; one adopter pattern for markdown pages)
 
 **Both packages: purely additive.** Every existing `SectionNode` renders byte-identically. The `SectionNode.variant` closed union gains one value (`"prose"`); the shipped default CSS gets element-level polish (asymmetric heading margins, blockquote/code-block/figure treatment tuned toward `@tailwindcss/typography` values). No existing consumer changes anything.

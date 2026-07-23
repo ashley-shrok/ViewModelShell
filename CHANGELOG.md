@@ -6,6 +6,62 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 6.12.0 / NuGet 6.12.0 — `radio` + `range` inputTypes, `tooltip?: string` prop cluster
+
+**npm:** `6.12.0` (minor, from `6.11.0`) · **NuGet:** `6.12.0` (minor, from `6.11.0`). Wire-format **additive** (`FieldNode.inputType` closed union gains two values; eight nodes gain an optional `tooltip?: string`); protocol token unchanged at `viewmodel-shell/1.0`. Fully backwards-compatible — every existing tree renders **byte-identically** to 6.11.0, and no consumer changes anything.
+
+**Motivation.** This is the ship of the top three picks from **`.planning/design/framework-capability-gap-survey.md`** (2026-07-23) — the meta-audit Ashley banked after inline rich text turned out to be a basic missing capability. The survey ran nine capability categories against four flagship component libs (Bootstrap/MUI/Ant/Chakra) for inventory completeness and six server-driven peers (LiveView/Hotwire/Livewire+Filament/Blazor/Streamlit/HTMX+DaisyUI) for shape-fit; two clusters were flagged as real gaps: **basic form-input diversity** and **anchored overlays**. `radio` + `range` are the two HIGH-ranked cheap ships from the input cluster; `tooltip` is the MEDIUM anchored-overlay pick, scoped tight to hover-only info-display (Ashley: *"as long as a tooltip means it only shows when you hover over something, and it's not any kind of situation where it would stay on screen"*) so the string-only wire field enforces info-only structurally.
+
+### Added — `FieldNode.inputType: "radio"` (wire)
+
+- **`FieldNode.inputType`** closed union grows by one: `"radio"`. Reuses existing `options[]` (`{value, label}[]`) — no new wire fields.
+- Renderer emits `<div class="vms-field__input vms-field--radio" role="radiogroup" id="vms-{name}">` wrapping one `<label class="vms-field__radio-option">` per option with `<input type="radio" name="{n.name}" value="{opt.value}">` + `<span class="vms-field__radio-label">`. Clicks write `opt.value` into `bind` on `change`. Parallels the `<select>` case for id-on-group and natural `decorateField` flow (disabled/error/help propagate).
+- Screen readers announce the group via the outer `.vms-field__label`; browser-native keyboard/focus handling for arrow-key navigation between options.
+- Cross-backend: `.NET` uses the same bare `string InputType` slot; no schema change, just a new valid string.
+
+### Added — `FieldNode.inputType: "range"` (wire)
+
+- **`FieldNode.inputType`** closed union grows by one: `"range"`. Reuses existing `min`/`max`/`step` (native HTML-attribute string semantics) — no new wire fields.
+- Renderer: falls through the default input branch (`inp.type = n.inputType` → `type="range"`); `decorateField` already applies min/max/step. The union extension alone is the whole implementation — zero renderer changes needed.
+- State carries the value as a string (native `<input type=range>.value` is always a string), consistent with every other value-bearing inputType.
+
+### Added — `tooltip?: string` on 8 node types (wire)
+
+- **`ButtonNode`, `CopyButtonNode`, `LinkNode`, `FieldNode`, `CheckboxNode`, `BadgeNode`, `TextNode`, `TableColumn`** each gain an optional `tooltip?: string`.
+- **Info-only by construction.** The field is a bare string, so no interaction (button, link, form) can be structurally expressed inside it. There's no wrapper node, no interaction model to design, no dismissible-by-X panel — just annotate content that already exists.
+- Renderer helper `applyTooltip(el, tooltip)` stamps **three things** together when tooltip is set: (a) the native `title=` attribute (agent-legible + headless fallback + touch long-press affordance; always works without CSS), (b) the `.vms-has-tooltip` class hook, (c) the `data-vms-tooltip=` attribute. Empty-string and null both no-op.
+- Shipped CSS renders a styled hover bubble via `.vms-has-tooltip:hover::after` / `:focus-visible::after` using `content: attr(data-vms-tooltip)` and `position:absolute`. The bubble uses a pseudo-element so the wire node's own DOM structure is untouched (no wrapper span). Non-dismissible — unhover/blur closes it. New `--vms-tooltip-bg` / `--vms-tooltip-fg` tokens default to Tailwind gray-800/gray-50; themes can override.
+- No JS positioning in v1: max-width + word-wrap; a bubble at a viewport edge can clip. Precedent-set by every mature framework for a v1 that avoids the floating-ui/popper.js dependency.
+- A11y: interactive controls (Button/Link/Field/CopyButton) get both `title` and `:focus-visible::after` (visual + long-press UX + keyboard disclosure). Non-interactive nodes (Text/Badge/TableColumn `<th>`) get `title` as the touch + SR fallback (`:focus-visible` won't fire on non-focusable elements — a known limitation, universal across libs).
+- Adopter usage:
+  ```csharp
+  new ButtonNode("Delete", new ActionDescriptor("delete"),
+      Tone: Tone.Danger,
+      Tooltip: "Removes the record permanently — cannot be undone.")
+  ```
+  ```typescript
+  { type: "table", columns: [
+    { key: "mtd", label: "MTD", tooltip: "Month-to-date" }
+  ], rows: [...] }
+  ```
+
+### Migration
+
+**None.** All additions are optional; omitting `tooltip` and continuing to use the existing 16 inputTypes is byte-identical to 6.11.0. Every existing tree renders unchanged.
+
+### Wire posture (gotcha #8 discipline)
+
+- `tooltip` on `.NET` records: `[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null` on all 8 records — WhenWritingNull ⇒ absent, matching every other optional string.
+- `FieldNode.inputType` remains bare `string` on both sides; the two new tokens ride the existing slot, same as `"lookup"`/`"lookup-multiple"` did in 5.2.0.
+- Parity FeatureProbe exercises radio (with 3 options), range (with min/max/step), and tooltip on both a FieldNode + a ButtonNode; `expectBodyContains` coverage tripwires assert the exact strings cross byte-identically across .NET/bun/node so the branches can't go vacuous.
+
+### Reference
+
+- The survey doc itself: `.planning/design/framework-capability-gap-survey.md` — the full ranked shortlist + easy-yes verdicts + rejected candidates + method for future audits (folded into `AGENTS.md` under "Conventions for evolving the framework").
+- The commits that led here: `docs(survey): framework capability-gap survey + AGENTS.md addendum...` → `feat(field): add radio + range inputTypes` → `feat: tooltip?: string prop cluster on 8 nodes (hover-only info)` → this release.
+
+---
+
 ## npm 6.11.0 / NuGet 6.11.0 — prose typography (`SectionNode variant:"prose"`) + globalized element polish
 
 **npm:** `6.11.0` (minor, from `6.10.0`) · **NuGet:** `6.11.0` (minor, from `6.10.0`). Wire-format **additive** (the `SectionNode.variant` closed union gains one value); protocol token unchanged at `viewmodel-shell/1.0`. Fully backwards-compatible — every existing tree renders **byte-identically** to 6.10.0, and no consumer changes anything.
