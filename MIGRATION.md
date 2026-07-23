@@ -6,6 +6,51 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `6.11.0` / NuGet `6.11.0` — nothing to do (additive; one adopter pattern for markdown pages)
+
+**Both packages: purely additive.** Every existing `SectionNode` renders byte-identically. The `SectionNode.variant` closed union gains one value (`"prose"`); the shipped default CSS gets element-level polish (asymmetric heading margins, blockquote/code-block/figure treatment tuned toward `@tailwindcss/typography` values). No existing consumer changes anything.
+
+### One adopter pattern (only for markdown / rich-text pages)
+
+**If you render markdown (or any rich text) into a page** — docs viewers, patch notes, help pages, guide pages, etc. — wrap the converted content in a `variant: "prose"` section to pick up the prose typography scope (block layout, real `<ul>`/`<ol>` bullets with hanging indent, `h_ + *` first-child reset, paragraph flow). One-line change:
+
+```csharp
+// .NET — before (renders under default flex+gap layout)
+var body = MarkdownConverter.ToViewNodes(md);
+return new PageNode(Title: entry.Title, Children: [/* chrome */, ..body]);
+
+// .NET — after (renders under prose scope)
+var body = MarkdownConverter.ToViewNodes(md);
+return new PageNode(Title: entry.Title, Children: [
+    /* chrome */,
+    new SectionNode(Heading: null, Children: body, Variant: SectionVariant.Prose),
+]);
+```
+
+```typescript
+// TypeScript — same pattern
+const body = markdownToViewNodes(md);
+// before
+{ type: "page", children: [/* chrome */, ...body] }
+// after
+{ type: "page", children: [
+  /* chrome */,
+  { type: "section", variant: "prose", children: body },
+] }
+```
+
+**Reference:** `demo/DocsViewer/AspNetCore/DocsViewerController.cs` — copy the `BuildReader` shape.
+
+**Do NOT wrap dashboards / forms / tables in prose.** The default `.vms-page` flex+gap layout is correct for app UI; wrapping produces block-flow layout inside a section where you likely want the flex+gap rhythm.
+
+### Nothing else to migrate
+
+- Existing `SectionNode { Variant: SectionVariant.Card }` renders byte-identically.
+- Blockquote/code-block/figure/hr look slightly different (prose-tuned): italic + muted-border blockquote (was accent-border + tinted card), dark inversion on code blocks (was surface-2 light bg), narrower heading margin-bottom, asymmetric heading top-margins. If a specific consumer relied on the exact old CSS, override the affected `--vms-*` tokens in your app stylesheet.
+- New `--vms-code-bg` / `--vms-code-fg` / `--vms-code-header-bg` / `--vms-code-header-fg` tokens; default to Tailwind gray-800/gray-200/gray-900/gray-400. Overridable per theme.
+
+---
+
 ## Upgrading to npm `6.10.0` / NuGet `6.10.0` — nothing to do (additive; one soft-deprecation)
 
 **All three packages: purely additive.** Every existing `TextNode`, `ImageNode`, `ListItemNode` is byte-unchanged on the wire and in the DOM. Five new primitives (`TextNode.level`, `ImageNode.caption`/`captionRuns`, `BlockquoteNode`, `ListItemNode.completed`, `CodeBlockNode`) are additive optional fields / new nodes; two new companion packages (`@ashley-shrok/viewmodel-shell/markdown` npm subpath + `AshleyShrok.ViewModelShell.Markdown` v0.1.0 NuGet) ship the reference markdown-to-`ViewNode` walker and are opt-in — a consumer that never renders markdown pulls nothing new.

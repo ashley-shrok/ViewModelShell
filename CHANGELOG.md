@@ -6,6 +6,78 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 6.11.0 / NuGet 6.11.0 — prose typography (`SectionNode variant:"prose"`) + globalized element polish
+
+**npm:** `6.11.0` (minor, from `6.10.0`) · **NuGet:** `6.11.0` (minor, from `6.10.0`). Wire-format **additive** (the `SectionNode.variant` closed union gains one value); protocol token unchanged at `viewmodel-shell/1.0`. Fully backwards-compatible — every existing tree renders **byte-identically** to 6.10.0, and no consumer changes anything.
+
+The v6.10 markdown primitives (`TextNode.level` real `<h1>`–`<h6>`, `BlockquoteNode`, `CodeBlockNode`, `ImageNode.caption`, `ListItemNode.completed`) shipped great typography *in the wire* but the shipped default CSS wasn't tuned for the prose-typography rhythm modern doc renderers expect: uniform heading spacing (no asymmetric grouping), `.vms-list` rendering as tiled cards instead of `<ul>` bullets, a lighter-surface code block, and no `h_ + *` sibling-margin reset. Consumer feedback (Ashley, evaluating rendering for Poppy's PBMInvoices Guide + What's-New adopter) surfaced the gap directly.
+
+This release ports the **`@tailwindcss/typography` "prose" plugin's rule set** (the de-facto modern standard for how markdown-produced HTML should look) into VMS. Most of it is applied GLOBALLY to `.vms-page` — every VMS page emitting these elements gets good typography by default, no wrapper needed. The parts that would break existing dashboard usage (list bullets vs card widgets, paragraph promotion of the inline `.vms-text` span, first-child sibling resets that only work in block flow) are scoped to a new opt-in `SectionNode variant:"prose"` wrapper.
+
+### Added — `SectionNode.variant: "prose"` (wire)
+
+- **`SectionNode.variant`** closed union extended from `"card"` to `"card" | "prose"` (TS) / `SectionVariant { Card, Prose }` (.NET). The renderer's three class-string sites generalize from a hardcoded `=== "card"` check to `n.variant ? \`--${n.variant}\`` — the same pattern already used for `tone`/`layout`.
+- **`.vms-section--prose`** emits when set. Inside this scope, the framework switches to standard block-flow prose typography: `.vms-list` becomes real `<ul>`/`<ol>` bullets with hanging indent (opting out of the dashboard-queue card treatment), `.vms-text` becomes block paragraphs with prose margins (out of its default inline/flex behavior), and the `h_ + *` first-child-margin reset engages so heading `margin-bottom` alone controls the visible gap to the following element.
+- **Adopter pattern:** wrap markdown-converter output in a prose section.
+  ```csharp
+  // .NET (DocsViewer demo, canonical reference):
+  return new PageNode(Title: entry.Title, Children: [
+      new ButtonNode("← Back", Action: new("back-to-list")),
+      new DividerNode(),
+      new SectionNode(Heading: null,
+          Children: MarkdownConverter.ToViewNodes(md),
+          Variant: SectionVariant.Prose),
+  ]);
+  ```
+  ```typescript
+  // TypeScript equivalent:
+  { type: "page", title, children: [
+    { type: "button", label: "← Back", action: { name: "back-to-list" } },
+    { type: "divider" },
+    { type: "section", variant: "prose", children: markdownToViewNodes(md) },
+  ] }
+  ```
+- **DocsViewer demo** (`demo/DocsViewer/AspNetCore/DocsViewerController.cs`) adopts the prose scope in the same commit as the primitive — per the "demos ARE the wiring reference" doctrine (banked lesson from the 6.7.x StaticFiles fleet fire). Consumers copying this file get the correct prose wrapping without a separate migration step.
+
+### Changed — global element treatment (any `.vms-page`, no wrapper required)
+
+These changes affect the shipped CSS of primitives that already existed. All limited-blast — the primitives shipped in 6.10 (`BlockquoteNode`, `CodeBlockNode`) had thin usage; `TextNode.level` was rendered with `margin: 0` from the 6.10 CSS fix — so re-tuning them was safe.
+
+- **`.vms-page h1..h6`:** asymmetric top margin per level (h2: `--vms-space-md`, h3–h6: `--vms-space-sm`), composing with the page's flex `gap: --vms-space-lg` so total space above > total space below (heading↔following-content grouping without needing block-flow collapsing margins). h1 top stays 0 (typically first). `.vms-page > :first-child { margin-top: 0 }` reset for the top-of-page case.
+- **`.vms-blockquote`:** prose treatment by default — italic + weight 500, thin 0.25rem muted left rule (was `--vms-accent`), no background surface (was `--vms-surface-2`). Standard prose blockquote look; works in both flex+gap page contexts and block-flow prose contexts.
+- **`.vms-code-block`:** dark inversion via new `--vms-code-bg` / `--vms-code-fg` / `--vms-code-header-bg` / `--vms-code-header-fg` tokens, defaulting to Tailwind gray-800/gray-200/gray-900/gray-400 on the shipped light default. Code sits in its own inverted dark card (matches `@tailwindcss/typography`'s `prose pre` treatment). Dark themes should override these to a darker-than-body surface (see below).
+- **`.vms-code-block__header`** matches the dark treatment; language pill and filename tune accordingly.
+
+### Added — new design tokens
+
+- `--vms-code-bg` — code block surface (default `#1f2937`, Tailwind gray-800).
+- `--vms-code-fg` — code block text (default `#e5e7eb`, Tailwind gray-200).
+- `--vms-code-header-bg` — header row surface (default `#111827`, one shade darker).
+- `--vms-code-header-fg` — header row text (default `#9ca3af`, muted).
+
+Themes may override in-file (dark themes want a darker-than-body value so the block still reads distinct; e.g. `#0d1117` on a `#111116` body).
+
+### Design notes
+
+- **Why "prose" as a variant, not a layout?** The mental model is a **surface KIND** (card, prose) rather than a child-arrangement (stack, split, cards). Existing `variant: "card"` describes a surface with its own background/border/padding. `variant: "prose"` describes a surface with prose typography flow. Both are structural KINDs of the section's surface — the axis is the same.
+- **Why not just apply the whole prose treatment globally?** Two structural blockers: (a) `.vms-list` is a shipped card-widget primitive every existing dashboard uses (border, hover, tone variants, priority badges); turning it into `<ul>` bullets globally would break every one. (b) `.vms-text` is inline (`<span>`) across many surfaces (form labels, badges, button interiors); promoting it globally to a block paragraph would break inline usage. These two structural incompatibilities forced the wrapper. Everything else — heading margins, blockquote treatment, code block dark inversion, figure/hr tuning, inline code chip — DID go global.
+- **Why the double-class `.vms-section--prose.vms-section--prose` selector on heading rules and resets?** The `.vms-text` paragraph rule inside prose scope has specificity (0,2,0) — two classes. Heading rules `.vms-section--prose h1` were only (0,1,1) — one class plus one element. Two-class ALWAYS beats one-class-plus-one-element regardless of source order, so the paragraph rule silently won every specificity race for the h1/h2 tags (which render as `<h1 class="vms-text">` — the `.vms-text` class is stamped on EVERY TextNode regardless of `level`). Doubling the parent class bumps the heading rules to (0,2,1) — beats (0,2,0). Same for resets. Documented inline because "why is my heading margin double-selector'd" is not obvious without the specificity math.
+- **The load-bearing rule ORDER inside `.vms-section--prose`:** (1) `.vms-text` paragraph promotion → (2) heading margin overrides → (3) element-specific overrides (`.vms-list`, `.vms-blockquote`, `.vms-code-block`, `.vms-figure`, `.vms-divider`) → (4) first/last-child + `h_+*` resets LAST. Any element-margin rule that comes AFTER the resets would silently override them. Documented inline because moving a rule out of this order silently reintroduces the "too much padding under headings" bug that took several tuning iterations to diagnose.
+
+### Accessibility
+
+- No new fg/bg pairs on the ~13-pair `check:aa-contrast` gate (the code block dark inversion uses fixed Tailwind values that carry AA safe pairs by design; every other change is a spacing/typography-only tune). Hand-verified worst-case pairs: code text (`#e5e7eb`) on code bg (`#1f2937`) = **12.02:1**; header text (`#9ca3af`) on header bg (`#111827`) = **4.86:1**. Both clear the 4.5:1 SC 1.4.3 bar.
+- Prose blockquote text-muted on shipped default surface unchanged from the base `.vms-text--muted` pair — already gated.
+
+### Notes for adopters
+
+- **Nothing to do for existing code.** Every existing `SectionNode` renders byte-identically. Existing dashboards get the (subtle) asymmetric heading spacing + blockquote / code-block re-tuning globally on their next npm bump; nothing else changes.
+- **For markdown / rich-text pages** (docs viewers, patch notes, help pages, Poppy's PBMInvoices Guide + What's-New): wrap the content in a prose section — see the DocsViewer adopter above. `AshleyShrok.ViewModelShell.Markdown.MarkdownConverter.ToViewNodes(md)` and `markdownToViewNodes(md)` continue to return the same `ViewNode[]`; the ONLY change is one wrapping section around the returned children.
+- ⚠️ **.NET: `SectionNode.Variant` positional slot unchanged** — it was already positional slot 3 in 6.10 (unchanged in this release). `SectionVariant.Prose` is additive on the existing enum. **Pass by name** (`Variant: SectionVariant.Prose`) as with all `SectionNode` optional properties.
+- **Dashboard/app UI does NOT need the wrapper.** The default `.vms-page` flex+gap layout is correct for dashboards; wrapping a dashboard in `variant:"prose"` would produce block-flow layout inside where flex+gap is what you want. Reach for prose only when the content IS prose.
+
+---
+
 ## npm 6.10.0 / NuGet 6.10.0 — markdown-primitives family + companion converter packages
 
 **npm:** `6.10.0` (minor, from `6.9.0`) · **NuGet AshleyShrok.ViewModelShell:** `6.10.0` (minor, from `6.9.0`) · **NuGet AshleyShrok.ViewModelShell.Markdown:** `0.1.0` (initial release, companion package). Wire-format **additive**; protocol token unchanged at `viewmodel-shell/1.0`. Fully backwards-compatible — every existing tree serializes and renders **byte-identically** to 6.9.0, and no consumer changes anything.
