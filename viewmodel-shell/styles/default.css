@@ -1129,6 +1129,246 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-page h5 { font-size: var(--vms-text-base); font-weight: 600; }
 .vms-page h6 { font-size: var(--vms-text-sm); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--vms-text-muted); }
 
+/* ── SectionNode variant:"prose" — prose typography scope ──
+   Ported from @tailwindcss/typography default (prose-base — the medium/default
+   prose size). Reference: https://github.com/tailwindlabs/tailwindcss-typography
+   src/styles.js defaultModifiers.base. Values kept em-based so scaling
+   composes naturally with the parent context's font-size.
+
+   Applies ONLY inside a .vms-section--prose scope — the default .vms-page
+   flex+gap layout is untouched for dashboards/forms/tables. Consumers wrap
+   markdown/rich-text content in { type:"section", variant:"prose", children:... }
+   and get standard prose rendering: block layout with collapsing margins,
+   asymmetric heading spacing (top > bottom), the load-bearing `h_ + *`
+   first-child reset (so the following element's margin-top zeroes and only
+   the heading's bottom-margin controls the gap), real <ul>/<ol> bullets with
+   hanging indent, prose blockquote/code/figure treatment.
+
+   These rules override the earlier .vms-page h1..h6 { margin:0 } via
+   same-specificity, later-in-file wins — that reset stays correct for
+   non-prose contexts (dashboard headings inside .vms-page flex+gap where a
+   heading margin would double the page gap). */
+
+.vms-section--prose {
+  /* Kill the .vms-section flex+gap base — prose relies on standard block
+     flow with collapsing margins for its whole spacing model. */
+  display: block;
+  gap: 0;
+  line-height: 1.75;
+  font-family: var(--vms-font-body);
+}
+
+/* Top/bottom of the prose block never has extra space (the standard Tailwind
+   Typography reset). */
+.vms-section--prose > :first-child { margin-top: 0; }
+.vms-section--prose > :last-child  { margin-bottom: 0; }
+
+/* Heading spacing — asymmetric top > bottom, groups a heading with its
+   following content. */
+.vms-section--prose h1 {
+  margin-top: 0;
+  margin-bottom: 0.889em;
+  font-size: 2.25em;
+  font-weight: 800;
+  line-height: 1.111;
+  letter-spacing: -0.02em;
+}
+.vms-section--prose h2 {
+  margin-top: 2em;
+  margin-bottom: 1em;
+  font-size: 1.5em;
+  font-weight: 700;
+  line-height: 1.333;
+  letter-spacing: -0.01em;
+}
+.vms-section--prose h3 {
+  margin-top: 1.6em;
+  margin-bottom: 0.6em;
+  font-size: 1.25em;
+  font-weight: 600;
+  line-height: 1.6;
+}
+.vms-section--prose h4 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.vms-section--prose h5 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.vms-section--prose h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  line-height: 1.5;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--vms-text-muted);
+}
+
+/* Heading-adjacent reset — the LOAD-BEARING move. Without this the following
+   element's margin-top adds to (or collapses against) the heading's
+   margin-bottom, eating the asymmetric intent. */
+.vms-section--prose h1 + *,
+.vms-section--prose h2 + *,
+.vms-section--prose h3 + *,
+.vms-section--prose h4 + *,
+.vms-section--prose h5 + *,
+.vms-section--prose h6 + *,
+.vms-section--prose hr + * { margin-top: 0; }
+
+/* Paragraphs — TextNode without level renders as <span class="vms-text">.
+   Promote to block flow with prose spacing under this scope. The .vms-text
+   base rule sets flex:1 which only makes sense in a flex parent — reset it. */
+.vms-section--prose > .vms-text {
+  display: block;
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+  line-height: 1.75;
+  flex: initial;
+}
+
+/* Lists — override the .vms-list dashboard-queue card treatment with real
+   <ul>/<ol> bullets and hanging indent. Outside a prose scope, ListNode
+   keeps its card rendering (unchanged). */
+.vms-section--prose .vms-list {
+  display: block;
+  padding-inline-start: 1.625em;
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+  list-style-type: disc;
+  gap: 0;
+}
+.vms-section--prose .vms-list--ordered {
+  list-style-type: decimal;
+}
+/* The framework's manual counter-based numbering (used for the card
+   treatment) is redundant under prose — the browser's native
+   list-style-type: decimal handles it. Disable both. */
+.vms-section--prose .vms-list--ordered > .vms-list-item {
+  counter-increment: none;
+}
+.vms-section--prose .vms-list--ordered > .vms-list-item::before {
+  content: none;
+}
+
+.vms-section--prose .vms-list-item {
+  display: list-item;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  padding-inline-start: 0.375em;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-inline-end: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+.vms-section--prose .vms-list-item:hover {
+  border-color: transparent;
+  background: transparent;
+}
+/* Nested list — tighter margins so nested bullets don't get paragraph-sized
+   air around them. */
+.vms-section--prose .vms-list .vms-list {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+/* A TextNode inside a list-item behaves as flowing text, not a separate
+   paragraph — collapse first/last margins so bullets stay tight. */
+.vms-section--prose .vms-list-item > .vms-text {
+  display: block;
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+  flex: initial;
+}
+.vms-section--prose .vms-list-item > .vms-text:first-child { margin-top: 0; }
+.vms-section--prose .vms-list-item > .vms-text:last-child  { margin-bottom: 0; }
+
+/* Blockquote — the base .vms-blockquote already has border-left + padding.
+   Under prose, tune margin/padding to Tailwind values and remove the card
+   surface (rounded background) so it reads as inline quoted flow. */
+.vms-section--prose .vms-blockquote {
+  display: block;
+  margin-top: 1.6em;
+  margin-bottom: 1.6em;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-inline-start: 1em;
+  padding-inline-end: 0;
+  border-inline-start-width: 0.25rem;
+  border-inline-start-style: solid;
+  border-inline-start-color: var(--vms-accent);
+  border-radius: 0;
+  background: transparent;
+  color: var(--vms-text-muted, inherit);
+  font-style: italic;
+  font-weight: 500;
+  gap: 0;
+  quotes: "\201C" "\201D" "\2018" "\2019";
+}
+/* Blockquote's inner TextNode children behave as prose paragraphs. */
+.vms-section--prose .vms-blockquote > .vms-text {
+  display: block;
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+  flex: initial;
+}
+.vms-section--prose .vms-blockquote > .vms-text:first-child { margin-top: 0; }
+.vms-section--prose .vms-blockquote > .vms-text:last-child  { margin-bottom: 0; }
+
+/* Code block — the .vms-code-block already has its own surface/border/header;
+   under prose we only tune the outer margin and text-size to match. */
+.vms-section--prose .vms-code-block {
+  margin-top: 1.714em;
+  margin-bottom: 1.714em;
+  font-size: 0.875em;
+}
+
+/* Inline code inside runs — sized down slightly to match prose expectations. */
+.vms-section--prose .vms-text__code {
+  font-size: 0.875em;
+  font-weight: 600;
+}
+
+/* Figure + figcaption — ImageNode.caption emission (<figure><img><figcaption>). */
+.vms-section--prose .vms-figure {
+  display: block;
+  margin-top: 2em;
+  margin-bottom: 2em;
+  gap: 0;
+}
+.vms-section--prose .vms-figcaption {
+  font-size: 0.875em;
+  line-height: 1.429;
+  margin-top: 0.857em;
+  text-align: center;
+  color: var(--vms-text-muted);
+}
+
+/* Horizontal rule — DividerNode renders as <hr class="vms-divider">. Under
+   prose, override the tighter .vms-divider margin-block with Tailwind's 3em. */
+.vms-section--prose .vms-divider {
+  margin-top: 3em;
+  margin-bottom: 3em;
+  border: 0;
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-top-color: var(--vms-border);
+}
+
+/* Images — sensible fluid sizing so an oversized image doesn't blow out
+   the prose column. */
+.vms-section--prose .vms-image img,
+.vms-section--prose img {
+  max-width: 100%;
+  height: auto;
+}
+
 /* ── Inline runs (TextNode.runs / DiffCell.runs) ──
    Intra-paragraph emphasis. Additive only: a run flag never SUBTRACTS from the
    node-level style, and __strike deliberately does NOT recolor the way the
