@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Companion NuGet package: Markdig -> ViewNode subtree converter.
+
+    Ships as a SEPARATE package from AshleyShrok.ViewModelShell so a consumer
+    that never uses markdown never pulls Markdig into their build graph. The
+    core NuGet stays at ZERO PackageReferences (FrameworkReference only) — this
+    package is the FIRST we-author companion that carries a hard PackageReference,
+    following the same "opt-in via subpath" seam the npm side uses for `marked`.
+    Wire-parallel to the TS twin @ashley-shrok/viewmodel-shell/markdown; feed
+    the same markdown string into either and get an equivalent ViewNode subtree.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ViewModelShell.Markdown</RootNamespace>
+    <AssemblyName>AshleyShrok.ViewModelShell.Markdown</AssemblyName>
+    <LangVersion>latest</LangVersion>
+
+    <!-- ── NuGet packaging ─────────────────────────────────────────── -->
+    <PackageId>AshleyShrok.ViewModelShell.Markdown</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>ashley-shrok</Authors>
+    <Description>Markdown -> ViewNode subtree converter for AshleyShrok.ViewModelShell. Optional companion; core VMS has no dependency on it. Wire-parallel to the TS twin @ashley-shrok/viewmodel-shell/markdown — feed the same markdown into either and get an equivalent ViewNode subtree.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ashley-shrok/ViewModelShell</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/ashley-shrok/ViewModelShell</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>viewmodel server-driven-ui markdown markdig sdui aspnetcore</PackageTags>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../AshleyShrok.ViewModelShell.csproj" />
+  </ItemGroup>
+
+  <!-- Markdig: mature, actively-maintained CommonMark + GFM extensions parser
+       for .NET. First we-author-companion PackageReference; the core NuGet
+       package stays FrameworkReference-only. Version pinned to a floor
+       compatible with all supported net8+ hosts. -->
+  <ItemGroup>
+    <PackageReference Include="Markdig" Version="0.37.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Tests/**" />
+    <None Remove="Tests/**" />
+  </ItemGroup>
+
+</Project>

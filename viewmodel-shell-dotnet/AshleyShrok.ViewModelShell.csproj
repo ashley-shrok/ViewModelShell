@@ -66,4 +66,16 @@
     <None Remove="Tests/**" />
   </ItemGroup>
 
+  <!-- Companion package: AshleyShrok.ViewModelShell.Markdown lives at
+       viewmodel-shell-dotnet/Markdown/ and ProjectReferences this csproj.
+       Exclude it from the CORE package's compile globs so it stays a
+       separate NuGet — the core has ZERO PackageReferences (only
+       FrameworkReference); pulling Markdig into this csproj would violate
+       that invariant. Same shape as the Tests/ exclusion above. -->
+  <ItemGroup>
+    <Compile Remove="Markdown/**" />
+    <EmbeddedResource Remove="Markdown/**" />
+    <None Remove="Markdown/**" />
+  </ItemGroup>
+
 </Project>
