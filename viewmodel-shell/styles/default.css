@@ -1100,6 +1100,35 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-text--success       { color: var(--vms-success); }
 .vms-text--info          { color: var(--vms-info); }
 
+/* ── Semantic headings (TextNode.level → real <h1>–<h6>) ──
+   TextNode.level emits real <h1>–<h6> HTML tags. Browsers ship generous
+   default margins on those tags (e.g. h2: margin: 0.83em 0), which STACK on
+   top of the flow container's own `gap` and produce a heading that visibly
+   floats away from its section content. Reset the browser margin here so
+   .vms-page / .vms-section rhythm (their `gap`) is the ONLY source of vertical
+   space around a heading — same fix applied to .vms-figure and .vms-blockquote.
+   Font-sizes map to the shipped type scale so headings never inherit the
+   browser's 2em/1.5em/... free-floating scale that has no relation to the
+   design system. Scoped to .vms-page so host chrome outside the tree is
+   untouched (matches the .vms-page__title scoping pattern). */
+.vms-page h1,
+.vms-page h2,
+.vms-page h3,
+.vms-page h4,
+.vms-page h5,
+.vms-page h6 {
+  margin: 0;
+  font-family: var(--vms-font-head);
+  line-height: 1.25;
+  color: inherit;
+}
+.vms-page h1 { font-size: var(--vms-text-2xl); font-weight: 700; letter-spacing: -0.02em; }
+.vms-page h2 { font-size: var(--vms-text-xl);  font-weight: 700; letter-spacing: -0.01em; }
+.vms-page h3 { font-size: var(--vms-text-lg);  font-weight: 600; }
+.vms-page h4 { font-size: var(--vms-text-md);  font-weight: 600; }
+.vms-page h5 { font-size: var(--vms-text-base); font-weight: 600; }
+.vms-page h6 { font-size: var(--vms-text-sm); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--vms-text-muted); }
+
 /* ── Inline runs (TextNode.runs / DiffCell.runs) ──
    Intra-paragraph emphasis. Additive only: a run flag never SUBTRACTS from the
    node-level style, and __strike deliberately does NOT recolor the way the
