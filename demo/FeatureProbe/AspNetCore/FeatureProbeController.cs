@@ -251,6 +251,25 @@ public class FeatureProbeController : ControllerBase
                 });
             return new ShellResponse<FeatureProbeState>(invalidTree, state).Validate();
         }
+        else if (name == "icon-only-invalid")
+        {
+            // v7.0.0 (ICON-05 / ICON-09) — return a tree containing an icon-only
+            // ButtonNode WITHOUT tooltip so .Validate() throws the byte-identical
+            // error → {ok:false, errors:[{message:"icon-only ButtonNode requires
+            // tooltip (used as aria-label)", code:"invalid_tree"}]} at 500.
+            // Parity's byte-diff on the error message across both backends is the
+            // proof the two hand-mirrored walker predicates agree.
+            var iconOnlyInvalidTree = new PageNode(
+                Title: null,
+                Children: new ViewNode[]
+                {
+                    new ButtonNode(
+                        Label: "",
+                        Action: new ActionDescriptor("noop-icon-invalid"),
+                        Icon: IconName.Trash2),
+                });
+            return new ShellResponse<FeatureProbeState>(iconOnlyInvalidTree, state).Validate();
+        }
         else
         {
             throw new UnknownActionException(name);
@@ -1054,6 +1073,69 @@ public class FeatureProbeController : ControllerBase
                             })),
                     },
                     Id: "probe-diff-wordlevel"),
+            }));
+        // Icons (v7.0.0 — ICON-01/02/04/05/06/09) — byte-identical to the bun
+        // twin iconsSection. Full omitted-vs-present matrix for the icons
+        // primitive: bare IconNode (Size/Tone/Label absent), one per size (5),
+        // one per tone (4 — matches the closed union), a meaning-carrying one
+        // with Label set, a multi-word (shield-check) + a number-suffixed
+        // (trash-2) name that exercise the IconNameConverter's digit-aware
+        // kebab conversion (the specific defect the plain KebabEnum<T> would
+        // silently drift on), cross-node icon? prop on all 5 hosts, and the
+        // VALID icon-only ButtonNode (label empty + tooltip set). The INVALID
+        // icon-only form is exercised via the dedicated icon-only-invalid POST
+        // action (see the envelope fixture). The renamed TrackerCell.Tooltip
+        // field is already covered above.
+        // The CLIENT-SIDE SVG rendering + the .vms-tooltip-host styled bubble
+        // is browser-only and NOT part of parity.
+        pageChildren.Add(new SectionNode(
+            Heading: "Icons",
+            Variant: SectionVariant.Card,
+            Children: new ViewNode[]
+            {
+                // Standalone IconNode — bare (all optionals absent).
+                new IconNode(IconName.Sparkles),
+                // One per size (5 total).
+                new IconNode(IconName.Activity, Size: IconSize.Xs),
+                new IconNode(IconName.Activity, Size: IconSize.Sm),
+                new IconNode(IconName.Activity, Size: IconSize.Md),
+                new IconNode(IconName.Activity, Size: IconSize.Lg),
+                new IconNode(IconName.Activity, Size: IconSize.Xl),
+                // One per tone (4 total, matching the closed union).
+                new IconNode(IconName.CheckCircle, Tone: Tone.Info),
+                new IconNode(IconName.CheckCircle, Tone: Tone.Success),
+                new IconNode(IconName.CheckCircle, Tone: Tone.Warning),
+                new IconNode(IconName.CheckCircle, Tone: Tone.Danger),
+                // Meaning-carrying (Label set). Multi-word name proves
+                // ShieldCheck serializes as "shield-check".
+                new IconNode(IconName.ShieldCheck, Label: "Verified"),
+                // Number-suffixed name — Trash2 → "trash-2" (the specific
+                // IconNameConverter test case).
+                new IconNode(IconName.Trash2, Size: IconSize.Lg, Tone: Tone.Danger, Label: "Delete permanently"),
+                // Cross-node host props — all 5 hosts.
+                new ButtonNode(Label: "Sparkle", Action: new ActionDescriptor("icon-button-noop"), Icon: IconName.Sparkles),
+                new LinkNode(Label: "Docs", Href: "https://vms.example/docs", External: true, Icon: IconName.ExternalLink),
+                new SectionNode(
+                    Heading: "Angels",
+                    Variant: SectionVariant.Card,
+                    Icon: IconName.Activity,
+                    Children: new ViewNode[] { new TextNode("Card body.") }),
+                new BadgeNode(Label: "Verified", Tone: Tone.Success, Icon: IconName.CheckCircle),
+                new ListNode(new ViewNode[]
+                {
+                    new ListItemNode(
+                        Id: null,
+                        State: null,
+                        Children: new ViewNode[] { new TextNode("Files") },
+                        Icon: IconName.Folder),
+                }),
+                // VALID icon-only ButtonNode — label empty + tooltip set,
+                // walker allows.
+                new ButtonNode(
+                    Label: "",
+                    Action: new ActionDescriptor("icon-only-noop"),
+                    Icon: IconName.Wrench,
+                    Tooltip: "Settings"),
             }));
         // Inline rich text (TextNode.Runs) — byte-identical to the bun twin
         // richTextSection. Covers the absent-vs-present matrix for every optional on

@@ -982,6 +982,64 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // ── Icons (v7.0.0 — ICON-01/02/04/05/06/09) ──
+  // Covers the full omitted-vs-present matrix for the icons primitive, byte-
+  // identical to the .NET twin iconsSection. Every branch introduced by this
+  // phase must have at least one emission here + an expectBodyContains
+  // tripwire on the initial GET step, per banked lesson: a diff can only prove
+  // things about code it actually RUNS.
+  //   • Standalone IconNode: bare (all optionals absent), 5 sizes, 4 tones
+  //     (matches the closed union — 4 not 6), one meaning-carrying (label set).
+  //   • Multi-word + number-suffixed names (shield-check, trash-2) exercise
+  //     the .NET IconNameConverter's digit-aware kebab conversion — the
+  //     specific defect the plain KebabEnum<T> would silently drift on.
+  //   • Cross-node icon? prop on all 5 hosts (Button/Link/Section/Badge/
+  //     ListItem) — each with a distinct icon.
+  //   • The VALID icon-only ButtonNode (label empty + tooltip set) — the
+  //     positive form of the walker rule. The INVALID form is exercised via
+  //     the dedicated icon-only-invalid POST action (see the envelope fixture).
+  // The renamed TrackerCell.tooltip field is already covered by the pre-
+  // existing trackerSection above (updated in Plan 22-03).
+  // NOTE: the CLIENT-SIDE SVG rendering (viewBox / stroke / path elements)
+  // and the .vms-tooltip-host styled bubble are browser-only and NOT part of
+  // parity — parity proves only that the icon fields serialize identically
+  // across backends.
+  const iconsSection: ViewNode = {
+    type: "section",
+    heading: "Icons",
+    variant: "card",
+    children: [
+      // Standalone IconNode — bare (size/tone/label ALL omitted, absent on the wire).
+      { type: "icon", name: "sparkles" },
+      // One per size (5 total) — exercises the IconSize enum end-to-end.
+      { type: "icon", name: "activity", size: "xs" },
+      { type: "icon", name: "activity", size: "sm" },
+      { type: "icon", name: "activity", size: "md" },
+      { type: "icon", name: "activity", size: "lg" },
+      { type: "icon", name: "activity", size: "xl" },
+      // One per tone (4 total, matching the closed union).
+      { type: "icon", name: "check-circle", tone: "info" },
+      { type: "icon", name: "check-circle", tone: "success" },
+      { type: "icon", name: "check-circle", tone: "warning" },
+      { type: "icon", name: "check-circle", tone: "danger" },
+      // Meaning-carrying (label set) — a11y contract: role="img" + aria-label
+      // (client-side, not parity). Multi-word name proves shield-check
+      // serializes as "shield-check" (kebab-boundary case on .NET).
+      { type: "icon", name: "shield-check", label: "Verified" },
+      // Number-suffixed name — the specific IconNameConverter test case
+      // (would drift on plain KebabEnum<T> to "trash2").
+      { type: "icon", name: "trash-2", size: "lg", tone: "danger", label: "Delete permanently" },
+      // Cross-node host props — all 5 hosts, each with a distinct icon.
+      { type: "button", label: "Sparkle", action: { name: "icon-button-noop" }, icon: "sparkles" },
+      { type: "link", label: "Docs", href: "https://vms.example/docs", external: true, icon: "external-link" },
+      { type: "section", heading: "Angels", variant: "card", icon: "activity", children: [{ type: "text", value: "Card body." }] },
+      { type: "badge", label: "Verified", tone: "success", icon: "check-circle" },
+      { type: "list", children: [{ type: "list-item", icon: "folder", children: [{ type: "text", value: "Files" }] }] },
+      // The VALID icon-only ButtonNode — label empty + tooltip set, walker allows.
+      { type: "button", label: "", action: { name: "icon-only-noop" }, icon: "wrench", tooltip: "Settings" },
+    ],
+  };
+
   // ── Inline rich text (TextNode.runs) ──
   // Covers the absent-vs-present matrix for every optional on InlineRun, plus the
   // two contract cases that are decisions rather than mechanics:
@@ -1131,6 +1189,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       navSection,
       trackerSection,
       diffSection,
+      iconsSection,
       richTextSection,
       lookupSection,
       probeModal,
@@ -1254,6 +1313,24 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
         children: [
           { type: "button", label: "A", action: { name: "dup" } },
           { type: "button", label: "B", action: { name: "dup" } },
+        ],
+      },
+      state,
+    };
+  } else if (name === "icon-only-invalid") {
+    // v7.0.0 (ICON-05 / ICON-09) — return a tree containing an icon-only
+    // ButtonNode WITHOUT tooltip so createAction's validateActionNames throws
+    // the byte-identical error → {ok:false, errors:[{message:"icon-only
+    // ButtonNode requires tooltip (used as aria-label)", code:"invalid_tree"}]}
+    // at 500. Parity's byte-diff on the error message across both backends is
+    // the proof the two hand-mirrored walker predicates agree — a drift like
+    // "icon-only ButtonNode requires Tooltip" (capitalization difference) or a
+    // wording tweak on one side would fail the diff loudly.
+    return {
+      vm: {
+        type: "page",
+        children: [
+          { type: "button", label: "", action: { name: "noop-icon-invalid" }, icon: "trash-2" },
         ],
       },
       state,
