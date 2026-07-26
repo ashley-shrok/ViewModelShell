@@ -1434,6 +1434,14 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   border-bottom-color: var(--vms-accent);
   font-weight: 600;
 }
+/* v7.0.0 (ICON-04) — leading icon spacing. The icon renderer prepends an <svg>
+   before a .vms-link__label span (browser.ts:3314-3319 — the span only exists
+   when there's an icon; without an icon the label is a bare text node). Mirror
+   the .vms-checkbox__label pattern: margin-left on the label, not padding on
+   the icon, so the affordance stays consistent with the framework's other
+   leading-marker conventions. Falls back to no-op when there's no icon. */
+.vms-link .vms-icon { vertical-align: -0.125em; }
+.vms-link__label    { margin-left: var(--vms-space-xs); }
 
 /* ── Image ── */
 .vms-image { max-width: 100%; height: auto; display: block; }

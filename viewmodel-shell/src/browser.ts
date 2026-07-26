@@ -3191,7 +3191,13 @@ export class BrowserAdapter implements Adapter {
       labelSpan.className = "vms-button__label";
       labelSpan.textContent = n.label;
       btn.textContent = ""; // wipe the applyButtonBehavior textContent
-      btn.appendChild(this.renderIconSvg(n.icon, "sm", n.tone, undefined));
+      // On emphasis:"primary" the button fill IS var(--_btn-tone) (= --vms-error/success/info),
+      // so a tone-colored icon disappears into the background. The label text handles this
+      // by rendering in surface color (#fff / --vms-on-warning-fill); icons follow suit —
+      // drop the tone axis and inherit currentColor from the button's own color. Filled
+      // outline/secondary buttons DO show the tone (icon on neutral surface, honest contrast).
+      const iconTone = n.emphasis === "primary" ? undefined : n.tone;
+      btn.appendChild(this.renderIconSvg(n.icon, "sm", iconTone, undefined));
       btn.appendChild(labelSpan);
     }
     btn.addEventListener("click", activate);
