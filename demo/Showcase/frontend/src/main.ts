@@ -798,6 +798,99 @@ function layoutsView(): ViewNode[] {
         { type: "text", value: "This paragraph is capped at the prose measure. Comfortable line length is roughly 45–75 characters; the prose token pins the column near 65ch — min(65ch, 100%), so it never overflows a narrow container — the same cap Tailwind exposes as max-w-prose and Every-Layout calls the measure. Resize the window: it stops growing at the measure even when there's more room." },
       ]},
     ]},
+
+    // ── icons (v7.0.0 — the framework's first icon primitive) ────────────
+    // Standalone IconNode at every size + the full tone matrix + a gallery
+    // grid of every IconName. Wire is name-only; framework owns the SVG
+    // (bundled Lucide subset), the size mapping, and stroke=currentColor.
+    { type: "section", heading: "Icons — IconNode (v7.0.0)", children: [
+      { type: "text", value: "The framework's first icon primitive. Wire carries only a NAME from the curated Lucide subset (~102 icons); the framework owns the SVG payload, the size mapping (xs=12 / sm=16 / md=20 / lg=24 / xl=32 px), and stroke=currentColor so tone (or the parent text's color) drives the tint. Apps describe with a name; framework renders.", style: "muted" },
+
+      { type: "text", value: "Sizes — the same icon at all 5 sizes", style: "subheading" },
+      { type: "section", layout: "row", align: "center", children: [
+        { type: "icon", name: "sparkles", size: "xs" },
+        { type: "icon", name: "sparkles", size: "sm" },
+        { type: "icon", name: "sparkles", size: "md" },
+        { type: "icon", name: "sparkles", size: "lg" },
+        { type: "icon", name: "sparkles", size: "xl" },
+      ]},
+
+      { type: "text", value: "Tones — a small representative row across all 4 semantic tones (plus a currentColor default)", style: "subheading" },
+      { type: "section", layout: "row", align: "center", children: [
+        { type: "icon", name: "check-circle", tone: "success" },
+        { type: "icon", name: "alert-triangle", tone: "warning" },
+        { type: "icon", name: "x-circle", tone: "danger" },
+        { type: "icon", name: "info", tone: "info" },
+        { type: "icon", name: "sparkles" },
+      ]},
+
+      { type: "text", value: "Every icon in the shipped curated subset (rendered at size md):", style: "subheading" },
+      { type: "section", layout: "row", children: (
+        [
+          // Actions
+          "check","x","plus","minus","edit","edit-3","trash","trash-2","save",
+          "download","upload","copy","clipboard","clipboard-copy","share","share-2",
+          "refresh-cw","rotate-ccw","search","filter","send","printer","pencil","eye",
+          // Status
+          "check-circle","check-circle-2","x-circle","alert-circle","alert-triangle",
+          "alert-octagon","info","help-circle","ban","loader-2",
+          // Navigation
+          "home","menu","more-horizontal","more-vertical","external-link",
+          "chevron-left","chevron-right","chevron-up","chevron-down",
+          "arrow-left","arrow-right","arrow-up","arrow-down","arrow-up-right",
+          // Content
+          "book-open","receipt","file","file-text","folder","folder-open","image",
+          "paperclip","link","link-2","calendar","clock","bookmark","mail",
+          // Communication
+          "message-square","message-circle","at-sign","phone","bell",
+          // People
+          "user","user-plus","user-check","users","user-x",
+          // Objects
+          "wrench","shield-check","shield","lock","unlock","key","star","heart","tag","flag",
+          // Data / system
+          "activity","workflow","route","database","server","hard-drive","cloud","wifi",
+          "bar-chart","line-chart","pie-chart","gauge","layers","settings","cpu","terminal",
+          // Magic / accents
+          "sparkles","zap","wand-2","flame",
+        ] as const
+      ).map(name => ({ type: "icon" as const, name })) },
+    ]},
+
+    // ── Hestia-style launcher card grid — the motivating v7.0.0 use case ──
+    // Eight `variant:"card"` sections, each with a leading concept-anchor
+    // icon at header size (framework picks xl, tone inherits from the
+    // section's tone if set). This is exactly the shape Pixie/Hestia
+    // launcher grids reach for; the icons make each card identifiable at a
+    // glance without adjacent decorative text.
+    { type: "section", heading: "Hestia-style launcher card grid (the motivating use case)", children: [
+      { type: "text", value: "The eight Pixie/Hestia concept anchors as SectionNode cards — each carries a name-only `icon:` on the host (not an IconNode child); the framework renders it at the section-appropriate size, and tone inherits from the section's tone if set. The card grid uses layout:\"cards\" so it collapses intrinsically as the container narrows (zero @media).", style: "muted" },
+      { type: "section", layout: "cards", children: [
+        { type: "section", variant: "card", icon: "sparkles",     heading: "Muse",       children: [
+          { type: "text", value: "Everyday spark — a nudge, a next step, an idea to try.", style: "muted" },
+        ]},
+        { type: "section", variant: "card", icon: "wrench",       heading: "Fixit",      children: [
+          { type: "text", value: "Household maintenance ledger — what broke, what got fixed.", style: "muted" },
+        ]},
+        { type: "section", variant: "card", icon: "shield-check", heading: "Ward",       children: [
+          { type: "text", value: "Guardrails and check-ins — quiet, opt-in safety.", style: "muted" },
+        ]},
+        { type: "section", variant: "card", icon: "route",        heading: "Wayfinder",  children: [
+          { type: "text", value: "Trip planning + itineraries — the shape of a journey.", style: "muted" },
+        ]},
+        { type: "section", variant: "card", icon: "book-open",    heading: "Chronicle",  children: [
+          { type: "text", value: "Journal + reading log — words to remember.", style: "muted" },
+        ]},
+        { type: "section", variant: "card", icon: "activity",     heading: "Pulse",      children: [
+          { type: "text", value: "Vitals and rhythms — what your body is telling you.", style: "muted" },
+        ]},
+        { type: "section", variant: "card", icon: "workflow",     heading: "Rituals",    children: [
+          { type: "text", value: "Recurring flows — the sequences you run every week.", style: "muted" },
+        ]},
+        { type: "section", variant: "card", icon: "receipt",      heading: "Ledger",     children: [
+          { type: "text", value: "Household finances — bills, receipts, the money-in-motion.", style: "muted" },
+        ]},
+      ]},
+    ]},
   ];
 }
 
