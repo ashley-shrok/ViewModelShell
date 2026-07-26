@@ -1000,6 +1000,17 @@ function renderNode(node: ViewNode, ctx: RCtx, key?: string | number): React.Rea
       const last = node.children[node.children.length - 1];
       return last ? renderNode(last, ctx, key) : null;
     }
+    case "icon":
+      // v7.0.0 (ICON-07) — icons dropped in TUI v1 per design-doc §9. Icons in
+      // a terminal is not a v1 problem worth solving; the TUI is @experimental
+      // and explicitly not-invested-in per standing directive. No
+      // unicode-fallback mapping — the honest degradation is: TUI users see
+      // the framework's already-correct semantic content (labels, tooltips,
+      // aria-text) without the visual glyph. Zero framework maintenance cost.
+      // Explicit arm (not the default UnsupportedView) so a screen reader /
+      // agent isn't told "unknown node type: icon" (which is wrong — it IS
+      // known; the TUI just chooses to drop it).
+      return null;
     default:
       return <UnsupportedView key={key} type={(node as { type: string }).type} />;
   }
