@@ -19,7 +19,9 @@ import type {
   ModalNode, TableNode, CopyButtonNode, DividerNode, FitsNode,
   EmptyStateNode, BadgeNode, ChartNode,
   BlockquoteNode, CodeBlockNode, BreadcrumbNode, StepsNode, TrackerNode, DiffNode,
+  IconNode, IconName,
 } from "./index.js";
+import { ICONS } from "./icons-payload.js";
 
 function legacyCopy(text: string): boolean {
   try {
@@ -560,6 +562,7 @@ export class BrowserAdapter implements Adapter {
       case "steps":        return this.steps(n, parent);
       case "tracker":      return this.tracker(n, parent, on);
       case "diff":         return this.diff(n, parent);
+      case "icon":         return this.icon(n, parent);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -950,7 +953,18 @@ export class BrowserAdapter implements Adapter {
       // Headingless fallback label — documented in TSDoc on
       // SectionNode.collapsible and in AGENTS.md "Non-obvious framework
       // behaviors". Choice locked.
-      summary.textContent = n.heading ?? "Show details";
+      // v7.0.0 (ICON-04) — leading icon inside the <summary> when set (size xl,
+      // tone inherited from section.tone). Prepended before the label text so
+      // the disclosure triangle still owns its native marker slot.
+      if (n.icon) {
+        summary.appendChild(this.renderIconSvg(n.icon, "xl", n.tone, undefined));
+        const labelSpan = document.createElement("span");
+        labelSpan.className = "vms-section__summary-label";
+        labelSpan.textContent = n.heading ?? "Show details";
+        summary.appendChild(labelSpan);
+      } else {
+        summary.textContent = n.heading ?? "Show details";
+      }
       el.appendChild(summary);
 
       this.kids(n.children, el, on);
@@ -987,6 +1001,9 @@ export class BrowserAdapter implements Adapter {
         a.target = "_blank";
         a.rel = "noopener noreferrer";
       }
+      // v7.0.0 (ICON-04) — leading icon (size xl, tone inherited from
+      // section.tone) prepended before the heading if any.
+      if (n.icon) a.appendChild(this.renderIconSvg(n.icon, "xl", n.tone, undefined));
       if (n.heading) {
         const h = document.createElement("h2");
         h.className = "vms-section__heading";
@@ -1042,6 +1059,10 @@ export class BrowserAdapter implements Adapter {
     // FOLLOW_TAIL_STICK_THRESHOLD_PX constant). No CSS/class — the scroll comes
     // from the element already being an overflow region (pair with fill).
     if (n.followTail === true) el.dataset.followTail = "";
+    // v7.0.0 (ICON-04) — leading icon (size xl, tone inherited from
+    // section.tone) prepended before the heading if any. Rendered as an
+    // header-slot glyph — the Hestia launcher-card use case.
+    if (n.icon) el.appendChild(this.renderIconSvg(n.icon, "xl", n.tone, undefined));
     if (n.heading) {
       const h = document.createElement("h2");
       h.className = "vms-section__heading";
@@ -1118,6 +1139,10 @@ export class BrowserAdapter implements Adapter {
       glyph.textContent = n.completed ? "☑" : "☐"; // ☑ / ☐
       li.appendChild(glyph);
     }
+    // v7.0.0 (ICON-04) — leading icon (size sm, tone inherited from
+    // list-item.tone) rendered after any task-list marker and before the item
+    // content.
+    if (n.icon) li.appendChild(this.renderIconSvg(n.icon, "sm", n.tone, undefined));
     this.kids(n.children, li, on);
     parent.appendChild(li);
   }
@@ -3157,6 +3182,18 @@ export class BrowserAdapter implements Adapter {
     const btn = document.createElement("button");
     btn.type = "button";
     const activate = this.applyButtonBehavior(btn, n, on);
+    // v7.0.0 (ICON-04) — leading icon at size sm, tone inherited from button.
+    // applyButtonBehavior sets textContent (which would wipe an already-appended
+    // icon), so prepend the icon AFTER it, using a nested label span for the
+    // text so the two coexist honestly.
+    if (n.icon) {
+      const labelSpan = document.createElement("span");
+      labelSpan.className = "vms-button__label";
+      labelSpan.textContent = n.label;
+      btn.textContent = ""; // wipe the applyButtonBehavior textContent
+      btn.appendChild(this.renderIconSvg(n.icon, "sm", n.tone, undefined));
+      btn.appendChild(labelSpan);
+    }
     btn.addEventListener("click", activate);
     this.applyTooltip(btn, n.tooltip);
     parent.appendChild(btn);
@@ -3266,7 +3303,17 @@ export class BrowserAdapter implements Adapter {
     const a = document.createElement("a");
     a.className = n.active ? "vms-link vms-link--active" : "vms-link";
     a.href = n.href;
-    a.textContent = n.label;
+    // v7.0.0 (ICON-04) — leading icon at size sm; NO tone class (link inherits
+    // currentColor per design-doc §4). Icon prepended before the label text.
+    if (n.icon) {
+      a.appendChild(this.renderIconSvg(n.icon, "sm", undefined, undefined));
+      const labelSpan = document.createElement("span");
+      labelSpan.className = "vms-link__label";
+      labelSpan.textContent = n.label;
+      a.appendChild(labelSpan);
+    } else {
+      a.textContent = n.label;
+    }
     if (n.active) a.setAttribute("aria-current", "page");
     if (n.external) {
       a.target = "_blank";
@@ -4003,9 +4050,93 @@ export class BrowserAdapter implements Adapter {
     const span = document.createElement("span");
     span.className = `vms-badge${n.tone ? ` vms-badge--${n.tone}` : ""}${
       n.emphasis ? ` vms-badge--${n.emphasis}` : ""}`;
-    span.textContent = n.label;
+    // v7.0.0 (ICON-04) — leading icon at size xs, tone inherited from badge.
+    if (n.icon) span.appendChild(this.renderIconSvg(n.icon, "xs", n.tone, undefined));
+    // textContent replaces existing content, so use a nested span when we
+    // already prepended an icon so the two don't clobber each other.
+    if (n.icon) {
+      const labelSpan = document.createElement("span");
+      labelSpan.className = "vms-badge__label";
+      labelSpan.textContent = n.label;
+      span.appendChild(labelSpan);
+    } else {
+      span.textContent = n.label;
+    }
     this.applyTooltip(span, n.tooltip);
     parent.appendChild(span);
+  }
+
+  // ─── Icons (v7.0.0 — ICON-01/02/03/04) ─────────────────────────────────────
+  //
+  // The framework owns the SVG payload map (ICONS in icons-payload.ts) and the
+  // <svg> wrapper attrs (viewBox, fill, stroke, stroke-width, stroke-linecap,
+  // stroke-linejoin). The wire carries only the icon NAME + optional size/tone/
+  // label — same posture as TextNode.style / SectionNode.tone (framework
+  // renders, apps describe). See .planning/design/icons-primitive.md §3.
+  //
+  // A11y contract enforced HERE (a discipline the type's TSDoc + walker also
+  // enforce): label present ⇒ role="img" + aria-label; label absent ⇒
+  // aria-hidden="true" (decorative).
+
+  private static readonly ICON_SIZE_PX: Record<"xs" | "sm" | "md" | "lg" | "xl", number> = {
+    xs: 12, sm: 16, md: 20, lg: 24, xl: 32,
+  };
+
+  /** Shared SVG factory used by BOTH the standalone icon() renderer and the
+   *  cross-node leading-icon emission on the 5 hosts. The single factory is
+   *  the anti-drift lock: an app-side change to icon rendering can only be a
+   *  change to this method, not five slightly-different renderers. */
+  private renderIconSvg(
+    name: IconName,
+    size: "xs" | "sm" | "md" | "lg" | "xl",
+    tone: "danger" | "warning" | "success" | "info" | undefined,
+    label: string | undefined,
+  ): SVGElement {
+    const px = BrowserAdapter.ICON_SIZE_PX[size];
+    // SVG-namespace element is REQUIRED — createElement("svg") produces an
+    // HTMLUnknownElement that renders as nothing in real browsers (though jsdom
+    // is lenient about it). See risk section of Plan 22-04.
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const classes = ["vms-icon", `vms-icon--${size}`];
+    if (tone) classes.push(`vms-icon--${tone}`);
+    svg.setAttribute("class", classes.join(" "));
+    svg.setAttribute("width", String(px));
+    svg.setAttribute("height", String(px));
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "2");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    if (label != null && label !== "") {
+      svg.setAttribute("role", "img");
+      svg.setAttribute("aria-label", label);
+    } else {
+      svg.setAttribute("aria-hidden", "true");
+    }
+    const payload = ICONS[name];
+    if (payload == null) {
+      // Belt-and-braces: the tree validator already rejects unknown names at
+      // buildVm time, but a wire that skips validation would land here at
+      // runtime. Match the framework's overall unknown-node posture: warn and
+      // emit nothing rather than throw (forward-compatibility).
+      console.warn(
+        `[viewmodel-shell] Unknown icon name ${JSON.stringify(name)} — ` +
+        `rendering an empty svg. The client may be older than the server's icon set.`,
+      );
+    } else {
+      // innerHTML on an SVG element in the SVG namespace parses inner elements
+      // as SVG per HTML spec — verified by the jsdom tests (Task 22-04-05) and
+      // by real browsers. The payload contains only path/circle/line elements
+      // from the framework's own bundle, never user data.
+      svg.innerHTML = payload;
+    }
+    return svg;
+  }
+
+  private icon(n: IconNode, parent: HTMLElement): void {
+    const size = n.size ?? "md";
+    parent.appendChild(this.renderIconSvg(n.name, size, n.tone, n.label));
   }
 
   /** BreadcrumbNode — a `<nav aria-label="breadcrumb">` landmark wrapping an

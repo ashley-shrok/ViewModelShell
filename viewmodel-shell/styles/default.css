@@ -1934,6 +1934,37 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
    align-self:flex-start) so it sits under the centered heading/message. */
 .vms-empty-state .vms-button { align-self: center; }
 
+/* ── Icon (v7.0.0 — ICON-01..ICON-04) ──
+   Standalone <svg class="vms-icon"> emitted by the browser adapter, plus
+   leading-icon slots inside Button/Link/Section/Badge/ListItem hosts. The wire
+   carries only the icon NAME + optional size/tone; the framework owns the SVG
+   payload (viewmodel-shell/src/icons-payload.ts, a curated Lucide subset) and
+   the <svg> wrapper attrs (viewBox="0 0 24 24", fill="none",
+   stroke="currentColor", stroke-*="round"). Because stroke inherits from the
+   CSS color property, tone (or the surrounding text's currentColor) drives the
+   visual color — the same posture as .vms-text and .vms-badge.
+   Size mapping: xs=12, sm=16, md=20 (default), lg=24, xl=32.
+   A11y is on the SVG element itself (role="img" + aria-label={label} when the
+   label is set; aria-hidden="true" when it's absent — the decorative default).
+*/
+.vms-icon {
+  display: inline-block;
+  vertical-align: -0.125em;    /* baseline-align inside flowing text */
+  flex-shrink: 0;              /* prevent squishing inside flex hosts (buttons/badges) */
+}
+.vms-icon--xs { width: 12px; height: 12px; }
+.vms-icon--sm { width: 16px; height: 16px; }
+.vms-icon--md { width: 20px; height: 20px; }
+.vms-icon--lg { width: 24px; height: 24px; }
+.vms-icon--xl { width: 32px; height: 32px; }
+/* tone → color. The SVG's stroke="currentColor" inherits from these values, so
+   the same tokens the rest of the framework uses drive the icon's visual color
+   (no bespoke icon palette). */
+.vms-icon--info    { color: var(--vms-info); }
+.vms-icon--success { color: var(--vms-success); }
+.vms-icon--warning { color: var(--vms-warning); }
+.vms-icon--danger  { color: var(--vms-error); }
+
 /* ── Badge (compact inline status pill / count) ──
    Leaf inline element. Default = neutral filled tint; tone recolors it; emphasis
    switches between a solid fill (primary) and an outline (secondary). */
