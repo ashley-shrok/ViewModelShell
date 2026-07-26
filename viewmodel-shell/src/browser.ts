@@ -4152,11 +4152,14 @@ export class BrowserAdapter implements Adapter {
       const state = cell.state ?? "muted";
       const el = document.createElement("div");
       el.className = `vms-tracker__cell vms-tracker__cell--${state}`;
-      // label → native tooltip + aria-label (non-color channel). When absent,
+      // tooltip → native tooltip + aria-label (non-color channel). When absent,
       // the state name is still the a11y fallback so a cell is never color-only.
-      const aria = cell.label != null && cell.label !== "" ? cell.label : state;
+      // v7.0.0 (ICON-06 / Plan 22-03): field renamed `label` → `tooltip`; the
+      // render-path swap from `el.title = ...` to the shipped 6.12.1
+      // `.vms-tooltip-host` singleton lands in Plan 22-05.
+      const aria = cell.tooltip != null && cell.tooltip !== "" ? cell.tooltip : state;
       el.setAttribute("aria-label", aria);
-      if (cell.label != null && cell.label !== "") el.title = cell.label;
+      if (cell.tooltip != null && cell.tooltip !== "") el.title = cell.tooltip;
       if (cell.action) {
         const action = cell.action;
         el.classList.add("vms-tracker__cell--clickable");

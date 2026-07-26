@@ -1594,12 +1594,19 @@ public record StepsNode(
 /// <summary>One bucket in a TrackerNode strip. State drives the cell color via the
 /// framework's baked colorblind-safe palette (Success=blue, Danger=red,
 /// Warning=amber, Muted=gray); only the color diverges from the global tones — the
-/// state name stays semantic on the wire. Label is the hover tooltip + aria-label
+/// state name stays semantic on the wire. Tooltip is the hover tooltip (rendered
+/// via the shipped 6.12.1 body-appended <c>.vms-tooltip-host</c> singleton — same
+/// infrastructure as ButtonNode.Tooltip / TableColumn.Tooltip) + aria-label
 /// (carries meaning as TEXT, not color alone). Action is an optional per-bucket
-/// click-through (per-bucket identity in the action name, like TableRow.Action).</summary>
+/// click-through (per-bucket identity in the action name, like TableRow.Action).
+///
+/// <para>⚠️ RENAMED in v7.0.0 (ICON-06). The old <c>Label</c> parameter is now
+/// <c>Tooltip</c>; consumers change <c>Label:</c> → <c>Tooltip:</c> in their
+/// buildVm. Same type, same semantics; the render path was upgraded to the
+/// styled tooltip infrastructure that already ships for 8 other nodes.</para></summary>
 public record TrackerCell(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TrackerState? State = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null
 );
 

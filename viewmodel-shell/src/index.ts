@@ -1662,11 +1662,18 @@ export interface TrackerCell {
    *  is intentionally NOT a member — it would collide with `success`=blue and has
    *  no meaning in a pass/fail history. */
   state?: "success" | "danger" | "warning" | "muted";
-  /** Optional hover label for this bucket (e.g. "2026-07-15 14:22 UTC · Success").
-   *  Rendered as the cell's native tooltip AND its aria-label, so the strip's
-   *  meaning is carried by TEXT, not color alone — the a11y + agent-legibility
-   *  channel a color-only glyph strip could never provide. */
-  label?: string;
+  /** Optional hover tooltip for this bucket (e.g. "2026-07-15 14:22 UTC · Success").
+   *  Rendered as the cell's styled tooltip (the shipped 6.12.1 body-appended
+   *  `.vms-tooltip-host` singleton — same infrastructure as ButtonNode.tooltip /
+   *  TableColumn.tooltip) AND its aria-label, so the strip's meaning is carried
+   *  by TEXT, not color alone — the a11y + agent-legibility channel a color-only
+   *  glyph strip could never provide. Omitted = no tooltip; aria-label falls
+   *  back to the state name.
+   *
+   *  ⚠️ RENAMED in v7.0.0 (ICON-06). Consumers change `label:` → `tooltip:` in
+   *  their buildVm. Same type, same semantics; the render path was upgraded to
+   *  the styled tooltip infrastructure that already ships for 8 other nodes. */
+  tooltip?: string;
   /** Optional click-through: dispatches this action when the bucket is clicked or
    *  keyboard-activated (Enter / Space — Space preventDefaults page scroll). Makes
    *  the cell a `role="button"` tabstop. Per-bucket identity is encoded in the

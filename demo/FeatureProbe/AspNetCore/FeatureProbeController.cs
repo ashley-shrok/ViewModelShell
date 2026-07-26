@@ -984,8 +984,8 @@ public class FeatureProbeController : ControllerBase
                     new TrackerCell(TrackerState.Danger),
                     new TrackerCell(TrackerState.Warning),
                     new TrackerCell(TrackerState.Muted),
-                    new TrackerCell(TrackerState.Success, Label: "2026-07-15 14:02 UTC · Success"),
-                    new TrackerCell(TrackerState.Danger, Label: "Failed",
+                    new TrackerCell(TrackerState.Success, Tooltip: "2026-07-15 14:02 UTC · Success"),
+                    new TrackerCell(TrackerState.Danger, Tooltip: "Failed",
                         Action: new ActionDescriptor("tracker-cell-probe")),
                 }, Id: "probe-tracker"),
             }));

@@ -720,20 +720,20 @@ describe("TrackerNode — status/heat strip", () => {
     expect(cells[4]!.classList.contains("vms-tracker__cell--muted")).toBe(true);
   });
 
-  it("label rides as both title tooltip and aria-label (non-color channel)", () => {
+  it("tooltip rides as both title tooltip and aria-label (non-color channel) — v7.0.0 rename from label", () => {
     const { container, render } = setup();
-    render({ type: "tracker", cells: [{ state: "success", label: "14:02 UTC · Success" }] });
+    render({ type: "tracker", cells: [{ state: "success", tooltip: "14:02 UTC · Success" }] });
     const cell = container.querySelector(".vms-tracker__cell") as HTMLElement;
     expect(cell.title).toBe("14:02 UTC · Success");
     expect(cell.getAttribute("aria-label")).toBe("14:02 UTC · Success");
   });
 
-  it("a cell with no label still carries the state as aria-label (never color-only)", () => {
+  it("a cell with no tooltip still carries the state as aria-label (never color-only)", () => {
     const { container, render } = setup();
     render({ type: "tracker", cells: [{ state: "danger" }] });
     const cell = container.querySelector(".vms-tracker__cell") as HTMLElement;
     expect(cell.getAttribute("aria-label")).toBe("danger");
-    expect(cell.title).toBe(""); // no title when no label
+    expect(cell.title).toBe(""); // no title when no tooltip
   });
 
   it("a cell with an action is a role=button tabstop; click / Enter / Space dispatch (Space preventDefaults)", () => {

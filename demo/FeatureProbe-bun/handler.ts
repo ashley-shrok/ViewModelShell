@@ -880,14 +880,15 @@ function buildVm(state: FeatureProbeState): ViewNode {
   // every GET step; byte-identical to the .NET twin trackerSection. Covers the
   // omitted-vs-present matrix: a cell with state OMITTED (proves absent = muted
   // default on the wire), one cell per state (success/danger/warning/muted), a
-  // cell carrying a `label` (proves the string crosses), and a cell carrying an
-  // `action` whose UNIQUE name tracker-cell-probe proves the action-name
-  // uniqueness walk DESCENDS into TrackerCell.action (never POSTed by any step —
-  // pure static wire-shape proof, same convention as nav-crumb-probe /
-  // lookup-search-probe). The CLIENT-SIDE appearance (hairline gap, baked
-  // colorblind-safe palette, shrink-then-scroll overflow, hover/tooltip, keyboard
-  // activation) is browser-only and NOT part of parity — parity proves only that
-  // the {type:"tracker", id?, cells:[{state?, label?, action?}]} wire serializes
+  // cell carrying a `tooltip` (proves the string crosses; v7.0.0 renamed from
+  // `label`), and a cell carrying an `action` whose UNIQUE name
+  // tracker-cell-probe proves the action-name uniqueness walk DESCENDS into
+  // TrackerCell.action (never POSTed by any step — pure static wire-shape
+  // proof, same convention as nav-crumb-probe / lookup-search-probe). The
+  // CLIENT-SIDE appearance (hairline gap, baked colorblind-safe palette,
+  // shrink-then-scroll overflow, hover/tooltip, keyboard activation) is
+  // browser-only and NOT part of parity — parity proves only that the
+  // {type:"tracker", id?, cells:[{state?, tooltip?, action?}]} wire serializes
   // identically across backends.
   const trackerSection: ViewNode = {
     type: "section",
@@ -903,8 +904,8 @@ function buildVm(state: FeatureProbeState): ViewNode {
           { state: "danger" },
           { state: "warning" },
           { state: "muted" },
-          { state: "success", label: "2026-07-15 14:02 UTC · Success" },
-          { state: "danger", label: "Failed", action: { name: "tracker-cell-probe" } },
+          { state: "success", tooltip: "2026-07-15 14:02 UTC · Success" },
+          { state: "danger", tooltip: "Failed", action: { name: "tracker-cell-probe" } },
         ],
       },
     ],
