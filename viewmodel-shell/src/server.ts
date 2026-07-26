@@ -177,7 +177,25 @@ function collectActions(
     }
     case "button": {
       const btn = node as ButtonNode;
+      // v7.0.0 (ICON-05) — icon-only ButtonNode a11y rule. An icon-only
+      // button with no visible label AND no tooltip is a screen-reader void:
+      // the tooltip double-duties as the button's aria-label, so requiring
+      // tooltip closes the gap. Byte-identical error message across TS + .NET
+      // (parity byte-diffs verify agreement). See design-doc §5.
+      if (
+        btn.icon != null &&
+        (btn.label == null || btn.label === "") &&
+        btn.tooltip == null
+      ) {
+        throw new Error("icon-only ButtonNode requires tooltip (used as aria-label)");
+      }
       recordAction(btn.action, enclosingForm, out);
+      return;
+    }
+    case "icon": {
+      // v7.0.0 (ICON-01) — IconNode is a leaf (no children, no action). The
+      // exhaustive-switch arm exists so a future refactor that promotes it
+      // to a container fails the TypeScript exhaustiveness check here first.
       return;
     }
     case "tabs": {

@@ -129,6 +129,54 @@ export interface Adapter {
 
 // ─── Node types ───────────────────────────────────────────────────────────────
 
+/** Closed-union of every icon name the framework ships (v7.0.0 — ICON-01/02).
+ *  The curated Lucide subset (~102 names) that inline-bundles into the browser
+ *  adapter as SVG path payloads. The wire carries ONLY the name; the framework
+ *  owns the SVG. Unknown names fail the tree validator (`invalid_tree`).
+ *
+ *  Categories (see `.planning/design/icons-primitive.md` §6 for the rationale):
+ *    Actions (24), Status (10), Navigation (14), Content (14),
+ *    Communication (5), People (5), Objects (10), Data/system (16),
+ *    Magic/accents (4). All 8 Pixie/Hestia concept anchors — `sparkles`,
+ *    `wrench`, `shield-check`, `route`, `book-open`, `activity`, `workflow`,
+ *    `receipt` — are members by literal name.
+ *
+ *  Grows by ADDITION only: consumers who need an icon not in this set open a
+ *  bounty; the framework adds the SVG + the enum member in a minor release.
+ *  Existing consumer code compiles untouched (per Ashley's 2026-07-16
+ *  additive-enum-member correction). */
+export type IconName =
+  // Actions (24)
+  | "check" | "x" | "plus" | "minus" | "edit" | "edit-3" | "trash" | "trash-2"
+  | "save" | "download" | "upload" | "copy" | "clipboard" | "clipboard-copy"
+  | "share" | "share-2" | "refresh-cw" | "rotate-ccw" | "search" | "filter"
+  | "send" | "printer" | "pencil" | "eye"
+  // Status (10)
+  | "check-circle" | "check-circle-2" | "x-circle" | "alert-circle"
+  | "alert-triangle" | "alert-octagon" | "info" | "help-circle" | "ban"
+  | "loader-2"
+  // Navigation (14)
+  | "home" | "menu" | "more-horizontal" | "more-vertical" | "external-link"
+  | "chevron-left" | "chevron-right" | "chevron-up" | "chevron-down"
+  | "arrow-left" | "arrow-right" | "arrow-up" | "arrow-down" | "arrow-up-right"
+  // Content (14)
+  | "book-open" | "receipt" | "file" | "file-text" | "folder" | "folder-open"
+  | "image" | "paperclip" | "link" | "link-2" | "calendar" | "clock"
+  | "bookmark" | "mail"
+  // Communication (5)
+  | "message-square" | "message-circle" | "at-sign" | "phone" | "bell"
+  // People (5)
+  | "user" | "user-plus" | "user-check" | "users" | "user-x"
+  // Objects (10)
+  | "wrench" | "shield-check" | "shield" | "lock" | "unlock" | "key"
+  | "star" | "heart" | "tag" | "flag"
+  // Data / system (16)
+  | "activity" | "workflow" | "route" | "database" | "server" | "hard-drive"
+  | "cloud" | "wifi" | "bar-chart" | "line-chart" | "pie-chart" | "gauge"
+  | "layers" | "settings" | "cpu" | "terminal"
+  // Magic / accents (4)
+  | "sparkles" | "zap" | "wand-2" | "flame";
+
 export type ViewNode =
   | PageNode
   | SectionNode
@@ -157,7 +205,8 @@ export type ViewNode =
   | BreadcrumbNode
   | StepsNode
   | TrackerNode
-  | DiffNode;
+  | DiffNode
+  | IconNode;
 
 export interface PageNode {
   type: "page";
@@ -288,6 +337,15 @@ export interface SectionNode {
    *  Omitted = today's section rendering, byte-identical (no `<a>` wrapper,
    *  no class drift, no extra attrs). */
   link?: { url: string; external?: boolean };
+  /** Leading icon by name from the curated Lucide subset (see IconName).
+   *  Name-only, NOT an IconNode child — host owns appearance (size + tone
+   *  inheritance per `.planning/design/icons-primitive.md` §4), icon carries
+   *  content. Rendered as a prominent header icon at size `xl`; tone inherits
+   *  from the section's `tone` if set, else `currentColor`. The Hestia
+   *  launcher-card use case (each of 8 `variant:"card"` sections carries a
+   *  concept-anchor icon).
+   *  Omitted = no icon. (v7.0.0, ICON-04.) */
+  icon?: IconName;
   children: ViewNode[];
 }
 
@@ -322,6 +380,13 @@ export interface ListItemNode {
    *  For an interactive check that dispatches on toggle, use a CheckboxNode
    *  inside `children` instead. */
   completed?: boolean;
+  /** Leading icon by name from the curated Lucide subset (see IconName).
+   *  Name-only, NOT an IconNode child — host owns appearance (size + tone
+   *  inheritance per `.planning/design/icons-primitive.md` §4), icon carries
+   *  content. Rendered leading before the item content at size `sm`; tone
+   *  inherits from the item's own `tone` if set, else `currentColor`.
+   *  Omitted = no icon. (v7.0.0, ICON-04.) */
+  icon?: IconName;
   children: ViewNode[];
 }
 
@@ -769,6 +834,21 @@ export interface ButtonNode {
   confirm?: string;
   /** Hover-only info tooltip (6.12.0, TOOL-01). See FieldNode.tooltip. */
   tooltip?: string;
+  /** Leading icon by name from the curated Lucide subset (see IconName).
+   *  Name-only, NOT an IconNode child — host owns appearance (size + tone
+   *  inheritance per `.planning/design/icons-primitive.md` §4), icon carries
+   *  content. Rendered leading before the label at size `sm`; tone inherits
+   *  from the button's own `tone`.
+   *
+   *  Icon-only-button a11y rule (enforced by the tree validator on both
+   *  backends): `icon != null && (label == null || label === "") && tooltip == null`
+   *  throws `invalid_tree` with the byte-identical message
+   *  `"icon-only ButtonNode requires tooltip (used as aria-label)"`. The
+   *  shipped `tooltip` field double-duties as the button's `aria-label` on
+   *  the icon-only case (see design-doc §5).
+   *
+   *  Omitted = no icon. (v7.0.0, ICON-04.) */
+  icon?: IconName;
 }
 
 /** One inline run — a contiguous piece of text inside a paragraph, carrying
@@ -963,6 +1043,13 @@ export interface LinkNode {
   active?: boolean;
   /** Hover-only info tooltip (6.12.0, TOOL-01). See FieldNode.tooltip. */
   tooltip?: string;
+  /** Leading icon by name from the curated Lucide subset (see IconName).
+   *  Name-only, NOT an IconNode child — host owns appearance (size + tone
+   *  inheritance per `.planning/design/icons-primitive.md` §4), icon carries
+   *  content. Rendered leading before the label at size `sm`; tone inherits
+   *  from surrounding text (`currentColor`).
+   *  Omitted = no icon. (v7.0.0, ICON-04.) */
+  icon?: IconName;
 }
 
 /** One crumb in a BreadcrumbNode trail. Mirrors LinkNode's nav model:
@@ -1293,6 +1380,78 @@ export interface BadgeNode {
    *  Useful for annotating short badge labels ("!!!", "3", "Beta") with a
    *  full explanation. */
   tooltip?: string;
+  /** Leading icon by name from the curated Lucide subset (see IconName).
+   *  Name-only, NOT an IconNode child — host owns appearance (size + tone
+   *  inheritance per `.planning/design/icons-primitive.md` §4), icon carries
+   *  content. Rendered leading inside the pill at size `xs`; tone inherits from
+   *  the badge's own `tone`. Omitted = no icon. (v7.0.0, ICON-04.) */
+  icon?: IconName;
+}
+
+/**
+ * A single icon glyph rendered from the framework's curated Lucide subset
+ * (v7.0.0 — ICON-01). Leaf node. The wire carries ONLY the `name`; the
+ * framework owns the SVG payload (bundled inline in the browser adapter as
+ * `ICONS[name]`), the size mapping (xs=12, sm=16, md=20, lg=24, xl=32), and
+ * `stroke="currentColor"` — so `tone` (or the parent's text color) drives
+ * visual color.
+ *
+ * ## Accessibility contract (LOAD-BEARING — do not remove this TSDoc)
+ *
+ * The framework dispatches on `label` presence to satisfy the two a11y
+ * regimes an icon can live under:
+ *   - `label` **omitted** = decorative. Emits `aria-hidden="true"` — the icon
+ *     is invisible to screen readers because meaning lives in adjacent text
+ *     (a Button `[icon][label]` pair, a ListItem with row title).
+ *   - `label` **present** = meaning-carrying. Emits `role="img"` + `aria-label={label}` —
+ *     the icon announces as one thing to screen readers. Used when the icon
+ *     stands alone (a status indicator with no adjacent text, an icon-only
+ *     navigation glyph). `label` is NEVER rendered as visible text; it is the
+ *     ARIA channel only.
+ *
+ * The icon-only ButtonNode rule (`icon && !label && !tooltip` → `invalid_tree`)
+ * enforces the sibling case at the tree validator: an icon-only button MUST
+ * carry `tooltip`, which double-duties as the button's `aria-label` there.
+ *
+ * ## Rendered DOM (candidate)
+ *
+ * ```html
+ * <svg class="vms-icon vms-icon--md vms-icon--danger" role="img" aria-label="Delete"
+ *      width="20" height="20" viewBox="0 0 24 24" fill="none"
+ *      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+ *   <!-- inline paths from lucide-static/icons/trash-2.svg -->
+ * </svg>
+ * ```
+ *
+ * ## Not on this shape (deliberate)
+ *
+ * - No `emphasis?` axis — Lucide is stroke-only; a filled/outlined axis would
+ *   force a per-icon variant fan-out (see design-doc §12 out-of-scope).
+ * - No SVG payload on the wire — the framework owns the asset, apps describe
+ *   with the name (same posture as `TextNode.style` / `SectionNode.tone`).
+ */
+export interface IconNode {
+  type: "icon";
+  /** The icon name from the curated Lucide subset. Closed union of ~102
+   *  literal names (see IconName). Unknown names fail the tree validator. */
+  name: IconName;
+  /** Pixel size axis (framework-owned mapping: xs=12, sm=16, md=20, lg=24,
+   *  xl=32). Omitted = "md" (20px), the default. */
+  size?: "xs" | "sm" | "md" | "lg" | "xl";
+  /** Semantic intent/severity — the universal status tone axis. Emits
+   *  `.vms-icon--{tone}` which sets `color`, which the SVG's
+   *  `stroke="currentColor"` picks up. Omitted = inherits currentColor from
+   *  the surrounding text/element (the default — keeps icons visually
+   *  consistent with adjacent text without duplicating the tone axis at every
+   *  callsite). Closed union, mirrors the other appearance-axis tones
+   *  framework-wide. */
+  tone?: "danger" | "warning" | "success" | "info";
+  /** Accessible name for screen readers when the icon carries meaning
+   *  INDEPENDENT of nearby text. When present, emits `role="img"` +
+   *  `aria-label={label}`. When absent, emits `aria-hidden="true"` (decorative;
+   *  meaning lives in adjacent text). NEVER rendered as visible text — this is
+   *  the ARIA channel only. Omitted = decorative (`aria-hidden="true"`). */
+  label?: string;
 }
 
 /**
