@@ -4283,14 +4283,19 @@ export class BrowserAdapter implements Adapter {
       const state = cell.state ?? "muted";
       const el = document.createElement("div");
       el.className = `vms-tracker__cell vms-tracker__cell--${state}`;
-      // tooltip → native tooltip + aria-label (non-color channel). When absent,
+      // tooltip → styled tooltip + aria-label (non-color channel). When absent,
       // the state name is still the a11y fallback so a cell is never color-only.
-      // v7.0.0 (ICON-06 / Plan 22-03): field renamed `label` → `tooltip`; the
-      // render-path swap from `el.title = ...` to the shipped 6.12.1
-      // `.vms-tooltip-host` singleton lands in Plan 22-05.
+      // v7.0.0 (ICON-06 / Plan 22-05): the render path was swapped from the
+      // native `el.title = ...` gray box to the shipped 6.12.1 TOOL-01
+      // .vms-tooltip-host singleton (same styled bubble as ButtonNode.tooltip /
+      // TableColumn.tooltip / FieldNode.tooltip / etc. — the 8 hosts already on
+      // the styled path). applyTooltip() is the single shared binding: sets
+      // el.title (still — screen-reader accessible name), adds
+      // .vms-has-tooltip class + data-vms-tooltip attribute, and registers the
+      // mouseenter/focusin listeners that drive the body-appended singleton.
       const aria = cell.tooltip != null && cell.tooltip !== "" ? cell.tooltip : state;
       el.setAttribute("aria-label", aria);
-      if (cell.tooltip != null && cell.tooltip !== "") el.title = cell.tooltip;
+      this.applyTooltip(el, cell.tooltip);
       if (cell.action) {
         const action = cell.action;
         el.classList.add("vms-tracker__cell--clickable");

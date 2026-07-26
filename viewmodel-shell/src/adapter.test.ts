@@ -720,20 +720,35 @@ describe("TrackerNode — status/heat strip", () => {
     expect(cells[4]!.classList.contains("vms-tracker__cell--muted")).toBe(true);
   });
 
-  it("tooltip rides as both title tooltip and aria-label (non-color channel) — v7.0.0 rename from label", () => {
+  it("tooltip rides via the shipped 6.12.1 .vms-tooltip-host singleton + aria-label (non-color channel) — v7.0.0 rename from label + render-path swap", () => {
     const { container, render } = setup();
     render({ type: "tracker", cells: [{ state: "success", tooltip: "14:02 UTC · Success" }] });
     const cell = container.querySelector(".vms-tracker__cell") as HTMLElement;
+    // v7.0.0 (ICON-06 / Plan 22-05): the render path was swapped from
+    // `el.title = ...` to the shipped TOOL-01 styled-tooltip singleton
+    // (applyTooltip helper). It sets the `vms-has-tooltip` class + the
+    // `data-vms-tooltip` attribute AND STILL sets el.title (which the browser
+    // uses as the accessible fallback name).
+    expect(cell.classList.contains("vms-has-tooltip")).toBe(true);
+    expect(cell.dataset.vmsTooltip).toBe("14:02 UTC · Success");
+    // applyTooltip still sets el.title for the native accessible-name fallback.
     expect(cell.title).toBe("14:02 UTC · Success");
+    // aria-label continues to fall back to the tooltip when set.
     expect(cell.getAttribute("aria-label")).toBe("14:02 UTC · Success");
   });
 
-  it("a cell with no tooltip still carries the state as aria-label (never color-only)", () => {
+  it("a cell with no tooltip has NO styled-tooltip binding and aria-label falls back to state (never color-only)", () => {
     const { container, render } = setup();
     render({ type: "tracker", cells: [{ state: "danger" }] });
     const cell = container.querySelector(".vms-tracker__cell") as HTMLElement;
     expect(cell.getAttribute("aria-label")).toBe("danger");
-    expect(cell.title).toBe(""); // no title when no tooltip
+    // The styled-tooltip class + data attribute MUST be absent when no
+    // tooltip was set on the cell — proves applyTooltip's early return
+    // holds (no bubble host, no listeners registered).
+    expect(cell.classList.contains("vms-has-tooltip")).toBe(false);
+    expect(cell.dataset.vmsTooltip).toBeUndefined();
+    // No native title either.
+    expect(cell.title).toBe("");
   });
 
   it("a cell with an action is a role=button tabstop; click / Enter / Space dispatch (Space preventDefaults)", () => {
