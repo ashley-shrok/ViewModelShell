@@ -177,6 +177,194 @@ public enum TextStyle { Heading, Subheading, Body, Muted, Pre, Strikethrough }
 [JsonConverter(typeof(KebabEnum<SectionVariant>))]
 public enum SectionVariant { Card, Prose }
 
+/// <summary>v7.0.0 (ICON-01) — icon pixel size axis. The framework-owned
+/// mapping is xs=12, sm=16, md=20 (default when omitted), lg=24, xl=32. Emits
+/// .vms-icon--{size}. Byte-identical wire values as the TS union
+/// `"xs" | "sm" | "md" | "lg" | "xl"`. Separate from ControlSize (buttons) and
+/// MinItem (cards) — icons carry a distinct semantic axis with its own set of
+/// 5 members. See `.planning/design/icons-primitive.md` §3.</summary>
+[JsonConverter(typeof(KebabEnum<IconSize>))]
+public enum IconSize { Xs, Sm, Md, Lg, Xl }
+
+/// <summary>v7.0.0 (ICON-01/02) — JSON converter for IconName that walks a
+/// static dictionary mapping each enum member to its exact literal Lucide
+/// name (kebab-case with digit-boundary awareness, e.g. Trash2 → "trash-2").
+///
+/// <para>NOT KebabEnum{T}: the framework's KebabCaseLower policy fails to
+/// insert a hyphen between letters and digits, so Trash2 → "trash2" and
+/// CheckCircle2 → "check-circle2" — a silent cross-backend drift with the TS
+/// twin's `"trash-2"` / `"check-circle-2"` union literals. This converter
+/// spells every member's wire value explicitly.</para>
+///
+/// <para>The dictionary is the single source of truth for the .NET wire
+/// contract. Every new member must be added here in the same change that
+/// adds the enum member; a build-time integrity check (below) throws on
+/// missing entries so the requirement disappears structurally rather than
+/// having to be remembered.</para></summary>
+public sealed class IconNameConverter : JsonConverter<IconName>
+{
+    // Explicit member → wire-string mapping. Byte-identical to the TS
+    // IconName union literals in viewmodel-shell/src/index.ts.
+    private static readonly IReadOnlyDictionary<IconName, string> _toWire = new Dictionary<IconName, string>
+    {
+        // Actions (24)
+        [IconName.Check] = "check", [IconName.X] = "x", [IconName.Plus] = "plus",
+        [IconName.Minus] = "minus", [IconName.Edit] = "edit", [IconName.Edit3] = "edit-3",
+        [IconName.Trash] = "trash", [IconName.Trash2] = "trash-2", [IconName.Save] = "save",
+        [IconName.Download] = "download", [IconName.Upload] = "upload", [IconName.Copy] = "copy",
+        [IconName.Clipboard] = "clipboard", [IconName.ClipboardCopy] = "clipboard-copy",
+        [IconName.Share] = "share", [IconName.Share2] = "share-2",
+        [IconName.RefreshCw] = "refresh-cw", [IconName.RotateCcw] = "rotate-ccw",
+        [IconName.Search] = "search", [IconName.Filter] = "filter",
+        [IconName.Send] = "send", [IconName.Printer] = "printer",
+        [IconName.Pencil] = "pencil", [IconName.Eye] = "eye",
+        // Status (10)
+        [IconName.CheckCircle] = "check-circle", [IconName.CheckCircle2] = "check-circle-2",
+        [IconName.XCircle] = "x-circle", [IconName.AlertCircle] = "alert-circle",
+        [IconName.AlertTriangle] = "alert-triangle", [IconName.AlertOctagon] = "alert-octagon",
+        [IconName.Info] = "info", [IconName.HelpCircle] = "help-circle",
+        [IconName.Ban] = "ban", [IconName.Loader2] = "loader-2",
+        // Navigation (14)
+        [IconName.Home] = "home", [IconName.Menu] = "menu",
+        [IconName.MoreHorizontal] = "more-horizontal", [IconName.MoreVertical] = "more-vertical",
+        [IconName.ExternalLink] = "external-link",
+        [IconName.ChevronLeft] = "chevron-left", [IconName.ChevronRight] = "chevron-right",
+        [IconName.ChevronUp] = "chevron-up", [IconName.ChevronDown] = "chevron-down",
+        [IconName.ArrowLeft] = "arrow-left", [IconName.ArrowRight] = "arrow-right",
+        [IconName.ArrowUp] = "arrow-up", [IconName.ArrowDown] = "arrow-down",
+        [IconName.ArrowUpRight] = "arrow-up-right",
+        // Content (14)
+        [IconName.BookOpen] = "book-open", [IconName.Receipt] = "receipt",
+        [IconName.File] = "file", [IconName.FileText] = "file-text",
+        [IconName.Folder] = "folder", [IconName.FolderOpen] = "folder-open",
+        [IconName.Image] = "image", [IconName.Paperclip] = "paperclip",
+        [IconName.Link] = "link", [IconName.Link2] = "link-2",
+        [IconName.Calendar] = "calendar", [IconName.Clock] = "clock",
+        [IconName.Bookmark] = "bookmark", [IconName.Mail] = "mail",
+        // Communication (5)
+        [IconName.MessageSquare] = "message-square", [IconName.MessageCircle] = "message-circle",
+        [IconName.AtSign] = "at-sign", [IconName.Phone] = "phone", [IconName.Bell] = "bell",
+        // People (5)
+        [IconName.User] = "user", [IconName.UserPlus] = "user-plus",
+        [IconName.UserCheck] = "user-check", [IconName.Users] = "users",
+        [IconName.UserX] = "user-x",
+        // Objects (10)
+        [IconName.Wrench] = "wrench", [IconName.ShieldCheck] = "shield-check",
+        [IconName.Shield] = "shield", [IconName.Lock] = "lock",
+        [IconName.Unlock] = "unlock", [IconName.Key] = "key",
+        [IconName.Star] = "star", [IconName.Heart] = "heart",
+        [IconName.Tag] = "tag", [IconName.Flag] = "flag",
+        // Data / system (16)
+        [IconName.Activity] = "activity", [IconName.Workflow] = "workflow",
+        [IconName.Route] = "route", [IconName.Database] = "database",
+        [IconName.Server] = "server", [IconName.HardDrive] = "hard-drive",
+        [IconName.Cloud] = "cloud", [IconName.Wifi] = "wifi",
+        [IconName.BarChart] = "bar-chart", [IconName.LineChart] = "line-chart",
+        [IconName.PieChart] = "pie-chart", [IconName.Gauge] = "gauge",
+        [IconName.Layers] = "layers", [IconName.Settings] = "settings",
+        [IconName.Cpu] = "cpu", [IconName.Terminal] = "terminal",
+        // Magic / accents (4)
+        [IconName.Sparkles] = "sparkles", [IconName.Zap] = "zap",
+        [IconName.Wand2] = "wand-2", [IconName.Flame] = "flame",
+    };
+
+    private static readonly IReadOnlyDictionary<string, IconName> _fromWire
+        = _toWire.ToDictionary(kv => kv.Value, kv => kv.Key);
+
+    // Build-time integrity check — every enum value present in _toWire. Runs
+    // on the type's static initialization; a missing entry throws at
+    // JsonSerializer construction time, not silently at wire time.
+    static IconNameConverter()
+    {
+        var missing = Enum.GetValues<IconName>()
+            .Where(v => !_toWire.ContainsKey(v))
+            .ToList();
+        if (missing.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"IconNameConverter: missing wire-value mapping for enum members: " +
+                string.Join(", ", missing));
+        }
+    }
+
+    public override IconName Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var s = reader.GetString();
+        if (s is null || !_fromWire.TryGetValue(s, out var name))
+        {
+            throw new JsonException($"Unknown IconName wire value: {s ?? "(null)"}");
+        }
+        return name;
+    }
+
+    public override void Write(Utf8JsonWriter writer, IconName value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(_toWire[value]);
+    }
+}
+
+/// <summary>v7.0.0 (ICON-01/02) — closed union of every icon name the framework
+/// ships. The curated Lucide subset (~102 names) that inline-bundles into the
+/// browser adapter as SVG path payloads. The wire carries ONLY the name; the
+/// framework owns the SVG. Unknown names fail the tree validator (invalid_tree).
+///
+/// <para>Categories (see `.planning/design/icons-primitive.md` §6 for the
+/// rationale): Actions (24), Status (10), Navigation (14), Content (14),
+/// Communication (5), People (5), Objects (10), Data/system (16),
+/// Magic/accents (4). All 8 Pixie/Hestia concept anchors — Sparkles, Wrench,
+/// ShieldCheck, Route, BookOpen, Activity, Workflow, Receipt — are members by
+/// literal name.</para>
+///
+/// <para>Grows by ADDITION only: consumers who need an icon not in this set
+/// open a bounty; the framework adds the SVG + the enum member in a minor
+/// release. Existing consumer code compiles untouched (per Ashley's 2026-07-16
+/// additive-enum-member correction). This is a CLOSED UNION on the .NET twin
+/// per AGENTS.md gotcha #8/#9 — a `string?` here would create a 38th open
+/// union in the known live class-1 gap.</para>
+///
+/// <para>PascalCase member names ↔ kebab-case wire values via a static
+/// dictionary walked by IconNameConverter (the single source of truth for the
+/// wire contract). KebabEnum{T} is NOT used here because its
+/// JsonNamingPolicy.KebabCaseLower does not split digits from letters — it
+/// emits Trash2 → "trash2", not "trash-2", which would silently drift from
+/// the TS union. The dictionary is one place to grep for the full member
+/// list and is byte-identical to the TS twin (Plan 22-01's IconName union
+/// literals).</para></summary>
+[JsonConverter(typeof(IconNameConverter))]
+public enum IconName
+{
+    // Actions (24)
+    Check, X, Plus, Minus, Edit, Edit3, Trash, Trash2,
+    Save, Download, Upload, Copy, Clipboard, ClipboardCopy,
+    Share, Share2, RefreshCw, RotateCcw, Search, Filter,
+    Send, Printer, Pencil, Eye,
+    // Status (10)
+    CheckCircle, CheckCircle2, XCircle, AlertCircle,
+    AlertTriangle, AlertOctagon, Info, HelpCircle, Ban,
+    Loader2,
+    // Navigation (14)
+    Home, Menu, MoreHorizontal, MoreVertical, ExternalLink,
+    ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
+    ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ArrowUpRight,
+    // Content (14)
+    BookOpen, Receipt, File, FileText, Folder, FolderOpen,
+    Image, Paperclip, Link, Link2, Calendar, Clock,
+    Bookmark, Mail,
+    // Communication (5)
+    MessageSquare, MessageCircle, AtSign, Phone, Bell,
+    // People (5)
+    User, UserPlus, UserCheck, Users, UserX,
+    // Objects (10)
+    Wrench, ShieldCheck, Shield, Lock, Unlock, Key,
+    Star, Heart, Tag, Flag,
+    // Data / system (16)
+    Activity, Workflow, Route, Database, Server, HardDrive,
+    Cloud, Wifi, BarChart, LineChart, PieChart, Gauge,
+    Layers, Settings, Cpu, Terminal,
+    // Magic / accents (4)
+    Sparkles, Zap, Wand2, Flame
+}
+
 // ─── Action types ─────────────────────────────────────────────────────────────
 
 public record ActionDescriptor(
@@ -556,6 +744,7 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(StepsNode),      "steps")]
 [JsonDerivedType(typeof(TrackerNode),    "tracker")]
 [JsonDerivedType(typeof(DiffNode),       "diff")]
+[JsonDerivedType(typeof(IconNode),       "icon")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -775,7 +964,13 @@ public record SectionNode(
     // when false (WhenWritingDefault) so it's ABSENT rather than
     // "followTail": false — matching the TS optional `followTail?` (F2; same
     // posture as Fill). false/omitted = byte-identical.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool FollowTail = false
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool FollowTail = false,
+    // v7.0.0 (ICON-04) — leading icon by name from the curated Lucide subset.
+    // Name-only, NOT an IconNode child — host owns appearance (rendered as a
+    // prominent header icon at size xl; tone inherits from Section.Tone if
+    // set, else currentColor), icon carries content. The Hestia launcher-card
+    // use case (each of 8 Variant:Card sections carries a concept-anchor icon).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null
 ) : ViewNode;
 
 public record ListNode(
@@ -870,7 +1065,12 @@ public record ListItemNode(
     // interactive check that dispatches on toggle, use a CheckboxNode child.
     // Wire posture: WhenWritingNull => omitted absent (nullable bool so `false`
     // is meaningful as "explicitly unchecked" and MUST cross the wire).
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Completed = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Completed = null,
+    // v7.0.0 (ICON-04) — leading icon by name from the curated Lucide subset.
+    // Name-only, NOT an IconNode child — host owns appearance (rendered leading
+    // before the item content at size sm; tone inherits from ListItem.Tone if
+    // set, else currentColor), icon carries content.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null
 ) : ViewNode;
 
 public record FormNode(
@@ -1179,7 +1379,19 @@ public record ButtonNode(
     // Null = instant dispatch.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Confirm = null,
     // 6.12.0 (TOOL-01) — hover-only info tooltip. See FieldNode.Tooltip.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null,
+    // v7.0.0 (ICON-04) — leading icon by name from the curated Lucide subset.
+    // Name-only, NOT an IconNode child — host owns appearance (rendered
+    // leading before the label at size sm; tone inherits from Button.Tone),
+    // icon carries content.
+    //
+    // Icon-only-button a11y rule (enforced by the tree validator on both
+    // backends): Icon != null AND string.IsNullOrEmpty(Label) AND Tooltip ==
+    // null throws invalid_tree with the byte-identical message
+    // "icon-only ButtonNode requires tooltip (used as aria-label)". The
+    // shipped Tooltip field double-duties as the button's aria-label on the
+    // icon-only case (design-doc §5).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null
 ) : ViewNode;
 
 /// <summary>One inline run — a contiguous piece of text inside a paragraph,
@@ -1593,7 +1805,12 @@ public record LinkNode(
     /// matches the TS `active?: boolean` posture (absent = not active).</summary>
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Active = null,
     // 6.12.0 (TOOL-01) — hover-only info tooltip. See FieldNode.Tooltip.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null,
+    // v7.0.0 (ICON-04) — leading icon by name from the curated Lucide subset.
+    // Name-only, NOT an IconNode child — host owns appearance (rendered
+    // leading before the label at size sm; tone inherits from surrounding text
+    // via currentColor), icon carries content.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null
 ) : ViewNode;
 
 // Breadcrumb (NAV-01) — .NET byte-identical twin of the TS BreadcrumbItem/
@@ -1689,7 +1906,55 @@ public record BadgeNode(
     // 6.12.0 (TOOL-01) — hover-only info tooltip. Useful for annotating short
     // badge labels ("!!!", "3", "Beta") with a full explanation. See
     // FieldNode.Tooltip.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null,
+    // v7.0.0 (ICON-04) — leading icon by name from the curated Lucide subset.
+    // Name-only, NOT an IconNode child — host owns appearance (rendered
+    // leading inside the pill at size xs; tone inherits from Badge.Tone), icon
+    // carries content. See `.planning/design/icons-primitive.md` §4.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null
+) : ViewNode;
+
+/// <summary>v7.0.0 (ICON-01) — a single icon glyph rendered from the framework's
+/// curated Lucide subset. Leaf node. The wire carries ONLY the Name; the
+/// framework owns the SVG payload (bundled inline in the browser adapter as
+/// <c>ICONS[name]</c>), the size mapping (xs=12, sm=16, md=20, lg=24, xl=32),
+/// and <c>stroke="currentColor"</c> — so Tone (or the parent's text color)
+/// drives visual color.
+///
+/// <para>ACCESSIBILITY CONTRACT (LOAD-BEARING — do not remove this doc): the
+/// framework dispatches on <c>Label</c> presence.
+///  <br/>Label OMITTED = decorative. Emits <c>aria-hidden="true"</c> — the icon
+/// is invisible to screen readers because meaning lives in adjacent text (a
+/// Button [icon][label] pair, a ListItem with row title).
+///  <br/>Label PRESENT = meaning-carrying. Emits <c>role="img"</c> +
+/// <c>aria-label={Label}</c> — the icon announces as one thing. Used when the
+/// icon stands alone (a status indicator with no adjacent text, an icon-only
+/// navigation glyph). Label is NEVER rendered as visible text — the ARIA
+/// channel only.</para>
+///
+/// <para>The icon-only ButtonNode rule (Icon != null AND string.IsNullOrEmpty(Label)
+/// AND Tooltip == null throws invalid_tree) enforces the sibling case at the
+/// tree validator — an icon-only button MUST carry Tooltip, which double-duties
+/// as the button's aria-label there.</para>
+///
+/// <para>NOT ON THIS SHAPE (deliberate): no Emphasis axis (Lucide is
+/// stroke-only, filled/outlined would force per-icon variant fan-out — design-doc
+/// §12 out-of-scope); no SVG payload on the wire (framework owns the asset,
+/// apps describe with the Name, same posture as TextNode.Style /
+/// SectionNode.Tone).</para></summary>
+public record IconNode(
+    IconName Name,
+    // Pixel size axis (framework-owned mapping xs=12, sm=16, md=20, lg=24,
+    // xl=32). Omitted = "md" (20px), the default.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconSize? Size = null,
+    // Semantic tint. When present, emits .vms-icon--{tone} which sets color,
+    // which the SVG's stroke="currentColor" picks up. Omitted = inherits
+    // currentColor from the surrounding text/element.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
+    // Accessible name for screen readers when the icon carries meaning
+    // INDEPENDENT of nearby text. Present → role="img" + aria-label={Label};
+    // absent → aria-hidden="true" (decorative). Never rendered as visible text.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label = null
 ) : ViewNode;
 
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────
@@ -1884,6 +2149,12 @@ public static class ViewTreeValidation
                 if (emptyState.Action is { } esAction) WalkForSectionAction(esAction, outerInteractive);
                 break;
 
+            case IconNode:
+                // v7.0.0 (ICON-01) — IconNode is a terminal leaf (no children,
+                // no SectionNode descendants). Same terminal-leaf posture as
+                // the leaf comment below.
+                break;
+
             // Leaf-like nodes (FieldNode, CheckboxNode, ButtonNode, TextNode,
             // LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
             // TableNode, CopyButtonNode, BadgeNode, ChartNode, BreadcrumbNode,
@@ -1946,7 +2217,26 @@ public static class ViewTreeValidation
                 break;
 
             case ButtonNode button:
+                // v7.0.0 (ICON-05) — icon-only ButtonNode a11y rule. An
+                // icon-only button with no visible label AND no tooltip is a
+                // screen-reader void: the tooltip double-duties as the button's
+                // aria-label, so requiring tooltip closes the gap. Byte-identical
+                // error message across TS + .NET (parity byte-diffs verify
+                // agreement). See design-doc §5.
+                if (button.Icon is not null
+                    && string.IsNullOrEmpty(button.Label)
+                    && button.Tooltip is null)
+                {
+                    throw new InvalidOperationException(
+                        "icon-only ButtonNode requires tooltip (used as aria-label)");
+                }
                 Record(button.Action, enclosingForm, sink);
+                break;
+
+            case IconNode:
+                // v7.0.0 (ICON-01) — IconNode is a leaf (no children, no
+                // action). The arm exists so a future refactor that promotes it
+                // to a container fails the C# exhaustive check here first.
                 break;
 
             case TabsNode tabs:
