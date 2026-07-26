@@ -117,3 +117,41 @@ This milestone adds VMS's first data-visualization primitive: a **structured `Ch
 
 *Milestone: v5.1 Navigation Primitives*
 *Requirements defined: 2026-07-11*
+
+---
+
+## Milestone v7.0 — Icons Primitive (Phase 22)
+
+**Defined:** 2026-07-26
+**Design of record:** `.planning/design/icons-primitive.md` (surveyed set choice + Ashley green-light on the shape). Icons additive; `TrackerCell.label`→`tooltip` rename is the ONE break that forces the major bump. Aligned npm + NuGet `7.0.0`.
+
+- [ ] **ICON-01**: An **`IconNode`** wire type (`type:"icon"`, closed-union `name`, optional `size:"xs"|"sm"|"md"|"lg"|"xl"`, optional `tone` from the framework tone axis, optional `label` for a11y) lands byte-identically in TS (`src/index.ts` + `browser.ts`) and .NET (`ViewModels.cs` record + `[JsonDerivedType]`; `name` an enum with a converter that emits the wire kebab-case string; every optional nullable carries `[JsonIgnore(WhenWritingNull)]`); BOTH tree-validators descend into it; an unknown `name` fails `invalid_tree` on both backends.
+- [ ] **ICON-02**: The framework ships the curated **Lucide subset** (~102 icons per design-doc §6, including all 8 of Pixie's Hestia concept anchors — `sparkles`, `wrench`, `shield-check`, `route`, `book-open`, `activity`, `workflow`, `receipt`) inline-bundled in the browser adapter as `ICONS: Record<IconName, string>` (SVG payload strings); the wire NEVER carries an SVG — only the name; framework grows by addition (consumers bounty new names, additive minor).
+- [ ] **ICON-03**: The browser renderer emits `<svg class="vms-icon vms-icon--{size} vms-icon--{tone}" role="img"|aria-hidden ...>` with `stroke="currentColor"` (so `tone` OR the parent's text color drives visual color); size mapping per design-doc §3 (xs=12, sm=16, md=20 default, lg=24, xl=32); jsdom tests verify DOM shape + a11y attributes (decorative when `label` absent → `aria-hidden="true"`; meaning-carrying when `label` set → `role="img"` + `aria-label`).
+- [ ] **ICON-04**: Cross-node **`icon?: IconName` prop** lands on `ButtonNode`, `LinkNode`, `SectionNode`, `Badge`, `ListItem` (both backends, byte-identical); framework renders at host-appropriate size per design-doc §4 (`Button`/`Link`/`Badge`/`ListItem` = leading `xs`/`sm`; `Section` = prominent card `xl`); tone inherits from the host's own tone axis — NEVER a separate wire slot on the icon prop (avoids two-ways-to-say-the-same-thing).
+- [ ] **ICON-05**: The **icon-only ButtonNode validator rule** is enforced on both backends — `button.icon != null && (!button.label || button.label === "") && button.tooltip == null` → `invalid_tree` at tree-validation time; the `tooltip` field (shipped 6.12.0) double-duties as `aria-label` on icon-only buttons; test coverage on both backends verifies the rule fires FAIL-before/PASS-after by mutation, not by assertion.
+- [ ] **ICON-06**: **`TrackerCell` renames `label` → `tooltip`** (both backends; wire-breaking); renderer swaps from `el.title = cell.label` (`browser.ts:4161`) to the TOOL-01 body-appended `.vms-tooltip-host` singleton + JS positioning (the exact 6.12.1 infrastructure that already ships for `Button.tooltip`/`TableColumn.tooltip`); Molly is DM'd on the relay BEFORE publish with the exact rename (`label:` → `tooltip:` in Metis buildVm) + MIGRATION.md excerpt; MIGRATION documents this as the ONE break.
+- [ ] **ICON-07**: TUI drops icons entirely for v1 (@experimental scope, not-invested-in per standing directive) — `IconNode` renders as nothing; cross-node `icon?:` props are ignored; no unicode-fallback mapping (deferred until TUI investment ever resumes).
+- [ ] **ICON-08**: **AA-contrast hand-check** for the icon-on-tone / icon-on-fill pairs the primitive introduces (icon rendered on `tone:"danger"` card, `tone:"warning"` card, etc., across default + all 12 themes) — the fixed 13-pair `check:aa-contrast` gate does NOT auto-cover NEW fg/bg pairs (banked lesson); deepen only the failing tones via `color-mix` per the shipped v3.5.0 pattern; graphical-state-indicator icons (WCAG 1.4.11) meeting 3:1 are acceptable ONLY when state is also carried by non-color channels (aria-label + shape) per the TrackerNode precedent.
+- [ ] **ICON-09**: Parity green — `bun run parity/run.ts` extends FeatureProbe `buildVm` in ALL backends (the shipped v5.1 pattern: EXTEND, not new fixture file; `$comment` clause appended) to emit standalone `IconNode` + each of the 5 host-node icon props + the icon-only-button validator case + the renamed TrackerCell tooltip; adds `expectBodyContains` coverage tripwires per branch (banked lesson: a diff can only prove things about code it actually RUNS — a fixture step covering a specific branch declares a substring only that branch emits).
+- [ ] **ICON-10**: Demo usage across the Showcase (icon gallery — every icon at every size × the tone matrix) + a Hestia-style card grid demo (all 8 Pixie concept anchors as `Section.icon` cards); interactive **tailnet verification page** driving the REAL bundle (real shipped CSS + real `BrowserAdapter` + `buildVm` output run through the REAL tree validator in the fetch-shim per banked lesson) with the Hestia grid + icon-in-Button/Badge/ListItem/Link examples + all 5 sizes + tone matrix + live TrackerCell strip showing the styled-tooltip render (light + dark, HTTPS if the page ever needs secure-context features per banked lesson); Ashley pre-publish sign-off (visual change = in-question publish gate).
+- [ ] **ICON-11**: Aligned **npm + NuGet `7.0.0`** major published (batched — major is forced by ICON-06's rename; icons alone would be additive), CHANGELOG + MIGRATION (the ONE break = TrackerCell field rename), operator-gated publish per AGENTS.md `.env` token-sync ritual, tag `v7.0.0` at the release commit, `main` advanced (`git merge-base --is-ancestor v7.0.0 main`), CI green, `#vms-changelog` release line posted.
+
+| Requirement | Phase |
+|---|---|
+| ICON-01 | 22 |
+| ICON-02 | 22 |
+| ICON-03 | 22 |
+| ICON-04 | 22 |
+| ICON-05 | 22 |
+| ICON-06 | 22 |
+| ICON-07 | 22 |
+| ICON-08 | 22 |
+| ICON-09 | 22 |
+| ICON-10 | 22 |
+| ICON-11 | 22 |
+
+---
+
+*Milestone: v7.0 Icons Primitive*
+*Requirements defined: 2026-07-26*
