@@ -6,6 +6,56 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 7.0.0 / NuGet 7.0.0 — Icons primitive (IconNode + cross-node icon composition + Lucide subset) · TrackerCell.label → tooltip rename (BREAKING — the only break)
+
+**npm:** `7.0.0` (major, from `6.12.1`) · **NuGet:** `7.0.0` (major, from `6.12.1`). Aligned major bump. Wire-format protocol token stays `viewmodel-shell/1.0` (additive icon changes are wire-compatible; the TrackerCell field rename is a per-node field change, not a wire-envelope change). Design of record: [`.planning/design/icons-primitive.md`](.planning/design/icons-primitive.md).
+
+**Motivation.** The source itself has commented for months that *"the framework ships no icon set"* (`src/index.ts:1255-1256`; `ViewModels.cs:1666-1667`). The workaround has been emoji-in-TextNode-label — platform-inconsistent by construction, un-configurable, un-a11y-able. Every mature UI framework ships icons as first-class; VMS was the outlier. Cleared the easy-yes rule on both criteria (real capability gap, contained self-contained primitive) plus directly from Ashley for Hestia's Pantheon launcher card grid + Angel's `/ai` chat surface — two independent consumers converging on the same 4 cross-composition surfaces.
+
+### 🟢 NEW — the icons primitive
+
+- **`IconNode`** — the standalone node. `{ type: "icon", name: IconName, size?: "xs"|"sm"|"md"|"lg"|"xl", tone?: Tone, label?: string }`. Size mapping: xs=12px / sm=16px / md=20px (default) / lg=24px / xl=32px. `stroke="currentColor"` so tone (or parent's text color) drives visual color. When `label` present → `role="img"` + `aria-label` (meaning-carrying); when absent → `aria-hidden="true"` (decorative).
+- **Cross-node `icon?: IconName` prop** on 5 hosts, name-only (host owns appearance per design-doc §4):
+  - `ButtonNode` — leading, size `sm`; tone inherits from button `tone` (dropped on `emphasis:"primary"` so it doesn't vanish into the filled background).
+  - `LinkNode` — leading, size `sm`; tone follows link `currentColor`.
+  - `SectionNode` — prominent card icon, size `xl`; tone from section `tone` if set, else `currentColor`. **The Hestia launcher-card case.**
+  - `Badge` — leading inside the pill, size `xs`; tone inherits from badge `tone`.
+  - `ListItem` — leading before item content, size `sm`; tone inherits from item `tone`.
+- **Curated Lucide subset (~102 icons)** inline-bundled in `browser.js` as a `Record<IconName, string>` payload map. Framework owns the SVGs; the wire carries only NAMES. Includes all 8 of Pixie's Hestia concept anchors (`sparkles`, `wrench`, `shield-check`, `route`, `book-open`, `activity`, `workflow`, `receipt`). Framework grows by addition — a consumer wanting a new icon files a bounty and the framework adds it in a minor.
+- **Closed union `IconName`** on both sides — TS union of ~102 literal strings; **.NET enum with a dedicated `IconNameConverter`** using an explicit `Dictionary<IconName, string>` (NOT `KebabCaseLower`, which silently dropped digit-boundary hyphens on 7 icons — a class-1 defect caught empirically during .NET plan execution).
+- **Icon-only ButtonNode a11y rule** — new tree-validator invariant on both backends: `button.icon != null && !button.label && !button.tooltip` → `invalid_tree`. The shipped `tooltip` field (6.12.0) double-duties as `aria-label` on icon-only buttons; framework enforces this so no icon-only button ever ships without a screen-reader-accessible name.
+- **`.vms-icon` CSS**: base + 5 sizes + 4 tones. Also `.vms-link .vms-icon` + `.vms-link__label` spacing (small companion fix landed with the icons pass — link icons no longer flush against the label).
+- **AA-contrast hand-checked** across default + all 12 shipped themes on every new icon-on-tinted-surface pair (icon-in-badge, icon-on-card-tone, icon-in-button, icon-in-listitem, icon-in-link, standalone). No `color-mix` deepening required — every new pair lives within the lightness/tint range the fixed 13-pair `check:aa-contrast` gate already validates for text pairs. See [`.planning/phases/22-.../22-08-AA-AUDIT.md`](.planning/phases/22-v7-0-iconnode-cross-node-composition-trackercell-label-toolt/22-08-AA-AUDIT.md).
+
+### 🔴 BREAKING — `TrackerCell.label` → `TrackerCell.tooltip` (the ONE break)
+
+**Wire field rename** on both backends. Same type (`string?` / `string?`), same semantics (hover tooltip + `aria-label` fallback). Also a render-path swap: the field now renders via the shipped 6.12.1 body-appended `.vms-tooltip-host` styled tooltip infrastructure (matching the 8 other TOOL-01 nodes) instead of the browser-native `<span title=...>` gray box. Ashley caught the styling inconsistency during her Metis pretty-pass; Molly (single fleet consumer of `TrackerCell`) authorized the field rename to fix the fleet naming inconsistency too (`label` elsewhere in VMS = visible text; there's no visible label on a colored dot). See [MIGRATION.md](MIGRATION.md).
+
+### 🟢 NEW — Showcase + IconVerification
+
+- **Showcase demo** gains an icons gallery (every icon × every size × tone matrix) + a Hestia-style launcher card grid using all 8 Pixie concept anchors.
+- **`demo/IconVerification-bun/`** — a new tailnet verification demo (following the shipped `-bun` sibling convention of `LookupVerification-bun` and `NavVerification-bun`). Real Bun.serve backend using the shipped `createAction` + `validateActionNames` + `validateSectionAction` on both GET and POST paths, so every response tree is validated end-to-end (banked lesson: fetch-shim mocks otherwise accept trees the real server rejects). Includes the full Hestia grid, icon-in-host examples, sizes row, tone matrix, live TrackerCell strip (proves ICON-06 render-swap end-to-end), valid + invalid icon-only Button toolbars (proves ICON-05 walker rule end-to-end), and a 13-theme picker.
+
+### ⚫ TUI — icons dropped for v1
+
+TUI target is `@experimental` and not-invested-in per standing directive. `IconNode` renders as nothing; cross-node `icon?:` props are ignored. No unicode-fallback mapping (deferred until TUI investment ever resumes).
+
+### Consumer action required
+
+**Metis (single fleet consumer of `TrackerCell`) renames one field per cell.** See [MIGRATION.md](MIGRATION.md) for the one-liner. All other consumers: nothing to do — the icon primitive is purely additive.
+
+### Green-tree at release commit
+
+- vitest 981 passed / 1 skipped
+- All 5 `check:*` gates (core-globals, test-types, aa-contrast 13/13 × 12 themes, no-demo-style 17 zero-style HTMLs, demo-types 21 projects)
+- Framework .NET 215 passed
+- Demo Tests 191 passed across 5 projects
+- `bun run parity/run.ts` — all backends agree byte-identically on the wire, including 22-07's new `expectBodyContains` coverage tripwires per icon composition branch
+
+Design of record: [`.planning/design/icons-primitive.md`](.planning/design/icons-primitive.md). Phase artifacts: [`.planning/phases/22-v7-0-iconnode-cross-node-composition-trackercell-label-toolt/`](.planning/phases/22-v7-0-iconnode-cross-node-composition-trackercell-label-toolt/). Motivating consumer feedback: Ashley (Hestia UX pass via Pixie), Angel (`/ai` chat surface via relay).
+
+---
+
 ## npm 6.12.1 / NuGet 6.12.1 — tooltip: JS-positioned body-appended host (fixes edge-clip + overflow-clip + wrong-anchor)
 
 **npm:** `6.12.1` (patch, from `6.12.0`) · **NuGet:** `6.12.1` (patch, from `6.12.0`). Wire-format **unchanged** — protocol token still `viewmodel-shell/1.0`, `tooltip?: string` on the same 8 nodes, byte-identical serialization. **This is a client-only render fix**; every existing tree renders `tooltip` correctly now.

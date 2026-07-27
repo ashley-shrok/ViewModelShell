@@ -6,6 +6,54 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `7.0.0` / NuGet `7.0.0` — ONE break: `TrackerCell.label` → `TrackerCell.tooltip`
+
+**Aligned major bump on both packages.** Wire protocol token stays `viewmodel-shell/1.0`. The icon primitive is **purely additive** — new `IconNode`, new `icon?: IconName` prop on `ButtonNode`/`LinkNode`/`SectionNode`/`Badge`/`ListItem`, a new tree-validator rule for icon-only Buttons — **no existing tree is affected**. If you don't use `TrackerCell`, nothing to do.
+
+**The ONE break: `TrackerCell.label` was renamed to `TrackerCell.tooltip`.** Same type (`string?`), same semantics (hover text + `aria-label` fallback), same behavior on the wire — the field just has a different name. **Metis is the only fleet consumer of `TrackerCell` today; Molly is the primary migration target here**, and she's been DMd on the relay ahead of the release with the exact rename note.
+
+### Copy-paste migration for `TrackerCell` consumers
+
+**.NET:**
+```diff
+- new TrackerCell(State: "clean", Label: "Jul 26, 2026 15:35 ET — clean")
++ new TrackerCell(State: "clean", Tooltip: "Jul 26, 2026 15:35 ET — clean")
+```
+
+**TypeScript / bun:**
+```diff
+- { state: "clean", label: "Jul 26, 2026 15:35 ET — clean" }
++ { state: "clean", tooltip: "Jul 26, 2026 15:35 ET — clean" }
+```
+
+That's the entire change. `aria-label` still falls back to `state` when `tooltip` is null (unchanged behavior). No other TrackerCell field moved.
+
+### Why the rename (background — not required reading)
+
+- **Fleet consistency.** The 8 other TOOL-01 nodes shipped in npm 6.12.0 (`Button`/`CopyButton`/`Link`/`Field`/`Checkbox`/`Badge`/`Text`/`TableColumn`) all carry `tooltip?: string` for hover-only info. `TrackerCell` was the odd one out.
+- **Semantic honesty.** `label` elsewhere in VMS means **visible text** (`ButtonNode.label`, `LinkNode.label`, `StatItem.label`). There's no visible label on a 4px colored dot in a tracker strip — the field is purely hover text.
+- **Render-path swap rides along.** The field now renders via the shipped 6.12.1 body-appended `.vms-tooltip-host` styled tooltip infrastructure (rounded, tinted, subtle shadow — the same infra Button.tooltip already uses) instead of the browser-native `<span title=...>` gray box. Once you install v7.0.0 and rename the fields, hovering a tracker cell shows the styled bubble.
+
+### Bonus: the icons primitive is one line to adopt
+
+Not a migration requirement — just noting the new capability. Any existing node can gain an icon by adding a name-only `icon?:` prop:
+
+```csharp
+// Card with a leading Hestia-style icon
+new SectionNode(Variant: "card", Heading: "Metis", Icon: IconName.Activity, Children: [...])
+
+// Button with a leading icon
+new ButtonNode(Label: "Save", Icon: IconName.Save, Action: ...)
+
+// Icon-only button — framework REQUIRES tooltip (used as aria-label)
+new ButtonNode(Label: "", Icon: IconName.Trash2, Tooltip: "Delete", Action: ...)
+// Missing tooltip on an icon-only button = tree-validator rejects with `invalid_tree`
+```
+
+The ~102-icon curated Lucide subset is inline-bundled — no additional dependency, no CDN fetch, no extra bytes on the wire (only the icon NAME crosses the network). Full name list in `IconName` in both `src/index.ts` and `ViewModels.cs`.
+
+---
+
 ## Upgrading to npm `6.12.0` / NuGet `6.12.0` — nothing to do (additive)
 
 **Both packages: purely additive.** Every existing tree renders byte-identically. `FieldNode.inputType` gains two new valid tokens (`"radio"`, `"range"`); eight nodes gain an optional `tooltip?: string` (Button, CopyButton, Link, Field, Checkbox, Badge, Text, TableColumn). No existing consumer changes anything.
