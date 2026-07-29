@@ -1144,11 +1144,22 @@ function buildVm(state: FeatureProbeState): ViewNode {
     variant: "card",
     children: [
       // ── COMP-05 ListRowNode (standalone) ────
+      // Explicit TextNode wrapping for primary/secondary/meta[] on the wire so
+      // the bun output byte-matches the .NET twin (which cannot use the
+      // `string | ViewNode` TS convenience — its ViewNode-only slot forces a
+      // wrapped-TextNode wire shape). The BrowserAdapter renders both shapes
+      // identically; the ONLY reason to prefer wrap-on-the-wire here is
+      // parity byte-alignment. Same convention as the Showcase's Primary
+      // Composites section (24-06) uses.
       {
         type: "list-row",
-        primary: "Order #42 · Ada Lovelace",
-        secondary: "Awaiting fulfillment · flagged high priority",
-        meta: ["Placed 2h ago", "priority: high", "channel: web"],
+        primary: { type: "text", value: "Order #42 · Ada Lovelace", style: "body", weight: "medium" },
+        secondary: { type: "text", value: "Awaiting fulfillment · flagged high priority", style: "muted" },
+        meta: [
+          { type: "text", value: "Placed 2h ago",  style: "caption" },
+          { type: "text", value: "priority: high", style: "caption" },
+          { type: "text", value: "channel: web",   style: "caption" },
+        ],
         tone: "warning",
         state: "high",
         action: { name: "list-row-open-42" },
@@ -1161,21 +1172,28 @@ function buildVm(state: FeatureProbeState): ViewNode {
           {
             type: "list-row",
             leading: { type: "avatar", initials: "AL", tone: "success" },
-            primary: "Refunded successfully",
-            secondary: "Refund ID rf_39a2 · $124.00",
-            meta: ["7m ago"],
+            primary: { type: "text", value: "Refunded successfully", style: "body", weight: "medium" },
+            secondary: { type: "text", value: "Refund ID rf_39a2 · $124.00", style: "muted" },
+            meta: [
+              { type: "text", value: "7m ago", style: "caption" },
+            ],
             tone: "success",
             state: "done",
           },
           {
             type: "list-row",
-            primary: "Payment declined",
-            meta: ["issuer decline", "card ending 4321"],
+            primary: { type: "text", value: "Payment declined", style: "body", weight: "medium" },
+            meta: [
+              { type: "text", value: "issuer decline",    style: "caption" },
+              { type: "text", value: "card ending 4321",  style: "caption" },
+            ],
             tone: "danger",
           },
         ],
       },
       // ── COMP-06 MessageNode + COMP-06a MessageListNode (followTail:true) ──
+      // Same byte-alignment rule as ListRowNode above — MessageNode.content is
+      // wrapped in an explicit TextNode on the wire so bun matches .NET.
       {
         type: "message-list",
         followTail: true,
@@ -1184,7 +1202,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
             type: "message",
             author: "Ada Lovelace",
             timestamp: "2:14 PM",
-            content: "Can we ship v8 this week?",
+            content: { type: "text", value: "Can we ship v8 this week?", style: "body" },
             avatar: { type: "avatar", initials: "AL", tone: "success" },
             role: "user",
           },
@@ -1192,7 +1210,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
             type: "message",
             author: "VMS Assistant",
             timestamp: "2:15 PM",
-            content: "The Phase 24 branch is green; publishing is a maintainer step.",
+            content: { type: "text", value: "The Phase 24 branch is green; publishing is a maintainer step.", style: "body" },
             avatar: { type: "avatar", icon: "sparkles", tone: "info" },
             role: "assistant",
             actions: [
@@ -1202,10 +1220,11 @@ function buildVm(state: FeatureProbeState): ViewNode {
         ],
       },
       // ── COMP-07 AlertNode (per tone + dismissible) ────────
-      { type: "alert", tone: "warning", title: "Storage almost full", message: "You've used 92% of your quota.", dismissible: true },
-      { type: "alert", tone: "danger",  title: "Payment declined",    message: "Your card was refused." },
-      { type: "alert", tone: "success", title: "Refund processed",    message: "Refund of $124 issued." },
-      { type: "alert", tone: "info",    title: "New version",         message: "v8.0.0 is available." },
+      // Same byte-alignment rule — AlertNode.message wrapped as TextNode.
+      { type: "alert", tone: "warning", title: "Storage almost full", message: { type: "text", value: "You've used 92% of your quota.", style: "muted" }, dismissible: true },
+      { type: "alert", tone: "danger",  title: "Payment declined",    message: { type: "text", value: "Your card was refused.",       style: "muted" } },
+      { type: "alert", tone: "success", title: "Refund processed",    message: { type: "text", value: "Refund of $124 issued.",       style: "muted" } },
+      { type: "alert", tone: "info",    title: "New version",         message: { type: "text", value: "v8.0.0 is available.",         style: "muted" } },
       // ── COMP-08 EmptyStateNode (RENAMED title/description + NEW icon slot) ──
       // NOTE: `receipt` used (not `inbox` per PATTERNS suggestion) — the
       // shipped IconName union at index.ts:148-178 does not include "inbox";
