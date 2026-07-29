@@ -24,6 +24,7 @@ import type {
   ListRowNode,
   MessageNode,
   MessageListNode,
+  AlertNode,
   FitsNode,
   EmptyStateNode,
   BlockquoteNode,
@@ -239,6 +240,23 @@ function collectActions(
         }
       }
       for (const child of ml.children) collectActions(child, enclosingForm, out);
+      return;
+    }
+    case "alert": {
+      // v8.0.0 (COMP-07) — AlertNode slots: message (string | ViewNode; only
+      // descend when ViewNode), actions (ButtonNode[]). Icon/title are
+      // primitives. Descend into each ViewNode-typed slot; each ButtonNode
+      // child's action participates in name uniqueness.
+      //
+      // NOTE: dismissible:true emits { name: "dismiss" } CLIENT-SIDE at click
+      // time (see browser.ts alert() renderer). The server tree carries NO
+      // ActionEvent for it — deliberate deviation from ModalNode.dismissAction
+      // per CONTEXT §5. So the walker records NOTHING for the dismiss button;
+      // apps that need the "dismiss" name to participate in uniqueness compose
+      // their own dismiss button in actions[] and set dismissible:false.
+      const a = node as AlertNode;
+      if (typeof a.message !== "string") collectActions(a.message, enclosingForm, out);
+      for (const btn of a.actions ?? []) collectActions(btn, enclosingForm, out);
       return;
     }
     case "form": {
@@ -595,6 +613,18 @@ function walkForSectionAction(
       // message's avatar or content slot.
       const ml = node as MessageListNode;
       for (const child of ml.children) walkForSectionAction(child, outerInteractive);
+      return;
+    }
+    case "alert": {
+      // v8.0.0 (COMP-07) — AlertNode.message can hold arbitrary ViewNode
+      // subtrees when non-string (e.g. an app-composed rich body). Descend
+      // for consistency with every other walk so a future shape can't slip
+      // an interactive section past this validator. Actions[] are
+      // ButtonNodes (no SectionNode descendants) but still walked for the
+      // same defense-in-depth posture.
+      const a = node as AlertNode;
+      if (typeof a.message !== "string") walkForSectionAction(a.message, outerInteractive);
+      for (const btn of a.actions ?? []) walkForSectionAction(btn, outerInteractive);
       return;
     }
     case "form": {

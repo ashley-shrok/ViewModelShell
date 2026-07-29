@@ -2491,6 +2491,20 @@ public static class ViewTreeValidation
                 foreach (var child in messageList.Children) WalkForSectionAction(child, outerInteractive);
                 break;
 
+            case AlertNode alert:
+                // v8.0.0 (COMP-07) — AlertNode.Message can hold arbitrary
+                // ViewNode subtrees (e.g. an app-composed rich body).
+                // Actions[] are ButtonNodes (no SectionNode descendants) but
+                // walked for defense-in-depth so a future shape can't slip
+                // an interactive section past this validator. Mirrors the
+                // TS twin `case "alert"` arm in server.ts.
+                WalkForSectionAction(alert.Message, outerInteractive);
+                if (alert.Actions is { } alertActions)
+                {
+                    foreach (var btn in alertActions) WalkForSectionAction(btn, outerInteractive);
+                }
+                break;
+
             case FormNode form:
                 foreach (var child in form.Children) WalkForSectionAction(child, outerInteractive);
                 break;
@@ -2662,6 +2676,29 @@ public static class ViewTreeValidation
                     }
                 }
                 foreach (var child in messageList.Children) Collect(child, enclosingForm, sink);
+                break;
+
+            case AlertNode alert:
+                // v8.0.0 (COMP-07) — AlertNode slots: Message (ViewNode,
+                // required), Actions (IReadOnlyList<ViewNode>?  — typed wide
+                // for polymorphic discriminator emission per the FormNode.
+                // Buttons posture at :1155-1159). Icon/Title are primitives.
+                // Descend into every ViewNode-typed slot; each ButtonNode
+                // child's Action participates in name uniqueness.
+                //
+                // NOTE: Dismissible:true emits { name: "dismiss" } CLIENT-
+                // SIDE at click time (browser.ts alert() renderer). The
+                // server tree carries NO ActionDescriptor for it — deliberate
+                // deviation from ModalNode.DismissAction per CONTEXT §5. So
+                // the walker records NOTHING for the dismiss button; apps
+                // needing the "dismiss" name to participate in uniqueness
+                // compose their own dismiss button in Actions and set
+                // Dismissible:false. Mirrors the TS twin `case "alert"` arm.
+                Collect(alert.Message, enclosingForm, sink);
+                if (alert.Actions is { } alertActions)
+                {
+                    foreach (var btn in alertActions) Collect(btn, enclosingForm, sink);
+                }
                 break;
 
             case FormNode form:
@@ -2855,6 +2892,7 @@ public static class ViewTreeValidation
         AvatarNode    => "avatar",
         MessageNode    => "message",
         MessageListNode => "message-list",
+        AlertNode     => "alert",
         _             => node.GetType().Name,
     };
 }
