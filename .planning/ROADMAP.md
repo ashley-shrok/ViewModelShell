@@ -278,3 +278,59 @@ Design of record: [design/icons-primitive.md](./design/icons-primitive.md) — r
   7. TUI drops icons entirely for v1 (`@experimental` scope, not-invested-in per standing directive); no unicode-fallback mapping.
   8. Aligned npm + NuGet **v7.0.0** major published (batched), tagged `v7.0.0`, `main` advanced to the release commit (`git merge-base --is-ancestor v7.0.0 main`), CI green, `#vms-changelog` release line — after a tailnet verification page Ashley signs off (Hestia-style card grid with all 8 Pixie concept anchors + icon-in-Button/Badge/ListItem/Link examples + all 5 sizes + tone matrix + a live TrackerCell strip showing the new styled-tooltip render, light + dark, real bundle + shipped CSS + REAL tree-validator in the fetch-shim per banked lesson).
 **Plans:** 0 plans (to be created by `/gsd:plan-phase 22`)
+
+## 🚧 v8.0.0 Composite-Nodes Layer (Phases 23–26) — IN PLANNING
+
+**Milestone Goal:** Grow the **Route B recipe layer** atop VMS's primitive axes. VMS today ships the AXES (tone/emphasis/size/state/layout/density) and a few recipes for shapes with **unambiguous intent** (StatBar, Steps, Table, Tracker). For common web shapes with **variance** — list rows, chat messages, alerts, empty states, user rows, key-value details, timeline entries, settings toggles, dismissable chip clusters — consumers compose from primitives and the result reliably falls short of what the same shape looks like on the modern web. Every mature UI framework has this layer atop primitives; VMS has it partial-and-uneven. Every request that arrived under "the framework has all the nodes but the shape looks bad" (Moxie's banner, Molly's incident list, Angel's chat messages) is one instance of this pattern; closing it as a coherent layer beats closing each ask one-off.
+
+Ashley's **governance rule** (2026-07-29, canonicalized): a shape earns a composite node when the best-effort with today's primitives is a "pretty bad approximation" of the common shape. Bar is **visual** — the after has to look right; the before has to look wrong enough to justify the primitive earning a promotion. Judgment per shape, eyeball each in a served tasting before it earns the composite.
+
+**Approved via before/after tasting** (2026-07-29, tasting served at `bounties/composite-nodes-layer/tasting-page/index.html`):
+- **10 new composites:** `ListRowNode`, `MessageNode`, `AlertNode`, `EmptyStateNode`, `UserRowNode`, `DetailRowNode`, `TimelineEntryNode`, `AvatarNode` (standalone primitive), `SettingRowNode`, `ChipListNode` + `ChipNode`.
+- **3 adjacent wire tweaks** (foundations everything else consumes): `TextNode.style: "caption"` (the 3rd typographic tier), `TextNode` weight axis (semi-bold body-size weight), `CheckboxNode.variant: "switch"` (visual-only render mode).
+- **Governance rule** added to AGENTS.md as a maintainer policy so the "when does a shape earn a composite?" call stays consistent going forward.
+
+**Every composite obeys the philosophy:** typed slots with semantic names, closed enums for variance axes, unconstrained content nested inside each slot. Recipes own the shape (DOM + typography + spacing); apps own the content. Both layers coexist — consumers with a shape we didn't foresee still drop to primitives and compose. This is the pattern every surveyed peer converged on (MUI `ListItemText`, Ant `List.Item.Meta`, Chakra `Card` composites, Phoenix LiveView function-component slots, Blazor Razor typed content).
+
+**Everything technically ADDITIVE** — no wire breaks. Old renderers gracefully degrade on unknown enum values (a `.vms-text--caption` class with no CSS falls back to unstyled `.vms-text`). Semver-wise a minor bump would suffice, but this earns **v8.0.0** for comms — largest capability expansion since 3.0.0's axes unification, warrants "consumers should read the release notes."
+
+**Milestone-wide success criteria:**
+1. All 10 composites + 3 wire tweaks land byte-identical across TS/.NET, both tree-validators descend where applicable, parity green with `expectBodyContains` per branch (banked lesson: a diff can only prove things about code it actually RUNS).
+2. Every composite shipped WITH real demo adoption (banked lesson from `UseVmsShellStaticFiles`: helpers don't ship without demo adoption or the wiring reference teaches the wrong thing). Showcase gains a `Composites` tab exercising every new node.
+3. AA-contrast hand-check for every new fg/bg pair the composites introduce (Alert toned surfaces, Chip toned pills, SettingRow switch states) across default + all 12 themes.
+4. `agent-skill.md` updated with the new wire vocabulary (byte-identical .NET twin, `parity/check-skill.ts` green).
+5. AGENTS.md gains a **"Route B composite-nodes layer"** governance section codifying the earn-a-composite rule + the typed-slots pattern.
+6. Aligned npm + NuGet **v8.0.0** major published, tagged, main advanced, CI green, `#vms-changelog` announced — after a comprehensive tailnet verification page Ashley signs off (10 composites × light + dark, real bundle + shipped CSS + REAL tree-validator in the fetch-shim).
+
+Design of record: `bounties/composite-nodes-layer/tasting-page/index.html` (the approved before/after tasting) + a design doc `.planning/design/composite-nodes-layer.md` (to be written as part of Phase 23).
+
+### Phase 23: v8.0 Foundations — text style caption + weight axis + checkbox switch variant + AvatarNode
+
+**Goal:** Land the 4 foundation additions every downstream composite depends on. `TextNode` gains `style: "caption"` (text-xs, muted, opacity — the 3rd typographic tier `ListRowNode`/`MessageNode`/`TimelineEntryNode` all consume) and a weight axis for the semi-bold body-size weight that row primaries need; `CheckboxNode` gains `variant: "switch"` (visual-only render mode — the switch slider `SettingRowNode` pairs with); `AvatarNode` ships as a standalone primitive (circular slot with initials/image/icon, closed size `sm|md|lg|xl`, closed tone). All byte-identical across TS/.NET, parity green with FeatureProbe extended per addition + `expectBodyContains` coverage tripwires. Everything additive — no wire breaks. Aligned pre-release verification via tailnet page: Ashley eyeballs each addition against the tasting mockup before Phase 24 opens.
+**Requirements**: COMP-01, COMP-02, COMP-03, COMP-04
+**Depends on:** Phase 22 (v7.0 icons — `AvatarNode` reuses the icon rendering + `IconName` closed union for the fallback-icon slot). Design of record: `.planning/design/composite-nodes-layer.md` (to be written in this phase; approved tasting at `bounties/composite-nodes-layer/tasting-page/`).
+**Success Criteria** (what must be TRUE):
+  1. `TextNode.style` gains `"caption"` on both backends — closed union extension (`"heading" | "subheading" | "body" | "muted" | "strikethrough" | "pre" | "caption"`). Renders `.vms-text--caption` with `font-size: var(--vms-text-xs)`, muted color, 0.85 opacity. Existing consumers unaffected (they never emit `caption`; old renderer gracefully degrades on the new value if a new backend sends it).
+  2. `TextNode` gains an optional weight axis for the semi-bold body-size variant. Shape TBD in planning (either `weight?: "regular" | "medium" | "bold"` closed enum OR `style: "strong"` as an additional value). Whichever shape wins is byte-identical across backends and closed-enum on .NET per the closed-union-must-be-enum maintainer rule.
+  3. `CheckboxNode.variant: "switch"` renders as a switch slider (visual only — wire and semantics unchanged; the value on the wire is still boolean, dispatch shape is still standard checkbox `bind`/change semantics). Emits `.vms-field--switch` modifier; falls back to the standard checkbox on renderers that don't know the variant.
+  4. `AvatarNode` renders as a circular slot with `initials?: string`, `image?: string` (URL), `icon?: IconName` (fallback), `size?: "sm" | "md" | "lg" | "xl"` (1.5/2/2.5/3rem — closed enum), `tone?: Tone` (background palette for initials/icon mode), `alt?: string` (a11y). Both tree-validators descend; content resolution priority is image > initials > icon > (empty circle if none).
+  5. Byte-identical across TS/.NET (`[JsonIgnore(WhenWritingNull)]` on every optional nullable; closed unions as .NET enums with converters).
+  6. Parity green: `bun run parity/run.ts` extends FeatureProbe `buildVm` in ALL 3 backends to emit `TextNode style:"caption"` + a weight variant + a `CheckboxNode variant:"switch"` + an `AvatarNode` at each size × tone × content-mode; `expectBodyContains` coverage tripwires per addition (banked lesson: a diff can only prove things about code it actually RUNS). No new fixture file; `$comment` clause updated per the v5.1 pattern.
+  7. AA-contrast hand-check: caption text (opacity-adjusted muted) against default + 12 themes; avatar tone-tinted background against every `initials` text-color rendering; switch on/off state colors. Fixed 13-pair `check:aa-contrast` does NOT auto-cover new pairs (banked lesson) — hand-check + deepen via `color-mix` where AA fails.
+  8. Every foundation adopted in the Showcase demo (a "Foundations" sub-tab in the eventual Composites tab, or standalone demonstration) — the fleet-adoption discipline applies to foundations too. No orphaned primitive.
+  9. Vitest + .NET test coverage for each addition (rendering, tree-validation, wire round-trip).
+ 10. AGENTS.md gains an **initial** "Route B composite-nodes layer" governance section — the earn-a-composite rule + the typed-slots pattern + the multi-phase milestone plan. The section grows as Phases 24-26 land; Phase 23's version establishes the frame.
+ 11. NO release ship yet — Phase 23 lands the foundations to a green tree with full test/parity/gate coverage, but v8.0.0 publishes only at Phase 26 closeout (batch-then-ship discipline). CHANGELOG entries accumulate under an "Unreleased" section.
+**Plans:** 9 plans
+
+Plans:
+- [ ] 23-01-PLAN.md — COMP-01: TextNode.style: "caption" end-to-end (wire type + CSS + .NET twin + vitest + .NET test + AA hand-check) (wave 1)
+- [ ] 23-02-PLAN.md — COMP-02: TextNode weight axis end-to-end (Option A chosen — new orthogonal `weight?` field; TS + browser + CSS + .NET twin + tests + WhenWritingNull proof) (wave 2, depends on 23-01)
+- [ ] 23-03-PLAN.md — COMP-03: CheckboxNode.variant: "switch" end-to-end (wire type + role=switch + slider CSS + .NET twin + tests + wire-semantics-unchanged proof + AA hand-check) (wave 3, depends on 23-02)
+- [ ] 23-04-PLAN.md — COMP-04: AvatarNode new standalone primitive end-to-end (wire type + discriminator + walker + browser renderer with renderIconSvg reuse + CSS + .NET twin + tests + priority-order mutation test + AA hand-check) (wave 4, depends on 23-03)
+- [ ] 23-05-PLAN.md — .planning/design/composite-nodes-layer.md design of record for the v8.0.0 milestone (thesis, governance rule, typed-slots pattern, 10-composite inventory, adoption order) (wave 1)
+- [ ] 23-06-PLAN.md — AGENTS.md "Route B composite-nodes layer" governance section (initial frame; recipe inventory deferred to Phase 24-26) (wave 2, depends on 23-05)
+- [ ] 23-07-PLAN.md — Showcase Foundations demo section + FeatureProbe buildVm extension in both backends + parity fixture $comment + expectBodyContains tripwires (wave 5, depends on 23-01..04)
+- [ ] 23-08-PLAN.md — CHANGELOG.md Unreleased — v8.0.0 (in progress) heading + 4 foundation entries + batch-then-ship reminder (wave 5, depends on 23-01..04)
+- [ ] 23-09-PLAN.md — Full green-tree gate re-run + AA-contrast hand-check re-verify + Showcase visual smoke on tailnet (Ashley sign-off) + requirement-to-artifact cross-check (wave 6, depends on 23-01..08)
+

@@ -154,4 +154,47 @@ This milestone adds VMS's first data-visualization primitive: a **structured `Ch
 ---
 
 *Milestone: v7.0 Icons Primitive*
+
+## Milestone v8.0.0 — Composite-Nodes Layer (Phases 23–26)
+
+**Defined:** 2026-07-29
+**Design of record:** `bounties/composite-nodes-layer/tasting-page/index.html` (approved before/after tasting) + `.planning/design/composite-nodes-layer.md` (to be written in Phase 23)
+
+Ship the **Route B composite layer** atop VMS's primitive axes. VMS today ships axes + a few recipes for shapes with unambiguous intent (StatBar, Steps, Table, Tracker); for common web shapes with variance (list rows, chat messages, alerts, empty states, user rows, key-value details, timeline entries, settings toggles, dismissable chip clusters) consumers compose from primitives and the result reliably falls short of what the same shape looks like on the modern web. Every mature UI framework has this layer atop primitives; VMS has it partial-and-uneven. Every request that arrived under "the framework has all the nodes but the shape looks bad" (Moxie's banner, Molly's incident list, Angel's chat messages) is one instance of this pattern — this milestone closes it as a coherent layer.
+
+**Governance rule** (Ashley, 2026-07-29, canonicalized): A shape earns a composite node when the best-effort with today's primitives is a "pretty bad approximation" of the common shape. Bar is **visual** — the after has to look right; the before has to look wrong enough to justify the primitive earning a promotion. Judgment per shape, eyeballed against a served tasting page before it earns the composite.
+
+**All 10 composites + 3 wire tweaks approved via the before/after tasting on 2026-07-29** (served at 100.113.23.63:8182). Everything technically additive — no wire breaks; old renderers gracefully degrade on unknown enum values. Version bumped to **v8.0.0** for comms (largest capability expansion since 3.0.0's axes unification, warrants "consumers should read the release notes"); technically a minor bump under semver.
+
+### Phase 23 — Foundations (COMP-01..04)
+
+The 4 foundation additions every downstream composite depends on. Land these first so Phase 24-26 composites can consume them.
+
+- [ ] **COMP-01**: `TextNode.style` gains `"caption"` as a closed-union value on both backends. Renders `.vms-text--caption` with `font-size: var(--vms-text-xs)` (0.75rem), muted color, ~0.85 opacity — the 3rd typographic tier `ListRowNode`/`MessageNode`/`TimelineEntryNode` all consume for micro-meta lines. Byte-identical across TS/.NET (.NET enum extension with converter per closed-union-must-be-enum maintainer rule). Existing consumers unaffected (never emit `"caption"`; graceful degradation on new value if a backend sends it to an older renderer). AA-contrast hand-check for opacity-adjusted muted vs default + all 12 themes.
+- [ ] **COMP-02**: `TextNode` gains a weight axis for the semi-bold body-size variant. Shape TBD in planning — either `weight?: "regular" | "medium" | "bold"` (closed enum axis) OR `style: "strong"` (additional closed-union value). Whichever shape wins, byte-identical across backends, closed-enum on .NET, semantic intent not raw CSS. Required for row primaries (`ListRowNode.primary`, `MessageNode.author`, `UserRowNode.name`, `SettingRowNode.label`) that need medium weight; today `.vms-text` inherits body default (400) with no way to elevate.
+- [ ] **COMP-03**: `CheckboxNode.variant: "switch"` renders as a switch slider (visual only — wire and semantics unchanged; the value is still boolean, dispatch shape is still standard checkbox `bind`/change). Emits `.vms-field--switch` modifier; falls back to the standard checkbox render on older adapters (graceful degradation on unknown variant). Pairs with `SettingRowNode` in Phase 25. Byte-identical across backends; a11y contract intact (still a real `<input type="checkbox">` under the hood, only the visual is different).
+- [ ] **COMP-04**: `AvatarNode` ships as a standalone primitive — circular slot with `initials?: string`, `image?: string` (URL), `icon?: IconName` (fallback using the Phase 22 icon system), `size?: "sm" | "md" | "lg" | "xl"` (1.5/2/2.5/3rem — closed enum), `tone?: Tone` (background palette for initials/icon mode), `alt?: string` (a11y — screen-reader announcement). Both tree-validators descend; content-resolution priority: image > initials > icon > (empty circle if none). Byte-identical across TS/.NET. Consumed by `UserRowNode` + `MessageNode` in Phase 24-25; also usable standalone in mention pickers, assignee columns, comment threads. AA-contrast hand-check for tone-tinted background against every `initials` text-color rendering across default + all 12 themes.
+
+### Phase 24 — Primary composites (COMP-05..08, to be defined in `/gsd:plan-phase 24`)
+
+Strongest evidence + live consumer pressure. Requirements defined after Phase 23 lands and consumers see the foundations.
+
+### Phase 25 — Secondary composites (COMP-09..15, to be defined in `/gsd:plan-phase 25`)
+
+Broader coverage — user rows, detail lists, timeline entries, setting rows, chip clusters. Requirements defined after Phase 24 lands.
+
+### Phase 26 — Adoption + verification + v8.0.0 release closeout (COMP-16..N, to be defined in `/gsd:plan-phase 26`)
+
+Showcase adoption of every composite, comprehensive tailnet verification page, agent-skill.md updates, AGENTS.md governance section, CHANGELOG + MIGRATION, aligned npm + NuGet v8.0.0 release. Requirements defined after Phase 25 lands.
+
+| Requirement | Phase |
+|---|---|
+| COMP-01 | 23 |
+| COMP-02 | 23 |
+| COMP-03 | 23 |
+| COMP-04 | 23 |
+
+---
+
+*Milestone: v8.0.0 Composite-Nodes Layer*
 *Requirements defined: 2026-07-26*
