@@ -21,6 +21,7 @@ import type {
   BlockquoteNode, CodeBlockNode, BreadcrumbNode, StepsNode, TrackerNode, DiffNode,
   IconNode, IconName, AvatarNode, ListRowNode,
   MessageNode, MessageListNode, AlertNode, UserRowNode,
+  DetailRowNode, DetailListNode,
 } from "./index.js";
 import { ICONS } from "./icons-payload.js";
 
@@ -570,6 +571,8 @@ export class BrowserAdapter implements Adapter {
       case "message-list": return this.messageList(n, parent, on);
       case "alert":        return this.alert(n, parent, on);
       case "user-row":     return this.userRow(n, parent, on);
+      case "detail-row":   return this.detailRow(n, parent, on);
+      case "detail-list":  return this.detailList(n, parent, on);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -1375,6 +1378,89 @@ export class BrowserAdapter implements Adapter {
     }
 
     parent.appendChild(el);
+  }
+
+  /** v8.0.0 (COMP-10a) — DetailListNode renderer.
+   *
+   *  Aligned key-value container. Emits `<dl>` — the semantic HTML element for
+   *  a definition list. This choice is LOAD-BEARING: screen readers announce
+   *  each child `<dt>`/`<dd>` pair as a term/definition, and the `<dl>` gives
+   *  the whole group its "list of term-definition pairs" semantic. A `<div>`
+   *  swap would drop that semantic (mutation-testable in
+   *  test/detail-row.test.ts).
+   *
+   *  labelWidth closed enum (sm/md/lg → 8/10/12rem) → modifier class that
+   *  sets `--vms-detail-label` CSS-var on the container; each `.vms-detail-row`
+   *  child reads it as `grid-template-columns: var(--vms-detail-label) 1fr`.
+   *  Omitted labelWidth = NO modifier class (byte-identical to md — the
+   *  container's default `--vms-detail-label` is 10rem, matching md
+   *  explicitly). */
+  private detailList(n: DetailListNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const dl = document.createElement("dl");
+    const cls = ["vms-detail-list"];
+    if (n.labelWidth) cls.push(`vms-detail-list--${n.labelWidth}`);
+    dl.className = cls.join(" ");
+    // Children are DetailRowNode[] on the type — the tree-validator rejects
+    // non-DetailRowNode entries server-side (byte-identical error message
+    // across TS + .NET). The renderer just walks children through the
+    // standard node() dispatch (which will render each as detailRow()).
+    this.kids(n.children as unknown as ViewNode[], dl, on);
+    parent.appendChild(dl);
+  }
+
+  /** v8.0.0 (COMP-10) — DetailRowNode renderer.
+   *
+   *  Emits `<div class="vms-detail-row [vms-detail-row--{tone}]">
+   *  <dt class="vms-detail-row__label">{icon?}{label}</dt>
+   *  <dd class="vms-detail-row__value">{value}</dd></div>`. The wrapping
+   *  `<div>` is load-bearing — it carries the grid layout that positions the
+   *  `<dt>` + `<dd>` sibling pair as two grid columns. Screen readers still
+   *  see the `<dt>`/`<dd>` inside the parent `<dl>` (browsers treat these as
+   *  the definition-list terms/definitions regardless of the intervening
+   *  `<div>` in the flat DOM tree).
+   *
+   *  LABEL — appended to `<dt>` as a RAW text node (via
+   *  `document.createTextNode`). NOT wrapped in a TextNode. The trained
+   *  typography (text-xs uppercase weight:500 muted) is BAKED into
+   *  `.vms-detail-row__label` CSS. Mutation-testable: wrapping the label in
+   *  a TextNode would emit a nested `<div class="vms-text">` inside the
+   *  `<dt>` and break the "label renders as raw text inside <dt>" test.
+   *
+   *  VALUE — `string` → renderer wraps in `TextNode { style: "body" }`;
+   *  `ViewNode` → rendered as-is (escape hatch for rich content).
+   *
+   *  ICON — optional; renders inside the `<dt>` BEFORE the label text at
+   *  `sm` size. */
+  private detailRow(n: DetailRowNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const row = document.createElement("div");
+    const cls = ["vms-detail-row"];
+    if (n.tone) cls.push(`vms-detail-row--${n.tone}`);
+    row.className = cls.join(" ");
+
+    const dt = document.createElement("dt");
+    dt.className = "vms-detail-row__label";
+    // Icon-before-label: append the SVG first, then the label text node. The
+    // CSS applies `display:flex` + `gap` on .vms-detail-row__label so the
+    // icon and text sit inline with proper spacing.
+    if (n.icon) dt.appendChild(this.renderIconSvg(n.icon, "sm", undefined, undefined));
+    // Label is a RAW text node — NOT a TextNode wrap. The trained typography
+    // is baked in CSS (.vms-detail-row__label). This is deliberate and
+    // mutation-testable — see the renderer TSDoc.
+    dt.appendChild(document.createTextNode(n.label));
+    row.appendChild(dt);
+
+    const dd = document.createElement("dd");
+    dd.className = "vms-detail-row__value";
+    if (typeof n.value === "string") {
+      // Trained value typography: body tier (COMP-01). String-lift rule.
+      this.node({ type: "text", value: n.value, style: "body" }, dd, on);
+    } else {
+      // ViewNode value: render as-is (escape hatch for rich content).
+      this.node(n.value, dd, on);
+    }
+    row.appendChild(dd);
+
+    parent.appendChild(row);
   }
 
   /** v8.0.0 (COMP-06) — MessageNode renderer. Chat/comment message with a
