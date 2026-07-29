@@ -19,7 +19,7 @@ import type {
   ModalNode, TableNode, CopyButtonNode, DividerNode, FitsNode,
   EmptyStateNode, BadgeNode, ChartNode,
   BlockquoteNode, CodeBlockNode, BreadcrumbNode, StepsNode, TrackerNode, DiffNode,
-  IconNode, IconName, AvatarNode,
+  IconNode, IconName, AvatarNode, ListRowNode,
 } from "./index.js";
 import { ICONS } from "./icons-payload.js";
 
@@ -564,6 +564,7 @@ export class BrowserAdapter implements Adapter {
       case "diff":         return this.diff(n, parent);
       case "icon":         return this.icon(n, parent);
       case "avatar":       return this.avatar(n, parent);
+      case "list-row":     return this.listRow(n, parent, on);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -1115,10 +1116,136 @@ export class BrowserAdapter implements Adapter {
 
   private list(n: ListNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const ul = document.createElement(n.ordered ? "ol" : "ul");
-    ul.className = `vms-list${n.ordered ? " vms-list--ordered" : ""}`;
+    // v8.0.0 (COMP-05a) — variant:"rows" adds .vms-list--rows which turns the
+    // container into a single bordered surface with per-row dividers (see
+    // default.css). Omitted/"items" = byte-identical to the pre-Phase-24 render.
+    // A ListRowNode child detects its container via
+    // parent.classList.contains("vms-list") || contains("vms-list--rows")
+    // in listRow() below to emit an <li>.
+    ul.className = `vms-list${n.ordered ? " vms-list--ordered" : ""}${n.variant === "rows" ? " vms-list--rows" : ""}`;
     if (n.id) ul.id = n.id;
     this.kids(n.children, ul, on);
     parent.appendChild(ul);
+  }
+
+  /** v8.0.0 (COMP-05) — ListRowNode renderer. Emits an <li> when in a
+   *  .vms-list / .vms-list--rows container, else <div class="vms-list-row-standalone">.
+   *  String-lift trained typography per CONTEXT §1:
+   *    primary   string → TextNode{style:"body", weight:"medium"} (COMP-01/02)
+   *    secondary string → TextNode{style:"muted"}
+   *    meta[i]   string → TextNode{style:"caption"}                (COMP-01)
+   *  Whole-row action mirrors TableRow.action (browser.ts:3689-3714) —
+   *  role="button", tabIndex=0, Enter/Space dispatch, aria-label from
+   *  flattened text. Interactive descendants stopPropagation via the same
+   *  selector list as SectionNode.action (browser.ts:1107-1110). */
+  private listRow(n: ListRowNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    // Standalone-vs-in-container detection — the parent's own className tells
+    // us whether we're inside a list or free-floating. Matches the checkbox
+    // scoped-vs-standalone dispatch idiom.
+    const isInList = parent.classList.contains("vms-list") || parent.classList.contains("vms-list--rows");
+    // Explicit HTMLElement type so downstream addEventListener("keydown", ...)
+    // resolves the callback param to KeyboardEvent (a ternary tag narrows the
+    // return to a union that TS resolves loosely; both HTMLLIElement and
+    // HTMLDivElement extend HTMLElement, so widening is safe).
+    const el: HTMLElement = document.createElement(isInList ? "li" : "div");
+    const cls = ["vms-list-row"];
+    if (!isInList) cls.push("vms-list-row-standalone");
+    if (n.tone) cls.push(`vms-list-row--${n.tone}`);
+    if (n.state) cls.push(`vms-list-row--${n.state}`);
+    if (n.action) cls.push("vms-list-row--clickable");
+    el.className = cls.join(" ");
+
+    // Leading slot — any ViewNode.
+    if (n.leading) {
+      const lead = document.createElement("div");
+      lead.className = "vms-list-row__leading";
+      this.node(n.leading, lead, on);
+      el.appendChild(lead);
+    }
+
+    // Content stack — primary/secondary/meta[]. String slots auto-wrap in
+    // trained TextNode per the string-lift rule.
+    const content = document.createElement("div");
+    content.className = "vms-list-row__content";
+
+    const primaryEl = document.createElement("div");
+    primaryEl.className = "vms-list-row__primary";
+    if (typeof n.primary === "string") {
+      // COMP-01 body tier + COMP-02 weight axis — the trained primary
+      // typography a row visually expects. Consumers who need custom shapes
+      // pass a ViewNode (see the else branch below).
+      this.node({ type: "text", value: n.primary, style: "body", weight: "medium" }, primaryEl, on);
+    } else {
+      this.node(n.primary, primaryEl, on);
+    }
+    content.appendChild(primaryEl);
+
+    if (n.secondary != null) {
+      const secEl = document.createElement("div");
+      secEl.className = "vms-list-row__secondary";
+      if (typeof n.secondary === "string") {
+        this.node({ type: "text", value: n.secondary, style: "muted" }, secEl, on);
+      } else {
+        this.node(n.secondary, secEl, on);
+      }
+      content.appendChild(secEl);
+    }
+
+    for (const m of n.meta ?? []) {
+      const metaEl = document.createElement("div");
+      metaEl.className = "vms-list-row__meta";
+      if (typeof m === "string") {
+        // COMP-01 caption tier — the meta-line typography.
+        this.node({ type: "text", value: m, style: "caption" }, metaEl, on);
+      } else {
+        this.node(m, metaEl, on);
+      }
+      content.appendChild(metaEl);
+    }
+
+    el.appendChild(content);
+
+    // Trailing slot — any ViewNode.
+    if (n.trailing) {
+      const trail = document.createElement("div");
+      trail.className = "vms-list-row__trailing";
+      this.node(n.trailing, trail, on);
+      el.appendChild(trail);
+    }
+
+    // Whole-row action — click-anywhere + keyboard + ARIA. Mirrors
+    // TableRow.action at browser.ts:3694-3714 exactly.
+    if (n.action) {
+      const action = n.action;
+      el.tabIndex = 0;
+      el.setAttribute("role", "button");
+      // aria-label from flattened primary+meta text (collapse whitespace,
+      // slice to 200 chars — same banked posture as TableRow's
+      // `labelParts.join(" · ")` but sourced from el.textContent since our
+      // slots are already rendered into the DOM at this point).
+      const ariaText = (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
+      if (ariaText) el.setAttribute("aria-label", ariaText);
+      el.addEventListener("click", () => { on(action); });
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          on(action);
+        } else if (e.key === " " || e.key === "Spacebar") {
+          e.preventDefault(); // suppress page scroll
+          on(action);
+        }
+      });
+      // Containment: clicks on nested interactive controls must NOT bubble to
+      // the row's click handler. Selectors mirror the SectionNode.action
+      // wiring at browser.ts:1107-1110 exactly (button / checkbox input +
+      // label / field input / any anchor).
+      el.querySelectorAll<HTMLElement>(
+        ".vms-button, .vms-checkbox__input, .vms-checkbox, .vms-field__input, a[href]"
+      ).forEach(ctrl => {
+        ctrl.addEventListener("click", (e) => { e.stopPropagation(); });
+      });
+    }
+
+    parent.appendChild(el);
   }
 
   private listItem(n: ListItemNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
