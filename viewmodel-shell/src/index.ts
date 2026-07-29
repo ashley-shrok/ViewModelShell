@@ -206,7 +206,8 @@ export type ViewNode =
   | StepsNode
   | TrackerNode
   | DiffNode
-  | IconNode;
+  | IconNode
+  | AvatarNode;
 
 export interface PageNode {
   type: "page";
@@ -1480,6 +1481,69 @@ export interface IconNode {
    *  meaning lives in adjacent text). NEVER rendered as visible text — this is
    *  the ARIA channel only. Omitted = decorative (`aria-hidden="true"`). */
   label?: string;
+}
+
+/**
+ * v8.0.0 (COMP-04) — AvatarNode. A circular slot with content-resolution
+ * priority `image > initials > icon > empty`. Consumed by `UserRowNode`
+ * (Phase 25 leading slot), `MessageNode` (Phase 24 leading slot), `ChipNode`
+ * optional leading; standalone use in mention pickers, assignee columns,
+ * comment threads, "who's viewing" indicators.
+ *
+ * Circular only for v1 (other shapes deferred — see the composite-nodes-layer
+ * design doc). Reuses the shipped `IconName` closed union (Phase 22) for the
+ * fallback-icon slot; the icon-mode rendering reuses `renderIconSvg` verbatim
+ * in the browser adapter.
+ *
+ * ## Rendering priority (CONTEXT.md §4 / PATTERNS.md §6, LOCKED)
+ *
+ *   1. `image` set → `<img class="vms-avatar vms-avatar--{size}" src alt>`.
+ *      The `<img>` element covers the circle (background is displaced).
+ *   2. Else `initials` set → `<div class="vms-avatar vms-avatar--{size}
+ *      [vms-avatar--{tone}]?" role="img" aria-label={alt || initials}>{initials}</div>`.
+ *   3. Else `icon` set → `<div class="vms-avatar vms-avatar--{size} [tone]
+ *      vms-avatar--icon" role="img" aria-label={alt || ""}>` wrapping a nested
+ *      `<svg class="vms-icon">` produced by `renderIconSvg` (Phase 22 shared
+ *      helper — anti-drift lock, do NOT duplicate).
+ *   4. Else → empty circle `<div class="vms-avatar vms-avatar--{size} [tone]?"
+ *      role="img" aria-label={alt || ""}>` (decorative when alt is empty).
+ *
+ * The priority is enforced by the renderer's `if/else if` order; a mutation
+ * test in `test/avatar-render.test.ts` swaps the branches and expects assertions
+ * to fail, so the ordering cannot drift silently.
+ */
+export interface AvatarNode {
+  type: "avatar";
+  /** Displayed when no image is set. 1–2 characters typical (e.g. "AL" for
+   *  Ada Lovelace). Rendered as textContent (never innerHTML) so no HTML
+   *  injection is possible. */
+  initials?: string;
+  /** Image URL — takes precedence over `initials` when set (the `<img>`
+   *  element covers the circle background). Server-authored; framework does
+   *  not proxy or sanitize URLs (same posture as `LinkNode.href`, no new
+   *  attack surface). */
+  image?: string;
+  /** Fallback icon when neither `initials` nor `image` is set. Reuses the
+   *  shipped Lucide subset from `IconName` (Phase 22 shipped, ~102 members)
+   *  and the same `renderIconSvg` payload builder — no duplicate SVG
+   *  machinery. */
+  icon?: IconName;
+  /** Circle diameter axis — sm=1.5rem (24px, inline in dense lists),
+   *  md=2rem (32px, DEFAULT — comment threads / user rows / chat messages),
+   *  lg=2.5rem (40px, expanded headers), xl=3rem (48px, hero/profile).
+   *  Closed union. Framework owns the mapping. Omitted = "md" (2rem). */
+  size?: "sm" | "md" | "lg" | "xl";
+  /** Background palette for the circle in initials/icon modes ONLY — image
+   *  mode's `<img>` element covers the background, so `tone` has no visual
+   *  effect there. Same 4-tone closed union used framework-wide. Omitted =
+   *  the framework default neutral fill (`--vms-text-muted`). */
+  tone?: "danger" | "warning" | "success" | "info";
+  /** Accessible name for screen readers. Present ⇒ `role="img"` +
+   *  `aria-label={alt}`. Omitted on non-image modes ⇒ `aria-label={initials}`
+   *  (initials mode) or `aria-label=""` (icon/empty modes — decorative).
+   *  On image mode passes through as `<img alt={alt || ""}>` (empty string is
+   *  legal a11y for a decorative image). */
+  alt?: string;
 }
 
 /**

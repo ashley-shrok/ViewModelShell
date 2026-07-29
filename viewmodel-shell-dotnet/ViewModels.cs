@@ -210,6 +210,15 @@ public enum SectionVariant { Card, Prose }
 [JsonConverter(typeof(KebabEnum<IconSize>))]
 public enum IconSize { Xs, Sm, Md, Lg, Xl }
 
+/// <summary>v8.0.0 (COMP-04) — AvatarNode circle diameter axis. Framework-owned
+/// rem mapping: sm=1.5rem, md=2rem (default), lg=2.5rem, xl=3rem. Distinct
+/// enum from IconSize (which is px-mapped, xs..xl) because avatar sizes are
+/// container-sized (rem) and the value set differs (4 vs 5 members). Closed
+/// union, kebab-lowercase wire values ("sm"/"md"/"lg"/"xl") — KebabEnum handles
+/// the conversion naturally for these single-token members.</summary>
+[JsonConverter(typeof(KebabEnum<AvatarSize>))]
+public enum AvatarSize { Sm, Md, Lg, Xl }
+
 /// <summary>v7.0.0 (ICON-01/02) — JSON converter for IconName that walks a
 /// static dictionary mapping each enum member to its exact literal Lucide
 /// name (kebab-case with digit-boundary awareness, e.g. Trash2 → "trash-2").
@@ -769,6 +778,7 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(TrackerNode),    "tracker")]
 [JsonDerivedType(typeof(DiffNode),       "diff")]
 [JsonDerivedType(typeof(IconNode),       "icon")]
+[JsonDerivedType(typeof(AvatarNode),     "avatar")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -2000,6 +2010,44 @@ public record IconNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label = null
 ) : ViewNode;
 
+/// <summary>v8.0.0 (COMP-04) — AvatarNode circular slot with initials/image/
+/// icon content-resolution priority (image &gt; initials &gt; icon &gt; empty).
+/// Consumed by UserRowNode (Phase 25 leading slot), MessageNode (Phase 24
+/// leading slot), ChipNode optional leading; standalone use in mention
+/// pickers, assignee columns, comment threads, "who's viewing" indicators.
+/// Circular only for v1 (other shapes deferred; see composite-nodes-layer
+/// design doc).
+///
+/// <para>Leaf node: no children, no action. The tree-walker arm is a no-op
+/// (same posture as IconNode). Every optional carries
+/// <c>[JsonIgnore(WhenWritingNull)]</c> per AGENTS.md gotcha #8 — a bare
+/// <c>new AvatarNode()</c> serializes as <c>{"type":"avatar"}</c> with NO
+/// nulls on the wire (class-2 findNulls defect protection).</para>
+///
+/// <para>AvatarSize is a REAL enum (not <c>string?</c>) per the closed-union-
+/// must-be-enum discipline — see PATTERNS.md §8c. Reuses the framework-wide
+/// Tone enum and the v7.0.0 IconName closed union — no redeclaration.</para></summary>
+public record AvatarNode(
+    // Displayed when Image is absent. 1-2 characters typical (e.g. "AL" for
+    // Ada Lovelace). Rendered as textContent by the browser (no HTML injection).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Initials = null,
+    // Image URL — takes precedence over Initials when set (background hidden
+    // by the <img> element). Server-authored; framework does not proxy or
+    // sanitize (same posture as LinkNode.Href).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Image = null,
+    // Fallback icon when neither Initials nor Image is set. Reuses the v7.0.0
+    // IconName closed union (~102 members) — no redeclaration.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null,
+    // Circle diameter (sm/md/lg/xl → 1.5/2/2.5/3rem). Omitted = "md" (2rem).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] AvatarSize? Size = null,
+    // Background palette (initials/icon modes ONLY — Image displaces the bg).
+    // Reuses the framework-wide Tone enum.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
+    // Accessible name for screen readers. Present ⇒ role="img" + aria-label.
+    // Empty string is valid a11y for a decorative avatar.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Alt = null
+) : ViewNode;
+
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────
 //
 // Mirrors viewmodel-shell/src/server.ts `validateActionNames` byte-for-byte:
@@ -2198,6 +2246,12 @@ public static class ViewTreeValidation
                 // the leaf comment below.
                 break;
 
+            case AvatarNode:
+                // v8.0.0 (COMP-04) — AvatarNode is a terminal leaf (no
+                // children, no SectionNode descendants). Same terminal-leaf
+                // posture as IconNode.
+                break;
+
             // Leaf-like nodes (FieldNode, CheckboxNode, ButtonNode, TextNode,
             // LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
             // TableNode, CopyButtonNode, BadgeNode, ChartNode, BreadcrumbNode,
@@ -2280,6 +2334,11 @@ public static class ViewTreeValidation
                 // v7.0.0 (ICON-01) — IconNode is a leaf (no children, no
                 // action). The arm exists so a future refactor that promotes it
                 // to a container fails the C# exhaustive check here first.
+                break;
+
+            case AvatarNode:
+                // v8.0.0 (COMP-04) — AvatarNode is a leaf (no children, no
+                // action). Same terminal-leaf posture as IconNode.
                 break;
 
             case TabsNode tabs:

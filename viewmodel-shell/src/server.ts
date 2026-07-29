@@ -198,6 +198,13 @@ function collectActions(
       // to a container fails the TypeScript exhaustiveness check here first.
       return;
     }
+    case "avatar": {
+      // v8.0.0 (COMP-04) — AvatarNode is a leaf (no children, no action). Same
+      // terminal-leaf posture as IconNode. The arm exists so a future refactor
+      // that promotes it to a container fails the TypeScript exhaustiveness
+      // check here first.
+      return;
+    }
     case "tabs": {
       const tabs = node as TabsNode;
       for (const tab of tabs.tabs) recordAction(tab.action, enclosingForm, out);
