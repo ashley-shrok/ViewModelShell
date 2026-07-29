@@ -30,6 +30,8 @@ import type {
   DetailListNode,
   TimelineEntryNode,
   TimelineNode,
+  SettingRowNode,
+  SettingListNode,
   FitsNode,
   EmptyStateNode,
   BlockquoteNode,
@@ -354,6 +356,56 @@ function collectActions(
         }
       }
       for (const child of tl.children) collectActions(child, enclosingForm, out);
+      return;
+    }
+    case "setting-row": {
+      // v8.0.0 (COMP-12) — SettingRowNode slots: label (string | ViewNode;
+      // only descend when ViewNode), description (string | ViewNode; only
+      // descend when non-null and ViewNode), trailing (ViewNode), action
+      // (whole-row click). `string | ViewNode` slots descend ONLY when the
+      // value is a ViewNode — the string case is a leaf (auto-wrapped by
+      // the renderer into a TextNode) with no descendants of its own.
+      //
+      // icon is a primitive (IconName closed enum) — no descent.
+      //
+      // Whole-row action is dispatch-bearing → recordAction (participates
+      // in name uniqueness the same way ListRowNode.action + UserRowNode.
+      // action do). The trailing slot's nested action (e.g. a CheckboxNode
+      // with variant:"switch" and an action) is also collected via the
+      // recursive collectActions call, so a per-row switch action and the
+      // whole-row action BOTH participate in the same uniqueness check.
+      const sr = node as SettingRowNode;
+      if (typeof sr.label !== "string") collectActions(sr.label, enclosingForm, out);
+      if (sr.description != null && typeof sr.description !== "string") {
+        collectActions(sr.description, enclosingForm, out);
+      }
+      if (sr.trailing) collectActions(sr.trailing, enclosingForm, out);
+      if (sr.action) recordAction(sr.action, enclosingForm, out);
+      return;
+    }
+    case "setting-list": {
+      // v8.0.0 (COMP-12a) — SettingListNode.children MUST be
+      // SettingRowNode[]. Tree-invariant rejection: any non-SettingRowNode
+      // child throws invalid_tree. Byte-identical error message across
+      // TS + .NET (see the .NET twin arm in ViewTreeValidation.Collect in
+      // ViewModels.cs). Same pattern as MessageListNode.children +
+      // DetailListNode.children + TimelineNode.children mixed-children
+      // rejection above.
+      const sl = node as SettingListNode;
+      for (const child of sl.children) {
+        // Cast through unknown — TypeScript's compile-time type is
+        // SettingRowNode[], but the runtime tree is server-authored JSON
+        // that CAN smuggle any ViewNode in (a hostile deserialization /
+        // a buildVm bug). The validator catches it at runtime with the
+        // byte-identical error message.
+        const c = child as unknown as { type: string };
+        if (c.type !== "setting-row") {
+          throw new Error(
+            `SettingListNode.children must all be SettingRowNodes (found: ${c.type})`
+          );
+        }
+      }
+      for (const child of sl.children) collectActions(child, enclosingForm, out);
       return;
     }
     case "form": {
@@ -774,6 +826,29 @@ function walkForSectionAction(
       // in an entry's description slot.
       const tl = node as TimelineNode;
       for (const child of tl.children) walkForSectionAction(child, outerInteractive);
+      return;
+    }
+    case "setting-row": {
+      // v8.0.0 (COMP-12) — SettingRowNode slots can hold arbitrary ViewNode
+      // subtrees (label-when-non-string / description-when-non-string /
+      // trailing). Descend into every ViewNode slot for defense-in-depth so
+      // a future shape can't slip an interactive section past this
+      // validator. `string | ViewNode` slots are guarded so we don't feed a
+      // string primitive into the walker. icon is a primitive — no descent.
+      const sr = node as SettingRowNode;
+      if (typeof sr.label !== "string") walkForSectionAction(sr.label, outerInteractive);
+      if (sr.description != null && typeof sr.description !== "string") {
+        walkForSectionAction(sr.description, outerInteractive);
+      }
+      if (sr.trailing) walkForSectionAction(sr.trailing, outerInteractive);
+      return;
+    }
+    case "setting-list": {
+      // v8.0.0 (COMP-12a) — SettingListNode.children are SettingRowNodes;
+      // descend into each to catch any nested interactive-section violations
+      // in a row's label/description/trailing slot.
+      const sl = node as SettingListNode;
+      for (const child of sl.children) walkForSectionAction(child, outerInteractive);
       return;
     }
     case "form": {

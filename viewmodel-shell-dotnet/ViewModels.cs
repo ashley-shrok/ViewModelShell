@@ -2952,6 +2952,27 @@ public static class ViewTreeValidation
                 foreach (var child in timeline.Children) WalkForSectionAction(child, outerInteractive);
                 break;
 
+            case SettingRowNode settingRow:
+                // v8.0.0 (COMP-12) — SettingRowNode.Label / Description /
+                // Trailing can hold arbitrary ViewNode subtrees. Descend for
+                // defense-in-depth so a future shape can't slip an
+                // interactive section past this validator. Icon is a
+                // primitive (IconName) — no descent. Mirrors the TS twin
+                // `case "setting-row"` arm in server.ts.
+                WalkForSectionAction(settingRow.Label, outerInteractive);
+                if (settingRow.Description is { } srDesc) WalkForSectionAction(srDesc, outerInteractive);
+                if (settingRow.Trailing is { } srTrail) WalkForSectionAction(srTrail, outerInteractive);
+                break;
+
+            case SettingListNode settingList:
+                // v8.0.0 (COMP-12a) — SettingListNode.Children are
+                // SettingRowNodes; descend into each to catch any nested
+                // interactive-section violations in a row's Label /
+                // Description / Trailing slot. Mirrors the TS twin
+                // `case "setting-list"` arm.
+                foreach (var child in settingList.Children) WalkForSectionAction(child, outerInteractive);
+                break;
+
             case FormNode form:
                 foreach (var child in form.Children) WalkForSectionAction(child, outerInteractive);
                 break;
@@ -3237,6 +3258,51 @@ public static class ViewTreeValidation
                     }
                 }
                 foreach (var child in timeline.Children) Collect(child, enclosingForm, sink);
+                break;
+
+            case SettingRowNode settingRow:
+                // v8.0.0 (COMP-12) — SettingRowNode slots: Label (ViewNode,
+                // required), Description (ViewNode?), Trailing (ViewNode?),
+                // Action (whole-row click). Every ViewNode-typed slot
+                // descended into; Action recorded via Record (participates
+                // in name uniqueness the same way ListRowNode.Action +
+                // UserRowNode.Action do). Icon is a leaf primitive
+                // (IconName closed enum) — NO walker descent. Mirrors the
+                // TS twin `case "setting-row"` arm in server.ts.
+                //
+                // The natural pairing (Trailing = CheckboxNode(Variant:
+                // "switch") with its own Action) participates via the
+                // recursive Collect call on Trailing — the switch's action
+                // and the row's Action both flow through the same
+                // uniqueness check.
+                Collect(settingRow.Label, enclosingForm, sink);
+                if (settingRow.Description is { } srDesc) Collect(srDesc, enclosingForm, sink);
+                if (settingRow.Trailing is { } srTrail) Collect(srTrail, enclosingForm, sink);
+                if (settingRow.Action is { } srAction) Record(srAction, enclosingForm, sink);
+                break;
+
+            case SettingListNode settingList:
+                // v8.0.0 (COMP-12a) — SettingListNode.Children MUST be
+                // SettingRowNode. Children is typed IReadOnlyList<ViewNode>
+                // on the record (deliberately widened from
+                // SettingRowNode-only, for polymorphic-discriminator
+                // preservation — see the record's XML doc), so the
+                // tree-shape invariant IS enforced exclusively at runtime
+                // here — the compile-time type would silently accept any
+                // ViewNode.
+                //
+                // Byte-identical error message across TS + .NET (see the
+                // TS twin `case "setting-list"` arm in server.ts).
+                foreach (var child in settingList.Children)
+                {
+                    if (child is not SettingRowNode)
+                    {
+                        var childType = ViewNodeWireName(child);
+                        throw new InvalidOperationException(
+                            $"SettingListNode.children must all be SettingRowNodes (found: {childType})");
+                    }
+                }
+                foreach (var child in settingList.Children) Collect(child, enclosingForm, sink);
                 break;
 
             case FormNode form:
