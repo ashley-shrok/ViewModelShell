@@ -360,11 +360,11 @@ Plans:
  14. AGENTS.md "Route B composite-nodes layer" section grown: add the 4 primary composites to the shipped recipe inventory + note their consumption of Phase 23 foundations.
  15. NO release ship — v8.0.0 releases at Phase 26 closeout. CHANGELOG accumulates all 4 under "Unreleased".
 
-**Plans:** 2/9 plans executed
+**Plans:** 3/9 plans executed
 
 Plans:
 - [x] 24-01-PLAN.md — ListRowNode (COMP-05) + ListNode.variant:"rows" (COMP-05a) end-to-end (wave 1)
-- [ ] 24-02-PLAN.md — MessageNode (COMP-06) + MessageListNode (COMP-06a) end-to-end; followTail REUSES SectionNode.followTail (wave 2, depends on 24-01)
+- [x] 24-02-PLAN.md — MessageNode (COMP-06) + MessageListNode (COMP-06a) end-to-end; followTail REUSES SectionNode.followTail (wave 2, depends on 24-01)
 - [ ] 24-03-PLAN.md — AlertNode (COMP-07) end-to-end with tone→icon default map (wave 3, depends on 24-02)
 - [ ] 24-04-PLAN.md — EmptyStateNode (COMP-08) BREAKING RENAME end-to-end + framework rename cascade (wave 4, depends on 24-03)
 - [x] 24-05-PLAN.md — design/composite-nodes-layer.md Shipped Recipe Inventory + AGENTS.md Currently shipped recipes (wave 1, file-disjoint)
