@@ -214,7 +214,9 @@ export type ViewNode =
   | AlertNode
   | UserRowNode
   | DetailRowNode
-  | DetailListNode;
+  | DetailListNode
+  | TimelineEntryNode
+  | TimelineNode;
 
 export interface PageNode {
   type: "page";
@@ -1994,6 +1996,88 @@ export interface DetailListNode {
    *  `.vms-detail-list--{labelWidth}` which sets `--vms-detail-label` on the
    *  container; each row's grid reads that CSS var. */
   labelWidth?: "sm" | "md" | "lg";
+}
+
+/**
+ * v8.0.0 (COMP-11) — TimelineEntryNode. A single entry in an activity feed /
+ * audit log / status trail — the Route-B recipe with typed semantic slots
+ * (time + description + optional tone + optional icon). Consumed by incident
+ * timelines, order-status trails, deployment logs, activity feeds.
+ *
+ * Renders as `<li class="vms-timeline-entry [vms-timeline-entry--{tone}]">
+ * <div class="vms-timeline-entry__time">{time}</div>
+ * <div class="vms-timeline-entry__description">{description}</div></li>` —
+ * the visual rail-and-dot mechanism (`::before` on the container + `::before`
+ * per entry) is baked into `default.css` and lives ENTIRELY in CSS. The
+ * renderer just emits semantic markup + class names; CSS does all the visual
+ * work. See TimelineNode below for the container.
+ *
+ * SLOT STRING-LIFT (trained typography):
+ *   `time`         string (PRIMITIVE, not ViewNode-typed) → renderer wraps in
+ *                  `TextNode { style: "caption" }` (COMP-01 caption tier).
+ *   `description`  string → `TextNode { style: "body" }` (COMP-01 body tier).
+ *   `description`  ViewNode → rendered as-is (escape hatch for rich content —
+ *                  e.g. TextNode.weight:"medium" for a bold actor name).
+ *
+ * TONE controls the dot border color (via `.vms-timeline-entry--{tone}` on
+ * the wrapper `<li>`). Default (absent) = accent border. Closed 4-way union.
+ *
+ * ICON (optional) — when present, renders inside a `.vms-timeline-entry__icon`
+ * wrapper (larger dot slot; the framework handles sizing via `sm` icon size).
+ * Reuses Phase 22 `IconName` closed union.
+ */
+export interface TimelineEntryNode {
+  type: "timeline-entry";
+  /** REQUIRED — the timestamp label. PRIMITIVE (NOT ViewNode-typed). Trained
+   *  typography: renderer wraps in `TextNode { style: "caption" }` (COMP-01
+   *  caption tier). String only; ViewNode variant deliberately absent — the
+   *  composite owns the timestamp typography absolutely. */
+  time: string;
+  /** REQUIRED — the entry description. `string` → renderer wraps in
+   *  `TextNode { style: "body" }`; `ViewNode` → rendered as-is (rich content
+   *  OK — e.g. an inline TextNode with `weight:"medium"` for a bold actor
+   *  name from COMP-02). */
+  description: string | ViewNode;
+  /** Optional accent controlling the dot border color (via
+   *  `.vms-timeline-entry--{tone}` on the row `<li>`). Reuses shipped Phase 23
+   *  tone palette. Closed union. Omitted = default accent border. */
+  tone?: "danger" | "warning" | "success" | "info";
+  /** Optional icon inside the dot slot (larger dot). Reuses Phase 22 v7.0
+   *  `IconName` closed union; renders at `sm` size. */
+  icon?: IconName;
+}
+
+/**
+ * v8.0.0 (COMP-11a) — TimelineNode. Container for TimelineEntryNode children
+ * with the framework-owned decorative rail. The activity-feed / audit-log /
+ * history primitive.
+ *
+ * Renders as `<ol class="vms-timeline">` — semantic ordered list (chronological
+ * entries). The container CSS installs a decorative left rail via `::before`
+ * (a 2px vertical line spanning top-to-bottom of the container); each child
+ * `TimelineEntryNode` installs a dot via its own `::before`. The framework
+ * owns the rail + dot markers — apps CANNOT compose this from primitives
+ * ("apps describe, never decorate" precludes app-CSS for a rail). This
+ * composite exists SPECIFICALLY to bake this in — it is the poster child for
+ * "apps describe, never decorate" and the ONE genuinely new CSS mechanism in
+ * the Phase 25 secondary-composites set. See `default.css` `.vms-timeline`
+ * for the full CSS block + docstring.
+ *
+ * TREE INVARIANT — children must ALL be TimelineEntryNode. The tree
+ * validator rejects non-TimelineEntry children with `invalid_tree` and a
+ * byte-identical error message across both backends:
+ * `"TimelineNode.children must all be TimelineEntryNodes (found: <type>)"`.
+ */
+export interface TimelineNode {
+  type: "timeline";
+  /** REQUIRED — TimelineEntryNode-only children. The tree-validator rejects
+   *  mixed / non-TimelineEntry children with `invalid_tree` (byte-identical
+   *  error message across TS + .NET). The container `<ol class="vms-timeline">`
+   *  grows a decorative vertical rail via CSS `::before`; each entry grows a
+   *  dot via `::before`. NO app-CSS — the composite exists specifically to
+   *  bake this in (the "apps describe, never decorate" rule precludes
+   *  app-authored rail/dot CSS). */
+  children: TimelineEntryNode[];
 }
 
 /**

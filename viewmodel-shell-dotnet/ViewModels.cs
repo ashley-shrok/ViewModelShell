@@ -825,6 +825,8 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(UserRowNode),     "user-row")]
 [JsonDerivedType(typeof(DetailRowNode),   "detail-row")]
 [JsonDerivedType(typeof(DetailListNode),  "detail-list")]
+[JsonDerivedType(typeof(TimelineEntryNode), "timeline-entry")]
+[JsonDerivedType(typeof(TimelineNode),      "timeline")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -2504,6 +2506,96 @@ public record DetailListNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DetailLabelWidth? LabelWidth = null
 ) : ViewNode;
 
+/// <summary>v8.0.0 (COMP-11) — TimelineEntryNode. A single entry in an activity
+/// feed / audit log / status trail. Route-B recipe: framework owns grid layout,
+/// typography tiers, the rail-and-dot visual mechanism (baked in CSS
+/// <c>::before</c> pseudo-elements on the container + entry), and a11y — the
+/// app hands it content via named slots. Consumed by incident timelines,
+/// order-status trails, deployment logs.
+///
+/// <para>Renders as
+/// <c>&lt;li class="vms-timeline-entry [vms-timeline-entry--{tone}]"&gt;
+/// &lt;div class="vms-timeline-entry__time"&gt;{time}&lt;/div&gt;
+/// &lt;div class="vms-timeline-entry__description"&gt;{description}&lt;/div&gt;
+/// &lt;/li&gt;</c>. The visual dot marker lives ENTIRELY in the
+/// <c>.vms-timeline-entry::before</c> CSS rule; the renderer emits ONLY
+/// semantic markup + class names.</para>
+///
+/// <para>SLOT-TYPING POLICY: <c>Time</c> is a REQUIRED PRIMITIVE
+/// <c>string</c> (NOT ViewNode-typed) — the renderer wraps it in
+/// <c>TextNode{Style: TextStyle.Caption}</c> to consume COMP-01 trained
+/// typography. <c>Description</c> is REQUIRED as a <c>ViewNode</c> (NOT
+/// <c>ViewNode?</c>) so System.Text.Json emits the polymorphic <c>"type"</c>
+/// discriminator on the nested payload — the TS twin's
+/// <c>string | ViewNode</c> ergonomic convenience is TS-only; the .NET server
+/// wraps a string explicitly
+/// (<c>new TextNode("Incident opened", Style: TextStyle.Body)</c>).</para>
+///
+/// <para>TONE: shifts the dot border color via
+/// <c>.vms-timeline-entry--{tone}::before { border-color: var(--vms-{tone}); }</c>.
+/// Reuses the shipped <c>Tone</c> enum at :74-75 — byte-identical to the TS
+/// closed union. WhenWritingNull discipline; absent = default accent border.</para>
+///
+/// <para>Every optional slot carries <c>[JsonIgnore(WhenWritingNull)]</c> so
+/// an unset slot is ABSENT from the wire (never <c>"tone": null</c>) — the
+/// class-2 findNulls defect protection AGENTS.md gotcha #8 exists for.</para>
+/// </summary>
+public record TimelineEntryNode(
+    // Time is REQUIRED. Primitive string (NOT ViewNode) — the browser renderer
+    // wraps in TextNode{Style:Caption} at render time (COMP-01 trained
+    // typography). String only; no ViewNode variant.
+    string Time,
+    // Description is REQUIRED. Typed ViewNode (NOT ViewNode?, NOT string) so
+    // System.Text.Json emits the polymorphic "type" discriminator on the
+    // nested payload. TS twin's `string | ViewNode` convenience wraps in
+    // TextNode{body} at render time; .NET server wraps explicitly.
+    ViewNode Description,
+    // Optional tone accent — controls the dot border color via
+    // .vms-timeline-entry--{tone}::before. Reuses shipped Tone enum (:74-75).
+    // WhenWritingNull → absent when null (never `"tone":null`).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
+    // Optional icon inside the dot slot (larger dot). Reuses Phase 22 v7.0
+    // IconName closed enum.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null
+) : ViewNode;
+
+/// <summary>v8.0.0 (COMP-11a) — TimelineNode. Container for TimelineEntryNode
+/// children with the framework-owned decorative rail.
+///
+/// <para>Renders as <c>&lt;ol class="vms-timeline"&gt;</c> — semantic ordered
+/// list (chronological entries). The container CSS installs a decorative left
+/// rail via <c>::before</c> (a 2px vertical line spanning top-to-bottom); each
+/// child <c>TimelineEntryNode</c> installs a dot via its own <c>::before</c>.
+/// The framework owns the rail + dot markers — apps CANNOT compose this from
+/// primitives ("apps describe, never decorate" precludes app-CSS for a rail).
+/// This composite exists SPECIFICALLY to bake this in — it is the ONE
+/// genuinely new CSS mechanism in the Phase 25 secondary-composites set.</para>
+///
+/// <para>TREE INVARIANT — children MUST be TimelineEntryNode. Children is
+/// typed <c>IReadOnlyList&lt;ViewNode&gt;</c> on the record (widening from
+/// TimelineEntryNode-only is deliberate — a narrow shape drops the polymorphic
+/// <c>"type":"timeline-entry"</c> discriminator per the FormNode.Buttons
+/// banked posture at :1155-1159 + MessageListNode.Children at :2250 +
+/// DetailListNode.Children at :2499), so the tree-shape invariant IS enforced
+/// exclusively at runtime by ViewTreeValidation.Collect — the compile-time
+/// type would silently accept any ViewNode. Byte-identical error message
+/// across TS + .NET:
+/// <c>"TimelineNode.children must all be TimelineEntryNodes (found: &lt;type&gt;)"</c>.</para>
+/// </summary>
+public record TimelineNode(
+    // Typed IReadOnlyList<ViewNode> (NOT IReadOnlyList<TimelineEntryNode>) so
+    // System.Text.Json emits the polymorphic "type":"timeline-entry"
+    // discriminator on each child (a narrow TimelineEntryNode-typed list
+    // silently drops the discriminator — banked posture from FormNode.Buttons
+    // at :1155-1159 + MessageListNode.Children at :2250 +
+    // DetailListNode.Children at :2499). The tree invariant is enforced
+    // exclusively by the runtime validator in ViewTreeValidation.Collect
+    // (invalid_tree with byte-identical error message to the TS twin) — every
+    // non-TimelineEntryNode child is rejected there, so the wire-level list is
+    // effectively still TimelineEntryNode-only.
+    IReadOnlyList<ViewNode> Children
+) : ViewNode;
+
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────
 //
 // Mirrors viewmodel-shell/src/server.ts `validateActionNames` byte-for-byte:
@@ -3188,6 +3280,8 @@ public static class ViewTreeValidation
         UserRowNode   => "user-row",
         DetailRowNode  => "detail-row",
         DetailListNode => "detail-list",
+        TimelineEntryNode => "timeline-entry",
+        TimelineNode      => "timeline",
         _             => node.GetType().Name,
     };
 }

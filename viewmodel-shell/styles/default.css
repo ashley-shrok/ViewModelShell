@@ -1484,6 +1484,98 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-detail-row--success .vms-detail-row__value { color: var(--vms-success); }
 .vms-detail-row--info    .vms-detail-row__value { color: var(--vms-info); }
 
+/* ── TimelineEntry + Timeline (COMP-11 + 11a, v8.0.0) ────────────────────────
+ * 🚨 GENUINELY NEW CSS MECHANISM: rail-and-dot via ::before pseudo-elements.
+ * Apps CANNOT compose this from primitives — "apps describe, never decorate"
+ * precludes app-authored rail/dot CSS. The composite exists SPECIFICALLY to
+ * bake this in. This is the ONE genuinely new CSS mechanism in the Phase 25
+ * secondary-composites set — every other secondary composite (UserRow,
+ * DetailRow, SettingRow, Chip) is a semantic-grid + shipped-token
+ * composition. Timeline needs the rail-and-dot markers, which are pure
+ * decorative geometry no primitive on the wire could produce.
+ *
+ * See composite-nodes-layer.md §Timeline + AGENTS.md Route B recipe list.
+ *
+ * DOM: TimelineNode → <ol class="vms-timeline">; each TimelineEntryNode →
+ * <li class="vms-timeline-entry [vms-timeline-entry--{tone}]"> with a
+ * .vms-timeline-entry__time + .vms-timeline-entry__description child pair
+ * (+ optional .vms-timeline-entry__icon slot).
+ *
+ * The RAIL: an absolutely-positioned 2px vertical line via
+ * .vms-timeline::before, spanning top-to-bottom of the container inside a
+ * left padding of 1.5rem. The DOTS: one per entry via
+ * .vms-timeline-entry::before, absolutely positioned to align on the rail
+ * (negative-left, translated 3px). Tone-encoded dot border colors reuse the
+ * shipped Phase 23 tone palette (--vms-error/warning/success/info) on
+ * --vms-surface fill.
+ *
+ * jsdom caveat (banked): jsdom does NOT compute ::before pseudo-element
+ * geometry (width/height/border-color). The rail-and-dot visual mechanism
+ * cannot be verified in unit tests. test/timeline.test.ts asserts CLASS
+ * PRESENCE only; visual verification lives in Plan 25-10 Ashley checkpoint.
+ */
+.vms-timeline {
+  position: relative;
+  padding: 0 0 0 1.5rem;
+  margin: 0;
+  list-style: none;
+}
+.vms-timeline::before {
+  content: "";
+  position: absolute;
+  left: 0.375rem;
+  top: 0.375rem;
+  bottom: 0.375rem;
+  width: 2px;
+  background: var(--vms-border);
+  border-radius: 1px;
+}
+
+.vms-timeline-entry {
+  position: relative;
+  padding-bottom: var(--vms-space-md);
+}
+.vms-timeline-entry:last-child { padding-bottom: 0; }
+.vms-timeline-entry::before {
+  content: "";
+  position: absolute;
+  left: -1.5rem;
+  top: 0.375rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 999px;
+  background: var(--vms-surface);
+  border: 2px solid var(--vms-accent);   /* default = accent border */
+  transform: translateX(3px);
+}
+.vms-timeline-entry--danger::before  { border-color: var(--vms-error); }
+.vms-timeline-entry--warning::before { border-color: var(--vms-warning); }
+.vms-timeline-entry--success::before { border-color: var(--vms-success); }
+.vms-timeline-entry--info::before    { border-color: var(--vms-info); }
+
+.vms-timeline-entry__time {
+  color: var(--vms-text-muted);
+  font-size: var(--vms-text-xs);
+  line-height: 1.4;
+  margin-bottom: 0.125rem;
+}
+.vms-timeline-entry__description {
+  color: var(--vms-text);
+  line-height: 1.5;
+}
+.vms-timeline-entry__icon {
+  position: absolute;
+  left: -1.5rem;
+  top: 0.375rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateX(3px);
+  color: var(--vms-accent);
+}
+
 /* ── Text ── */
 .vms-text { flex: 1; line-height: 1.4; word-break: break-word; }
 .vms-text--heading       { font-family: var(--vms-font-head); font-size: var(--vms-text-xl); }
