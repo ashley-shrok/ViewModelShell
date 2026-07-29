@@ -827,6 +827,8 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(DetailListNode),  "detail-list")]
 [JsonDerivedType(typeof(TimelineEntryNode), "timeline-entry")]
 [JsonDerivedType(typeof(TimelineNode),      "timeline")]
+[JsonDerivedType(typeof(SettingRowNode),    "setting-row")]
+[JsonDerivedType(typeof(SettingListNode),   "setting-list")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -2594,6 +2596,104 @@ public record TimelineNode(
     // non-TimelineEntryNode child is rejected there, so the wire-level list is
     // effectively still TimelineEntryNode-only.
     IReadOnlyList<ViewNode> Children
+) : ViewNode;
+
+/// <summary>v8.0.0 (COMP-12) — SettingRowNode. The settings-page primitive —
+/// one row per toggleable / configurable setting, with a label, optional
+/// description, and a trailing control slot. Consumed by feature-flag panels,
+/// notification-preference screens, account-settings pages.
+///
+/// <para>Renders as <c>&lt;li class="vms-setting-row [vms-setting-row--clickable]"&gt;</c>
+/// with a <c>[body | control]</c> grid (1fr auto, <c>align-items: center</c>).
+/// The body column stacks <c>[label | description]</c>; the control column
+/// vertically centers the trailing slot against the label+description stack.
+/// String-lift trained typography lives at render time in the browser renderer
+/// (label → <c>TextNode{style:body, weight:medium}</c>; description →
+/// <c>TextNode{style:muted}</c> inside a <c>&lt;p&gt;</c> with
+/// <c>max-width:42rem</c>).</para>
+///
+/// <para>NATURAL PAIRING: <c>Trailing</c> typically holds a
+/// <c>CheckboxNode(Variant:"switch")</c> from COMP-03 (Phase 23) — the whole
+/// recipe exists so an app hands the framework <c>{Label, Description,
+/// Trailing: switch}</c> and gets the shipped settings-row layout for free.
+/// Other common trailing controls: <c>ButtonNode</c>, <c>LinkNode</c>.</para>
+///
+/// <para>ACTION (optional) — whole-row click. Same shape as
+/// <c>ListRowNode.Action</c>. The renderer wires <c>stopPropagation</c> on
+/// interactive descendants (buttons, checkboxes/switches, links) so a click
+/// on the trailing switch does NOT double-fire the row action.</para>
+///
+/// <para>Every optional slot carries <c>WhenWritingNull</c> — an unset slot
+/// is ABSENT from the wire (never <c>"trailing": null</c>) per AGENTS.md
+/// gotcha #8 (class-2 findNulls defect protection).</para>
+/// </summary>
+public record SettingRowNode(
+    // Label is REQUIRED. Typed ViewNode (NOT ViewNode?, NOT string) so
+    // System.Text.Json emits the polymorphic "type" discriminator on the
+    // nested payload. TS twin's `string | ViewNode` convenience wraps in
+    // TextNode{body, weight:medium} at render time; .NET server wraps
+    // explicitly. Same posture as AlertNode.Message + DetailRowNode.Value +
+    // TimelineEntryNode.Description.
+    ViewNode Label,
+    // Optional leading icon on the body column. Reuses Phase 22 v7.0
+    // IconName closed enum. WhenWritingNull → absent when null.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null,
+    // Supporting description — typography subordinate to the label. Typed
+    // ViewNode? so the .NET server always constructs a full subtree (a raw
+    // string would drop the discriminator on the wire). Renderer wraps
+    // caller strings in TextNode{muted} at render time on TS side; on .NET
+    // side the caller wraps explicitly.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Description = null,
+    // Trailing control slot — any ViewNode. Natural pairing:
+    // CheckboxNode(Variant:"switch"). WhenWritingNull → absent when null.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Trailing = null,
+    // Whole-row click (opt-in). Same shape as ListRowNode.Action.
+    // WhenWritingNull → absent when null.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null
+) : ViewNode;
+
+/// <summary>v8.0.0 (COMP-12a) — SettingListNode. Container for
+/// SettingRowNode children with an optional heading — the settings-group
+/// primitive.
+///
+/// <para>Renders as <c>&lt;ul class="vms-setting-list"&gt;</c> with an
+/// optional heading emitted as a SIBLING
+/// <c>&lt;h3 class="vms-setting-list__heading"&gt;</c> BEFORE the
+/// <c>&lt;ul&gt;</c> (NOT inside — same posture as Phase 24
+/// <c>EmptyStateNode</c>'s "structural elements outside the semantic list"
+/// approach, so the semantic list stays a clean <c>&lt;ul&gt;</c> of
+/// <c>&lt;li&gt;</c> items). Single bordered surface with per-row dividers
+/// (same pattern as <c>ListNode.Variant:"rows"</c> — Phase 24 shipped
+/// convention).</para>
+///
+/// <para>TREE INVARIANT — children MUST be SettingRowNode. Children is
+/// typed <c>IReadOnlyList&lt;ViewNode&gt;</c> on the record (widening from
+/// SettingRowNode-only is deliberate — a narrow shape drops the polymorphic
+/// <c>"type":"setting-row"</c> discriminator per the FormNode.Buttons banked
+/// posture at :1155-1159 + MessageListNode.Children at :2250 +
+/// DetailListNode.Children at :2499 + TimelineNode.Children at :2598), so
+/// the tree-shape invariant IS enforced exclusively at runtime by
+/// ViewTreeValidation.Collect — the compile-time type would silently accept
+/// any ViewNode. Byte-identical error message across TS + .NET:
+/// <c>"SettingListNode.children must all be SettingRowNodes (found: &lt;type&gt;)"</c>.</para>
+/// </summary>
+public record SettingListNode(
+    // Typed IReadOnlyList<ViewNode> (NOT IReadOnlyList<SettingRowNode>) so
+    // System.Text.Json emits the polymorphic "type":"setting-row"
+    // discriminator on each child (a narrow SettingRowNode-typed list
+    // silently drops the discriminator — banked posture from FormNode.Buttons
+    // at :1155-1159 + MessageListNode.Children at :2250 +
+    // DetailListNode.Children at :2499 + TimelineNode.Children at :2598).
+    // The tree invariant is enforced exclusively by the runtime validator
+    // in ViewTreeValidation.Collect (invalid_tree with byte-identical error
+    // message to the TS twin) — every non-SettingRowNode child is rejected
+    // there, so the wire-level list is effectively still
+    // SettingRowNode-only.
+    IReadOnlyList<ViewNode> Children,
+    // Optional heading for the settings group — renders as
+    // <h3 class="vms-setting-list__heading"> immediately BEFORE the <ul>
+    // (sibling, NOT child). WhenWritingNull → absent when null.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Heading = null
 ) : ViewNode;
 
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────

@@ -216,7 +216,9 @@ export type ViewNode =
   | DetailRowNode
   | DetailListNode
   | TimelineEntryNode
-  | TimelineNode;
+  | TimelineNode
+  | SettingRowNode
+  | SettingListNode;
 
 export interface PageNode {
   type: "page";
@@ -2078,6 +2080,101 @@ export interface TimelineNode {
    *  bake this in (the "apps describe, never decorate" rule precludes
    *  app-authored rail/dot CSS). */
   children: TimelineEntryNode[];
+}
+
+/**
+ * v8.0.0 (COMP-12) — SettingRowNode. The settings-page primitive — a row
+ * describing a single toggleable / configurable setting with a label,
+ * optional description, and a trailing control slot. The Route-B recipe for
+ * feature-flag toggles, notification preferences, and account settings
+ * panels.
+ *
+ * Renders as `<li class="vms-setting-row [vms-setting-row--clickable]">` with
+ * a `[body | control]` grid (1fr auto, `align-items: center`). The body
+ * column stacks `[label | description]`; the control column vertically
+ * centers the trailing slot against the label+description stack.
+ *
+ * SLOT STRING-LIFT (trained typography):
+ *   `label`        string → renderer wraps in
+ *                  `TextNode { style: "body", weight: "medium" }` (COMP-01/02).
+ *   `label`        ViewNode → rendered as-is (escape hatch for rich content —
+ *                  e.g. TextNode with a leading badge inline).
+ *   `description`  string → `TextNode { style: "muted" }` inside a `<p>` with
+ *                  `.vms-setting-row__description { max-width: 42rem; }` for
+ *                  readable line-length via CSS.
+ *   `description`  ViewNode → rendered as-is.
+ *
+ * TRAILING slot accepts ANY ViewNode. The natural pairing is
+ * `CheckboxNode(variant:"switch")` from COMP-03 (Phase 23) — every
+ * feature-flag / preference / setting toggle is expressed as
+ * `{ label, description, trailing: switch }` and gets the shipped
+ * settings-row layout for free. Other common trailing controls: `ButtonNode`
+ * (destructive action per row), `LinkNode` (drill-down).
+ *
+ * ACTION (optional) — makes the entire row `role="button"`, `tabIndex=0`,
+ * with Enter/Space dispatch. Interactive descendants (buttons, checkboxes,
+ * switches, links) call `stopPropagation` on click so the trailing switch
+ * does NOT double-fire the row action. Same shape as ListRowNode.action
+ * (browser.ts:1220-1250 — Phase 24 COMP-05), extended with `.vms-field--switch`
+ * in the selector list so the natural switch pairing behaves correctly.
+ *
+ * ICON (optional) — leading icon on the body column. Reuses Phase 22 v7.0
+ * `IconName` closed union; renders at `sm` size.
+ */
+export interface SettingRowNode {
+  type: "setting-row";
+  /** Optional leading icon on the body column. Reuses Phase 22 v7.0
+   *  `IconName` closed union; renders at `sm` size. */
+  icon?: IconName;
+  /** REQUIRED — the setting label. `string` → renderer wraps in
+   *  `TextNode { style: "body", weight: "medium" }`; `ViewNode` → rendered
+   *  as-is (rich content OK — e.g. an inline TextNode with a badge). */
+  label: string | ViewNode;
+  /** Supporting description — typography subordinate to the label.
+   *  `string` → renderer wraps in `TextNode { style: "muted" }` inside a
+   *  `<p class="vms-setting-row__description">` (max-width:42rem via CSS
+   *  for readable line-length); `ViewNode` → rendered as-is. */
+  description?: string | ViewNode;
+  /** Trailing control slot — any ViewNode. The natural pairing is
+   *  `CheckboxNode(variant:"switch")` from COMP-03; also common:
+   *  `ButtonNode`, `LinkNode`. Vertically centered against the
+   *  label+description stack via grid `align-items: center`. */
+  trailing?: ViewNode;
+  /** Whole-row click (opt-in). Same shape as ListRowNode.action —
+   *  `role="button"`, `tabIndex=0`, Enter/Space dispatch, aria-label from
+   *  flattened body text. Interactive descendants (buttons, checkboxes,
+   *  switches, links) `stopPropagation` so a click on the trailing switch
+   *  does NOT double-fire the row action. */
+  action?: ActionEvent;
+}
+
+/**
+ * v8.0.0 (COMP-12a) — SettingListNode. Container for SettingRowNode
+ * children — the settings-group primitive. Consumed by feature-flag panels,
+ * notification-preferences pages, account-settings screens.
+ *
+ * Renders as `<ul class="vms-setting-list">` with an optional heading
+ * emitted as a SIBLING `<h3 class="vms-setting-list__heading">` BEFORE the
+ * `<ul>` (NOT inside — same posture as Phase 24 `EmptyStateNode`'s
+ * "structural elements outside the semantic list" approach). Single bordered
+ * surface with per-row dividers (same pattern as `ListNode.variant:"rows"`).
+ *
+ * TREE INVARIANT — children must ALL be SettingRowNode. The tree
+ * validator rejects non-SettingRow children with `invalid_tree` and a
+ * byte-identical error message across both backends:
+ * `"SettingListNode.children must all be SettingRowNodes (found: <type>)"`.
+ */
+export interface SettingListNode {
+  type: "setting-list";
+  /** REQUIRED — SettingRowNode-only children. The tree-validator rejects
+   *  mixed / non-SettingRow children with `invalid_tree` (byte-identical
+   *  error message across TS + .NET). */
+  children: SettingRowNode[];
+  /** Optional heading for the settings group — renders as
+   *  `<h3 class="vms-setting-list__heading">` immediately BEFORE the
+   *  `<ul>` (sibling, NOT child of the `<ul>`), so the semantic list stays
+   *  a clean `<ul>` of `<li>` items. */
+  heading?: string;
 }
 
 /**
