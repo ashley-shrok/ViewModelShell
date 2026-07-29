@@ -324,13 +324,40 @@ Design of record: `bounties/composite-nodes-layer/tasting-page/index.html` (the 
 **Plans:** 9 plans
 
 Plans:
-- [ ] 23-01-PLAN.md — COMP-01: TextNode.style: "caption" end-to-end (wire type + CSS + .NET twin + vitest + .NET test + AA hand-check) (wave 1)
-- [ ] 23-02-PLAN.md — COMP-02: TextNode weight axis end-to-end (Option A chosen — new orthogonal `weight?` field; TS + browser + CSS + .NET twin + tests + WhenWritingNull proof) (wave 2, depends on 23-01)
-- [ ] 23-03-PLAN.md — COMP-03: CheckboxNode.variant: "switch" end-to-end (wire type + role=switch + slider CSS + .NET twin + tests + wire-semantics-unchanged proof + AA hand-check) (wave 3, depends on 23-02)
-- [ ] 23-04-PLAN.md — COMP-04: AvatarNode new standalone primitive end-to-end (wire type + discriminator + walker + browser renderer with renderIconSvg reuse + CSS + .NET twin + tests + priority-order mutation test + AA hand-check) (wave 4, depends on 23-03)
-- [ ] 23-05-PLAN.md — .planning/design/composite-nodes-layer.md design of record for the v8.0.0 milestone (thesis, governance rule, typed-slots pattern, 10-composite inventory, adoption order) (wave 1)
-- [ ] 23-06-PLAN.md — AGENTS.md "Route B composite-nodes layer" governance section (initial frame; recipe inventory deferred to Phase 24-26) (wave 2, depends on 23-05)
-- [ ] 23-07-PLAN.md — Showcase Foundations demo section + FeatureProbe buildVm extension in both backends + parity fixture $comment + expectBodyContains tripwires (wave 5, depends on 23-01..04)
-- [ ] 23-08-PLAN.md — CHANGELOG.md Unreleased — v8.0.0 (in progress) heading + 4 foundation entries + batch-then-ship reminder (wave 5, depends on 23-01..04)
-- [ ] 23-09-PLAN.md — Full green-tree gate re-run + AA-contrast hand-check re-verify + Showcase visual smoke on tailnet (Ashley sign-off) + requirement-to-artifact cross-check (wave 6, depends on 23-01..08)
+- [x] 23-01-PLAN.md — COMP-01: TextNode.style: "caption" end-to-end (wire type + CSS + .NET twin + vitest + .NET test + AA hand-check) (wave 1)
+- [x] 23-02-PLAN.md — COMP-02: TextNode weight axis end-to-end (Option A chosen — new orthogonal `weight?` field; TS + browser + CSS + .NET twin + tests + WhenWritingNull proof) (wave 2, depends on 23-01)
+- [x] 23-03-PLAN.md — COMP-03: CheckboxNode.variant: "switch" end-to-end (wire type + role=switch + slider CSS + .NET twin + tests + wire-semantics-unchanged proof + AA hand-check) (wave 3, depends on 23-02)
+- [x] 23-04-PLAN.md — COMP-04: AvatarNode new standalone primitive end-to-end (wire type + discriminator + walker + browser renderer with renderIconSvg reuse + CSS + .NET twin + tests + priority-order mutation test + AA hand-check) (wave 4, depends on 23-03)
+- [x] 23-05-PLAN.md — .planning/design/composite-nodes-layer.md design of record for the v8.0.0 milestone (thesis, governance rule, typed-slots pattern, 10-composite inventory, adoption order) (wave 1)
+- [x] 23-06-PLAN.md — AGENTS.md "Route B composite-nodes layer" governance section (initial frame; recipe inventory deferred to Phase 24-26) (wave 2, depends on 23-05)
+- [x] 23-07-PLAN.md — Showcase Foundations demo section + FeatureProbe buildVm extension in both backends + parity fixture $comment + expectBodyContains tripwires (wave 5, depends on 23-01..04)
+- [x] 23-08-PLAN.md — CHANGELOG.md Unreleased — v8.0.0 (in progress) heading + 4 foundation entries + batch-then-ship reminder (wave 5, depends on 23-01..04)
+- [x] 23-09-PLAN.md — Full green-tree gate re-run + AA-contrast hand-check re-verify + Showcase visual smoke on tailnet (Ashley sign-off) + requirement-to-artifact cross-check (wave 6, depends on 23-01..08)
 
+
+### Phase 24: v8.0 Primary composites — ListRowNode + MessageNode + AlertNode + EmptyStateNode
+
+**Goal:** Land the 4 primary composite recipes that the v8.0.0 tasting approved with the strongest evidence + live consumer pressure. Each is a **Route B recipe** — typed semantic slots with unconstrained ViewNode content, closed-enum variance axes, framework owns layout/typography/spacing. Every composite consumes Phase 23 foundations (`TextNode.style: "caption"` for tertiary meta; `TextNode.weight` for row primaries; `AvatarNode` for user identity). Both backends byte-identical, tree-validators descend where applicable, parity green with `expectBodyContains` per branch, AA hand-check per new fg/bg pair, tests per composite (vitest + .NET), Showcase adoption. **NO release ship** — accumulate CHANGELOG under "Unreleased"; v8.0.0 publishes at Phase 26 closeout.
+
+**Requirements**: COMP-05 (ListRowNode + ListNode variant:"rows"), COMP-06 (MessageNode + MessageListNode with followTail semantics), COMP-07 (AlertNode with icon-tone default mapping), COMP-08 (EmptyStateNode with icon + title + description + action slot)
+
+**Depends on:** Phase 23 (foundations landed on main via commits 97163e1..133967d). Design of record: `.planning/design/composite-nodes-layer.md`. Approved tasting: `~/.claude/identities/vicky/bounties/composite-nodes-layer/tasting-page/index.html`.
+
+**Success Criteria** (what must be TRUE):
+  1. **`ListRowNode`** ships with slots `{ leading?, primary, secondary?, meta?, trailing?, tone?, state?, action? }`. `primary` rendered with trained `TextNode` typography (body + weight:"medium"); `secondary` = muted; `meta[]` = caption tier. `tone` (closed 4-way) sets left-accent border; `state` freeform (matches ListItem — active/done/disabled/high framework-styled); `action` enables whole-row `role="button" tabindex=0`. Byte-identical TS/.NET.
+  2. **`ListNode` gains `variant?: "items" | "rows"`** — omitted/`"items"` = today's ListItem behavior (byte-identical); `"rows"` = ListRowNode-only container rendering as a single bordered surface with per-row dividers. Old renderers gracefully degrade on unknown variant.
+  3. **`MessageNode`** ships with slots `{ avatar?, author, timestamp?, content, role?, actions? }`. `role:"assistant"` gets tinted-info surface; `role:"user"`/`"system"`/omitted gets neutral. `author` weight:600; `timestamp` caption tier; `actions[]` right-aligned. Byte-identical TS/.NET.
+  4. **`MessageListNode`** ships with `{ children: MessageNode[], followTail?: boolean }`. When `followTail:true` inherits `SectionNode.followTail` semantics (at-bottom detection pre-render, pin-to-new-bottom post-render). Pairs naturally with `PageNode.fill:true`.
+  5. **`AlertNode`** ships with slots `{ tone (required), title?, message, icon?, actions?, dismissible? }`. `tone` closed 4-way — this IS the point of the node. `icon` overrides tone→icon default mapping (danger→`x-circle`, warning→`alert-triangle`, success→`check-circle`, info→`info`). `title` weight:600; `message` muted. `actions[]` right-aligned size:"sm". `dismissible:true` adds close-X that dispatches a `dismiss` action name.
+  6. **`EmptyStateNode`** ships with slots `{ icon?, title, description?, action? }`. Centered stack, generous vertical padding. `icon` large in tinted-circle background; `title` text-lg weight:600; `description` muted with max-width for readable line length; `action` single ButtonNode centered. Composable in TableNode/ListNode empty-cell slot (resolves open bounty `empty-state-on-collections` via composite-consumable-in-empty-slot, NOT collection-property).
+  7. Every composite: both tree-validators descend into ViewNode-typed slots; action-name uniqueness enforced across the tree (banked from Nelly's TODO discovery).
+  8. Every composite: `[JsonIgnore(WhenWritingNull)]` on every optional nullable + `[JsonIgnore(WhenWritingDefault)]` on optional non-nullable bools per gotcha #8.
+  9. Parity green: FeatureProbe `buildVm` extended in all 3 backends (v5.1 pattern) per composite; minimum one `expectBodyContains` per composite that only its branch emits. `$comment` clause appended.
+ 10. AA-contrast hand-check for new fg/bg pairs per composite (Alert toned surfaces × 4 tones × 13 themes; Message assistant tinted content surface; ListRowNode hover-tint; EmptyStateNode tinted-circle icon backdrop). Fixed 13-pair gate does NOT auto-cover (banked lesson).
+ 11. Showcase adoption of every composite (Composites tab extending Foundations; fleet-adoption discipline — banked from UseVmsShellStaticFiles 6.7.0). Each composite demonstrated in situ.
+ 12. Vitest per composite (mutation-testable — rendering + slot passing + tree-validator descent) + .NET serialization tests (byte-identical wire + WhenWritingNull round-trip).
+ 13. `.planning/design/composite-nodes-layer.md` recipe-inventory table filled in for these 4 (Phase 23 landed the frame with empty inventory).
+ 14. AGENTS.md "Route B composite-nodes layer" section grown: add the 4 primary composites to the shipped recipe inventory + note their consumption of Phase 23 foundations.
+ 15. NO release ship — v8.0.0 releases at Phase 26 closeout. CHANGELOG accumulates all 4 under "Unreleased".
+
+**Plans:** 0 plans (to be created by `/gsd:plan-phase 24`)

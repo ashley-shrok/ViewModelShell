@@ -183,9 +183,16 @@ Strongest evidence + live consumer pressure. Requirements defined after Phase 23
 
 Broader coverage — user rows, detail lists, timeline entries, setting rows, chip clusters. Requirements defined after Phase 24 lands.
 
-### Phase 26 — Adoption + verification + v8.0.0 release closeout (COMP-16..N, to be defined in `/gsd:plan-phase 26`)
+### Phase 24 — Primary composites (COMP-05..08)
 
-Showcase adoption of every composite, comprehensive tailnet verification page, agent-skill.md updates, AGENTS.md governance section, CHANGELOG + MIGRATION, aligned npm + NuGet v8.0.0 release. Requirements defined after Phase 25 lands.
+The 4 composite recipes with the strongest evidence + live consumer pressure. Each consumes Phase 23 foundations.
+
+- [ ] **COMP-05**: **`ListRowNode`** — Route B recipe for the "dense row-per-item list" pattern. Slots: `leading?: ViewNode` (icon, badge, avatar, checkbox); `primary: string | ViewNode` (trained: TextNode body + weight:"medium"); `secondary?: string | ViewNode` (trained: TextNode muted); `meta?: (string | ViewNode)[]` (trained: TextNode style:"caption" — consumes COMP-01); `trailing?: ViewNode` (right-aligned — timestamp, count, actions); `tone?: "danger"|"warning"|"success"|"info"` (left-accent border); `state?: string` (freeform — active/done/disabled/high framework-styled, mirrors ListItem.state axis); `action?: ActionEvent` (whole-row click, same shape as TableRow.action). Renders as `<li>` inside a `ListNode(variant:"rows")` container that provides the single bordered surface with per-row dividers. Byte-identical TS/.NET; both tree-validators descend; string-form primary/secondary/meta lifted into TextNode by the renderer; action-name uniqueness enforced across the tree.
+- [ ] **COMP-05a**: **`ListNode` gains `variant?: "items" | "rows"`** — closed-union extension. Omitted/`"items"` = today's ListItem behavior (byte-identical). `"rows"` = ListRowNode-only container rendering as a single bordered surface with per-row dividers (denser than card-per-row). Old renderers gracefully degrade on unknown variant (renders as unstyled `<ul>` with `<li>` children).
+- [ ] **COMP-06**: **`MessageNode`** — Route B recipe for chat/comment messages with actor. Slots: `avatar?: ViewNode` (typically AvatarNode from COMP-04 — but slot accepts any ViewNode); `author: string` (trained: TextNode text-sm weight:600 — consumes COMP-02); `timestamp?: string` (trained: caption tier — consumes COMP-01); `content: string | ViewNode` (wrapped in padded surface); `role?: "user" | "assistant" | "system"` (closed union — controls surface tone: assistant = tinted-info surface; user/system/omitted = neutral surface); `actions?: ButtonNode[]` (right-aligned trailing action bar, always-visible per doctrine — no hover-reveal). Byte-identical TS/.NET; both tree-validators descend; content-as-string lifted to TextNode.
+- [ ] **COMP-06a**: **`MessageListNode`** — container for a stream of MessageNodes. Slots: `children: MessageNode[]` (typed to accept only messages — validator rejects other types); `followTail?: boolean` (WhenWritingDefault; when true the container inherits SectionNode.followTail semantics — at-bottom-detection pre-render, pin-to-new-bottom post-render — the shipped chartInstances/persistent-node idiom already handles this). Pairs naturally with `PageNode.fill:true` for full-height chat surfaces. Byte-identical TS/.NET.
+- [ ] **COMP-07**: **`AlertNode`** — Route B recipe for prominent status messages (banner asks from Moxie 2026-07-17 discoverability-miss + generally). Slots: `tone: "danger" | "warning" | "success" | "info"` (REQUIRED — this is the whole point of the node); `title?: string` (trained: TextNode text-md weight:600); `message: string | ViewNode` (trained: TextNode text-sm muted); `icon?: IconName` (overrides the tone→icon default mapping — see below); `actions?: ButtonNode[]` (right-aligned, size:"sm"); `dismissible?: boolean` (WhenWritingDefault; when true renders a close-X that dispatches a `dismiss` action name — framework handles the wire; app catches the action name via its normal dispatch loop). **Tone→icon default mapping** (baked in the browser renderer): danger→`x-circle`, warning→`alert-triangle`, success→`check-circle`, info→`info`. Byte-identical TS/.NET.
+- [ ] **COMP-08**: **`EmptyStateNode`** — Route B recipe for "nothing here" states (every collection view when there's nothing to show; the open bounty `empty-state-on-collections` proposed devolving onto collections as properties — this composite supersedes that direction, per the tasting-approval discussion). Slots: `icon?: IconName` (trained: large in tinted-circle background, 3rem circle, 1.5rem icon inside); `title: string` (trained: TextNode text-lg weight:600 — consumes COMP-02); `description?: string` (trained: TextNode text-sm muted with max-width for readable line length); `action?: ButtonNode` (centered below, single action only). Renders as a centered stack with generous vertical padding. Composable via drop-in: pass an EmptyStateNode to `TableNode`'s or `ListNode`'s empty-cell rendering slot (which the tasting-approved direction resolves — standalone composite wins vs. devolve-to-collection-property). Byte-identical TS/.NET.
 
 | Requirement | Phase |
 |---|---|
@@ -193,6 +200,12 @@ Showcase adoption of every composite, comprehensive tailnet verification page, a
 | COMP-02 | 23 |
 | COMP-03 | 23 |
 | COMP-04 | 23 |
+| COMP-05 | 24 |
+| COMP-05a | 24 |
+| COMP-06 | 24 |
+| COMP-06a | 24 |
+| COMP-07 | 24 |
+| COMP-08 | 24 |
 
 ---
 
