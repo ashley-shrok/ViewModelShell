@@ -6,6 +6,55 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 7.1.0 / NuGet `AshleyShrok.ViewModelShell.Markdown` 0.2.0 — Markdown converter: `imageSrcRewrite` + `linkHrefRewrite` hooks
+
+**npm:** `7.1.0` (minor, from `7.0.1`). **NuGet Markdown companion:** `0.2.0` (minor, from `0.1.0`). Core NuGet `AshleyShrok.ViewModelShell` sits out — it stays at `7.0.0`. Purely additive; no consumer action.
+
+Motivating consumer feedback: Amelia adopting the Markdown companion for Athena. Athena renders markdown out of a git-backed repo, and relative image references (`![alt](./screenshots/foo.png)`) must resolve to an app-served asset endpoint (`/athena/api/asset?path=<encoded>&id=<pageGuid>`). Same shape for wiki cross-links. Two-consumer convergence signal (Amelia + any future doc-viewer / wiki / notes app hits the same shape).
+
+### 🟢 NEW — `imageSrcRewrite` on `MarkdownOptions`
+
+Rewrite hook for image URLs. Called per emitted `ImageNode` with the raw markdown src; the return value replaces `ImageNode.src`. `null` / `undefined` (default) = no-op — existing adopters unaffected.
+
+- **.NET:** `MarkdownOptions.ImageSrcRewrite: Func<string, string>?`
+- **TS/npm:** `MarkdownOptions.imageSrcRewrite?: (src: string) => string`
+
+### 🟢 NEW — `linkHrefRewrite` on `MarkdownOptions`
+
+Symmetric rewrite hook for link URLs. Called per emitted link href (regular markdown links AND autolinks) with the raw href; the return value replaces `InlineRun.href`. `null` / `undefined` (default) = no-op.
+
+- **.NET:** `MarkdownOptions.LinkHrefRewrite: Func<string, string>?`
+- **TS/npm:** `MarkdownOptions.linkHrefRewrite?: (href: string) => string`
+
+**Autolink visible text is rewritten too.** For `<https://foo>`, the visible text IS the URL — rewriting only the href would let the visible label lie about where the click goes. Both sides of the pair (href + visible text) get the rewritten value together. For regular `[label](href)` links, the author's label stays untouched (only the href moves).
+
+**Order:** `linkHrefRewrite` runs BEFORE the `external` wire flag is applied. `external` is a wire property on the run, not a URL transform, so the rewriter never sees it.
+
+### 🟡 SCOPE — markdown-syntax only; inline HTML bypasses these hooks
+
+Both hooks fire on markdown-syntax `![alt](src)` / `[label](href)` / `<https://…>` autolinks. **Inline HTML `<img>` and `<a>` bypass the converter** (currently deferred v1 — silently skipped by the block/inline walker) and therefore never reach these hooks. Documented up front so consumers can decide whether their source markdown carries inline HTML. If a future adopter wall-hits on inline HTML too, address it then — for the two-consumer convergence case (Athena + PBM's Guide / What's New), the markdown-syntax-only scope is sufficient.
+
+### Precedent
+
+CommonMark itself is deliberately silent on URL resolution — it's a rendering concern. Every mature markdown renderer that faces this constraint converged on a callback-shaped rewrite hook (marked's `walkTokens`, markdown-it's `normalizeLink`, remark/rehype's `visit → node.url = …`). Same shape here, at the ViewNode-emission seam — right place.
+
+### Consumer action required
+
+None. Both hooks default to no-op; existing `MarkdownOptions` usage compiles and runs unchanged.
+
+### Green-tree at release commit
+
+- vitest 990 passed / 1 skipped (63 files; +7 new tests for the two hooks)
+- All 5 `check:*` gates + `check:demo-types` (21 projects)
+- Framework .NET 215 passed
+- Demo Tests 191 passed across 5 projects
+- Markdown companion Tests 34 passed (+7 new)
+- `bun run parity/run.ts` — all backends agree byte-identically
+
+Motivating consumer feedback: Amelia (Athena adoption via relay). Bounty: `markdown-src-href-rewrite`.
+
+---
+
 ## npm 7.0.1 — CSS: FieldNode(inputType:"checkbox") flex-shrink guard
 
 **npm:** `7.0.1` (patch, from `7.0.0`). CSS-only patch — NuGet sits out this bump (stays at `7.0.0`; the 7.0 line is unchanged). Purely additive style declaration, no consumer action required, no MIGRATION entry.

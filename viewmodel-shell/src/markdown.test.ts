@@ -372,3 +372,77 @@ describe("markdownToViewNodes — corpus fixtures", () => {
     });
   }
 });
+
+// ── Rewrite hooks: imageSrcRewrite + linkHrefRewrite (0.2.0) ──────────────
+
+describe("markdownToViewNodes — imageSrcRewrite", () => {
+  it("undefined = no-op (backcompat)", () => {
+    const nodes = markdownToViewNodes("![alt](./foo.png)");
+    const img = nodes[0] as ImageNode;
+    expect(img.type).toBe("image");
+    expect(img.src).toBe("./foo.png");
+  });
+
+  it("rewrites ImageNode.src per the callback (raw → resolved)", () => {
+    const nodes = markdownToViewNodes("![screenshot](./screenshots/foo.png)", {
+      imageSrcRewrite: (src) => `/assets?path=${encodeURIComponent(src)}&id=42`,
+    });
+    const img = nodes[0] as ImageNode;
+    expect(img.src).toBe("/assets?path=.%2Fscreenshots%2Ffoo.png&id=42");
+    expect(img.alt).toBe("screenshot");
+  });
+
+  it("does NOT fire on inline HTML <img> (scope: markdown-syntax only)", () => {
+    // Inline HTML is deferred (silently skipped). The hook must not synthesize
+    // an ImageNode from bytes we never emitted.
+    let fired = false;
+    const nodes = markdownToViewNodes('<img src="./inline.png" alt="i">', {
+      imageSrcRewrite: (src) => { fired = true; return src; },
+    });
+    expect(fired).toBe(false);
+    expect(nodes.some((n) => n.type === "image")).toBe(false);
+  });
+});
+
+describe("markdownToViewNodes — linkHrefRewrite", () => {
+  it("undefined = no-op (backcompat)", () => {
+    const nodes = markdownToViewNodes("[home](./index.md)");
+    const t = nodes[0] as TextNode;
+    expect(t.runs?.[0]?.href).toBe("./index.md");
+  });
+
+  it("rewrites InlineRun.href per the callback (regular link)", () => {
+    const nodes = markdownToViewNodes("[see](./other.md)", {
+      linkHrefRewrite: (h) => `/wiki?p=${encodeURIComponent(h)}`,
+    });
+    const t = nodes[0] as TextNode;
+    expect(t.runs?.[0]?.href).toBe("/wiki?p=.%2Fother.md");
+  });
+
+  it("also fires on autolinks (<https://example.com>)", () => {
+    const nodes = markdownToViewNodes("visit <https://example.com>", {
+      linkHrefRewrite: (h) => h.replace(/^https/, "http"),
+    });
+    const t = nodes[0] as TextNode;
+    // The autolink run carries the rewritten href AND its visible text is the
+    // rewritten URL — otherwise the label would lie about what a click does.
+    const linkRun = t.runs?.find((r) => r.href);
+    expect(linkRun?.href).toBe("http://example.com");
+    expect(linkRun?.text).toBe("http://example.com");
+  });
+
+  it("runs BEFORE external is applied (order guarantee)", () => {
+    // With external:true, the rewrite still fires and the run picks up BOTH
+    // the rewritten href AND external:true — order matters only in that the
+    // rewriter never sees the external flag (it's a wire property, not a URL).
+    const seen: string[] = [];
+    const nodes = markdownToViewNodes("[x](./y.md)", {
+      external: true,
+      linkHrefRewrite: (h) => { seen.push(h); return `/routed${h}`; },
+    });
+    expect(seen).toEqual(["./y.md"]);
+    const t = nodes[0] as TextNode;
+    expect(t.runs?.[0]?.href).toBe("/routed./y.md");
+    expect(t.runs?.[0]?.external).toBe(true);
+  });
+});

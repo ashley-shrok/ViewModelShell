@@ -40,6 +40,31 @@ export interface MarkdownOptions {
   /** GFM extensions (task-list markers, strikethrough) enabled by default.
    *  Set false for strict CommonMark. */
   gfm?: boolean;
+  /** Rewrite hook for image sources. Called per emitted `ImageNode` with
+   *  the raw markdown src; the return value replaces `ImageNode.src`.
+   *  Undefined (default) = no-op.
+   *
+   *  Use when relative image references in the source markdown must resolve
+   *  to an app-served asset endpoint (git-backed docs / wikis / notes apps).
+   *
+   *  **Scope:** fires on markdown-syntax `![alt](src)` only. Inline HTML
+   *  `<img>` bypasses the converter (currently deferred v1) and this hook. */
+  imageSrcRewrite?: (src: string) => string;
+  /** Rewrite hook for link hrefs. Called per emitted link URL (regular
+   *  links and autolinks) with the raw markdown href; the return value
+   *  replaces `InlineRun.href`. Undefined (default) = no-op.
+   *
+   *  Use when relative link references in the source markdown must resolve
+   *  to app-routed URLs (git-backed docs cross-linking to each other, wiki
+   *  page links, etc.).
+   *
+   *  **Scope:** fires on markdown-syntax `[label](href)` and autolinks
+   *  `<https://...>` only. Inline HTML `<a>` bypasses the converter
+   *  (currently deferred v1) and this hook.
+   *
+   *  **Order:** the hook runs before `external` is applied — external is a
+   *  wire flag on the run, not a URL transform. */
+  linkHrefRewrite?: (href: string) => string;
 }
 
 /** Parse `md` into a flat block-level `ViewNode[]`. Compose into any
@@ -61,29 +86,28 @@ export function markdownToViewNodes(
   md: string,
   opts: MarkdownOptions = {},
 ): ViewNode[] {
-  const external = opts.external ?? false;
   const tokens = marked.lexer(md, { gfm: opts.gfm ?? true });
-  return convertBlocks(tokens as Token[], external);
+  return convertBlocks(tokens as Token[], opts);
 }
 
 // ── Block-level walk ────────────────────────────────────────────────────────
 
-function convertBlocks(tokens: Token[], external: boolean): ViewNode[] {
+function convertBlocks(tokens: Token[], opts: MarkdownOptions): ViewNode[] {
   const out: ViewNode[] = [];
   for (const t of tokens) {
-    const nodes = convertBlock(t, external);
+    const nodes = convertBlock(t, opts);
     if (nodes) out.push(...nodes);
   }
   return out;
 }
 
-function convertBlock(t: Token, external: boolean): ViewNode[] | null {
+function convertBlock(t: Token, opts: MarkdownOptions): ViewNode[] | null {
   switch (t.type) {
     case "space":
       return null;
     case "heading": {
       const h = t as Tokens.Heading;
-      const runs = convertInline(h.tokens ?? [], external);
+      const runs = convertInline(h.tokens ?? [], opts);
       const level = clampLevel(h.depth);
       return [buildTextFromRuns(runs, level ? { level } : {})];
     }
@@ -92,18 +116,18 @@ function convertBlock(t: Token, external: boolean): ViewNode[] | null {
       // Paragraph containing ONLY an image → standalone ImageNode (the
       // conventional markdown pattern for a captioned figure).
       if (p.tokens?.length === 1 && p.tokens[0]?.type === "image") {
-        return [convertImage(p.tokens[0] as Tokens.Image)];
+        return [convertImage(p.tokens[0] as Tokens.Image, opts)];
       }
-      const runs = convertInline(p.tokens ?? [], external);
+      const runs = convertInline(p.tokens ?? [], opts);
       return [buildTextFromRuns(runs)];
     }
     case "list":
-      return [convertList(t as Tokens.List, external)];
+      return [convertList(t as Tokens.List, opts)];
     case "blockquote": {
       const bq = t as Tokens.Blockquote;
       const node: BlockquoteNode = {
         type: "blockquote",
-        children: convertBlocks(bq.tokens ?? [], external),
+        children: convertBlocks(bq.tokens ?? [], opts),
       };
       return [node];
     }
@@ -127,9 +151,9 @@ function convertBlock(t: Token, external: boolean): ViewNode[] | null {
   }
 }
 
-function convertList(list: Tokens.List, external: boolean): ListNode {
+function convertList(list: Tokens.List, opts: MarkdownOptions): ListNode {
   const items: ListItemNode[] = list.items.map((item) =>
-    convertListItem(item, external),
+    convertListItem(item, opts),
   );
   const node: ListNode = { type: "list", children: items };
   if (list.ordered) node.ordered = true;
@@ -138,7 +162,7 @@ function convertList(list: Tokens.List, external: boolean): ListNode {
 
 function convertListItem(
   item: Tokens.ListItem,
-  external: boolean,
+  opts: MarkdownOptions,
 ): ListItemNode {
   // A list_item's tokens[] MIX inline "text" (whose OWN nested `.tokens[]`
   // holds the real inline runs) with block-level nodes (nested list,
@@ -148,7 +172,7 @@ function convertListItem(
   let inlineBuffer: Token[] = [];
   const flushInline = () => {
     if (inlineBuffer.length === 0) return;
-    const runs = convertInline(inlineBuffer, external);
+    const runs = convertInline(inlineBuffer, opts);
     if (runs.length > 0 || inlineBuffer.some((t) => t.type === "text")) {
       children.push(buildTextFromRuns(runs));
     }
@@ -164,7 +188,7 @@ function convertListItem(
       else inlineBuffer.push(t);
     } else if (isBlockLevel(t)) {
       flushInline();
-      const block = convertBlock(t, external);
+      const block = convertBlock(t, opts);
       if (block) children.push(...block);
     } else {
       // An inline token appearing directly (rare — marked usually wraps in
@@ -196,8 +220,9 @@ function isBlockLevel(t: Token): boolean {
   }
 }
 
-function convertImage(img: Tokens.Image): ImageNode {
-  const node: ImageNode = { type: "image", src: img.href };
+function convertImage(img: Tokens.Image, opts: MarkdownOptions): ImageNode {
+  const src = opts.imageSrcRewrite ? opts.imageSrcRewrite(img.href) : img.href;
+  const node: ImageNode = { type: "image", src };
   if (img.text) node.alt = img.text;
   if (img.title) node.caption = img.title;
   return node;
@@ -215,9 +240,10 @@ interface InlineCtx {
 
 function convertInline(
   tokens: Token[],
-  external: boolean,
+  opts: MarkdownOptions,
   ctx: InlineCtx = {},
 ): InlineRun[] {
+  const external = opts.external ?? false;
   const out: InlineRun[] = [];
   for (const t of tokens) {
     switch (t.type) {
@@ -229,7 +255,7 @@ function convertInline(
       }
       case "strong":
         out.push(
-          ...convertInline((t as Tokens.Strong).tokens ?? [], external, {
+          ...convertInline((t as Tokens.Strong).tokens ?? [], opts, {
             ...ctx,
             bold: true,
           }),
@@ -237,7 +263,7 @@ function convertInline(
         break;
       case "em":
         out.push(
-          ...convertInline((t as Tokens.Em).tokens ?? [], external, {
+          ...convertInline((t as Tokens.Em).tokens ?? [], opts, {
             ...ctx,
             italic: true,
           }),
@@ -245,7 +271,7 @@ function convertInline(
         break;
       case "del":
         out.push(
-          ...convertInline((t as Tokens.Del).tokens ?? [], external, {
+          ...convertInline((t as Tokens.Del).tokens ?? [], opts, {
             ...ctx,
             strike: true,
           }),
@@ -263,13 +289,21 @@ function convertInline(
       }
       case "link": {
         const l = t as Tokens.Link;
-        const inner = l.tokens && l.tokens.length > 0
+        // Marked emits both `[label](href)` links and `<https://...>` autolinks
+        // as "link" tokens; the autolink case is `l.text === l.href` with
+        // `l.tokens` pre-populated to a single text token holding the URL.
+        // For autolinks we substitute the rewritten href as the visible text
+        // too — otherwise the label would lie about where the click goes.
+        // For regular labeled links the author's label stays untouched.
+        const href = opts.linkHrefRewrite ? opts.linkHrefRewrite(l.href) : l.href;
+        const isAutolink = l.text === l.href;
+        const inner = l.tokens && l.tokens.length > 0 && !isAutolink
           ? l.tokens
-          : ([{ type: "text", raw: l.text, text: l.text, escaped: false }] as Token[]);
+          : ([{ type: "text", raw: href, text: href, escaped: false }] as Token[]);
         out.push(
-          ...convertInline(inner, external, {
+          ...convertInline(inner, opts, {
             ...ctx,
-            href: l.href,
+            href,
             ...(external ? { extern: true as const } : {}),
           }),
         );

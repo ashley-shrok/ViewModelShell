@@ -35,6 +35,32 @@ public sealed class MarkdownOptions
     /// on a page rendering documentation whose links point at unrelated
     /// third parties.</summary>
     public bool External { get; init; }
+
+    /// <summary>Rewrite hook for image sources. Called per emitted
+    /// <see cref="ImageNode"/> with the raw markdown src; the return value
+    /// replaces <see cref="ImageNode.Src"/>. Null (default) = no-op.
+    /// <para>Use when relative image references in the source markdown must
+    /// resolve to an app-served asset endpoint (git-backed docs / wikis /
+    /// notes apps).</para>
+    /// <para><b>Scope:</b> fires on markdown-syntax <c>![alt](src)</c> only.
+    /// Inline HTML <c>&lt;img&gt;</c> bypasses the converter (currently
+    /// deferred v1) and this hook.</para></summary>
+    public Func<string, string>? ImageSrcRewrite { get; init; }
+
+    /// <summary>Rewrite hook for link hrefs. Called per emitted link URL
+    /// (regular links and autolinks) with the raw markdown href; the return
+    /// value replaces the href stored in the emitted <see cref="InlineRun"/>
+    /// (and, for an empty-label link, the run's visible text). Null (default)
+    /// = no-op.
+    /// <para>Use when relative link references in the source markdown must
+    /// resolve to app-routed URLs (git-backed docs cross-linking to each
+    /// other, wiki page links, etc.).</para>
+    /// <para><b>Scope:</b> fires on markdown-syntax <c>[label](href)</c> and
+    /// autolinks <c>&lt;https://...&gt;</c> only. Inline HTML <c>&lt;a&gt;</c>
+    /// bypasses the converter (currently deferred v1) and this hook.</para>
+    /// <para><b>Order:</b> the hook runs before <see cref="External"/> is
+    /// applied — external is a wire flag on the run, not a URL transform.</para></summary>
+    public Func<string, string>? LinkHrefRewrite { get; init; }
 }
 
 public static class MarkdownConverter
@@ -94,7 +120,7 @@ public static class MarkdownConverter
                 // (the conventional markdown pattern for a captioned figure).
                 if (IsImageOnlyParagraph(p.Inline, out var imgInline))
                 {
-                    return new[] { ConvertImage(imgInline) };
+                    return new[] { ConvertImage(imgInline, opts) };
                 }
                 var runs = ConvertInline(p.Inline, opts, new InlineCtx());
                 return new[] { BuildTextFromRuns(runs) };
@@ -200,9 +226,10 @@ public static class MarkdownConverter
         return true;
     }
 
-    private static ImageNode ConvertImage(LinkInline img)
+    private static ImageNode ConvertImage(LinkInline img, MarkdownOptions opts)
     {
         var src = img.Url ?? "";
+        if (opts.ImageSrcRewrite is not null) src = opts.ImageSrcRewrite(src);
         // Alt text is the concatenation of the image's inline children as
         // literal text (markdown allows nested inlines inside alt but the
         // wire is a plain string). Preserves "![some *emphasis*](x.png)"
@@ -279,6 +306,7 @@ public static class MarkdownConverter
             case LinkInline link when !link.IsImage:
             {
                 var href = link.Url ?? "";
+                if (opts.LinkHrefRewrite is not null) href = opts.LinkHrefRewrite(href);
                 var next = ctx with { Href = href, External = opts.External };
                 var inner = ConvertInline(link, opts, next);
                 if (inner.Count == 0)
@@ -305,6 +333,7 @@ public static class MarkdownConverter
             case AutolinkInline auto:
             {
                 var url = auto.Url ?? "";
+                if (opts.LinkHrefRewrite is not null) url = opts.LinkHrefRewrite(url);
                 var next = ctx with { Href = url, External = opts.External };
                 runs.Add(MakeRun(url, next));
                 break;

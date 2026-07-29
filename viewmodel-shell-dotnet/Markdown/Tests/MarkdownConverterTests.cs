@@ -341,4 +341,92 @@ public class MarkdownConverterTests
             }
         }
     }
+
+    // ── Rewrite hooks: ImageSrcRewrite + LinkHrefRewrite (0.2.0) ──────────
+
+    [Fact]
+    public void ImageSrcRewrite_Null_Is_NoOp_Backcompat()
+    {
+        var img = Assert.IsType<ImageNode>(MarkdownConverter.ToViewNodes("![alt](./foo.png)").Single());
+        Assert.Equal("./foo.png", img.Src);
+    }
+
+    [Fact]
+    public void ImageSrcRewrite_Rewrites_ImageNode_Src()
+    {
+        var opts = new MarkdownOptions
+        {
+            ImageSrcRewrite = src => $"/assets?path={System.Uri.EscapeDataString(src)}&id=42",
+        };
+        var img = Assert.IsType<ImageNode>(MarkdownConverter.ToViewNodes("![screenshot](./screenshots/foo.png)", opts).Single());
+        Assert.Equal("/assets?path=.%2Fscreenshots%2Ffoo.png&id=42", img.Src);
+        Assert.Equal("screenshot", img.Alt);
+    }
+
+    [Fact]
+    public void ImageSrcRewrite_Does_Not_Fire_On_Inline_HTML_Img()
+    {
+        // Inline HTML is deferred (silently skipped). The hook must not fire on
+        // <img> the converter never emits from.
+        var fired = false;
+        var opts = new MarkdownOptions { ImageSrcRewrite = src => { fired = true; return src; } };
+        var nodes = MarkdownConverter.ToViewNodes("<img src=\"./inline.png\" alt=\"i\">", opts);
+        Assert.False(fired);
+        Assert.DoesNotContain(nodes, n => n is ImageNode);
+    }
+
+    [Fact]
+    public void LinkHrefRewrite_Null_Is_NoOp_Backcompat()
+    {
+        var t = Assert.IsType<TextNode>(MarkdownConverter.ToViewNodes("[home](./index.md)").Single());
+        Assert.NotNull(t.Runs);
+        Assert.Equal("./index.md", t.Runs![0].Href);
+    }
+
+    [Fact]
+    public void LinkHrefRewrite_Rewrites_Regular_Link_Href()
+    {
+        var opts = new MarkdownOptions
+        {
+            LinkHrefRewrite = h => $"/wiki?p={System.Uri.EscapeDataString(h)}",
+        };
+        var t = Assert.IsType<TextNode>(MarkdownConverter.ToViewNodes("[see](./other.md)", opts).Single());
+        Assert.NotNull(t.Runs);
+        Assert.Equal("/wiki?p=.%2Fother.md", t.Runs![0].Href);
+    }
+
+    [Fact]
+    public void LinkHrefRewrite_Fires_On_Autolinks_And_Rewrites_Visible_Text_Too()
+    {
+        // Autolink `<https://foo>` visible text IS its URL. Rewriting only the
+        // href would let the visible label lie about where the click goes;
+        // both must be rewritten together. Parallel to the TS twin.
+        var opts = new MarkdownOptions
+        {
+            LinkHrefRewrite = h => h.Replace("https", "http"),
+        };
+        var t = Assert.IsType<TextNode>(MarkdownConverter.ToViewNodes("visit <https://example.com>", opts).Single());
+        Assert.NotNull(t.Runs);
+        var linkRun = t.Runs!.Single(r => r.Href is not null);
+        Assert.Equal("http://example.com", linkRun.Href);
+        Assert.Equal("http://example.com", linkRun.Text);
+    }
+
+    [Fact]
+    public void LinkHrefRewrite_Runs_Before_External_Flag_Applied()
+    {
+        // The rewriter never sees external — external is a wire property on
+        // the run, not a URL transform. Both flags land on the emitted run.
+        var seen = new System.Collections.Generic.List<string>();
+        var opts = new MarkdownOptions
+        {
+            External = true,
+            LinkHrefRewrite = h => { seen.Add(h); return $"/routed{h}"; },
+        };
+        var t = Assert.IsType<TextNode>(MarkdownConverter.ToViewNodes("[x](./y.md)", opts).Single());
+        Assert.Equal(new[] { "./y.md" }, seen);
+        Assert.NotNull(t.Runs);
+        Assert.Equal("/routed./y.md", t.Runs![0].Href);
+        Assert.True(t.Runs[0].External);
+    }
 }

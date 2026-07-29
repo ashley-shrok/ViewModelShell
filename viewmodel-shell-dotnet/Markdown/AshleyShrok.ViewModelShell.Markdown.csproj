@@ -22,7 +22,7 @@
 
     <!-- ── NuGet packaging ─────────────────────────────────────────── -->
     <PackageId>AshleyShrok.ViewModelShell.Markdown</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>ashley-shrok</Authors>
     <Description>Markdown -> ViewNode subtree converter for AshleyShrok.ViewModelShell. Optional companion; core VMS has no dependency on it. Wire-parallel to the TS twin @ashley-shrok/viewmodel-shell/markdown — feed the same markdown into either and get an equivalent ViewNode subtree.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
