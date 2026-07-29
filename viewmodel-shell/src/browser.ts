@@ -24,6 +24,7 @@ import type {
   DetailRowNode, DetailListNode,
   TimelineEntryNode, TimelineNode,
   SettingRowNode, SettingListNode,
+  ChipNode, ChipListNode,
 } from "./index.js";
 import { ICONS } from "./icons-payload.js";
 
@@ -579,6 +580,8 @@ export class BrowserAdapter implements Adapter {
       case "timeline-entry": return this.timelineEntry(n, parent, on);
       case "setting-list":   return this.settingList(n, parent, on);
       case "setting-row":    return this.settingRow(n, parent, on);
+      case "chip":           return this.chip(n, parent, on);
+      case "chip-list":      return this.chipList(n, parent, on);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -1686,6 +1689,87 @@ export class BrowserAdapter implements Adapter {
     }
 
     parent.appendChild(li);
+  }
+
+  /** v8.0.0 (COMP-13a) — ChipListNode renderer. Flex-wrap horizontal pill
+   *  cluster (`<div class="vms-chip-list" role="list">`). Tree-validator
+   *  (server.ts) enforces the ChipNode-only child invariant with a
+   *  byte-identical error message across both backends; at runtime we still
+   *  descend via kids() — any non-Chip that slips past goes through node()
+   *  and is warned by the unknown-type default arm. */
+  private chipList(n: ChipListNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const div = document.createElement("div");
+    div.className = "vms-chip-list";
+    div.setAttribute("role", "list");
+    this.kids(n.children as unknown as ViewNode[], div, on);
+    parent.appendChild(div);
+  }
+
+  /** v8.0.0 (COMP-13) — ChipNode renderer. Tinted-pill primitive for filter
+   *  chips, selected tags, category pills. Renders as
+   *  `<span class="vms-chip" role="listitem">`; upgraded to `role="button"`
+   *  + tabIndex=0 + Enter/Space keydown when `action` is set (chip IS the
+   *  button when action is set — the last setAttribute wins).
+   *
+   *  🚨 CRITICAL — the dismissAction dispatch calls `on(n.dismissAction)`
+   *  with the CALLER-SUPPLIED ActionEvent (mirrors ModalNode.dismissAction
+   *  shape), NOT `on({name:"dismiss"})` like AlertNode.dismissible. Chips
+   *  need identity-carrying dispatch (`remove-filter-42`, `unselect-tag-foo`).
+   *  If a future contributor reverts this to the AlertNode fixed-name shape,
+   *  the vitest KEY MUTATION TEST fails immediately. Do not "fix" the
+   *  divergence — it is intentional and load-bearing.
+   *
+   *  When BOTH `n.action` and `n.dismissAction` are present, the X button's
+   *  click stopPropagation()s so the whole-chip click does NOT double-fire. */
+  private chip(n: ChipNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const span = document.createElement("span");
+    const cls = ["vms-chip"];
+    if (n.tone) cls.push(`vms-chip--${n.tone}`);
+    if (n.action) cls.push("vms-chip--clickable");
+    span.className = cls.join(" ");
+    span.setAttribute("role", "listitem");
+
+    if (n.icon) span.appendChild(this.renderIconSvg(n.icon, "xs", undefined, undefined));
+    span.appendChild(document.createTextNode(n.label));
+
+    // 🚨 dismissAction — CALLER-SUPPLIED ActionEvent (mirrors
+    // ModalNode.dismissAction shape, NOT AlertNode.dismissible's fixed-name
+    // shape). Absent = no X rendered (respects "no dead UI"; CONTEXT §5
+    // explicitly notes this). If a future contributor reverts
+    // `on(dismissAction)` → `on({name:"dismiss"})` matching AlertNode, the
+    // vitest KEY MUTATION TEST fails.
+    if (n.dismissAction) {
+      const dismissAction = n.dismissAction;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "vms-chip__dismiss";
+      btn.setAttribute("aria-label", `Remove ${n.label}`);
+      btn.textContent = "✕";
+      btn.addEventListener("click", (e) => {
+        // When BOTH n.action and n.dismissAction are set, the X must not
+        // double-fire the whole-chip click.
+        if (n.action) e.stopPropagation();
+        on(dismissAction);
+      });
+      span.appendChild(btn);
+    }
+
+    // Whole-chip click — SAME pattern as listRow()'s action wiring
+    // (role="button", tabIndex=0, Enter/Space keydown with Space
+    // preventDefault). Applied to the .vms-chip span itself; the last
+    // setAttribute("role", ...) wins over the earlier "listitem".
+    if (n.action) {
+      const action = n.action;
+      span.tabIndex = 0;
+      span.setAttribute("role", "button");
+      span.addEventListener("click", () => { on(action); });
+      span.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") on(action);
+        else if (e.key === " " || e.key === "Spacebar") { e.preventDefault(); on(action); }
+      });
+    }
+
+    parent.appendChild(span);
   }
 
   /** v8.0.0 (COMP-06) — MessageNode renderer. Chat/comment message with a
