@@ -22,6 +22,7 @@ import type {
   IconNode, IconName, AvatarNode, ListRowNode,
   MessageNode, MessageListNode, AlertNode, UserRowNode,
   DetailRowNode, DetailListNode,
+  TimelineEntryNode, TimelineNode,
 } from "./index.js";
 import { ICONS } from "./icons-payload.js";
 
@@ -573,6 +574,8 @@ export class BrowserAdapter implements Adapter {
       case "user-row":     return this.userRow(n, parent, on);
       case "detail-row":   return this.detailRow(n, parent, on);
       case "detail-list":  return this.detailList(n, parent, on);
+      case "timeline":       return this.timeline(n, parent, on);
+      case "timeline-entry": return this.timelineEntry(n, parent, on);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -1461,6 +1464,81 @@ export class BrowserAdapter implements Adapter {
     row.appendChild(dd);
 
     parent.appendChild(row);
+  }
+
+  /** v8.0.0 (COMP-11a) — TimelineNode renderer.
+   *
+   *  Emits `<ol class="vms-timeline">` — semantic ordered list, since timeline
+   *  entries are chronological. The decorative left rail is installed
+   *  ENTIRELY via CSS `::before` on `.vms-timeline` (default.css); the
+   *  renderer emits NO decoration itself. Children are TimelineEntryNode[]
+   *  on the type — the tree-validator rejects non-TimelineEntryNode entries
+   *  server-side (byte-identical error message across TS + .NET). The
+   *  renderer just walks children through the standard node() dispatch
+   *  (which will render each as timelineEntry()).
+   *
+   *  Mutation test: swapping `<ol>` → `<ul>` breaks the semantic-list test
+   *  in test/timeline.test.ts (an ordered list is the right semantic for
+   *  chronological entries; a bulleted list drops that meaning).
+   */
+  private timeline(n: TimelineNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const ol = document.createElement("ol");
+    ol.className = "vms-timeline";
+    this.kids(n.children as unknown as ViewNode[], ol, on);
+    parent.appendChild(ol);
+  }
+
+  /** v8.0.0 (COMP-11) — TimelineEntryNode renderer.
+   *
+   *  Emits `<li class="vms-timeline-entry [vms-timeline-entry--{tone}]">
+   *  <div class="vms-timeline-entry__time">{time}</div>
+   *  <div class="vms-timeline-entry__description">{description}</div></li>`.
+   *  The dot marker on each entry lives ENTIRELY in the
+   *  `.vms-timeline-entry::before` CSS rule (default.css); the renderer emits
+   *  NO DOM node for the dot. The tone modifier class routes to the tone-
+   *  encoded border-color rule (`.vms-timeline-entry--{tone}::before`).
+   *
+   *  STRING-LIFT trained typography:
+   *   - `time` (primitive string, no ViewNode variant) → renderer wraps in
+   *     `TextNode { style: "caption" }` (COMP-01 caption tier).
+   *   - `description` string → renderer wraps in `TextNode { style: "body" }`;
+   *     ViewNode → rendered as-is (escape hatch for rich content).
+   *
+   *  ICON — optional; renders inside `.vms-timeline-entry__icon` wrapper
+   *  which is CSS-absolutely-positioned into the dot slot (larger than a
+   *  bare dot). Reuses `renderIconSvg` from Phase 22 at `sm` size.
+   */
+  private timelineEntry(n: TimelineEntryNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const li = document.createElement("li");
+    const cls = ["vms-timeline-entry"];
+    if (n.tone) cls.push(`vms-timeline-entry--${n.tone}`);
+    li.className = cls.join(" ");
+
+    // time — always string, always caption-tier trained typography (COMP-01)
+    const time = document.createElement("div");
+    time.className = "vms-timeline-entry__time";
+    this.node({ type: "text", value: n.time, style: "caption" }, time, on);
+    li.appendChild(time);
+
+    // description — string → body-tier; ViewNode → as-is (rich content OK)
+    const desc = document.createElement("div");
+    desc.className = "vms-timeline-entry__description";
+    if (typeof n.description === "string") {
+      this.node({ type: "text", value: n.description, style: "body" }, desc, on);
+    } else {
+      this.node(n.description, desc, on);
+    }
+    li.appendChild(desc);
+
+    // Optional icon — larger dot slot (CSS-positioned via .vms-timeline-entry__icon)
+    if (n.icon) {
+      const iconWrap = document.createElement("span");
+      iconWrap.className = "vms-timeline-entry__icon";
+      iconWrap.appendChild(this.renderIconSvg(n.icon, "sm", undefined, undefined));
+      li.appendChild(iconWrap);
+    }
+
+    parent.appendChild(li);
   }
 
   /** v8.0.0 (COMP-06) — MessageNode renderer. Chat/comment message with a
