@@ -6,6 +6,21 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to v8.0.0 (in progress) — nothing to do (all foundations additive)
+
+**Batch-then-ship:** v8.0.0 publishes at Phase 26 closeout with all 10 composites + 3 wire tweaks + 4 foundations in one aligned release. This entry accumulates as Phase 23-26 land; it flips to a versioned release heading at Phase 26.
+
+**Phase 23 foundations are purely additive** — new optional wire fields and one new node type. Every existing tree renders byte-identically; no consumer changes anything. Old renderers on unknown enum values (`TextNode.style: "caption"`, `TextNode.weight`, `CheckboxNode.variant: "switch"`) gracefully degrade to their pre-v8.0 rendering path. Consumers not opting in to the new fields see no behavior change.
+
+- `TextNode.style: "caption"` — opt in by setting `style: "caption"` on any TextNode; renders at text-xs muted.
+- `TextNode.weight?: "regular" | "medium" | "bold"` — new optional axis; omit for the framework default.
+- `CheckboxNode.variant?: "checkbox" | "switch"` — new optional axis; omit for the standard checkbox render (existing behavior).
+- `AvatarNode` — new node type; adopt at any composition point without touching existing trees.
+
+No code changes required. See the `Unreleased — v8.0.0 (in progress)` section of `CHANGELOG.md` for the full wire-level detail.
+
+---
+
 ## Upgrading to npm `7.0.0` / NuGet `7.0.0` — ONE break: `TrackerCell.label` → `TrackerCell.tooltip`
 
 **Aligned major bump on both packages.** Wire protocol token stays `viewmodel-shell/1.0`. The icon primitive is **purely additive** — new `IconNode`, new `icon?: IconName` prop on `ButtonNode`/`LinkNode`/`SectionNode`/`Badge`/`ListItem`, a new tree-validator rule for icon-only Buttons — **no existing tree is affected**. If you don't use `TrackerCell`, nothing to do.

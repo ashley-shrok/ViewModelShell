@@ -6,6 +6,19 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## Unreleased — v8.0.0 (in progress)
+
+> **Batch-then-ship:** v8.0.0 publishes at Phase 26 closeout with all 10 composites + 3 wire tweaks + 4 foundations in one aligned release. Do NOT publish Phase 23 as its own release. See `.planning/design/composite-nodes-layer.md` for the milestone design of record.
+
+### Added
+
+- `TextNode.style: "caption"` — the 3rd typographic tier: renders `.vms-text--caption` at `font-size: var(--vms-text-xs)`, `color: var(--vms-text-muted)`, `opacity: 0.85`, `line-height: 1.4`. Downstream composites (`ListRowNode.meta[]`, `MessageNode.timestamp`, `TimelineEntryNode.time`) consume it for micro-meta lines. (COMP-01)
+- `TextNode.weight?: "regular" | "medium" | "bold"` — new orthogonal weight axis: renders `.vms-text--weight-{value}` at `font-weight: 400/500/700`. Semi-bold body-size weight for row primaries (`ListRowNode.primary`, `MessageNode.author`, `UserRowNode.name`, `SettingRowNode.label`). Omitted = the framework default weight for the node's `style`. (COMP-02)
+- `CheckboxNode.variant?: "checkbox" | "switch"` — visual switch-slider render mode; wire and dispatch semantics UNCHANGED (still boolean, still `bind`/change dispatch, still `<input type="checkbox">`). `"switch"` emits `.vms-field--switch` + native `role="switch"` on the input; older adapters gracefully degrade to standard checkbox on unknown variant. (COMP-03)
+- `AvatarNode` — new standalone primitive: circular slot with content-resolution priority image > initials > icon > empty. Wire shape: `{ type: "avatar", initials?, image?, icon?: IconName, size?: "sm"|"md"|"lg"|"xl", tone?: Tone, alt? }`. Sizes map to 1.5/2/2.5/3rem. Tone applies to non-image modes only. Reuses the v7.0.0 `IconName` closed union for the fallback icon slot and `renderIconSvg` for icon-mode rendering. Consumed by `UserRowNode`, `MessageNode`, `ChipNode` downstream (Phase 24-25); usable standalone in mention pickers, assignee columns, comment threads. Circular only for v1 (other shapes deferred). (COMP-04)
+
+---
+
 ## npm 7.1.0 / NuGet `AshleyShrok.ViewModelShell.Markdown` 0.2.0 — Markdown converter: `imageSrcRewrite` + `linkHrefRewrite` hooks
 
 **npm:** `7.1.0` (minor, from `7.0.1`). **NuGet Markdown companion:** `0.2.0` (minor, from `0.1.0`). Core NuGet `AshleyShrok.ViewModelShell` sits out — it stays at `7.0.0`. Purely additive; no consumer action.
