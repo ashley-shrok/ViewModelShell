@@ -26,6 +26,8 @@ import type {
   MessageListNode,
   AlertNode,
   UserRowNode,
+  DetailRowNode,
+  DetailListNode,
   FitsNode,
   EmptyStateNode,
   BlockquoteNode,
@@ -282,6 +284,39 @@ function collectActions(
       }
       if (ur.trailing) collectActions(ur.trailing, enclosingForm, out);
       if (ur.action) recordAction(ur.action, enclosingForm, out);
+      return;
+    }
+    case "detail-row": {
+      // v8.0.0 (COMP-10) — DetailRowNode slots: value (string | ViewNode).
+      // label + icon + tone are primitives (label is a raw string, icon is
+      // IconName, tone is a closed-union enum) — no walker descent. Value
+      // descends ONLY when it's a ViewNode (the string case is a leaf that
+      // the renderer auto-wraps into a TextNode). NO action slot on this
+      // node — DetailRowNode is passive display.
+      const dr = node as DetailRowNode;
+      if (typeof dr.value !== "string") collectActions(dr.value, enclosingForm, out);
+      return;
+    }
+    case "detail-list": {
+      // v8.0.0 (COMP-10a) — DetailListNode.children MUST be DetailRowNode[].
+      // Tree-invariant rejection: any non-DetailRowNode child throws
+      // invalid_tree. Byte-identical error message across TS + .NET (see the
+      // .NET twin arm in ViewTreeValidation.Collect in ViewModels.cs). Same
+      // pattern as MessageListNode.children mixed-children rejection above.
+      const dl = node as DetailListNode;
+      for (const child of dl.children) {
+        // Cast through unknown — TypeScript's compile-time type is
+        // DetailRowNode[], but the runtime tree is server-authored JSON that
+        // CAN smuggle any ViewNode in (hostile deserialization / a buildVm
+        // bug). The validator catches it at runtime.
+        const c = child as unknown as { type: string };
+        if (c.type !== "detail-row") {
+          throw new Error(
+            `DetailListNode.children must all be DetailRowNodes (found: ${c.type})`
+          );
+        }
+      }
+      for (const child of dl.children) collectActions(child, enclosingForm, out);
       return;
     }
     case "form": {
@@ -666,6 +701,23 @@ function walkForSectionAction(
         walkForSectionAction(ur.meta, outerInteractive);
       }
       if (ur.trailing) walkForSectionAction(ur.trailing, outerInteractive);
+      return;
+    }
+    case "detail-row": {
+      // v8.0.0 (COMP-10) — DetailRowNode.value can hold arbitrary ViewNode
+      // subtrees when non-string. Descend for defense-in-depth so a future
+      // shape can't slip an interactive section past this validator.
+      // label + icon + tone are primitives — no descent.
+      const dr = node as DetailRowNode;
+      if (typeof dr.value !== "string") walkForSectionAction(dr.value, outerInteractive);
+      return;
+    }
+    case "detail-list": {
+      // v8.0.0 (COMP-10a) — DetailListNode.children are DetailRowNodes;
+      // descend into each to catch any nested interactive-section violations
+      // in a row's value slot.
+      const dl = node as DetailListNode;
+      for (const child of dl.children) walkForSectionAction(child, outerInteractive);
       return;
     }
     case "form": {

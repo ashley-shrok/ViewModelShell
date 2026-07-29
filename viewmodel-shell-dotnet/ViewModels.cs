@@ -2726,6 +2726,23 @@ public static class ViewTreeValidation
                 if (userRow.Trailing is { } urTrail) WalkForSectionAction(urTrail, outerInteractive);
                 break;
 
+            case DetailRowNode detailRow:
+                // v8.0.0 (COMP-10) — DetailRowNode.Value can hold arbitrary
+                // ViewNode subtrees. Descend for defense-in-depth so a future
+                // shape can't slip an interactive section past this
+                // validator. Label + Icon + Tone are primitives — no descent.
+                // Mirrors the TS twin `case "detail-row"` arm in server.ts.
+                WalkForSectionAction(detailRow.Value, outerInteractive);
+                break;
+
+            case DetailListNode detailList:
+                // v8.0.0 (COMP-10a) — DetailListNode.Children are
+                // DetailRowNodes; descend into each to catch any nested
+                // interactive-section violations in a row's Value slot.
+                // Mirrors the TS twin `case "detail-list"` arm.
+                foreach (var child in detailList.Children) WalkForSectionAction(child, outerInteractive);
+                break;
+
             case FormNode form:
                 foreach (var child in form.Children) WalkForSectionAction(child, outerInteractive);
                 break;
@@ -2938,6 +2955,44 @@ public static class ViewTreeValidation
                 if (userRow.Action is { } urAction) Record(urAction, enclosingForm, sink);
                 break;
 
+            case DetailRowNode detailRow:
+                // v8.0.0 (COMP-10) — DetailRowNode slots: Value (ViewNode,
+                // required). Label + Icon + Tone are primitives (Label is a
+                // raw string, Icon is IconName, Tone is a closed-union enum)
+                // — no descent. Value is REQUIRED as ViewNode (not
+                // ViewNode?) so the .NET server always has a subtree to walk
+                // (the TS twin's `string | ViewNode` convenience wraps in
+                // TextNode{body} at render time; the .NET server wraps
+                // explicitly). NO Action slot on this node — DetailRowNode is
+                // passive display. Mirrors the TS twin `case "detail-row"`
+                // arm in server.ts.
+                Collect(detailRow.Value, enclosingForm, sink);
+                break;
+
+            case DetailListNode detailList:
+                // v8.0.0 (COMP-10a) — DetailListNode.Children MUST be
+                // DetailRowNode. Children is typed IReadOnlyList<ViewNode>
+                // on the record (widening from DetailRowNode-only is
+                // deliberate — a narrow shape drops the polymorphic
+                // "type":"detail-row" discriminator per the FormNode.Buttons
+                // banked posture at :1155-1159), so the tree-shape invariant
+                // IS enforced exclusively at runtime here — the compile-time
+                // type would silently accept any ViewNode.
+                //
+                // Byte-identical error message across TS + .NET (see the TS
+                // twin `case "detail-list"` arm in server.ts).
+                foreach (var child in detailList.Children)
+                {
+                    if (child is not DetailRowNode)
+                    {
+                        var childType = ViewNodeWireName(child);
+                        throw new InvalidOperationException(
+                            $"DetailListNode.children must all be DetailRowNodes (found: {childType})");
+                    }
+                }
+                foreach (var child in detailList.Children) Collect(child, enclosingForm, sink);
+                break;
+
             case FormNode form:
                 if (form.SubmitAction is { } submit) Record(submit, form, sink);
                 if (form.Buttons is { } buttons)
@@ -3131,6 +3186,8 @@ public static class ViewTreeValidation
         MessageListNode => "message-list",
         AlertNode     => "alert",
         UserRowNode   => "user-row",
+        DetailRowNode  => "detail-row",
+        DetailListNode => "detail-list",
         _             => node.GetType().Name,
     };
 }
