@@ -2185,10 +2185,15 @@ public record MessageNode(
     // Message role — controls surface tone. Real enum per closed-union-must-
     // be-enum discipline (KebabEnum wire values "user"/"assistant"/"system").
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MessageRole? Role = null,
-    // Right-aligned action bar. Narrow-typed IReadOnlyList<ButtonNode> — the
-    // shape always accepts only buttons (matches every action-bar slot in the
-    // framework). Rendered UNCONDITIONALLY when non-empty; no hover-reveal.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ButtonNode>? Actions = null
+    // Right-aligned action bar. Typed IReadOnlyList<ViewNode>? (NOT
+    // IReadOnlyList<ButtonNode>) so System.Text.Json emits the polymorphic
+    // "type":"button" discriminator on each entry — a narrow ButtonNode-typed
+    // list would silently drop the discriminator (banked posture from
+    // FormNode.Buttons at :1155-1159; same rule applies here). Rendered
+    // UNCONDITIONALLY when non-empty; no hover-reveal (banked a11y doctrine).
+    // The renderer + walker cast entries to ButtonNode; a non-button entry
+    // is currently unspec-behavior, matching the FormNode.Buttons contract.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Actions = null
 ) : ViewNode;
 
 /// <summary>v8.0.0 (COMP-06a) — MessageListNode. Container for MessageNode
@@ -2213,7 +2218,15 @@ public record MessageNode(
 /// </para>
 /// </summary>
 public record MessageListNode(
-    IReadOnlyList<MessageNode> Children,
+    // Typed IReadOnlyList<ViewNode> (NOT IReadOnlyList<MessageNode>) so
+    // System.Text.Json emits the polymorphic "type":"message" discriminator
+    // on each child (a narrow MessageNode-typed list silently drops the
+    // discriminator — same banked posture as FormNode.Buttons at :1155-1159).
+    // The tree invariant is enforced by the runtime validator in
+    // ViewTreeValidation.Collect (`invalid_tree` with byte-identical error
+    // message to the TS twin) — every non-MessageNode child is rejected
+    // there, so the wire-level list is effectively still MessageNode-only.
+    IReadOnlyList<ViewNode> Children,
     // WhenWritingDefault posture on a non-nullable bool — matches
     // SectionNode.FollowTail at :999. false = ABSENT on the wire (byte-
     // identical to the TS optional `followTail?: boolean` which is
@@ -2549,10 +2562,13 @@ public static class ViewTreeValidation
 
             case MessageNode message:
                 // v8.0.0 (COMP-06) — MessageNode slots: Avatar (ViewNode?),
-                // Content (ViewNode, required), Actions (ButtonNode[]).
-                // Descend into every ViewNode-typed slot; each button's
-                // Action participates in name uniqueness. Mirrors the TS
-                // twin `case "message"` arm in server.ts.
+                // Content (ViewNode, required), Actions (IReadOnlyList<ViewNode>?
+                // — typed wide for polymorphic discriminator emission per the
+                // FormNode.Buttons posture at :1155-1159). Descend into every
+                // ViewNode-typed slot; each ButtonNode child's Action
+                // participates in name uniqueness — filter via OfType<
+                // ButtonNode>() to match FormNode.Buttons handling at :2598
+                // exactly. Mirrors the TS twin `case "message"` arm in server.ts.
                 if (message.Avatar is { } msgAvatar) Collect(msgAvatar, enclosingForm, sink);
                 Collect(message.Content, enclosingForm, sink);
                 if (message.Actions is { } msgActions)
@@ -2563,22 +2579,21 @@ public static class ViewTreeValidation
 
             case MessageListNode messageList:
                 // v8.0.0 (COMP-06a) — MessageListNode.Children MUST be
-                // MessageNode. The compile-time IReadOnlyList<MessageNode>
-                // type is the primary enforcement; this runtime check is
-                // defense-in-depth for a hostile deserialization path that
-                // smuggles in non-MessageNode entries as ViewNode. Byte-
-                // identical error message across TS + .NET (see the TS twin
-                // `case "message-list"` arm in server.ts).
+                // MessageNode. Children is typed IReadOnlyList<ViewNode> on
+                // the record (widening from IReadOnlyList<MessageNode> is
+                // deliberate — a narrow shape drops the polymorphic
+                // "type":"message" discriminator per the FormNode.Buttons
+                // banked posture), so the tree-shape invariant IS enforced
+                // exclusively at runtime here — the compile-time type would
+                // silently accept any ViewNode.
+                //
+                // Byte-identical error message across TS + .NET (see the TS
+                // twin `case "message-list"` arm in server.ts).
                 foreach (var child in messageList.Children)
                 {
-                    // Children is IReadOnlyList<MessageNode> at compile time;
-                    // cast through ViewNode so a poisoned collection (e.g. a
-                    // deserializer that produced ViewNode entries and coerced
-                    // the type check) still trips the guard.
-                    ViewNode c = child;
-                    if (c is not MessageNode)
+                    if (child is not MessageNode)
                     {
-                        var childType = ViewNodeWireName(c);
+                        var childType = ViewNodeWireName(child);
                         throw new InvalidOperationException(
                             $"MessageListNode.children must all be MessageNodes (found: {childType})");
                     }
