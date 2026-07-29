@@ -3017,6 +3017,26 @@ public static class ViewTreeValidation
                 foreach (var child in settingList.Children) WalkForSectionAction(child, outerInteractive);
                 break;
 
+            case ChipNode:
+                // v8.0.0 (COMP-13) — ChipNode has no ViewNode-typed slots
+                // (Label is a string primitive, Tone is a closed enum, Icon
+                // is IconName, and both DismissAction/Action are
+                // ActionDescriptors — not ViewNodes). No section can be
+                // smuggled through — the arm exists for consistency with
+                // every other walk so a future shape that promotes a slot
+                // to ViewNode can't slip an interactive section past this
+                // validator. Mirrors the TS twin `case "chip"` arm.
+                break;
+
+            case ChipListNode chipList:
+                // v8.0.0 (COMP-13a) — ChipListNode.Children are ChipNodes;
+                // descend into each for defense-in-depth (chips carry no
+                // ViewNode slots today, but if a future slot is added the
+                // descent is already correct). Mirrors the TS twin
+                // `case "chip-list"` arm.
+                foreach (var child in chipList.Children) WalkForSectionAction(child, outerInteractive);
+                break;
+
             case FormNode form:
                 foreach (var child in form.Children) WalkForSectionAction(child, outerInteractive);
                 break;
@@ -3347,6 +3367,50 @@ public static class ViewTreeValidation
                     }
                 }
                 foreach (var child in settingList.Children) Collect(child, enclosingForm, sink);
+                break;
+
+            case ChipNode chip:
+                // v8.0.0 (COMP-13) — ChipNode has TWO independent ActionEvent
+                // slots: DismissAction (X click, caller-supplied identity-
+                // carrying name like `remove-filter-42`) and Action (whole-chip
+                // click, caller-supplied toggle name like `toggle-filter-42`).
+                // BOTH participate in name uniqueness — a chip in a filter set
+                // might carry BOTH as its two independent operations on the
+                // same identity.
+                //
+                // 🚨 CRITICAL POSTURE: DismissAction is a CALLER-SUPPLIED
+                // ActionDescriptor (mirrors ModalNode.DismissAction). Unlike
+                // AlertNode.Dismissible (bool → fixed local `{name:"dismiss"}`
+                // emitted client-side; walker records nothing), Chip's
+                // DismissAction IS on the wire and MUST be recorded here for
+                // uniqueness. See ChipNode XML doc + AGENTS.md.
+                //
+                // Mirrors the TS twin `case "chip"` arm in server.ts.
+                if (chip.DismissAction is { } chipDismiss) Record(chipDismiss, enclosingForm, sink);
+                if (chip.Action is { } chipAction) Record(chipAction, enclosingForm, sink);
+                break;
+
+            case ChipListNode chipList:
+                // v8.0.0 (COMP-13a) — ChipListNode.Children MUST be ChipNode.
+                // Children is typed IReadOnlyList<ViewNode> on the record
+                // (deliberately widened from ChipNode-only, for polymorphic-
+                // discriminator preservation — see the record's XML doc), so
+                // the tree-shape invariant IS enforced exclusively at runtime
+                // here — the compile-time type would silently accept any
+                // ViewNode.
+                //
+                // Byte-identical error message across TS + .NET (see the TS
+                // twin `case "chip-list"` arm in server.ts).
+                foreach (var child in chipList.Children)
+                {
+                    if (child is not ChipNode)
+                    {
+                        var childType = ViewNodeWireName(child);
+                        throw new InvalidOperationException(
+                            $"ChipListNode.children must all be ChipNodes (found: {childType})");
+                    }
+                }
+                foreach (var child in chipList.Children) Collect(child, enclosingForm, sink);
                 break;
 
             case FormNode form:

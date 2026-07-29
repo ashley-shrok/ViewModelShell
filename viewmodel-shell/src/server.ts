@@ -32,6 +32,8 @@ import type {
   TimelineNode,
   SettingRowNode,
   SettingListNode,
+  ChipNode,
+  ChipListNode,
   FitsNode,
   EmptyStateNode,
   BlockquoteNode,
@@ -406,6 +408,46 @@ function collectActions(
         }
       }
       for (const child of sl.children) collectActions(child, enclosingForm, out);
+      return;
+    }
+    case "chip": {
+      // v8.0.0 (COMP-13) — ChipNode has TWO independent ActionEvent slots:
+      // `dismissAction` (X click, caller-supplied identity-carrying name like
+      // `remove-filter-42`) and `action` (whole-chip click, caller-supplied
+      // toggle name like `toggle-filter-42`). BOTH participate in name
+      // uniqueness — a chip in a filter set might carry BOTH as its two
+      // independent operations on the same identity.
+      //
+      // 🚨 CRITICAL POSTURE: dismissAction is a CALLER-SUPPLIED ActionEvent
+      // (mirrors ModalNode.dismissAction). Unlike AlertNode.dismissible
+      // (bool → fixed local `{name:"dismiss"}` emitted client-side; walker
+      // records nothing), Chip's dismissAction IS on the wire and MUST be
+      // recorded here for uniqueness. See ChipNode TSDoc + AGENTS.md.
+      const ch = node as ChipNode;
+      if (ch.dismissAction) recordAction(ch.dismissAction, enclosingForm, out);
+      if (ch.action) recordAction(ch.action, enclosingForm, out);
+      return;
+    }
+    case "chip-list": {
+      // v8.0.0 (COMP-13a) — ChipListNode.children MUST be ChipNode[].
+      // Tree-invariant rejection: any non-ChipNode child throws invalid_tree
+      // with byte-identical error text across TS + .NET (see the .NET twin
+      // arm in ViewTreeValidation.Collect in ViewModels.cs). Same pattern as
+      // MessageListNode / DetailListNode / TimelineNode / SettingListNode.
+      const cl = node as ChipListNode;
+      for (const child of cl.children) {
+        // Cast through unknown — TypeScript's compile-time type is
+        // ChipNode[], but the runtime tree is server-authored JSON that
+        // CAN smuggle any ViewNode in (hostile deserialization / a buildVm
+        // bug). The validator catches it at runtime.
+        const c = child as unknown as { type: string };
+        if (c.type !== "chip") {
+          throw new Error(
+            `ChipListNode.children must all be ChipNodes (found: ${c.type})`
+          );
+        }
+      }
+      for (const child of cl.children) collectActions(child, enclosingForm, out);
       return;
     }
     case "form": {
@@ -849,6 +891,23 @@ function walkForSectionAction(
       // in a row's label/description/trailing slot.
       const sl = node as SettingListNode;
       for (const child of sl.children) walkForSectionAction(child, outerInteractive);
+      return;
+    }
+    case "chip": {
+      // v8.0.0 (COMP-13) — ChipNode has no ViewNode-typed slots: label is a
+      // string primitive, tone is a closed enum, icon is IconName, and both
+      // dismissAction/action are ActionEvents (not ViewNodes). No section
+      // can be smuggled through — the arm exists for exhaustive-switch
+      // coverage so a future refactor that promotes a slot to ViewNode fails
+      // the TypeScript exhaustiveness check here first.
+      return;
+    }
+    case "chip-list": {
+      // v8.0.0 (COMP-13a) — ChipListNode.children are ChipNodes; descend
+      // into each for defense-in-depth (chips carry no ViewNode slots today,
+      // but if a future slot is added the descent is already correct).
+      const cl = node as ChipListNode;
+      for (const child of cl.children) walkForSectionAction(child, outerInteractive);
       return;
     }
     case "form": {
