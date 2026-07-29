@@ -397,11 +397,11 @@ Plans:
  13. AGENTS.md "Route B composite-nodes layer" section grows: add the 5 secondaries to the shipped recipe inventory.
  14. NO release ship — v8.0.0 releases at Phase 26 closeout. CHANGELOG accumulates all 5 under "Unreleased".
 
-**Plans:** 2/10 plans executed
+**Plans:** 3/10 plans executed
 
 Plans:
 - [x] 25-01-PLAN.md — UserRowNode (COMP-09) end-to-end
-- [ ] 25-02-PLAN.md — DetailRowNode + DetailListNode (COMP-10 + 10a) end-to-end
+- [x] 25-02-PLAN.md — DetailRowNode + DetailListNode (COMP-10 + 10a) end-to-end
 - [ ] 25-03-PLAN.md — TimelineEntryNode + TimelineNode (COMP-11 + 11a) end-to-end with NEW ::before rail+dot CSS
 - [ ] 25-04-PLAN.md — SettingRowNode + SettingListNode (COMP-12 + 12a) end-to-end with CheckboxNode(variant:"switch") pairing
 - [ ] 25-05-PLAN.md — ChipNode + ChipListNode (COMP-13 + 13a) end-to-end with caller-supplied dismissAction posture
