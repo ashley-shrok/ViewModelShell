@@ -165,6 +165,17 @@ public enum Axis { Horizontal, Vertical, Both }
 [JsonConverter(typeof(KebabEnum<TextStyle>))]
 public enum TextStyle { Heading, Subheading, Body, Muted, Pre, Strikethrough, Caption }
 
+/// <summary>Type-weight axis (v8.0.0, COMP-02) — orthogonal to TextStyle
+/// and Tone. Values are the standard OpenType body-tier weights: Regular=400
+/// (default when omitted), Medium=500 (the semi-bold anchor consumed by
+/// composite row primaries in Phase 24-25), Bold=700. Closed enum;
+/// kebab-lowercase wire values "regular"/"medium"/"bold". A body-styled
+/// TextNode can be Weight:Medium without becoming a heading — Option A shape
+/// (new orthogonal field) chosen over Option B (Style:"Strong") so the two
+/// axes stay separable.</summary>
+[JsonConverter(typeof(KebabEnum<TextWeight>))]
+public enum TextWeight { Regular, Medium, Bold }
+
 /// <summary>
 /// A section's structural surface kind. `Card` = grouped surface
 /// (background/border/padding/radius, .vms-section--card). `Prose` = block-flow
@@ -1506,7 +1517,15 @@ public record TextNode(
     // absent, matching the closed-union convention (TS twin: `level?: 1|2|3|4|5|6`).
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Level = null,
     // 6.12.0 (TOOL-01) — hover-only info tooltip. See FieldNode.Tooltip.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null,
+    // v8.0.0 (COMP-02) — type-weight axis, orthogonal to Style and Tone.
+    // Appended LAST (same "append-last for zero-retype construction sites" rule
+    // as Runs / Level / Tooltip above — every existing 1-/2-/3-/4-/5-/6-arg
+    // construction site is unaffected). PASS BY NAME (Weight: TextWeight.Medium).
+    // Wire posture: WhenWritingNull => absent, NEVER "weight":null (gotcha #8).
+    // Omitted = the framework default weight for the node's Style (400 for
+    // body/muted/caption; the shipped style's own weight for heading/subheading).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TextWeight? Weight = null
 ) : ViewNode
 {
     /// <summary>Build a TextNode from inline runs, DERIVING Value as the

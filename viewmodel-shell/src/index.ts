@@ -1005,6 +1005,19 @@ export interface TextNode {
    *  A run's `href` colors as a link (`.vms-text__link`) even inside a toned node —
    *  a link that does not look like a link is worse than a tone that does not reach. */
   tone?: "danger" | "warning" | "success" | "info";
+  /** Type-weight axis (orthogonal to `style` and `tone`) — semi-bold body-size
+   *  weight for the `body`-styled TextNodes that anchor rows and cards. Emits
+   *  `.vms-text--weight-{weight}`. Omitted = the framework default weight for
+   *  the node's `style` (400 for body/muted/caption; the shipped style's own
+   *  weight for heading/subheading). Closed union.
+   *
+   *  v8.0.0 (COMP-02) — the semi-bold body-size weight anchor that composite
+   *  row primaries (`ListRowNode.primary`, `MessageNode.author`,
+   *  `UserRowNode.name`, `SettingRowNode.label` in Phase 24-25) need. Option A
+   *  shape (new orthogonal field) chosen over Option B (`style:"strong"`) so
+   *  a `body`-styled TextNode can be `weight:"medium"` without stopping being
+   *  body-typed — mirrors the `tone` orthogonal-axis pattern already shipped. */
+  weight?: "regular" | "medium" | "bold";
   /** Hover-only info tooltip (6.12.0, TOOL-01). See FieldNode.tooltip. */
   tooltip?: string;
 }

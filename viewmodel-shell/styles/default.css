@@ -1141,6 +1141,13 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
    shipped v3.5.0 color-mix deepening pattern; results recorded in the
    test file header + 23-01-SUMMARY.md. */
 .vms-text--caption       { color: color-mix(in srgb, var(--vms-text-muted) 70%, var(--vms-text)); }
+/* Weight axis (COMP-02, v8.0.0) — orthogonal to style; a body-styled TextNode
+   can be weight:"medium" without becoming a heading. Values are the standard
+   OpenType body-tier weights (400/500/700); the framework does not currently
+   ship font families with 600 (semi-bold) so 500 is the semi-bold anchor. */
+.vms-text--weight-regular { font-weight: 400; }
+.vms-text--weight-medium  { font-weight: 500; }
+.vms-text--weight-bold    { font-weight: 700; }
 /* tone — semantic color axis (was the old style:"error"/"warning"). Placed after
    the typography classes so a tone color wins over a style color (e.g. muted). */
 .vms-text--danger        { color: var(--vms-error); }
