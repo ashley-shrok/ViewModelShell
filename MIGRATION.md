@@ -6,9 +6,11 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
-## Upgrading to v8.0.0 (in progress) — nothing to do (all foundations additive)
+## Upgrading to v8.0.0 (in progress) — ONE break: `EmptyStateNode` field rename
 
 **Batch-then-ship:** v8.0.0 publishes at Phase 26 closeout with all 10 composites + 3 wire tweaks + 4 foundations in one aligned release. This entry accumulates as Phase 23-26 land; it flips to a versioned release heading at Phase 26.
+
+### Phase 23 foundations — purely additive
 
 **Phase 23 foundations are purely additive** — new optional wire fields and one new node type. Every existing tree renders byte-identically; no consumer changes anything. Old renderers on unknown enum values (`TextNode.style: "caption"`, `TextNode.weight`, `CheckboxNode.variant: "switch"`) gracefully degrade to their pre-v8.0 rendering path. Consumers not opting in to the new fields see no behavior change.
 
@@ -17,7 +19,50 @@ to be aware of. It is copy-pasteable — every command and version string is con
 - `CheckboxNode.variant?: "checkbox" | "switch"` — new optional axis; omit for the standard checkbox render (existing behavior).
 - `AvatarNode` — new node type; adopt at any composition point without touching existing trees.
 
-No code changes required. See the `Unreleased — v8.0.0 (in progress)` section of `CHANGELOG.md` for the full wire-level detail.
+No code changes required for Phase 23 additions.
+
+### EmptyStateNode field rename (COMP-08, BREAKING) — Phase 24
+
+**This is the ONLY breaking wire change in v8.0.0.** Every other v8.0 addition (foundations + all primary/secondary composites) is additive.
+
+Old (`v7.x`):
+
+```typescript
+{ type: "empty-state", heading: "No orders yet", message: "Try adjusting your filter.", action: {...} }
+```
+
+New (`v8.0`):
+
+```typescript
+{ type: "empty-state", icon: "inbox", title: "No orders yet", description: "Try adjusting your filter.", action: {...} }
+```
+
+Field mapping: `heading → title`, `message → description`. `title` is now REQUIRED (where `heading` was optional). New optional `icon?: IconName` slot; the renderer wraps it in a tinted-accent-12% 3rem × 3rem circle backdrop above the title. Reuses the v7.0 `IconName` closed union (Phase 22).
+
+**.NET record rename** — `EmptyStateNode(Heading, Message?, Action?, Tooltip?)` → `EmptyStateNode(Title, Icon?, Description?, Action?)`. The legacy `Tooltip` field is REMOVED (never in the TS twin; dropped for byte-alignment — a Class-1 defect per AGENTS.md that had persisted silently because both sides could share a violation the parity diff couldn't see). No TS consumer impact from the Tooltip removal.
+
+**Automated rewrite:** find-and-replace at the callsite. Every VMS consumer already using `EmptyStateNode` needs a one-line edit per instance:
+
+```bash
+# TS / bun
+sed -i 's/heading:/title:/g; s/message:/description:/g' path/to/your/buildVm.ts
+
+# .NET / C#
+sed -i 's/Heading:/Title:/g; s/Message:/Description:/g' path/to/YourController.cs
+# then manually remove any `Tooltip:` named argument
+```
+
+Framework's own demo apps (FeatureProbe) and tests are updated in the same commit run (Phase 24). Any consumer whose rewrite misses a nested `EmptyStateNode` (e.g. wrapped in a complex expression the sed can't see) can compare their shape against the framework's updated demos as reference.
+
+### ListRowNode, MessageNode, MessageListNode, AlertNode (COMP-05, 06, 06a, 07) — new node types
+
+**Additive; no consumer changes required.** New node types with `[JsonDerivedType]` discriminators; older adapters silently render nothing for unknown types (existing forward-compatibility behavior). Adopt at any composition point without touching existing trees.
+
+**`AlertNode.dismissible` RESERVED action name:** when `dismissible: true`, the composite dispatches an action with the FIXED name `"dismiss"`. Apps that already have a `dismiss` action handler for a different purpose should either compose their own dismiss button in `actions[]` (and set `dismissible: false`), or rename their existing handler to disambiguate. This is distinct from `ModalNode.dismissAction` which takes a caller-supplied ActionEvent.
+
+**`MessageListNode.followTail` scroll behavior:** identical to the shipped `SectionNode.followTail` — the append-only feed pins to the new bottom if the user was near the bottom before the re-render, or preserves their scrollTop if they had scrolled up. Reuses the same DOM signal (`data-follow-tail`), so a feed with both a `MessageListNode` and a `SectionNode.followTail: true` would be walked in document order (each independently pinned/preserved by ordinal — the shipped behavior generalizes). No new adapter code beyond `el.dataset.followTail = ""` on the message-list container.
+
+See the `Unreleased — v8.0.0 (in progress)` section of `CHANGELOG.md` for the full wire-level detail.
 
 ---
 
