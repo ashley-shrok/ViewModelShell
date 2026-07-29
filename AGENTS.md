@@ -741,7 +741,16 @@ Three rules govern the pattern, and together they defeat the "too-rigid recipe" 
 
 **Design of record.** `.planning/design/composite-nodes-layer.md` is the design of record for the v8.0.0 Composite-Nodes Layer milestone (Phases 23-26). Read it before proposing any addition to the Route B layer. §2 (the governance rule) and §3 (the typed-slots pattern) of that doc are the copy-consistent source of truth for the rule + pattern reproduced above — the two documents must stay aligned.
 
-**Current recipe inventory.** *[To be populated as Phases 24-26 land composite recipes. The initial version omits the inventory table by design so it doesn't drift ahead of what actually ships; grows as composites land.]*
+**Currently shipped recipes.** *(Updated as Phase 24-26 land. Docs describe SHIPPED recipes only — an entry appears here only after its plan's SUMMARY lands on `main`.)*
+
+Phase 24 (v8.0.0, primary composites):
+- **`ListRowNode` (COMP-05) + `ListNode.variant:"rows"` (COMP-05a)** — dense list row with 3-tier typography (`primary` body-weight-medium, `secondary` muted, `meta[]` caption); single-surface `rows` container with per-row dividers; bidirectional tree invariant (Rows list rejects non-list-row children; Items list rejects list-row children) with byte-identical error wording across TS + .NET. Whole-row `action?` follows `TableRow.action` shape verbatim (`role="button"`, `tabindex=0`, `aria-label` derived from flattened cell text, Enter/Space dispatches, `stopPropagation` on interactive descendants).
+- **`MessageNode` (COMP-06) + `MessageListNode` (COMP-06a)** — chat/comment message with follow-tail transcript. **`MessageListNode.followTail` REUSES `SectionNode.followTail`'s shipped mechanism VERBATIM** — the pre-render snapshot / post-render restore at `browser.ts:227-246 + 362-372` walks EVERY `[data-follow-tail]` element, so the new consumer is a one-line renderer addition `el.dataset.followTail = ""`; **no new adapter code, ever**. Same posture will apply to any future "growing feed" composite (activity feed, live log, notification stream). Message content consumes AvatarNode (COMP-04) for the avatar slot + TextNode caption (COMP-01) for the timestamp + TextNode weight (COMP-02) for the author.
+- **`AlertNode` (COMP-07)** — prominent status message with tone-appropriate icon. Tone→icon default map BAKED into `browser.ts:ALERT_TONE_ICON`: `danger`→`x-circle`, `warning`→`alert-triangle`, `success`→`check-circle`, `info`→`info` (overridable via `icon?`). `dismissible:true` dispatches the RESERVED `{name:"dismiss"}` action name — apps needing a distinct name compose their own dismiss button in `actions[]` instead of setting `dismissible`.
+- **`EmptyStateNode` (COMP-08)** — friendly "nothing here" recipe. **v8.0 WIRE BREAKING:** field rename `heading`→`title`, `message`→`description`; new `icon?` slot. NOT a new node — a pre-existing shipped node whose schema was tightened at the v8.0.0 milestone boundary to match the typed-slots pattern above. This is the ONLY breaking wire change in the v8.0.0 composite-nodes layer; every other composite is additive. See `MIGRATION.md`.
+
+Phase 25 composites (`UserRowNode`, `DetailRowNode` + `DetailListNode`, `TimelineEntryNode` + `TimelineNode`, `SettingRowNode` + `SettingListNode`, `ChipNode` + `ChipListNode`): TBD in `/gsd:plan-phase 25`.
+Phase 26 release ritual: TBD (aligned v8.0.0 npm + NuGet publish; comprehensive tailnet verification page across all 10 composites + 3 wire tweaks + 1 new primitive; see `.planning/design/composite-nodes-layer.md` §5).
 
 ---
 
