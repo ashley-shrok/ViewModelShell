@@ -1960,23 +1960,32 @@ public record CopyButtonNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Html = null
 ) : ViewNode;
 
-// A first-class "nothing here" presentation (empty-state primitive). Heading is
-// required; Message/Action are nullable wire optionals (absent, never null, per
-// the file-header rule). Action is a ButtonNode carrying a real action name — a
-// dispatch-bearing descendant — so BOTH validation walks (ValidateActionNames /
-// ValidateSectionAction) descend into it (no icon field — the framework ships no
-// icon set).
+// A first-class "nothing here" presentation (empty-state primitive). Title is
+// required; Icon/Description/Action are nullable wire optionals (absent, never
+// null, per the file-header rule). Action is a ButtonNode carrying a real
+// action name — a dispatch-bearing descendant — so BOTH validation walks
+// (ValidateActionNames / ValidateSectionAction) descend into it.
+//
+// 🚨 BREAKING WIRE RENAME in v8.0.0:
+//   - Heading → Title (required, renamed)
+//   - Message → Description (optional, renamed)
+//   - NEW Icon?: IconName slot (tinted-circle backdrop; reuses Phase 22 icons)
+//   - Tooltip REMOVED (was TS/.NET byte-drift — folded into this same wire break)
+// The type discriminator "empty-state" is unchanged; only field NAMES rename.
+// See MIGRATION.md for the consumer rewrite.
 public record EmptyStateNode(
-    string Heading,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Message = null,
+    string Title,
+    // NEW in v8.0 — tinted-circle icon backdrop. Reuses IconName closed union
+    // from Phase 22 (v7.0 icons).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null,
+    // RENAMED from Message in v8.0.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Description = null,
     // Typed ViewNode? (NOT concrete ButtonNode) so System.Text.Json emits the
     // polymorphic "type":"button" discriminator — STJ only writes it when
     // serializing through the [JsonPolymorphic] base ViewNode. The same
     // maintainer rule as FormNode.SubmitButton / FormNode.Buttons; without it the
     // wire drifts from the TS twin (which always includes type:"button").
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Action = null,
-    // 6.12.0 (TOOL-01) — hover-only info tooltip. See FieldNode.Tooltip.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Action = null
 ) : ViewNode;
 
 // A compact status pill / count (badge primitive). Leaf node — Label required,

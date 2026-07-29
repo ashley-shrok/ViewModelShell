@@ -1382,9 +1382,16 @@ export interface CopyButtonNode {
 /**
  * A first-class "nothing here" presentation — the empty-state primitive
  * (MUI/Ant `<Empty>`, the standard zero-data placeholder). A centered block
- * with a required heading, an optional supporting message, and an optional
- * call-to-action ButtonNode (e.g. "Create your first ticket"). No icon field —
- * the framework ships no icon set.
+ * with an optional tinted-circle icon backdrop, a required title, an optional
+ * supporting description, and an optional call-to-action ButtonNode (e.g.
+ * "Create your first ticket").
+ *
+ * 🚨 BREAKING WIRE RENAME in v8.0.0: `heading` → `title`, `message` →
+ * `description`; NEW optional `icon` slot added. See MIGRATION.md — consumers
+ * must rewrite the two renamed field names when adopting v8.0. The type
+ * discriminator `"empty-state"` is unchanged, so pre-v8 clients dispatched
+ * against the same arm but will silently render nothing for the renamed slots
+ * (the intended breaking-comms signal for the v8.0 major).
  *
  * The `action` ButtonNode carries a real action name and is a dispatch-bearing
  * descendant, so EVERY tree-walk (action-name uniqueness collector, section
@@ -1394,11 +1401,19 @@ export interface CopyButtonNode {
  */
 export interface EmptyStateNode {
   type: "empty-state";
-  /** The primary line — what's missing / what to do. Required. */
-  heading: string;
-  /** Optional supporting line below the heading. */
-  message?: string;
-  /** Optional call-to-action button (e.g. "Add the first item"). */
+  /** Optional leading icon rendered in a tinted-accent circle backdrop (3rem
+   *  circle, 1.5rem glyph). New in v8.0. Reuses the Phase 22 IconName closed
+   *  union + `renderIconSvg` helper. */
+  icon?: IconName;
+  /** Primary heading — the "nothing here" message. RENAMED from `heading` in
+   *  v8.0. Trained typography: text-lg, weight 600 (subheading-ish tier). */
+  title: string;
+  /** Optional supporting line. RENAMED from `message` in v8.0. Trained
+   *  typography: text-sm muted with `max-width: 28rem` for readable line
+   *  length. */
+  description?: string;
+  /** Optional call-to-action button (e.g. "Add the first item"). UNCHANGED
+   *  from v7.x. */
   action?: ButtonNode;
 }
 

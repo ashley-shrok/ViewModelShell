@@ -1,13 +1,14 @@
-// Feedback primitives — Toast (side-effect), EmptyStateNode, BadgeNode.
+// Feedback primitives — Toast (side-effect), BadgeNode.
+//
+// EmptyStateNode tests moved to test/empty-state.test.ts (24-04, v8.0.0
+// BREAKING RENAME — `heading→title`, `message→description`, NEW `icon` slot).
 //
 // Direct BrowserAdapter render/route assertions in jsdom (no browser, no
 // running server). Covers:
 //   - BadgeNode: label + tone/emphasis modifier classes
-//   - EmptyStateNode: heading / message / CTA action button render
 //   - BrowserAdapter.toast(): creates the host region + a toast element
 //   - core processResponse routes a "toast" side-effect to adapter.toast
 //   - core is FAIL-QUIET when the adapter omits toast (no throw, no onError)
-//   - EmptyStateNode.action is reachable by the action-name uniqueness walk
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
@@ -17,7 +18,6 @@ import {
   type Adapter,
 } from "../src/index.js";
 import { BrowserAdapter } from "../src/browser.js";
-import { validateActionNames } from "../src/server.js";
 
 function render(node: ViewNode, on: (a: { name: string }) => void = () => {}): HTMLElement {
   const container = document.createElement("div");
@@ -64,63 +64,7 @@ describe("BadgeNode", () => {
   });
 });
 
-describe("EmptyStateNode", () => {
-  it("renders heading, optional message, and the CTA action button", () => {
-    const dispatched: string[] = [];
-    const c = render(
-      {
-        type: "empty-state",
-        heading: "No tickets yet",
-        message: "Create your first ticket to get started.",
-        action: { type: "button", label: "New ticket", action: { name: "create-ticket" }, emphasis: "primary" },
-      },
-      (a) => dispatched.push(a.name),
-    );
-    const empty = c.querySelector(".vms-empty-state")!;
-    expect(empty.querySelector(".vms-empty-state__heading")!.textContent).toBe("No tickets yet");
-    expect(empty.querySelector(".vms-empty-state__message")!.textContent).toBe(
-      "Create your first ticket to get started.",
-    );
-    const btn = empty.querySelector(".vms-button") as HTMLButtonElement;
-    expect(btn).not.toBeNull();
-    expect(btn.textContent).toBe("New ticket");
-    btn.click();
-    expect(dispatched).toEqual(["create-ticket"]);
-  });
-
-  it("omits the message element and the button when not provided", () => {
-    const c = render({ type: "empty-state", heading: "Nothing here" });
-    const empty = c.querySelector(".vms-empty-state")!;
-    expect(empty.querySelector(".vms-empty-state__heading")!.textContent).toBe("Nothing here");
-    expect(empty.querySelector(".vms-empty-state__message")).toBeNull();
-    expect(empty.querySelector(".vms-button")).toBeNull();
-  });
-
-  it("EmptyStateNode.action is reachable by the action-name uniqueness walk", () => {
-    // Two empty-state CTAs sharing one action name (outside any form) is the
-    // exact bug the walk exists to catch — it must THROW. If the walk failed to
-    // descend into empty-state.action, this would pass silently (the regression).
-    const tree: ViewNode = {
-      type: "page",
-      children: [
-        { type: "empty-state", heading: "A", action: { type: "button", label: "Go", action: { name: "dup" } } },
-        { type: "empty-state", heading: "B", action: { type: "button", label: "Go", action: { name: "dup" } } },
-      ],
-    };
-    expect(() => validateActionNames(tree)).toThrow(/Duplicate action name 'dup'/);
-  });
-
-  it("a single empty-state CTA passes the uniqueness walk", () => {
-    const tree: ViewNode = {
-      type: "page",
-      children: [
-        { type: "empty-state", heading: "A", action: { type: "button", label: "Go", action: { name: "go-a" } } },
-        { type: "button", label: "Other", action: { name: "go-b" } },
-      ],
-    };
-    expect(() => validateActionNames(tree)).not.toThrow();
-  });
-});
+// EmptyStateNode tests moved to test/empty-state.test.ts (v8.0.0 BREAKING RENAME).
 
 describe("BrowserAdapter.toast()", () => {
   it("lazily creates the host region and appends a toast element with the message", () => {

@@ -2149,31 +2149,46 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
    measure against the LETTERS instead of the flex-stretched box. */
 .vms-text__anchor { display: inline; }
 
-/* ── Empty state (first-class "nothing here" presentation) ──
-   A centered block: heading, optional message, optional CTA button. */
+/* ── EmptyStateNode (COMP-08, v8.0.0) — REPLACES the shipped v7.x block with
+   an icon-bearing, tinted-circle rendition per the tasting mockup. Field names
+   change: __heading → __title, __message → __description. */
 .vms-empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--vms-space-sm);
   text-align: center;
-  padding: var(--vms-space-xl) var(--vms-space-md);
+  padding: 2.5rem 1.5rem;
+  gap: .75rem;
   color: var(--vms-text-muted);
 }
-.vms-empty-state__heading {
+.vms-empty-state__icon {
+  width: 3rem; height: 3rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--vms-accent) 12%, transparent);
+  color: var(--vms-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: .25rem;
+}
+.vms-empty-state__icon svg { width: 1.5rem; height: 1.5rem; }
+.vms-empty-state__title {
+  font-family: var(--vms-font-head);
   font-size: var(--vms-text-lg);
   font-weight: 600;
   color: var(--vms-text);
+  margin: 0;
 }
-.vms-empty-state__message {
-  font-size: var(--vms-text-base);
+.vms-empty-state__description {
+  font-size: var(--vms-text-sm);
   color: var(--vms-text-muted);
-  max-width: min(40ch, 100%);
+  line-height: 1.55;
+  max-width: 28rem;
+  margin: 0;
 }
 /* The CTA button inside an empty state centers (override the button's default
-   align-self:flex-start) so it sits under the centered heading/message. */
-.vms-empty-state .vms-button { align-self: center; }
+   align-self:flex-start) so it sits under the centered title/description. */
+.vms-empty-state .vms-button { align-self: center; margin-top: var(--vms-space-sm); }
 
 /* ── Icon (v7.0.0 — ICON-01..ICON-04) ──
    Standalone <svg class="vms-icon"> emitted by the browser adapter, plus

@@ -4287,23 +4287,40 @@ export class BrowserAdapter implements Adapter {
     parent.appendChild(btn);
   }
 
-  /** EmptyStateNode — a centered "nothing here" block: a heading, an optional
-   *  message, then the optional CTA ButtonNode (rendered via the shared button
-   *  renderer so it dispatches like any other button). */
+  /** EmptyStateNode — a centered "nothing here" block: an optional
+   *  tinted-circle icon backdrop, a title, an optional description, then the
+   *  optional CTA ButtonNode (rendered via the shared button renderer so it
+   *  dispatches like any other button).
+   *
+   *  🚨 v8.0.0 BREAKING RENAME:
+   *    `heading` → `title` (required), `message` → `description` (optional),
+   *    NEW `icon?: IconName` slot. Class-name rename cascades to CSS block. */
   private emptyState(n: EmptyStateNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const el = document.createElement("div");
     el.className = "vms-empty-state";
 
-    const heading = document.createElement("div");
-    heading.className = "vms-empty-state__heading";
-    heading.textContent = n.heading;
-    el.appendChild(heading);
+    // NEW in v8.0 — tinted-circle icon backdrop. Renders <div class="vms-empty-state__icon">
+    // wrapping an <svg class="vms-icon vms-icon--lg">. CSS ships the 3rem × 3rem
+    // circle + accent-tinted background per the tasting mockup.
+    if (n.icon) {
+      const iconWrap = document.createElement("div");
+      iconWrap.className = "vms-empty-state__icon";
+      iconWrap.appendChild(this.renderIconSvg(n.icon, "lg", undefined, undefined));
+      el.appendChild(iconWrap);
+    }
 
-    if (n.message != null && n.message !== "") {
-      const msg = document.createElement("div");
-      msg.className = "vms-empty-state__message";
-      msg.textContent = n.message;
-      el.appendChild(msg);
+    // RENAMED: `heading` → `title`, class `__heading` → `__title`
+    const title = document.createElement("div");
+    title.className = "vms-empty-state__title";
+    title.textContent = n.title;
+    el.appendChild(title);
+
+    // RENAMED: `message` → `description`, class `__message` → `__description`
+    if (n.description != null && n.description !== "") {
+      const desc = document.createElement("div");
+      desc.className = "vms-empty-state__description";
+      desc.textContent = n.description;
+      el.appendChild(desc);
     }
 
     if (n.action) this.button(n.action, el, on);

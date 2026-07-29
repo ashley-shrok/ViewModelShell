@@ -736,10 +736,13 @@ function buildVm(state: FeatureProbeState): ViewNode {
   // Feedback primitives — BadgeNode + EmptyStateNode (static view-shape captured
   // by every GET step; byte-identical to the .NET twin feedbackSection). A bare
   // badge (NEITHER tone nor emphasis => omitted = absent on the wire), a
-  // tone-only badge, a tone+emphasis badge; a bare empty-state (no message/action
-  // => omitted = absent), and an empty-state with message + a CTA ButtonNode
+  // tone-only badge, a tone+emphasis badge; a bare empty-state (no description/action
+  // => omitted = absent), and an empty-state with description + a CTA ButtonNode
   // (proves the action serializes with type:"button" AND the action-name walk
   // descends into empty-state.action on both backends — unique name feedback-cta).
+  //
+  // v8.0.0 BREAKING RENAME (24-04): EmptyStateNode field names
+  // heading→title, message→description; NEW icon slot.
   const feedbackSection: ViewNode = {
     type: "section",
     heading: "Feedback primitives",
@@ -748,11 +751,11 @@ function buildVm(state: FeatureProbeState): ViewNode {
       { type: "badge", label: "New" },
       { type: "badge", label: "3", tone: "danger" },
       { type: "badge", label: "Beta", tone: "info", emphasis: "secondary" },
-      { type: "empty-state", heading: "No items yet" },
+      { type: "empty-state", title: "No items yet" },
       {
         type: "empty-state",
-        heading: "Nothing here",
-        message: "Add the first item.",
+        title: "Nothing here",
+        description: "Add the first item.",
         action: { type: "button", label: "Add item", action: { name: "feedback-cta" }, emphasis: "primary" },
       },
     ],

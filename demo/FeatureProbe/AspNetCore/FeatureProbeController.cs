@@ -834,11 +834,14 @@ public class FeatureProbeController : ControllerBase
         // Feedback primitives — BadgeNode + EmptyStateNode (static view-shape;
         // byte-identical to the bun twin feedbackSection). A bare badge (NEITHER
         // Tone nor Emphasis => omitted = absent on the wire), a tone-only badge, a
-        // tone+emphasis badge; a bare empty-state (no Message/Action => omitted =
-        // absent), and an empty-state with Message + a CTA ButtonNode (proves the
+        // tone+emphasis badge; a bare empty-state (no Description/Action => omitted =
+        // absent), and an empty-state with Description + a CTA ButtonNode (proves the
         // action serializes with the "type":"button" discriminator AND the
         // action-name walk descends into EmptyStateNode.Action — unique name
         // feedback-cta).
+        //
+        // v8.0.0 BREAKING RENAME (24-04): EmptyStateNode field names
+        // Heading→Title, Message→Description; NEW Icon slot.
         pageChildren.Add(new SectionNode(
             Heading: "Feedback primitives",
             Variant: SectionVariant.Card,
@@ -850,7 +853,7 @@ public class FeatureProbeController : ControllerBase
                 new EmptyStateNode("No items yet"),
                 new EmptyStateNode(
                     "Nothing here",
-                    Message: "Add the first item.",
+                    Description: "Add the first item.",
                     Action: new ButtonNode("Add item", new ActionDescriptor("feedback-cta"), Emphasis: Emphasis.Primary)),
             }));
         // Fill axis (SectionNode.Fill) — one representative section carrying
