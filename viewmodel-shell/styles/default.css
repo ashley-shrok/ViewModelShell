@@ -2027,6 +2027,85 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-icon--warning { color: var(--vms-warning); }
 .vms-icon--danger  { color: var(--vms-error); }
 
+/* ── AvatarNode (COMP-04, v8.0.0) ──
+   Circular slot with initials / image / icon content-resolution priority
+   handled by the renderer. Fully round; other shapes deferred (see the
+   composite-nodes-layer design doc). Tone applies to initials/icon modes
+   ONLY — the image mode's <img> element covers the circle background.
+
+   Sizing (rem-based, container-sized — distinct from .vms-icon's px axis):
+     sm = 1.5rem (24px)  — inline in dense lists
+     md = 2rem   (32px)  — DEFAULT (comment threads / user rows / chat)
+     lg = 2.5rem (40px)  — expanded headers
+     xl = 3rem   (48px)  — hero / profile
+
+   Initials font-size scales proportionally to circle size; font-weight
+   600 (semibold) for legibility at all sizes.
+
+   A11y contract carried by the renderer (see private avatar() in browser.ts):
+     • Image mode: <img alt> — empty string is legal for a decorative image.
+     • Non-image modes: <div role="img" aria-label>. Initials mode falls back
+       to the initials themselves as the label; icon/empty modes fall back
+       to "" (decorative — meaning lives in adjacent content).
+
+   AA-contrast for the initials-on-tone pairs is documented in
+   test/avatar-render.test.ts (banked lesson: the fixed check:aa-contrast
+   gate does not auto-cover new pairs — hand-check on every theme). The
+   warning tone reuses the same KNOCKOUT pattern as .vms-badge--warning
+   .vms-badge--primary (bright fill + dark text) because #fff on
+   --vms-warning fails AA. */
+.vms-avatar {
+  --_avatar-tone: var(--vms-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 999px;
+  font-weight: 600;
+  overflow: hidden; /* clips <img> to the circle */
+  background: var(--_avatar-tone);
+  color: #fff;
+}
+/* Size axis — rem-based; framework-owned mapping. */
+.vms-avatar--sm { width: 1.5rem; height: 1.5rem; font-size: 0.6875rem; }
+.vms-avatar--md { width: 2rem;   height: 2rem;   font-size: 0.8125rem; }
+.vms-avatar--lg { width: 2.5rem; height: 2.5rem; font-size: 0.9375rem; }
+.vms-avatar--xl { width: 3rem;   height: 3rem;   font-size: 1.0625rem; }
+/* Tone axis — sets the circle background (initials/icon modes only; image
+   mode's <img> displaces it). */
+.vms-avatar--danger  { --_avatar-tone: var(--vms-error); }
+.vms-avatar--success { --_avatar-tone: var(--vms-success); }
+.vms-avatar--info    { --_avatar-tone: var(--vms-info); }
+/* Warning polarity exception: #fff on --vms-warning fails AA (3.2/2.14:1
+   light/dark; see --vms-warning-fill). Reuse the same KNOCKOUT pattern
+   .vms-badge--warning.vms-badge--primary uses — bright fill background,
+   dark foreground text. This applies to both the initials glyphs AND the
+   icon-mode SVG's stroke (via the .vms-avatar--warning .vms-icon color rule
+   below). */
+.vms-avatar--warning {
+  --_avatar-tone: var(--vms-warning-fill);
+  color: var(--vms-on-warning-fill);
+}
+/* Icon mode — nested .vms-icon SVG replaces the initials glyph. Kill the
+   initials font-size so a stray text node doesn't fight the icon; set the
+   SVG color to #fff so stroke="currentColor" picks up the polarity. */
+.vms-avatar--icon { font-size: 0; }
+.vms-avatar--icon .vms-icon { color: #fff; }
+/* Warning icon-mode polarity: dark stroke on bright fill (matches the
+   initials warning override above). */
+.vms-avatar--warning.vms-avatar--icon .vms-icon { color: var(--vms-on-warning-fill); }
+/* Image mode — the <img> element inherits .vms-avatar--{size}'s width/height
+   directly (browser.ts sets the class on the <img> itself, not a wrapper).
+   The rules below cover both the direct case AND a nested-img fallback for
+   any future consumer that wraps their own <img> inside the avatar div. */
+.vms-avatar img,
+img.vms-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 /* ── Badge (compact inline status pill / count) ──
    Leaf inline element. Default = neutral filled tint; tone recolors it; emphasis
    switches between a solid fill (primary) and an outline (secondary). */

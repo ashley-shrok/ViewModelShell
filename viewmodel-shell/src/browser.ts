@@ -19,7 +19,7 @@ import type {
   ModalNode, TableNode, CopyButtonNode, DividerNode, FitsNode,
   EmptyStateNode, BadgeNode, ChartNode,
   BlockquoteNode, CodeBlockNode, BreadcrumbNode, StepsNode, TrackerNode, DiffNode,
-  IconNode, IconName,
+  IconNode, IconName, AvatarNode,
 } from "./index.js";
 import { ICONS } from "./icons-payload.js";
 
@@ -563,6 +563,7 @@ export class BrowserAdapter implements Adapter {
       case "tracker":      return this.tracker(n, parent, on);
       case "diff":         return this.diff(n, parent);
       case "icon":         return this.icon(n, parent);
+      case "avatar":       return this.avatar(n, parent);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -4156,6 +4157,67 @@ export class BrowserAdapter implements Adapter {
   private icon(n: IconNode, parent: HTMLElement): void {
     const size = n.size ?? "md";
     parent.appendChild(this.renderIconSvg(n.name, size, n.tone, n.label));
+  }
+
+  /** AvatarNode (v8.0.0, COMP-04) — circular slot with content-resolution
+   *  priority image > initials > icon > empty. See CONTEXT §4 / PATTERNS §6
+   *  for the LOCKED priority table; the priority is enforced by the if/else
+   *  branch order below and mutation-tested in test/avatar-render.test.ts.
+   *  Icon-mode reuses `renderIconSvg` verbatim — the same Phase 22 shared
+   *  helper every host icon slot uses (anti-drift lock).
+   *
+   *  Tone applies to initials/icon modes only — the image mode's <img>
+   *  element covers the circle background, so a --{tone} class on the wrapper
+   *  would be pointless (and the tests assert that <img> does NOT receive a
+   *  tone class, only the size class).
+   *
+   *  A11y: image mode uses <img alt> (empty string is legal for a decorative
+   *  image); non-image modes use <div role="img" aria-label>. On initials
+   *  mode the label falls back to the initials themselves; on icon/empty it
+   *  falls back to "" (decorative — meaning lives elsewhere). */
+  private avatar(n: AvatarNode, parent: HTMLElement): void {
+    const size = n.size ?? "md";
+
+    // Image mode — <img> element. img displaces the background; alt="" is legal.
+    if (n.image != null && n.image !== "") {
+      const img = document.createElement("img");
+      img.className = `vms-avatar vms-avatar--${size}`;
+      img.src = n.image;
+      img.alt = n.alt ?? "";
+      parent.appendChild(img);
+      return;
+    }
+
+    // Non-image modes render as <div role="img"> with a computed aria-label
+    // per the CONTEXT §4 priority table.
+    const el = document.createElement("div");
+    const classes = ["vms-avatar", `vms-avatar--${size}`];
+    if (n.tone) classes.push(`vms-avatar--${n.tone}`);
+
+    if (n.initials != null && n.initials !== "") {
+      el.className = classes.join(" ");
+      el.setAttribute("role", "img");
+      el.setAttribute("aria-label", n.alt ?? n.initials);
+      el.textContent = n.initials;
+    } else if (n.icon != null) {
+      classes.push("vms-avatar--icon");
+      el.className = classes.join(" ");
+      el.setAttribute("role", "img");
+      el.setAttribute("aria-label", n.alt ?? "");
+      // v7.0.0 icon renderer reused — the circle background carries the tone,
+      // not the icon stroke (pass tone=undefined so the SVG stays currentColor,
+      // which .vms-avatar--icon .vms-icon overrides to #fff). Label=undefined
+      // because the outer div owns the aria-label; the inner SVG stays
+      // decorative (aria-hidden).
+      el.appendChild(this.renderIconSvg(n.icon, size === "sm" ? "sm" : "md", undefined, undefined));
+    } else {
+      // Empty circle — no visual content, still role="img" for a11y consistency.
+      el.className = classes.join(" ");
+      el.setAttribute("role", "img");
+      el.setAttribute("aria-label", n.alt ?? "");
+    }
+
+    parent.appendChild(el);
   }
 
   /** BreadcrumbNode — a `<nav aria-label="breadcrumb">` landmark wrapping an
