@@ -77,6 +77,27 @@ Every composite in v8.0.0 obeys **the same structural shape.** The vocabulary of
 
 The full v8.0.0 set, exactly as approved via the tasting. Schemas are pulled verbatim from the tasting page (`bounties/composite-nodes-layer/tasting-page/index.html` §§1-10 + "Adjacent seams"); this doc summarizes and freezes them.
 
+### Shipped recipe inventory
+
+This inventory tracks recipes that have landed on `main` and shipped byte-identical across both backends. Rows for phases that haven't landed yet are marked TBD; they're populated as `/gsd:plan-phase 25` and `/gsd:plan-phase 26` land. **Docs do not race ahead of code** (per the AGENTS.md governance convention plugged in from Phase 23 plan 23-06); a row appears here only after its plan's SUMMARY lands on `main`.
+
+| Composite | Slot summary | Phase | Wire type | .NET record | Consumes |
+|---|---|---|---|---|---|
+| `ListRowNode` | leading, primary, secondary, meta[], trailing, tone, state, action | 24 (COMP-05) | `"list-row"` | `ListRowNode` | TextNode caption + weight (COMP-01/02); TableRow.action a11y pattern (browser.ts:3689-3714, REUSED verbatim) |
+| `ListNode.variant:"rows"` | (extension) rows container for ListRowNode-only children | 24 (COMP-05a) | `"list"` (existing) | `ListNode.Variant` (`ListVariant` KebabEnum) | Existing ListNode + new closed-union enum; bidirectional mixed-children tree invariant with byte-identical error wording across TS + .NET |
+| `MessageNode` | avatar, author, timestamp, content, role, actions[] | 24 (COMP-06) | `"message"` | `MessageNode` | AvatarNode (COMP-04) for the avatar slot; TextNode caption (COMP-01) for the timestamp; TextNode weight (COMP-02) for the author; string-lift renderer arm shape established by ListRowNode (24-01) for `content` |
+| `MessageListNode` | children (MessageNode[]), followTail | 24 (COMP-06a) | `"message-list"` | `MessageListNode` | **REUSES `SectionNode.followTail`'s shipped mechanism VERBATIM** — the pre-render snapshot / post-render restore at `browser.ts:227-246 + 362-372` walks EVERY `[data-follow-tail]` element, so the renderer arm is a one-line addition `el.dataset.followTail = ""`. Zero new adapter code. Same posture will apply to any future "growing feed" composite (activity feed, live log, notification stream) |
+| `AlertNode` | tone (required), title, message, icon, actions[], dismissible | 24 (COMP-07) | `"alert"` | `AlertNode` | IconName + closed-enum discipline (v7.0); TextNode weight (COMP-02); tone→icon default map BAKED into `browser.ts:ALERT_TONE_ICON` (`danger`→`x-circle`, `warning`→`alert-triangle`, `success`→`check-circle`, `info`→`info`) overridable via `icon?`; `dismissible:true` dispatches RESERVED `{name:"dismiss"}` action name (apps needing a distinct name compose their own dismiss button in `actions[]`) |
+| `EmptyStateNode` (v8.0 rename) | icon, title (was heading), description (was message), action | 24 (COMP-08) | `"empty-state"` (unchanged) | `EmptyStateNode` | IconName (v7.0). **BREAKING wire rename** from v7.x — field renames `heading`→`title`, `message`→`description`; new `icon?` slot. See `CHANGELOG.md` v8.0.0 + `MIGRATION.md`. NOT a new node — a pre-existing shipped node whose schema was tightened at the v8.0.0 milestone boundary to match the typed-slots pattern (§3) |
+| `UserRowNode` | TBD | 25 (COMP-09) | TBD | TBD | TBD |
+| `DetailRowNode` + `DetailListNode` | TBD | 25 (COMP-10) | TBD | TBD | TBD |
+| `TimelineEntryNode` + `TimelineNode` | TBD | 25 (COMP-11) | TBD | TBD | TBD |
+| `SettingRowNode` + `SettingListNode` | TBD | 25 (COMP-12) | TBD | TBD | TBD |
+| `ChipListNode` + `ChipNode` | TBD | 25 (COMP-13) | TBD | TBD | TBD |
+| **Phase 26 release ritual** | (aligned v8.0.0 npm + NuGet publish; comprehensive tailnet verification page across all 10 composites + 3 wire tweaks + 1 new primitive) | 26 | — | — | TBD |
+
+The free-form §§4a-4d below record design rationale + slot-schema justifications for the whole milestone set (what SHOULD ship); this table records what HAS shipped. The two views are complementary — the free-form sections tell the "why" and "what to build"; the table tells the "what's actually live". If a Phase 24-25 finding tightens a schema (e.g. the EmptyStateNode rename), the free-form section is updated to match reality and the table cell records the delta.
+
 ### 4a. Wire tweaks (Phase 23 foundations — this phase)
 
 The composites need three additions to existing wire types before they can render the trained typography and control shapes they promise. Landing them first — as *foundations* — is the entire reason Phase 23 exists.
@@ -153,6 +174,7 @@ EmptyStateNode {
   action?: ButtonNode;                                  // optional CTA, centered below
 }
 ```
+> **v8.0 BREAKING wire rename.** EmptyStateNode is not a new node in v8.0.0 — it was pre-existing. The v8.0.0 milestone tightens its schema to the typed-slots pattern (§3): field renames `heading`→`title`, `message`→`description`, new `icon?` slot. Old callers (v7.x) shipping `{ heading, message }` need to migrate to `{ title, description }`. This is the only BREAKING wire change in the v8.0.0 composite-nodes layer — every other composite is additive. Recorded in the shipped-recipe-inventory table above; full migration guidance in `MIGRATION.md`.
 > **Alternative on the table:** there is an existing bounty (`empty-state-on-collections`) proposing empty-state as a *property* on collection nodes (`TableNode.empty?`, `ListNode.empty?`) instead of a standalone composite. Trade-off: property-on-collection is neat when empty-state is always contextual to a specific list; standalone composite is neat when consumers want a full-page empty-state (e.g. "no notifications" as an entire page). **Ashley picks between the two during Phase 24 planning.** If the standalone composite wins, the bounty closes; if the property-on-collection wins, EmptyStateNode drops from the milestone and this doc gets amended.
 
 ### 4d. Composites (Phase 25 — secondary)
