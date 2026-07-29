@@ -1206,6 +1206,64 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   border-top: 1px solid var(--vms-border);
 }
 
+/* ── MessageNode + MessageListNode (COMP-06, COMP-06a, v8.0.0) ────────────
+   Chat/comment. Grid: [avatar | body]. Body = header row (author + timestamp)
+   + padded content surface + optional action bar. role controls surface tone
+   via .vms-message--{role}. MessageListNode is a vertical flex stream and
+   REUSES SectionNode.followTail's shipped data-follow-tail scroll-pin
+   mechanism verbatim (browser.ts:227-246 + :362-372) — the container just
+   sets the same attribute (see browser.ts messageList()). Ships with the
+   tasting-approved shape (bounties/composite-nodes-layer/tasting-page/
+   index.html §COMPOSITE-2). */
+.vms-message-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vms-space-md);
+}
+.vms-message {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--vms-space-sm);
+  align-items: start;
+}
+.vms-message__avatar { flex-shrink: 0; }
+.vms-message__body   { min-width: 0; }
+.vms-message__header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+.vms-message__author {
+  font-size: var(--vms-text-sm);
+  font-weight: 600;
+  color: var(--vms-text);
+}
+.vms-message__timestamp {
+  font-size: var(--vms-text-xs);
+  color: var(--vms-text-muted);
+  opacity: 0.85;
+}
+.vms-message__content {
+  font-size: var(--vms-text-md);
+  line-height: 1.55;
+  color: var(--vms-text);
+  background: var(--vms-surface);
+  border: 1px solid var(--vms-border);
+  border-radius: var(--vms-radius);
+  padding: var(--vms-space-sm) var(--vms-space-md);
+}
+.vms-message--assistant .vms-message__content {
+  background: color-mix(in srgb, var(--vms-info) 6%, var(--vms-surface));
+  border-color: color-mix(in srgb, var(--vms-info) 25%, var(--vms-border));
+}
+.vms-message__actions {
+  display: flex;
+  gap: var(--vms-space-xs);
+  justify-content: flex-end;
+  margin-top: var(--vms-space-xs);
+}
+
 /* ── Text ── */
 .vms-text { flex: 1; line-height: 1.4; word-break: break-word; }
 .vms-text--heading       { font-family: var(--vms-font-head); font-size: var(--vms-text-xl); }

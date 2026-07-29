@@ -229,6 +229,15 @@ public enum AvatarSize { Sm, Md, Lg, Xl }
 [JsonConverter(typeof(KebabEnum<ListVariant>))]
 public enum ListVariant { Items, Rows }
 
+/// <summary>v8.0.0 (COMP-06) — MessageNode role. Closed enum controlling
+/// surface tone on the message content surface. "assistant" tints info; every
+/// other value (and the absent case) renders on the neutral surface. Closed
+/// union enforced on both backends per the closed-union-must-be-enum
+/// discipline. KebabEnum emits "user" / "assistant" / "system" for the wire.
+/// </summary>
+[JsonConverter(typeof(KebabEnum<MessageRole>))]
+public enum MessageRole { User, Assistant, System }
+
 /// <summary>v7.0.0 (ICON-01/02) — JSON converter for IconName that walks a
 /// static dictionary mapping each enum member to its exact literal Lucide
 /// name (kebab-case with digit-boundary awareness, e.g. Trash2 → "trash-2").
@@ -790,6 +799,8 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(IconNode),       "icon")]
 [JsonDerivedType(typeof(AvatarNode),     "avatar")]
 [JsonDerivedType(typeof(ListRowNode),    "list-row")]
+[JsonDerivedType(typeof(MessageNode),     "message")]
+[JsonDerivedType(typeof(MessageListNode), "message-list")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -2128,6 +2139,86 @@ public record ListRowNode(
     // ActionDescriptor participating in name-uniqueness (Collect walker
     // records it via the ViewTreeValidation.Collect arm).
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null
+) : ViewNode;
+
+/// <summary>v8.0.0 (COMP-06) — MessageNode. Chat/comment/thread message
+/// primitive with typed semantic slots. Framework owns layout / typography /
+/// spacing / a11y; app hands it content via named slots. Consumed by the /ai
+/// chat, every comment/thread/message/activity-feed app.
+///
+/// <para>Grid: [avatar | body] — avatar column auto-sized (matches
+/// AvatarNode's size), body is 1fr with min-width:0 so long content truncates
+/// cleanly. Body is a stack: [header (author + timestamp) | content surface |
+/// optional actions bar].</para>
+///
+/// <para>SLOT-TYPING POLICY (PATTERNS.md §5 Analog C, LOCKED, matches
+/// ListRowNode): every ViewNode-typed slot is <c>ViewNode?</c> (Avatar) or
+/// <c>ViewNode</c> (Content, required) — the TS twin's <c>string | ViewNode</c>
+/// ergonomic convenience is TS-only. The .NET server wraps a string
+/// explicitly (e.g. <c>Content: new TextNode("Hello", Style: TextStyle.Body)</c>).
+/// Actions typed <c>IReadOnlyList&lt;ButtonNode&gt;</c> (narrow — the shape
+/// always accepts only buttons; identical posture to the existing action-bar
+/// slots).</para>
+///
+/// <para>Every optional slot carries [JsonIgnore(WhenWritingNull)] so an unset
+/// slot is ABSENT from the wire — the class-2 findNulls defect protection
+/// AGENTS.md gotcha #8 exists for.</para>
+///
+/// <para>ROLE controls surface tone via <c>.vms-message--{role}</c> on the
+/// wrapper: "assistant" tints info, other roles + omitted = neutral. Actions
+/// are ALWAYS VISIBLE — no hover-reveal (banked a11y doctrine).</para>
+/// </summary>
+public record MessageNode(
+    // Author display name. REQUIRED. Text-sm, weight:600 (trained typography).
+    // Rendered as textContent (no HTML injection).
+    string Author,
+    // Content body. REQUIRED. On the .NET side, this is a ViewNode (not
+    // string) so the record stays polymorphic; the TS twin's
+    // string-convenience wraps in TextNode{style:"body"} at render time.
+    // The .NET server wraps explicitly.
+    ViewNode Content,
+    // Leading circular slot — typically an AvatarNode (COMP-04). ViewNode?
+    // per Analog C (polymorphic emission).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Avatar = null,
+    // Trained typography: caption tier (COMP-01). Rendered as textContent.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Timestamp = null,
+    // Message role — controls surface tone. Real enum per closed-union-must-
+    // be-enum discipline (KebabEnum wire values "user"/"assistant"/"system").
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MessageRole? Role = null,
+    // Right-aligned action bar. Narrow-typed IReadOnlyList<ButtonNode> — the
+    // shape always accepts only buttons (matches every action-bar slot in the
+    // framework). Rendered UNCONDITIONALLY when non-empty; no hover-reveal.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ButtonNode>? Actions = null
+) : ViewNode;
+
+/// <summary>v8.0.0 (COMP-06a) — MessageListNode. Container for MessageNode
+/// children with optional follow-tail transcript semantics.
+///
+/// <para>TREE INVARIANT — children must ALL be MessageNode. The compile-time
+/// type <c>IReadOnlyList&lt;MessageNode&gt;</c> is the primary enforcement on
+/// the .NET side; the runtime validator in ViewTreeValidation.Collect is
+/// defense-in-depth for a hostile deserialization path that smuggles in
+/// non-MessageNode entries. Byte-identical error message across both
+/// backends.</para>
+///
+/// <para>FOLLOW-TAIL — REUSES SectionNode.FollowTail's shipped
+/// <c>data-follow-tail</c> scroll-pin mechanism verbatim (browser.ts:227-246
+/// + :362-372). The BrowserAdapter's pre-render snapshot walks EVERY
+/// [data-follow-tail] element in document order; the post-render restore pins
+/// each to its new bottom (or preserves old scrollTop when scrolled up).
+/// MessageListNode piggybacks by setting the SAME attribute — no parallel
+/// snapshot/restore logic. Same <c>WhenWritingDefault</c> posture as
+/// SectionNode.FollowTail — false is ABSENT on the wire (not
+/// <c>"followTail": false</c>), matching the TS optional <c>followTail?</c>.
+/// </para>
+/// </summary>
+public record MessageListNode(
+    IReadOnlyList<MessageNode> Children,
+    // WhenWritingDefault posture on a non-nullable bool — matches
+    // SectionNode.FollowTail at :999. false = ABSENT on the wire (byte-
+    // identical to the TS optional `followTail?: boolean` which is
+    // omitted when unset).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool FollowTail = false
 ) : ViewNode;
 
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────

@@ -208,7 +208,9 @@ export type ViewNode =
   | DiffNode
   | IconNode
   | AvatarNode
-  | ListRowNode;
+  | ListRowNode
+  | MessageNode
+  | MessageListNode;
 
 export interface PageNode {
   type: "page";
@@ -1628,6 +1630,92 @@ export interface ListRowNode {
    *  `role="button"`, `tabIndex=0`, Enter/Space dispatch, aria-label from
    *  flattened primary+meta text. Interactive descendants `stopPropagation`. */
   action?: ActionEvent;
+}
+
+/**
+ * v8.0.0 (COMP-06) — MessageNode. Chat/comment/thread message primitive with
+ * typed semantic slots. Framework owns layout / typography / spacing / a11y;
+ * the app hands it content via named slots. Consumed by the `/ai` chat, every
+ * comment/thread/message/activity-feed app.
+ *
+ * Grid: `[avatar | body]` — avatar column auto-sized (matches AvatarNode's
+ * size), body is 1fr with `min-width: 0` so long content truncates cleanly.
+ * Body is a stack: `[header (author + timestamp) | content surface | optional
+ * actions bar]`.
+ *
+ * SLOT STRING-LIFT (trained typography):
+ *   `content`    string → `TextNode { style: "body" }` (COMP-01 body tier)
+ *   `content`    ViewNode → rendered as-is
+ * `author` is emitted as `<span class="vms-message__author">` with weight:600
+ * (matches CONTEXT §3). `timestamp` is emitted as `<span
+ * class="vms-message__timestamp">` with COMP-01 caption-tier typography.
+ *
+ * ROLE controls surface tone (via `.vms-message--{role}` on the wrapper):
+ *   - `"assistant"` → tinted-info content surface
+ *     (`color-mix(in srgb, var(--vms-info) 6%, var(--vms-surface))`).
+ *   - `"user"` / `"system"` / omitted → neutral surface (`var(--vms-surface)`).
+ *
+ * Actions are ALWAYS VISIBLE — no hover-reveal. Banked lesson: hover-reveal
+ * has a11y + touch failure modes; the shipped design of record
+ * (`composite-nodes-layer.md`) explicitly excludes hover-reveal.
+ */
+export interface MessageNode {
+  type: "message";
+  /** Leading circular slot — typically an AvatarNode (COMP-04). Slot accepts
+   *  any ViewNode. Omitted = no avatar column content (the grid column stays
+   *  in place for consistent baseline across a MessageList; use MessageListNode
+   *  for a stream). */
+  avatar?: ViewNode;
+  /** Author display name. Trained typography: `text-sm, weight:600`. REQUIRED.
+   *  Rendered as textContent (no HTML injection). */
+  author: string;
+  /** Timestamp. Trained typography: COMP-01 caption tier. Absent hides the
+   *  `.vms-message__timestamp` element entirely (not rendered as an empty
+   *  span — verifiable in the test suite). */
+  timestamp?: string;
+  /** Content body. `string` → `TextNode { style: "body" }`; `ViewNode` →
+   *  rendered as-is (consumers who need custom shapes pass a ViewNode).
+   *  Wrapped in a padded surface with role-based background. REQUIRED. */
+  content: string | ViewNode;
+  /** Message role — controls surface tone. Closed union.
+   *  `"assistant"` tints info; others neutral. */
+  role?: "user" | "assistant" | "system";
+  /** Right-aligned action bar rendered as `<div class="vms-message__actions">`.
+   *  Actions are ALWAYS VISIBLE when present (no hover-reveal — banked
+   *  a11y doctrine). Omitted or empty array hides the bar entirely. */
+  actions?: ButtonNode[];
+}
+
+/**
+ * v8.0.0 (COMP-06a) — MessageListNode. Container for MessageNode children with
+ * optional follow-tail transcript semantics.
+ *
+ * Renders as `<div class="vms-message-list">` (or `<div
+ * class="vms-message-list" data-follow-tail>` when `followTail: true`).
+ *
+ * TREE INVARIANT — children must ALL be MessageNode. The tree validator
+ * rejects non-MessageNode children with `invalid_tree` and a byte-identical
+ * error message across both backends.
+ *
+ * FOLLOW-TAIL — REUSES SectionNode.followTail's shipped `data-follow-tail`
+ * scroll-pin mechanism verbatim (browser.ts:227-246 + :362-372). The
+ * pre-render snapshot walks EVERY `[data-follow-tail]` element in document
+ * order; the post-render restore pins each to its new bottom (or preserves
+ * old scrollTop when scrolled up). MessageListNode piggybacks by setting the
+ * SAME attribute — no parallel snapshot/restore logic. Absent/false =
+ * normal preserve-my-place scroll behavior.
+ */
+export interface MessageListNode {
+  type: "message-list";
+  /** MessageNode-only children. The tree-validator rejects mixed / non-Message
+   *  children with `invalid_tree` (byte-identical error across TS + .NET). */
+  children: MessageNode[];
+  /** Reuses SectionNode.followTail's shipped mechanism verbatim
+   *  (browser.ts:227-246 + :362-372). The `data-follow-tail` attribute drives
+   *  the shipped at-bottom snapshot/restore. Absent/false = normal
+   *  preserve-my-place scroll. Optional non-nullable bool — false is ABSENT
+   *  on the wire (.NET `WhenWritingDefault` posture; TS optional). */
+  followTail?: boolean;
 }
 
 /**
