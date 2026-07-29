@@ -1127,6 +1127,20 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-text--muted         { color: var(--vms-text-muted); font-size: var(--vms-text-sm); }
 .vms-text--strikethrough { color: var(--vms-done-text); text-decoration: line-through; }
 .vms-text--pre           { font-family: var(--vms-font-mono); white-space: pre; }
+/* v8.0.0 (COMP-01) — Caption is the 3rd typographic tier: text-xs muted +
+   opacity + line-height:1.4. Consumed by ListRowNode.meta[],
+   MessageNode.timestamp, TimelineEntryNode.time (Phase 24-25). */
+.vms-text--caption       { color: var(--vms-text-muted); font-size: var(--vms-text-xs); opacity: 0.85; line-height: 1.4; }
+/* AA-contrast deepening (COMP-01, v8.0.0) — the base rule above matches the
+   locked plan spec (grep-checked). Hand-computed WCAG ratios for text-xs
+   muted × opacity 0.85 fall SHORT of AA-normal 4.5:1 on light themes
+   (3.58:1 over --vms-bg, 3.77:1 over --vms-surface) and are marginal on
+   dark themes (4.46:1 over --vms-surface). Deepening via a color-mix
+   toward currentColor (--vms-text) works in the right direction on BOTH
+   light and dark themes and lifts every pair over 4.83:1. Follows the
+   shipped v3.5.0 color-mix deepening pattern; results recorded in the
+   test file header + 23-01-SUMMARY.md. */
+.vms-text--caption       { color: color-mix(in srgb, var(--vms-text-muted) 70%, var(--vms-text)); }
 /* tone — semantic color axis (was the old style:"error"/"warning"). Placed after
    the typography classes so a tone color wins over a style color (e.g. muted). */
 .vms-text--danger        { color: var(--vms-error); }

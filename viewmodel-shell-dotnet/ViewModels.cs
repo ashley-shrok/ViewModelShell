@@ -158,9 +158,12 @@ public enum Orientation { Horizontal, Vertical }
 [JsonConverter(typeof(KebabEnum<Axis>))]
 public enum Axis { Horizontal, Vertical, Both }
 
-/// <summary>Text typography role.</summary>
+/// <summary>Text typography role. v8.0.0 (COMP-01) adds Caption — the 3rd
+/// typographic tier (text-xs muted with opacity), used by ListRowNode.Meta[],
+/// MessageNode.Timestamp, TimelineEntryNode.Time in Phase 24-25. KebabEnum
+/// naturally emits "caption" for the wire.</summary>
 [JsonConverter(typeof(KebabEnum<TextStyle>))]
-public enum TextStyle { Heading, Subheading, Body, Muted, Pre, Strikethrough }
+public enum TextStyle { Heading, Subheading, Body, Muted, Pre, Strikethrough, Caption }
 
 /// <summary>
 /// A section's structural surface kind. `Card` = grouped surface

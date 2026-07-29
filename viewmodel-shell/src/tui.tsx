@@ -1166,6 +1166,11 @@ const STYLE_ATTRS: Record<NonNullable<TextNodeType["style"]>, { attributes?: num
   muted:         { fg: "#888888" },
   strikethrough: { attributes: 16 /* STRIKETHROUGH */, fg: "#888888" },
   pre:           { fg: "#cccccc" },
+  // v8.0.0 (COMP-01) — TUI drops the CSS opacity/size machinery entirely
+  // (@experimental scope, not-invested-in per standing directive). Falls
+  // back to the same muted-color fg as .vms-text--muted so caption text
+  // still reads as secondary in a terminal.
+  caption:       { fg: "#888888" },
 };
 
 // Universal semantic-tone → foreground color, shared by text / buttons / list items.

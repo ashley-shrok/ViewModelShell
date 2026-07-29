@@ -993,8 +993,14 @@ export interface TextNode {
    *  @deprecated `"heading"` and `"subheading"` remain SUPPORTED for backward
    *  compatibility but new code should use the `level` axis above instead.
    *  Level emits real semantic `<h1>`–`<h6>` tags; these style values only
-   *  produce a `<span class="vms-text--heading">` with no landmark semantics. */
-  style?: "heading" | "subheading" | "body" | "muted" | "strikethrough" | "pre";
+   *  produce a `<span class="vms-text--heading">` with no landmark semantics.
+   *
+   *  v8.0.0 (COMP-01) — `"caption"` is the 3rd typographic tier: text-xs muted
+   *  with opacity, used by `ListRowNode.meta[]`, `MessageNode.timestamp`,
+   *  `TimelineEntryNode.time` (Phase 24-25). Renders as `<span
+   *  class="vms-text vms-text--caption">` — same DOM shape as every other
+   *  style; only the class modifier + CSS differ. */
+  style?: "heading" | "subheading" | "body" | "muted" | "strikethrough" | "pre" | "caption";
   /** Semantic intent/severity color — the universal status tone axis, orthogonal to `style` (a heading can be `tone:"danger"`). Emits .vms-text--{tone}; the tone color wins over a `style` color via source order. Omitted = default text color. Closed union.
    *  A run's `href` colors as a link (`.vms-text__link`) even inside a toned node —
    *  a link that does not look like a link is worse than a tone that does not reach. */
