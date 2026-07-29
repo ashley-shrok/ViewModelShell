@@ -1151,6 +1151,61 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   background: var(--vms-accent-glow);
 }
 
+/* ── ListRowNode (COMP-05, v8.0.0) + ListNode(variant:"rows") (COMP-05a) ────
+   A dense, single-surface list. Grid: [leading | content | trailing].
+   Content stack is 3-tier typography (primary/secondary/meta). Left border
+   encodes tone. Per-row dividers inside a single card via +sibling border-top.
+   Ships with the tasting-approved shape verbatim (bounties/composite-nodes-
+   layer/tasting-page/index.html §COMPOSITE-1). */
+.vms-list--rows {
+  list-style: none;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  background: var(--vms-surface);
+  border: 1px solid var(--vms-border);
+  border-radius: var(--vms-radius);
+  overflow: hidden;
+}
+.vms-list-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--vms-space-sm);
+  align-items: start;
+  padding: var(--vms-space-sm) var(--vms-space-md);
+  border-top: 1px solid var(--vms-border);
+  border-left: 3px solid transparent;
+  transition: background var(--vms-t);
+}
+.vms-list--rows > .vms-list-row:first-child { border-top: none; }
+.vms-list-row--clickable { cursor: pointer; }
+.vms-list-row--clickable:hover { background: color-mix(in srgb, var(--vms-accent) 4%, transparent); }
+.vms-list-row--clickable:focus-visible { outline: 2px solid var(--vms-accent); outline-offset: -2px; }
+.vms-list-row--danger  { border-left-color: var(--vms-error); }
+.vms-list-row--warning { border-left-color: var(--vms-warning); }
+.vms-list-row--success { border-left-color: var(--vms-success); }
+.vms-list-row--info    { border-left-color: var(--vms-info); }
+.vms-list-row--done { opacity: 0.72; }
+.vms-list-row--disabled { opacity: 0.55; }
+.vms-list-row--active { background: var(--vms-accent-glow); }
+
+.vms-list-row__leading { display: flex; align-items: center; padding-top: 1px; }
+.vms-list-row__content { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vms-list-row__primary   { font-size: var(--vms-text-md); font-weight: 500; color: var(--vms-text); line-height: 1.35; overflow-wrap: anywhere; }
+.vms-list-row__secondary { font-size: var(--vms-text-sm); color: var(--vms-text-muted); line-height: 1.4; }
+.vms-list-row__meta      { font-size: var(--vms-text-xs); color: var(--vms-text-muted); opacity: 0.85; line-height: 1.4; }
+.vms-list-row__trailing  { font-size: var(--vms-text-sm); color: var(--vms-text-muted); padding-top: 2px; white-space: nowrap; }
+
+/* Standalone (outside a .vms-list container) — the same grid + typography,
+   but wrapped in a bordered surface so it reads as its own card. Used when
+   a ListRowNode is rendered as a one-off (not inside a ListNode). */
+.vms-list-row-standalone {
+  background: var(--vms-surface);
+  border: 1px solid var(--vms-border);
+  border-radius: var(--vms-radius);
+  border-top: 1px solid var(--vms-border);
+}
+
 /* ── Text ── */
 .vms-text { flex: 1; line-height: 1.4; word-break: break-word; }
 .vms-text--heading       { font-family: var(--vms-font-head); font-size: var(--vms-text-xl); }

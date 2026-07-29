@@ -207,7 +207,8 @@ export type ViewNode =
   | TrackerNode
   | DiffNode
   | IconNode
-  | AvatarNode;
+  | AvatarNode
+  | ListRowNode;
 
 export interface PageNode {
   type: "page";
@@ -361,6 +362,17 @@ export interface ListNode {
    *  is a flex column with `list-style:none` — so numbering survives the styled
    *  list-item layout. Omitted/false = `<ul>` (byte-identical to today). */
   ordered?: boolean;
+  /** v8.0.0 (COMP-05a) — Layout variant. Omitted or "items" = today's
+   *  ListItem-only container (byte-identical to the pre-Phase-24 render).
+   *  "rows" = a single-bordered-surface container that accepts ONLY
+   *  ListRowNode children — the tree-validator rejects a mixed tree
+   *  (a ListItemNode inside a `variant:"rows"` list or a ListRowNode inside
+   *  a `variant:"items"` list fails with invalid_tree). Renders as a
+   *  bordered card with per-row dividers via `.vms-list--rows` on the
+   *  container. Old renderers (pre-Phase-24) gracefully degrade on an
+   *  unknown variant — the class exists but no shipped rule matches, so
+   *  it falls back to today's `.vms-list` styling. Closed union. */
+  variant?: "items" | "rows";
   children: ViewNode[];
 }
 
@@ -1544,6 +1556,78 @@ export interface AvatarNode {
    *  On image mode passes through as `<img alt={alt || ""}>` (empty string is
    *  legal a11y for a decorative image). */
   alt?: string;
+}
+
+/**
+ * v8.0.0 (COMP-05) — ListRowNode. A dense, single-surface list-row primitive
+ * with typed semantic slots. The Route-B recipe: the framework owns layout,
+ * typography tiers, spacing, and a11y; the app hands it content via named
+ * slots. Consumed by Metis incidents queue, workflow-app "row-per-item"
+ * lists, and every list that isn't a bare bullet list.
+ *
+ * Renders as `<li>` when the parent element carries `.vms-list` or
+ * `.vms-list--rows` (in-container), else as `<div class="vms-list-row-standalone">`
+ * (standalone). Grid: `[leading | content | trailing]` — leading = auto,
+ * content = 1fr min-width:0 (so long strings truncate cleanly), trailing =
+ * auto. `align-items: start` so a multi-line meta stack doesn't vertically
+ * center against a small leading badge.
+ *
+ * ## String-lift trained typography (CONTEXT §1, LOCKED)
+ *
+ *  - `primary: string` → renderer wraps in `TextNode { style: "body", weight: "medium" }`
+ *    (consumes Phase 23 COMP-01 body + COMP-02 weight axes).
+ *  - `secondary: string` → renderer wraps in `TextNode { style: "muted" }`.
+ *  - `meta[i]: string` → renderer wraps each entry in `TextNode { style: "caption" }`
+ *    (consumes Phase 23 COMP-01 caption tier).
+ *  - Any slot passed as a `ViewNode` is rendered as-is (escape hatch).
+ *
+ * The auto-wrap rule matters because callsites almost always pass strings, and
+ * the framework owns the typography tier the row visually expects. Passing a
+ * ViewNode is the escape hatch for the rare case where a slot needs a
+ * SectionNode / ImageNode / IconNode / Badge / other structured content.
+ *
+ * ## Whole-row `action`
+ *
+ * When `action` is set the row becomes click-anywhere + keyboard-activatable
+ * + accessible — `role="button"`, `tabIndex=0`, Enter dispatches, Space
+ * preventDefault + dispatches, `aria-label` derived from flattened
+ * primary+meta text. Interactive descendants (buttons, checkboxes, links,
+ * fields) `stopPropagation` so they don't double-fire the row action. Same
+ * shape as TableRow.action (browser.ts:3689-3714) — the framework owns the
+ * a11y wiring so the app never has to hand-roll it.
+ */
+export interface ListRowNode {
+  type: "list-row";
+  /** Leading affordance — icon / badge / avatar / checkbox. Any ViewNode. */
+  leading?: ViewNode;
+  /** The semantically-primary content. REQUIRED. String is auto-wrapped in
+   *  `TextNode { style: "body", weight: "medium" }` at render time (consumes
+   *  Phase 23 COMP-01 + COMP-02); a ViewNode is rendered as-is. */
+  primary: string | ViewNode;
+  /** Second-line typographically-subordinate. String → `TextNode { style: "muted" }`;
+   *  ViewNode as-is. Omitted = no second line. */
+  secondary?: string | ViewNode;
+  /** Meta-line array — each entry is text-xs muted (caption tier).
+   *  String entries auto-wrap in `TextNode { style: "caption" }` (consumes
+   *  Phase 23 COMP-01); ViewNode entries as-is. Rendered one per row
+   *  in a stacked column beneath `secondary`. */
+  meta?: (string | ViewNode)[];
+  /** Right-aligned slot — timestamp, count, per-row actions, badge. */
+  trailing?: ViewNode;
+  /** Semantic tone axis — left-accent border via `.vms-list-row--{tone}`.
+   *  Closed union, mirrors the framework-wide status tone axis. */
+  tone?: "danger" | "warning" | "success" | "info";
+  /** Row lifecycle STATE (NOT severity — that's `tone`). Freeform,
+   *  app-extensible token; the framework ships styling for `active`,
+   *  `done`, `disabled`, `high` (mirrors ListItemNode.state). Appended as
+   *  a BEM modifier: `.vms-list-row--{state}`. An unrecognized state
+   *  renders an unstyled class (it still round-trips; just no shipped
+   *  rule). Orthogonal to `tone`. */
+  state?: string;
+  /** Whole-row click. Same shape as TableRow.action / SectionNode.action —
+   *  `role="button"`, `tabIndex=0`, Enter/Space dispatch, aria-label from
+   *  flattened primary+meta text. Interactive descendants `stopPropagation`. */
+  action?: ActionEvent;
 }
 
 /**

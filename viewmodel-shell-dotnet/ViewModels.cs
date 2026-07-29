@@ -219,6 +219,16 @@ public enum IconSize { Xs, Sm, Md, Lg, Xl }
 [JsonConverter(typeof(KebabEnum<AvatarSize>))]
 public enum AvatarSize { Sm, Md, Lg, Xl }
 
+/// <summary>v8.0.0 (COMP-05a) — ListNode layout variant. Closed enum.
+/// Items (default when omitted, byte-identical to the pre-Phase-24 render) =
+/// today's ListItem-only container. Rows = a single-bordered-surface container
+/// that accepts ONLY ListRowNode children — tree-validator rejects a mixed
+/// tree (a ListItem inside a Rows list or a ListRowNode inside an Items list
+/// fails with invalid_tree). Old renderers gracefully degrade on an unknown
+/// variant. KebabEnum emits "items" / "rows" for the wire.</summary>
+[JsonConverter(typeof(KebabEnum<ListVariant>))]
+public enum ListVariant { Items, Rows }
+
 /// <summary>v7.0.0 (ICON-01/02) — JSON converter for IconName that walks a
 /// static dictionary mapping each enum member to its exact literal Lucide
 /// name (kebab-case with digit-boundary awareness, e.g. Trash2 → "trash-2").
@@ -779,6 +789,7 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(DiffNode),       "diff")]
 [JsonDerivedType(typeof(IconNode),       "icon")]
 [JsonDerivedType(typeof(AvatarNode),     "avatar")]
+[JsonDerivedType(typeof(ListRowNode),    "list-row")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -1014,7 +1025,15 @@ public record ListNode(
     // default, so WhenWritingDefault drops it from the wire (matching the TS
     // optional `ordered?: boolean`, absent when unset) — same posture as
     // PageNode/SectionNode.Fill, LinkNode.External, FieldNode.Required.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Ordered = false
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Ordered = false,
+    // v8.0.0 (COMP-05a) — Layout variant. Omitted (null) or Items = today's
+    // ListItem-only container (byte-identical to the pre-Phase-24 render).
+    // Rows = a single-bordered-surface container accepting ONLY ListRowNode
+    // children (tree-validator rejects mixed). Positional field appended at the
+    // END (zero-retype construction sites — same convention as CheckboxNode.
+    // Variant Phase 23). Nullable enum + WhenWritingNull per the file-header
+    // rule; matches the TS `variant?: "items" | "rows"` closed union.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ListVariant? Variant = null
 ) : ViewNode;
 
 // The SwiftUI `ViewThatFits` port (FITS-01/03). Children are ordered
@@ -2046,6 +2065,69 @@ public record AvatarNode(
     // Accessible name for screen readers. Present ⇒ role="img" + aria-label.
     // Empty string is valid a11y for a decorative avatar.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Alt = null
+) : ViewNode;
+
+/// <summary>v8.0.0 (COMP-05) — ListRowNode. Dense list-row primitive with
+/// typed semantic slots. The Route-B recipe — framework owns layout,
+/// typography tiers, spacing, and a11y; the app hands it content via named
+/// slots. Consumed by Metis incidents queue + every workflow-app
+/// "row-per-item" list.
+///
+/// <para>Renders as &lt;li&gt; when the parent element carries .vms-list or
+/// .vms-list--rows (in-container), else as
+/// &lt;div class="vms-list-row-standalone"&gt;. Grid:
+/// [leading | content | trailing] — leading=auto, content=1fr min-width:0,
+/// trailing=auto. align-items:start so a multi-line meta stack doesn't
+/// vertically center against a small leading badge.</para>
+///
+/// <para>SLOT-TYPING POLICY (PATTERNS.md §5 Analog C, LOCKED): every
+/// ViewNode-typed slot is <c>ViewNode?</c> (not a narrow shape like
+/// <c>ButtonNode?</c>) so System.Text.Json emits the polymorphic
+/// <c>"type":...</c> discriminator. The TS twin's <c>string | ViewNode</c>
+/// ergonomic convenience is TS-only — the .NET server wraps a string
+/// explicitly (e.g. <c>Primary: new TextNode("Order 42", Style: TextStyle.Body,
+/// Weight: TextWeight.Medium)</c>) — which is a small loss of ergonomics for
+/// byte-alignment simplicity. Same posture as EmptyStateNode.Action /
+/// FormNode.SubmitButton.</para>
+///
+/// <para>Every optional slot carries [JsonIgnore(WhenWritingNull)] so an
+/// unset slot is ABSENT from the wire (never <c>"leading": null</c>) — the
+/// class-2 findNulls defect protection AGENTS.md gotcha #8 exists for.</para>
+///
+/// <para>Whole-row Action mirrors TableRow.Action: role="button",
+/// tabIndex=0, Enter/Space dispatch, aria-label from flattened text.
+/// Interactive descendants (buttons, checkboxes, links, fields)
+/// stopPropagation.</para>
+/// </summary>
+public record ListRowNode(
+    // Primary is REQUIRED — the semantically-primary content per CONTEXT §1.
+    // Typed ViewNode (not string) so the .NET record stays polymorphic; the
+    // TS twin's string-convenience convention wraps the caller's string in
+    // TextNode{style:"body", weight:"medium"} at render time. The .NET server
+    // wraps explicitly (see the record's XML doc).
+    ViewNode Primary,
+    // Leading affordance — icon / badge / avatar / checkbox. ViewNode? per
+    // Analog C (polymorphic emission).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Leading = null,
+    // Second-line subordinate. String on the TS side wraps in TextNode{muted};
+    // .NET server wraps explicitly.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Secondary = null,
+    // Meta-line array — each entry is caption-tier text. TS string entries
+    // wrap in TextNode{caption}; .NET server wraps explicitly per entry.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Meta = null,
+    // Right-aligned slot — timestamp, count, per-row actions, badge.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Trailing = null,
+    // Semantic tone axis — left-accent border via .vms-list-row--{tone}.
+    // Reuses the framework-wide Tone enum.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
+    // Row lifecycle STATE (NOT severity — that's Tone). Freeform,
+    // app-extensible token; framework ships styling for active/done/disabled/
+    // high (mirrors ListItemNode.State). Orthogonal to Tone.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? State = null,
+    // Whole-row click. Same shape as TableRow.Action — dispatch-bearing
+    // ActionDescriptor participating in name-uniqueness (Collect walker
+    // records it via the ViewTreeValidation.Collect arm).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null
 ) : ViewNode;
 
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────
