@@ -1204,6 +1204,110 @@ public class FeatureProbeController : ControllerBase
                 new AvatarNode(Icon: IconName.User, Tone: Tone.Warning, Size: AvatarSize.Lg, Alt: "Anonymous user"),
                 new AvatarNode(Image: "https://vms.example/avatar-ada.png", Alt: "Ada Lovelace"),
             }));
+        // v8.0.0 Primary Composites (COMP-05..COMP-08) — byte-identical to the
+        // bun twin primaryCompositesSection. Every branch introduced by plans
+        // 24-01..04 gets at least one emission here + an expectBodyContains
+        // tripwire on the initial GET step, per banked lesson: a diff can only
+        // prove things about code it actually RUNS. Fleet-adoption discipline
+        // is honored — the composites ship with parity coverage in the same
+        // batch (per v5.1 EXTEND pattern; single fixture, appended section).
+        //   • COMP-05 (ListRowNode): one standalone ListRowNode (all slots
+        //     populated: Primary/Secondary/Meta[]/Tone/State/Action) + a
+        //     ListNode(Variant:Rows) wrapper containing two ListRowNodes —
+        //     proves standalone-vs-container dispatch AND the ListVariant.Rows
+        //     enum crosses the wire.
+        //   • COMP-06 + 06a (MessageNode + MessageListNode): a MessageListNode
+        //     with FollowTail:true (proves the WhenWritingDefault posture emits
+        //     the literal boolean true on the wire — false is ABSENT) containing
+        //     two MessageNodes with different Roles (User + Assistant, proves
+        //     the closed MessageRole enum crosses) + full Avatar + Timestamp +
+        //     Content + Actions slots.
+        //   • COMP-07 (AlertNode): one per Tone (Danger/Warning/Success/Info) +
+        //     one Dismissible:true variant (proves the WhenWritingDefault
+        //     posture on the .NET side matches the TS optional bool). Dismiss
+        //     button emits {name:"dismiss"} client-side — the wire carries only
+        //     the boolean posture; parity byte-diffs that.
+        //   • COMP-08 (EmptyStateNode): one with RENAMED Title/Description +
+        //     NEW Icon slot + Action button with UNIQUE name
+        //     empty-state-cta-probe — proves the rename cascade reached the
+        //     demo backends AND the action-name walk descends through the
+        //     renamed shape.
+        // NOTE: Icon:Receipt used (not Inbox per PATTERNS suggestion) — the
+        // shipped IconName enum does not include Inbox; Receipt fits the
+        // "orders" narrative and matches the Showcase (24-06). The icon choice
+        // is subordinate to the tripwires — Title/Description strings are the
+        // load-bearing proof of the rename cascade.
+        // NOTE: the CLIENT-SIDE rendering is browser-only and NOT part of
+        // parity — parity proves only that the fields serialize identically
+        // across backends.
+        pageChildren.Add(new SectionNode(
+            Heading: "v8.0.0 Primary Composites",
+            Variant: SectionVariant.Card,
+            Children: new ViewNode[]
+            {
+                // COMP-05 ListRowNode (standalone)
+                new ListRowNode(
+                    Primary: new TextNode("Order #42 · Ada Lovelace", Style: TextStyle.Body, Weight: TextWeight.Medium),
+                    Secondary: new TextNode("Awaiting fulfillment · flagged high priority", Style: TextStyle.Muted),
+                    Meta: new ViewNode[] {
+                        new TextNode("Placed 2h ago",  Style: TextStyle.Caption),
+                        new TextNode("priority: high", Style: TextStyle.Caption),
+                        new TextNode("channel: web",   Style: TextStyle.Caption),
+                    },
+                    Tone: Tone.Warning,
+                    State: "high",
+                    Action: new ActionDescriptor("list-row-open-42")),
+                // COMP-05a ListNode(Variant:Rows) with ListRow children
+                new ListNode(
+                    Children: new ViewNode[] {
+                        new ListRowNode(
+                            Primary: new TextNode("Refunded successfully", Style: TextStyle.Body, Weight: TextWeight.Medium),
+                            Leading: new AvatarNode(Initials: "AL", Tone: Tone.Success),
+                            Secondary: new TextNode("Refund ID rf_39a2 · $124.00", Style: TextStyle.Muted),
+                            Meta: new ViewNode[] { new TextNode("7m ago", Style: TextStyle.Caption) },
+                            Tone: Tone.Success,
+                            State: "done"),
+                        new ListRowNode(
+                            Primary: new TextNode("Payment declined", Style: TextStyle.Body, Weight: TextWeight.Medium),
+                            Meta: new ViewNode[] {
+                                new TextNode("issuer decline",    Style: TextStyle.Caption),
+                                new TextNode("card ending 4321",  Style: TextStyle.Caption),
+                            },
+                            Tone: Tone.Danger),
+                    },
+                    Variant: ListVariant.Rows),
+                // COMP-06 + 06a MessageListNode with FollowTail:true
+                new MessageListNode(
+                    Children: new MessageNode[] {
+                        new MessageNode(
+                            Author: "Ada Lovelace",
+                            Content: new TextNode("Can we ship v8 this week?", Style: TextStyle.Body),
+                            Timestamp: "2:14 PM",
+                            Avatar: new AvatarNode(Initials: "AL", Tone: Tone.Success),
+                            Role: MessageRole.User),
+                        new MessageNode(
+                            Author: "VMS Assistant",
+                            Content: new TextNode("The Phase 24 branch is green; publishing is a maintainer step.", Style: TextStyle.Body),
+                            Timestamp: "2:15 PM",
+                            Avatar: new AvatarNode(Icon: IconName.Sparkles, Tone: Tone.Info),
+                            Role: MessageRole.Assistant,
+                            Actions: new ViewNode[] {
+                                new ButtonNode(Label: "OK", Action: new ActionDescriptor("message-noop-1")),
+                            }),
+                    },
+                    FollowTail: true),
+                // COMP-07 AlertNode per tone + Dismissible:true
+                new AlertNode(Tone: Tone.Warning, Message: new TextNode("You've used 92% of your quota.", Style: TextStyle.Muted), Title: "Storage almost full", Dismissible: true),
+                new AlertNode(Tone: Tone.Danger,  Message: new TextNode("Your card was refused.",       Style: TextStyle.Muted), Title: "Payment declined"),
+                new AlertNode(Tone: Tone.Success, Message: new TextNode("Refund of $124 issued.",       Style: TextStyle.Muted), Title: "Refund processed"),
+                new AlertNode(Tone: Tone.Info,    Message: new TextNode("v8.0.0 is available.",         Style: TextStyle.Muted), Title: "New version"),
+                // COMP-08 EmptyStateNode with RENAMED Title/Description + NEW Icon slot
+                new EmptyStateNode(
+                    Title: "No orders yet",
+                    Icon: IconName.Receipt,
+                    Description: "Once customers place orders they'll show up here.",
+                    Action: new ButtonNode(Label: "Learn more", Action: new ActionDescriptor("empty-state-cta-probe"))),
+            }));
         // Inline rich text (TextNode.Runs) — byte-identical to the bun twin
         // richTextSection. Covers the absent-vs-present matrix for every optional on
         // InlineRun, plus the two contract cases that are DECISIONS rather than
