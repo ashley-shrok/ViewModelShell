@@ -886,6 +886,7 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-field--checkbox .vms-field__input {
   width: 18px;
   height: 18px;
+  flex-shrink: 0;
   padding: 0;
   cursor: pointer;
   accent-color: var(--vms-accent);

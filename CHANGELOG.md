@@ -6,6 +6,38 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 7.0.1 — CSS: FieldNode(inputType:"checkbox") flex-shrink guard
+
+**npm:** `7.0.1` (patch, from `7.0.0`). CSS-only patch — NuGet sits out this bump (stays at `7.0.0`; the 7.0 line is unchanged). Purely additive style declaration, no consumer action required, no MIGRATION entry.
+
+### 🟢 FIX — `.vms-field--checkbox .vms-field__input` gains `flex-shrink: 0`
+
+**The bug.** `FieldNode(inputType:"checkbox")` renders inside a flex-row `.vms-field--checkbox` container next to its label. Without an explicit `flex-shrink: 0`, the 18×18 input was a shrinkable flex item — in a tight parent container with a longer label, the browser would shrink the checkbox itself (visibly smaller than sibling checkboxes) rather than wrapping the label text. Reported by Angel from the `/ai` Builder Skills card: rows 1-3 checkboxes rendered at one size, rows 4-5 smaller, uniform emit, sibling `Tools` section (same shape) rendered consistently.
+
+**The drift.** The standalone `.vms-checkbox` primitive already carried `flex-shrink: 0` — the form-collected `.vms-field--checkbox .vms-field__input` pair-partner didn't. Same concept, two implementations, one had the guard.
+
+**The fix.** One line in `viewmodel-shell/styles/default.css` (the pair now matches). New regression guard `test/field-checkbox-flex-shrink.test.ts` asserts BOTH sides of the pair declare `flex-shrink: 0` — so a future edit to either can't silently re-open the gap.
+
+### Consumer action required
+
+None. Purely additive CSS declaration. Any consumer on npm 7.0.0 pulls 7.0.1 with no code change; behavior only *improves* under tight flex containers.
+
+### Broken promise — apology to Angel
+
+Angel filed this on 2026-07-26 and I acked on the relay that it would ride the v7.0 icons batch since we were already touching `default.css`. It didn't — the release ritual scope-drifted onto icons + AA-audit and I never surfaced this. v7.0.1 keeps the promise, one release late. Save-time discipline now: **sweep the relay for promises made this session that haven't landed**, before calling a batch done.
+
+### Green-tree at release commit
+
+- vitest 983 passed / 1 skipped (63 files; +2 new tests in the pair-guard regression)
+- All 5 `check:*` gates + `check:demo-types` (21 projects)
+- Framework .NET 215 passed
+- Demo Tests 191 passed across 5 projects
+- `bun run parity/run.ts` — all backends agree byte-identically
+
+Motivating consumer feedback: Angel via `/ai` Builder pretty-pass. Bounty: `fieldnode-checkbox-flex-shrink`.
+
+---
+
 ## npm 7.0.0 / NuGet 7.0.0 — Icons primitive (IconNode + cross-node icon composition + Lucide subset) · TrackerCell.label → tooltip rename (BREAKING — the only break)
 
 **npm:** `7.0.0` (major, from `6.12.1`) · **NuGet:** `7.0.0` (major, from `6.12.1`). Aligned major bump. Wire-format protocol token stays `viewmodel-shell/1.0` (additive icon changes are wire-compatible; the TrackerCell field rename is a per-node field change, not a wire-envelope change). Design of record: [`.planning/design/icons-primitive.md`](.planning/design/icons-primitive.md).
