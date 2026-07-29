@@ -369,6 +369,32 @@ Plans:
 - [x] 24-04-PLAN.md — EmptyStateNode (COMP-08) BREAKING RENAME end-to-end + framework rename cascade (wave 4, depends on 24-03)
 - [x] 24-05-PLAN.md — design/composite-nodes-layer.md Shipped Recipe Inventory + AGENTS.md Currently shipped recipes (wave 1, file-disjoint)
 - [x] 24-06-PLAN.md — Showcase Primary Composites section (wave 5, depends on 24-04)
-- [ ] 24-07-PLAN.md — FeatureProbe parity extension + $comment + tripwires (wave 5, depends on 24-04)
-- [ ] 24-08-PLAN.md — CHANGELOG.md + MIGRATION.md updates for Unreleased v8.0.0 (wave 5, depends on 24-04)
-- [ ] 24-09-PLAN.md — Full green-tree gate + Ashley visual sign-off + requirement cross-check + bounty close (wave 6, depends on all prior)
+- [x] 24-07-PLAN.md — FeatureProbe parity extension + $comment + tripwires (wave 5, depends on 24-04)
+- [x] 24-08-PLAN.md — CHANGELOG.md + MIGRATION.md updates for Unreleased v8.0.0 (wave 5, depends on 24-04)
+- [x] 24-09-PLAN.md — Full green-tree gate + Ashley visual sign-off + requirement cross-check + bounty close (wave 6, depends on all prior)
+
+### Phase 25: v8.0 Secondary composites — UserRowNode + DetailRow + Timeline + SettingRow + Chip
+
+**Goal:** Land the 5 remaining Route B composite recipes approved via the tasting: **UserRowNode** (person entity — avatar + name + meta + status dot), **DetailRowNode + DetailListNode** (aligned key-value with proper `<dl>`/`<dt>`/`<dd>` semantics), **TimelineEntryNode + TimelineNode** (activity feed with rail + dot markers — a shape today's primitives literally cannot produce), **SettingRowNode + SettingListNode** (label + description + trailing control — pairs with COMP-03's CheckboxNode.variant:"switch"), and **ChipNode + ChipListNode** (dismissible pill cluster — the only way to close out the "filter chip with X" pattern since BadgeNode isn't dismissable). Every composite consumes Phase 23 foundations + AvatarNode where applicable. Both backends byte-identical, parity green with `expectBodyContains` per branch, AA hand-check per new fg/bg pair, tests per composite, Showcase adoption. **NO release ship** — accumulate CHANGELOG under "Unreleased"; v8.0.0 publishes at Phase 26 closeout.
+
+**Requirements**: COMP-09 (UserRowNode), COMP-10 + 10a (DetailRowNode + DetailListNode), COMP-11 + 11a (TimelineEntryNode + TimelineNode), COMP-12 + 12a (SettingRowNode + SettingListNode), COMP-13 + 13a (ChipNode + ChipListNode)
+
+**Depends on:** Phase 24 (primary composites landed on main). Design of record: `.planning/design/composite-nodes-layer.md`. Approved tasting: `~/.claude/identities/vicky/bounties/composite-nodes-layer/tasting-page/index.html` (sections 5, 6, 7, 9, 10).
+
+**Success Criteria** (what must be TRUE):
+  1. **`UserRowNode`** ships with slots `{avatar?, name, meta?, status?, trailing?, action?}`. `avatar` typically an `AvatarNode` (COMP-04) but slot accepts any ViewNode. `name` = trained TextNode body + weight:"medium"; `meta` = TextNode muted. `status` a small `{label, kind}` object where `kind: "online"|"away"|"offline"|"busy"` closed enum. `action` = whole-row click (member-picker pattern). Byte-identical TS/.NET.
+  2. **`DetailRowNode` + `DetailListNode`** ship as a pair. DetailRow slots `{label, value, tone?, icon?}` where `label` trained text-xs uppercase weight:500 muted and `value` trained TextNode body. DetailListNode renders as a `<dl>` with fixed label column (`labelWidth?: "sm"|"md"|"lg"` closed enum) and consistent alignment across all rows. Byte-identical TS/.NET; tree-validator rejects non-DetailRow children in a DetailListNode.
+  3. **`TimelineEntryNode` + `TimelineNode`** ship as a pair. TimelineEntry slots `{time, description, tone?, icon?}` where `time` = trained caption tier (COMP-01) and `description` = TextNode body accepting rich content. TimelineNode renders the vertical rail + dot markers (a decorative `::before` line + per-entry `::before` dots), tone-encoded borders on dots. Byte-identical TS/.NET.
+  4. **`SettingRowNode` + `SettingListNode`** ship as a pair. SettingRow slots `{icon?, label, description?, trailing?, action?}` where `label` = trained TextNode body + weight:"medium" and `description` = TextNode muted with max-width. `trailing` typically holds a `CheckboxNode(variant:"switch")` from COMP-03 (natural pairing), a ButtonNode, or a LinkNode. SettingListNode renders as a single bordered surface with per-row dividers (same pattern as ListNode.variant:"rows"). Byte-identical TS/.NET.
+  5. **`ChipNode` + `ChipListNode`** ship as a pair. ChipNode slots `{label, tone?, icon?, dismissAction?, action?}` — different from BadgeNode by being standalone-interactive + supporting `dismissAction` (emits X + dispatches on click) + participating in a ChipListNode group. ChipListNode = flex-wrap horizontal cluster with tuned inline gap. Byte-identical TS/.NET.
+  6. Every composite: both tree-validators descend into ViewNode-typed slots; action-name uniqueness enforced across the tree.
+  7. Every composite: `[JsonIgnore(WhenWritingNull)]` on nullables + `[JsonIgnore(WhenWritingDefault)]` on optional non-nullable bools per gotcha #8.
+  8. Parity green: FeatureProbe `buildVm` extended in all 3 backends per composite (v5.1 pattern); minimum one `expectBodyContains` per composite branch that only that branch emits.
+  9. AA-contrast hand-check for new fg/bg pairs (Chip tinted-pill × 4 tones × 13 themes; status-dot colors on default + all themes; DetailRow label uppercase muted; TimelineEntry dot-border tones; SettingRow switch reuses Phase 23's checks).
+ 10. Showcase adoption of every composite (Secondary Composites section extending Primary Composites; fleet-adoption discipline).
+ 11. Vitest per composite + .NET serialization tests (byte-identical wire + WhenWritingNull round-trip + WhenWritingDefault for `dismissAction`-less chips).
+ 12. `.planning/design/composite-nodes-layer.md` recipe-inventory table filled in for these 5 (Phase 24 filled in the 4 primaries; this phase completes the shipped set).
+ 13. AGENTS.md "Route B composite-nodes layer" section grows: add the 5 secondaries to the shipped recipe inventory.
+ 14. NO release ship — v8.0.0 releases at Phase 26 closeout. CHANGELOG accumulates all 5 under "Unreleased".
+
+**Plans:** 0 plans (to be created by `/gsd:plan-phase 25`)

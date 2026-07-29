@@ -194,6 +194,28 @@ The 4 composite recipes with the strongest evidence + live consumer pressure. Ea
 - [x] **COMP-07**: **`AlertNode`** — Route B recipe for prominent status messages (banner asks from Moxie 2026-07-17 discoverability-miss + generally). Slots: `tone: "danger" | "warning" | "success" | "info"` (REQUIRED — this is the whole point of the node); `title?: string` (trained: TextNode text-md weight:600); `message: string | ViewNode` (trained: TextNode text-sm muted); `icon?: IconName` (overrides the tone→icon default mapping — see below); `actions?: ButtonNode[]` (right-aligned, size:"sm"); `dismissible?: boolean` (WhenWritingDefault; when true renders a close-X that dispatches a `dismiss` action name — framework handles the wire; app catches the action name via its normal dispatch loop). **Tone→icon default mapping** (baked in the browser renderer): danger→`x-circle`, warning→`alert-triangle`, success→`check-circle`, info→`info`. Byte-identical TS/.NET.
 - [x] **COMP-08**: **`EmptyStateNode`** — Route B recipe for "nothing here" states (every collection view when there's nothing to show; the open bounty `empty-state-on-collections` proposed devolving onto collections as properties — this composite supersedes that direction, per the tasting-approval discussion). Slots: `icon?: IconName` (trained: large in tinted-circle background, 3rem circle, 1.5rem icon inside); `title: string` (trained: TextNode text-lg weight:600 — consumes COMP-02); `description?: string` (trained: TextNode text-sm muted with max-width for readable line length); `action?: ButtonNode` (centered below, single action only). Renders as a centered stack with generous vertical padding. Composable via drop-in: pass an EmptyStateNode to `TableNode`'s or `ListNode`'s empty-cell rendering slot (which the tasting-approved direction resolves — standalone composite wins vs. devolve-to-collection-property). Byte-identical TS/.NET.
 
+### Phase 25 — Secondary composites (COMP-09..13a)
+
+The 5 remaining composite recipes from the approved tasting. Each consumes Phase 23 foundations + AvatarNode where applicable, and one (SettingRowNode) naturally pairs with COMP-03's `CheckboxNode.variant:"switch"`.
+
+- [ ] **COMP-09**: **`UserRowNode`** — Route B recipe for person entity display. Slots: `avatar?: ViewNode` (typically AvatarNode from COMP-04 — but slot accepts any ViewNode); `name: string | ViewNode` (trained: TextNode body + weight:"medium"); `meta?: string | ViewNode` (trained: TextNode muted — typically "email · role" or similar composite string); `status?: { label: string; kind: "online" | "away" | "offline" | "busy" }` (renders as small dot + label right-aligned; `kind` closed enum for palette); `trailing?: ViewNode` (optional trailing slot for actions or extra badge); `action?: ActionEvent` (whole-row click — member-picker pattern). Byte-identical TS/.NET; both tree-validators descend; string-form name/meta lifted into TextNode by the renderer. Wired inside a bordered surface with per-row dividers (same pattern as ListNode.variant:"rows" from COMP-05a).
+
+- [ ] **COMP-10**: **`DetailRowNode`** — Route B recipe for key-value pair with proper `<dt>`/`<dd>` semantics. Slots: `label: string` (trained: TextNode text-xs uppercase weight:500 muted — the "micro-label" convention common on the web for this pattern); `value: string | ViewNode` (trained: TextNode body); `tone?: "danger" | "warning" | "success" | "info"` (optional accent — e.g. red for "Deleted" status); `icon?: IconName` (optional leading icon on the label). Byte-identical TS/.NET.
+
+- [ ] **COMP-10a**: **`DetailListNode`** — container for a set of DetailRowNodes. Slots: `children: DetailRowNode[]` (tree-validator rejects non-DetailRow entries); `labelWidth?: "sm" | "md" | "lg"` (closed enum for consistent-label-column-width across all rows — the whole point of this being a list vs. individually-rendered rows). Renders as `<dl>` with `<div class="vms-detail-row">` wrappers containing `<dt>`/`<dd>`. Trained styling: single bordered surface with per-row dividers. Byte-identical TS/.NET.
+
+- [ ] **COMP-11**: **`TimelineEntryNode`** — Route B recipe for a single activity/history/audit-log entry. Slots: `time: string` (trained: caption tier per COMP-01); `description: string | ViewNode` (trained: TextNode body accepting rich content — bold actor names via TextNode.weight from COMP-02); `tone?: "danger" | "warning" | "success" | "info"` (dot border color, default = accent); `icon?: IconName` (overrides dot with an icon — bigger dot slot). Byte-identical TS/.NET.
+
+- [ ] **COMP-11a**: **`TimelineNode`** — container for a set of TimelineEntryNodes. Slots: `children: TimelineEntryNode[]` (tree-validator rejects non-TimelineEntry entries). Framework owns the vertical rail (decorative `::before` line on `.vms-timeline`) + per-entry dot markers (decorative `::before` circles on `.vms-timeline-entry`) with tone-encoded borders. **This is critical**: the rail + dots are impossible to compose from primitives today ("apps describe, never decorate" precludes app-CSS for a rail); the composite bakes it in. Byte-identical TS/.NET.
+
+- [ ] **COMP-12**: **`SettingRowNode`** — Route B recipe for settings-pattern rows (feature-flag toggles, notification-preferences, "manage account" panels). Slots: `icon?: IconName` (optional leading icon); `label: string` (trained: TextNode body + weight:"medium"); `description?: string | ViewNode` (trained: TextNode muted with `max-width` for readable line length); `trailing?: ViewNode` (typically a `CheckboxNode(variant:"switch")` from COMP-03 — natural pairing; also accepts ButtonNode, LinkNode, or any ViewNode); `action?: ActionEvent` (whole-row click, opt-in). Byte-identical TS/.NET.
+
+- [ ] **COMP-12a**: **`SettingListNode`** — container for a set of SettingRowNodes. Slots: `children: SettingRowNode[]`; `heading?: string` (optional heading for the settings group). Renders as single bordered surface with per-row dividers (same pattern as ListNode.variant:"rows" from COMP-05a). Byte-identical TS/.NET.
+
+- [ ] **COMP-13**: **`ChipNode`** — Route B recipe for dismissible/interactive pills. **Distinct from BadgeNode**: Badge is an *annotation* on another element (a "New" tag next to a title, a "3" count on an icon); Chip is a *standalone interactive element* that participates in a group (filter set, tag input, selected items). Slots: `label: string`; `tone?: "danger" | "warning" | "success" | "info"` (color palette, neutral if omitted); `icon?: IconName` (leading icon — e.g. tag/user); `dismissAction?: ActionEvent` (**showing the X requires this** — no dismiss action, no X; respects "no dead UI"); `action?: ActionEvent` (whole-chip click, filter-chip toggle pattern). Byte-identical TS/.NET.
+
+- [ ] **COMP-13a**: **`ChipListNode`** — container for a set of ChipNodes. Slots: `children: ChipNode[]` (tree-validator rejects non-Chip entries). Renders as flex-wrap horizontal cluster with tuned inline gap. Byte-identical TS/.NET.
+
 | Requirement | Phase |
 |---|---|
 | COMP-01 | 23 |
@@ -206,6 +228,15 @@ The 4 composite recipes with the strongest evidence + live consumer pressure. Ea
 | COMP-06a | 24 |
 | COMP-07 | 24 |
 | COMP-08 | 24 |
+| COMP-09 | 25 |
+| COMP-10 | 25 |
+| COMP-10a | 25 |
+| COMP-11 | 25 |
+| COMP-11a | 25 |
+| COMP-12 | 25 |
+| COMP-12a | 25 |
+| COMP-13 | 25 |
+| COMP-13a | 25 |
 
 ---
 
