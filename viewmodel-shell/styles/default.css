@@ -928,6 +928,38 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 }
 .vms-checkbox__label { margin-left: var(--vms-space-xs); font-size: var(--vms-text-base); }
 
+/* Switch variant (COMP-03, v8.0.0) — visual restyle of the standalone
+   checkbox as a slider track + thumb. Wire, dispatch, and DOM structure
+   unchanged from .vms-checkbox; only the mark's geometry differs. */
+.vms-field--switch .vms-checkbox__mark {
+  width: 2.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--vms-surface-2);
+}
+.vms-field--switch .vms-checkbox__mark::before {
+  content: '';
+  position: absolute;
+  left: 2px; top: 2px;
+  width: calc(1.5rem - 4px);
+  height: calc(1.5rem - 4px);
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--vms-t);
+}
+.vms-field--switch .vms-checkbox__input:checked + .vms-checkbox__mark {
+  background: var(--vms-accent);
+  border-color: var(--vms-accent);
+}
+.vms-field--switch .vms-checkbox__input:checked + .vms-checkbox__mark::before {
+  transform: translateX(1rem);
+}
+/* Override the base .vms-checkbox__input:checked + .vms-checkbox__mark::after
+   that draws the check-glyph — the switch has no glyph; the thumb IS the state. */
+.vms-field--switch .vms-checkbox__input:checked + .vms-checkbox__mark::after {
+  content: none;
+}
+
 /* ── Buttons — three orthogonal axes: emphasis (fill) × tone (color) × size
    (geometry). `--_btn-tone` carries the semantic color: it defaults to accent
    and the tone classes override it, so an emphasis fills/outlines in whatever

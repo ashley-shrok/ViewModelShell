@@ -3107,9 +3107,16 @@ export class BrowserAdapter implements Adapter {
    *  write to state then dispatch the action name (if any). */
   private checkbox(n: CheckboxNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const lbl = document.createElement("label");
-    lbl.className = "vms-checkbox";
+    // v8.0.0 (COMP-03) — switch variant is a visual-only .vms-field--switch
+    // modifier on the same label wrapper. Wire and dispatch semantics
+    // unchanged; the CSS restyles the checkbox+mark into a slider.
+    lbl.className = `vms-checkbox${n.variant === "switch" ? " vms-field--switch" : ""}`;
     const inp = document.createElement("input");
     inp.type = "checkbox";
+    // v8.0.0 (COMP-03) — role="switch" so screen readers announce
+    // "switch on"/"switch off" instead of "checked"/"unchecked". Native
+    // Space still toggles; keyboard traversal unchanged.
+    if (n.variant === "switch") inp.setAttribute("role", "switch");
     inp.className = "vms-checkbox__input";
     inp.name = n.name;
     // Stable id so keyboard focus survives a re-render (poll or action). The

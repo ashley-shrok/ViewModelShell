@@ -176,6 +176,16 @@ public enum TextStyle { Heading, Subheading, Body, Muted, Pre, Strikethrough, Ca
 [JsonConverter(typeof(KebabEnum<TextWeight>))]
 public enum TextWeight { Regular, Medium, Bold }
 
+/// <summary>v8.0.0 (COMP-03) — CheckboxNode visual variant. Closed enum:
+/// Checkbox (default, byte-identical to today's render) vs Switch (slider-
+/// track + thumb, .vms-field--switch modifier). Wire and dispatch semantics
+/// are UNCHANGED across the two values — value is still boolean, dispatch is
+/// still bind/change on the underlying &lt;input type="checkbox"&gt;. Only the
+/// className list + native ARIA role differ (role="switch" when Switch).
+/// KebabEnum naturally emits "checkbox" / "switch" for the wire.</summary>
+[JsonConverter(typeof(KebabEnum<CheckboxVariant>))]
+public enum CheckboxVariant { Checkbox, Switch }
+
 /// <summary>
 /// A section's structural surface kind. `Card` = grouped surface
 /// (background/border/padding/radius, .vms-section--card). `Prose` = block-flow
@@ -1358,7 +1368,11 @@ public record CheckboxNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action,
     // 6.12.0 (TOOL-01) — hover-only info tooltip. See FieldNode.Tooltip.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null,
+    // v8.0.0 (COMP-03) — visual variant; "switch" restyles as a slider track+thumb.
+    // Wire and dispatch semantics unchanged from the default. WhenWritingNull posture
+    // per gotcha #8: absent = "checkbox" (today's default), NEVER emit as null.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CheckboxVariant? Variant = null
 ) : ViewNode;
 
 public record ButtonNode(

@@ -792,6 +792,15 @@ export interface CheckboxNode {
   action?: ActionEvent;
   /** Hover-only info tooltip (6.12.0, TOOL-01). See FieldNode.tooltip. */
   tooltip?: string;
+  /** Visual variant — `"checkbox"` (omitted / today's render) vs `"switch"`
+   *  (slider-track + thumb, styled as .vms-field--switch). Wire semantics are
+   *  UNCHANGED: value is still a boolean, dispatch is still `bind`/change on
+   *  the underlying `<input type="checkbox">`, keyboard toggle is still Space.
+   *  a11y: with `"switch"` the renderer adds `role="switch"` to the input so
+   *  screen readers announce "switch on"/"switch off" instead of
+   *  "checked"/"unchecked". Fallback: older adapters ignore the field and
+   *  render as a normal checkbox (graceful degradation). Closed union. */
+  variant?: "checkbox" | "switch";
 }
 
 export interface ButtonNode {
