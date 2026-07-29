@@ -20,7 +20,7 @@ import type {
   EmptyStateNode, BadgeNode, ChartNode,
   BlockquoteNode, CodeBlockNode, BreadcrumbNode, StepsNode, TrackerNode, DiffNode,
   IconNode, IconName, AvatarNode, ListRowNode,
-  MessageNode, MessageListNode,
+  MessageNode, MessageListNode, AlertNode,
 } from "./index.js";
 import { ICONS } from "./icons-payload.js";
 
@@ -568,6 +568,7 @@ export class BrowserAdapter implements Adapter {
       case "list-row":     return this.listRow(n, parent, on);
       case "message":      return this.message(n, parent, on);
       case "message-list": return this.messageList(n, parent, on);
+      case "alert":        return this.alert(n, parent, on);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -1349,6 +1350,99 @@ export class BrowserAdapter implements Adapter {
     // message()); a belt-and-braces filter here would be redundant.
     this.kids(n.children as unknown as ViewNode[], div, on);
     parent.appendChild(div);
+  }
+
+  /** v8.0.0 (COMP-07) — Tone → default icon mapping. Baked into the browser
+   *  renderer as a static, frozen table (matches CONTEXT §5 locked schema).
+   *  All four default names are LUCIDE icons shipped in the Phase 22 v7.0
+   *  curated IconName union. `AlertNode.icon` overrides the tone default. */
+  private static readonly ALERT_TONE_ICON: Record<
+    "danger" | "warning" | "success" | "info", IconName
+  > = {
+    danger: "x-circle",
+    warning: "alert-triangle",
+    success: "check-circle",
+    info: "info",
+  };
+
+  /** v8.0.0 (COMP-07) — AlertNode renderer.
+   *
+   *  Prominent status-message primitive. Grid: [icon | body | actions].
+   *  `tone` is REQUIRED — drives surface palette (`.vms-alert--{tone}` +
+   *  color-mix tinted background from default.css) AND selects the default
+   *  icon (baked-in `ALERT_TONE_ICON` map). `n.icon` overrides the tone
+   *  default.
+   *
+   *  DISMISSIBLE — deliberate deviation from `ModalNode.dismissAction`.
+   *  `dismissible: true` renders a close-X that dispatches the RESERVED
+   *  fixed action name `{ name: "dismiss" }` LOCALLY at click time (no
+   *  caller-supplied ActionEvent slot on the wire — see the interface's
+   *  TSDoc for the rationale). Apps needing a specific name compose their
+   *  own dismiss button in `actions[]` and set `dismissible: false`. */
+  private alert(n: AlertNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const wrap = document.createElement("div");
+    wrap.className = `vms-alert vms-alert--${n.tone}`;
+
+    // Icon slot — n.icon overrides; else tone default. renderIconSvg reused
+    // verbatim (Phase 22 shared factory — the single anti-drift lock).
+    const iconName = n.icon ?? BrowserAdapter.ALERT_TONE_ICON[n.tone];
+    const iconWrap = document.createElement("div");
+    iconWrap.className = "vms-alert__icon";
+    iconWrap.appendChild(this.renderIconSvg(iconName, "md", undefined, undefined));
+    wrap.appendChild(iconWrap);
+
+    // Body column: optional title + required message.
+    const body = document.createElement("div");
+    body.className = "vms-alert__body";
+    if (n.title) {
+      const title = document.createElement("div");
+      title.className = "vms-alert__title";
+      // Trained typography: text-md, weight:medium (COMP-02 weight axis).
+      // String-lift via TextNode — matches CONTEXT §5 slot string-lift table.
+      this.node({ type: "text", value: n.title, style: "body", weight: "medium" }, title, on);
+      body.appendChild(title);
+    }
+    const message = document.createElement("div");
+    message.className = "vms-alert__message";
+    if (typeof n.message === "string") {
+      // String-lift into TextNode{style:"muted"} — trained typography for the
+      // secondary/subordinate line, matching CONTEXT §5.
+      this.node({ type: "text", value: n.message, style: "muted" }, message, on);
+    } else {
+      // ViewNode branch — rendered as-is (consumers who need a custom shape
+      // pass a ViewNode instead of a string).
+      this.node(n.message, message, on);
+    }
+    body.appendChild(message);
+    wrap.appendChild(body);
+
+    // Actions column — right-aligned buttons + optional dismiss X. The column
+    // is emitted ONLY when there are actions OR dismissible is true; an alert
+    // with neither has no third grid column populated (the `grid-template-
+    // columns: auto 1fr auto` still lays out cleanly because the auto track
+    // collapses to zero when no child is present).
+    if ((n.actions && n.actions.length > 0) || n.dismissible === true) {
+      const actionsEl = document.createElement("div");
+      actionsEl.className = "vms-alert__actions";
+      for (const btn of n.actions ?? []) this.button(btn, actionsEl, on);
+      if (n.dismissible === true) {
+        // DEVIATION from ModalNode.dismissAction (CONTEXT §5): the composite
+        // emits the FIXED, RESERVED action name `"dismiss"` locally rather
+        // than accepting a caller-supplied ActionEvent slot. Apps that need
+        // a distinct name compose their own dismiss button in `actions[]`
+        // and set `dismissible: false`. Documented in AlertNode TSDoc.
+        const closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.className = "vms-alert__dismiss";
+        closeBtn.setAttribute("aria-label", "Dismiss");
+        closeBtn.textContent = "✕";
+        closeBtn.addEventListener("click", () => on({ name: "dismiss" }));
+        actionsEl.appendChild(closeBtn);
+      }
+      wrap.appendChild(actionsEl);
+    }
+
+    parent.appendChild(wrap);
   }
 
   private listItem(n: ListItemNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
