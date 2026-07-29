@@ -20,6 +20,7 @@ import type {
   EmptyStateNode, BadgeNode, ChartNode,
   BlockquoteNode, CodeBlockNode, BreadcrumbNode, StepsNode, TrackerNode, DiffNode,
   IconNode, IconName, AvatarNode, ListRowNode,
+  MessageNode, MessageListNode,
 } from "./index.js";
 import { ICONS } from "./icons-payload.js";
 
@@ -565,6 +566,8 @@ export class BrowserAdapter implements Adapter {
       case "icon":         return this.icon(n, parent);
       case "avatar":       return this.avatar(n, parent);
       case "list-row":     return this.listRow(n, parent, on);
+      case "message":      return this.message(n, parent, on);
+      case "message-list": return this.messageList(n, parent, on);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -1246,6 +1249,106 @@ export class BrowserAdapter implements Adapter {
     }
 
     parent.appendChild(el);
+  }
+
+  /** v8.0.0 (COMP-06) — MessageNode renderer. Chat/comment message with a
+   *  [avatar | body] grid. Body is a stack: header (author + timestamp) →
+   *  padded content surface → optional actions bar. String content wraps in
+   *  `TextNode { style: "body" }`; ViewNode content renders as-is. Role
+   *  ("assistant"/"user"/"system") emits `.vms-message--{role}` which the
+   *  shipped CSS uses to tint the content surface. Actions are ALWAYS
+   *  VISIBLE — no hover-reveal (banked a11y doctrine). */
+  private message(n: MessageNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const wrap = document.createElement("div");
+    const cls = ["vms-message"];
+    if (n.role) cls.push(`vms-message--${n.role}`);
+    wrap.className = cls.join(" ");
+
+    // Avatar column — auto-sized (matches AvatarNode's size). The column
+    // element is emitted UNCONDITIONALLY so the [avatar | body] grid keeps a
+    // consistent baseline across a MessageList (even when a single message
+    // has no avatar, its body-column position stays aligned with siblings
+    // that do). Empty when n.avatar is absent.
+    const avatarEl = document.createElement("div");
+    avatarEl.className = "vms-message__avatar";
+    if (n.avatar) this.node(n.avatar, avatarEl, on);
+    wrap.appendChild(avatarEl);
+
+    // Body column: header (author + optional timestamp) → content → optional actions.
+    const body = document.createElement("div");
+    body.className = "vms-message__body";
+
+    // Header — author (required) + timestamp (optional). textContent, no innerHTML.
+    const header = document.createElement("div");
+    header.className = "vms-message__header";
+    const author = document.createElement("span");
+    author.className = "vms-message__author";
+    author.textContent = n.author;
+    header.appendChild(author);
+    if (n.timestamp) {
+      const ts = document.createElement("span");
+      ts.className = "vms-message__timestamp";
+      ts.textContent = n.timestamp;
+      header.appendChild(ts);
+    }
+    body.appendChild(header);
+
+    // Content surface — string → trained TextNode{style:"body"} (COMP-01 body
+    // tier); ViewNode → dispatched through node() as-is.
+    const content = document.createElement("div");
+    content.className = "vms-message__content";
+    if (typeof n.content === "string") {
+      this.node({ type: "text", value: n.content, style: "body" }, content, on);
+    } else {
+      this.node(n.content, content, on);
+    }
+    body.appendChild(content);
+
+    // Actions bar — right-aligned, ALWAYS VISIBLE when actions is non-empty.
+    // NO hover-reveal / conditional-hide class (banked a11y doctrine — the
+    // shipped design of record explicitly excludes hover-reveal).
+    if (n.actions && n.actions.length > 0) {
+      const actions = document.createElement("div");
+      actions.className = "vms-message__actions";
+      for (const btn of n.actions) this.button(btn, actions, on);
+      body.appendChild(actions);
+    }
+
+    wrap.appendChild(body);
+    parent.appendChild(wrap);
+  }
+
+  /** v8.0.0 (COMP-06a) — MessageListNode renderer.
+   *
+   *  🚨 FOLLOW-TAIL REUSE (plan-checker C-4): the ONLY new adapter code for
+   *  followTail semantics is `div.dataset.followTail = ""`. The shipped
+   *  SectionNode.followTail mechanism at browser.ts:227-231 (skip generic
+   *  scroll-map), :239-246 (pre-render snapshot), :362-372 (post-render
+   *  restore) walks EVERY [data-follow-tail] element in document order —
+   *  MessageListNode piggybacks by setting the same attribute. NO parallel
+   *  snapshot/restore code exists (or should exist) inside this method.
+   *
+   *  Tree-validator (server.ts + ViewModels.cs) rejects non-MessageNode
+   *  children with `invalid_tree` — the renderer trusts that and dispatches
+   *  children through the standard node() walk (which will render each as
+   *  message()). */
+  private messageList(n: MessageListNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const div = document.createElement("div");
+    div.className = "vms-message-list";
+    // MessageListNode.followTail — REUSES SectionNode's shipped mechanism.
+    // The pre-render snapshot at browser.ts:239-246 walks EVERY
+    // [data-follow-tail] element in document order; the post-render restore at
+    // browser.ts:362-372 pins each to its new bottom (or preserves old
+    // scrollTop when scrolled up). NO new adapter code — this line is the
+    // only change. Verbatim from SectionNode.followTail's own emission at
+    // browser.ts:1063.
+    if (n.followTail === true) div.dataset.followTail = "";
+    // Children are MessageNode[] on the type — the tree-validator rejects
+    // non-MessageNode entries server-side. The renderer just walks children
+    // through the standard node() dispatch (which will render each as
+    // message()); a belt-and-braces filter here would be redundant.
+    this.kids(n.children as unknown as ViewNode[], div, on);
+    parent.appendChild(div);
   }
 
   private listItem(n: ListItemNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
