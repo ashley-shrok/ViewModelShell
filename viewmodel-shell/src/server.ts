@@ -28,6 +28,8 @@ import type {
   UserRowNode,
   DetailRowNode,
   DetailListNode,
+  TimelineEntryNode,
+  TimelineNode,
   FitsNode,
   EmptyStateNode,
   BlockquoteNode,
@@ -317,6 +319,41 @@ function collectActions(
         }
       }
       for (const child of dl.children) collectActions(child, enclosingForm, out);
+      return;
+    }
+    case "timeline-entry": {
+      // v8.0.0 (COMP-11) — TimelineEntryNode slots: description (string |
+      // ViewNode; only descend when ViewNode). time is a primitive string,
+      // icon is IconName, tone is a closed-union enum — no descent. NO
+      // action slot on this node — TimelineEntryNode is passive display.
+      const te = node as TimelineEntryNode;
+      if (typeof te.description !== "string") {
+        collectActions(te.description, enclosingForm, out);
+      }
+      return;
+    }
+    case "timeline": {
+      // v8.0.0 (COMP-11a) — TimelineNode.children MUST be TimelineEntryNode[].
+      // Tree-invariant rejection: any non-TimelineEntryNode child throws
+      // invalid_tree. Byte-identical error message across TS + .NET (see the
+      // .NET twin arm in ViewTreeValidation.Collect in ViewModels.cs). Same
+      // pattern as MessageListNode.children + DetailListNode.children
+      // mixed-children rejection above.
+      const tl = node as TimelineNode;
+      for (const child of tl.children) {
+        // Cast through unknown — TypeScript's compile-time type is
+        // TimelineEntryNode[], but the runtime tree is server-authored JSON
+        // that CAN smuggle any ViewNode in (a hostile deserialization /
+        // a buildVm bug). The validator catches it at runtime with the
+        // byte-identical error message.
+        const c = child as unknown as { type: string };
+        if (c.type !== "timeline-entry") {
+          throw new Error(
+            `TimelineNode.children must all be TimelineEntryNodes (found: ${c.type})`
+          );
+        }
+      }
+      for (const child of tl.children) collectActions(child, enclosingForm, out);
       return;
     }
     case "form": {
@@ -718,6 +755,25 @@ function walkForSectionAction(
       // in a row's value slot.
       const dl = node as DetailListNode;
       for (const child of dl.children) walkForSectionAction(child, outerInteractive);
+      return;
+    }
+    case "timeline-entry": {
+      // v8.0.0 (COMP-11) — TimelineEntryNode.description can hold arbitrary
+      // ViewNode subtrees when non-string. Descend for defense-in-depth so a
+      // future shape can't slip an interactive section past this validator.
+      // time + icon + tone are primitives — no descent.
+      const te = node as TimelineEntryNode;
+      if (typeof te.description !== "string") {
+        walkForSectionAction(te.description, outerInteractive);
+      }
+      return;
+    }
+    case "timeline": {
+      // v8.0.0 (COMP-11a) — TimelineNode.children are TimelineEntryNodes;
+      // descend into each to catch any nested interactive-section violations
+      // in an entry's description slot.
+      const tl = node as TimelineNode;
+      for (const child of tl.children) walkForSectionAction(child, outerInteractive);
       return;
     }
     case "form": {

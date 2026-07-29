@@ -2835,6 +2835,23 @@ public static class ViewTreeValidation
                 foreach (var child in detailList.Children) WalkForSectionAction(child, outerInteractive);
                 break;
 
+            case TimelineEntryNode timelineEntry:
+                // v8.0.0 (COMP-11) — TimelineEntryNode.Description can hold
+                // arbitrary ViewNode subtrees. Descend for defense-in-depth so
+                // a future shape can't slip an interactive section past this
+                // validator. Time + Icon + Tone are primitives — no descent.
+                // Mirrors the TS twin `case "timeline-entry"` arm in server.ts.
+                WalkForSectionAction(timelineEntry.Description, outerInteractive);
+                break;
+
+            case TimelineNode timeline:
+                // v8.0.0 (COMP-11a) — TimelineNode.Children are
+                // TimelineEntryNodes; descend into each to catch any nested
+                // interactive-section violations in an entry's Description
+                // slot. Mirrors the TS twin `case "timeline"` arm.
+                foreach (var child in timeline.Children) WalkForSectionAction(child, outerInteractive);
+                break;
+
             case FormNode form:
                 foreach (var child in form.Children) WalkForSectionAction(child, outerInteractive);
                 break;
@@ -3083,6 +3100,43 @@ public static class ViewTreeValidation
                     }
                 }
                 foreach (var child in detailList.Children) Collect(child, enclosingForm, sink);
+                break;
+
+            case TimelineEntryNode timelineEntry:
+                // v8.0.0 (COMP-11) — TimelineEntryNode slots: Description
+                // (ViewNode, required). Time + Icon + Tone are primitives
+                // (Time is a raw string, Icon is IconName, Tone is a
+                // closed-union enum) — no descent. Description is REQUIRED as
+                // ViewNode (not ViewNode?) so the .NET server always has a
+                // subtree to walk (the TS twin's `string | ViewNode`
+                // convenience wraps in TextNode{body} at render time; the
+                // .NET server wraps explicitly). NO Action slot on this node
+                // — TimelineEntryNode is passive display. Mirrors the TS
+                // twin `case "timeline-entry"` arm in server.ts.
+                Collect(timelineEntry.Description, enclosingForm, sink);
+                break;
+
+            case TimelineNode timeline:
+                // v8.0.0 (COMP-11a) — TimelineNode.Children MUST be
+                // TimelineEntryNode. Children is typed IReadOnlyList<ViewNode>
+                // on the record (deliberately widened from
+                // TimelineEntryNode-only, for polymorphic-discriminator
+                // preservation — see the record's XML doc), so the tree-shape
+                // invariant IS enforced exclusively at runtime here — the
+                // compile-time type would silently accept any ViewNode.
+                //
+                // Byte-identical error message across TS + .NET (see the TS
+                // twin `case "timeline"` arm in server.ts).
+                foreach (var child in timeline.Children)
+                {
+                    if (child is not TimelineEntryNode)
+                    {
+                        var childType = ViewNodeWireName(child);
+                        throw new InvalidOperationException(
+                            $"TimelineNode.children must all be TimelineEntryNodes (found: {childType})");
+                    }
+                }
+                foreach (var child in timeline.Children) Collect(child, enclosingForm, sink);
                 break;
 
             case FormNode form:
