@@ -829,6 +829,8 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(TimelineNode),      "timeline")]
 [JsonDerivedType(typeof(SettingRowNode),    "setting-row")]
 [JsonDerivedType(typeof(SettingListNode),   "setting-list")]
+[JsonDerivedType(typeof(ChipNode),          "chip")]
+[JsonDerivedType(typeof(ChipListNode),      "chip-list")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -2694,6 +2696,48 @@ public record SettingListNode(
     // <h3 class="vms-setting-list__heading"> immediately BEFORE the <ul>
     // (sibling, NOT child). WhenWritingNull → absent when null.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Heading = null
+) : ViewNode;
+
+// v8.0.0 (COMP-13) — ChipNode. Tinted-pill primitive for filter chips,
+// selected tags, category pills. Mirrors TS ChipNode byte-identical.
+//
+// 🚨 CRITICAL DIVERGENCE from AlertNode.Dismissible:
+// ChipNode.DismissAction is a CALLER-SUPPLIED ActionDescriptor
+// (identity-carrying: "remove-filter-42", "unselect-tag-foo"). AlertNode.Dismissible
+// is a bool that emits a fixed local {name:"dismiss"} at click time. Chip needs
+// identity-carrying dispatch — apps typically name per-identity actions.
+// Mirrors ModalNode.DismissAction's shape (ActionDescriptor?), NOT
+// AlertNode.Dismissible (bool). The walker records BOTH DismissAction and
+// Action — both participate in action-name uniqueness.
+public record ChipNode(
+    // REQUIRED — pill text.
+    string Label,
+    // Tinted-pill palette. Neutral (accent-tinted) if omitted.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
+    // Optional leading icon.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null,
+    // CALLER-SUPPLIED ActionDescriptor — mirrors ModalNode.DismissAction, NOT
+    // AlertNode.Dismissible. Chip needs identity-carrying dispatch.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? DismissAction = null,
+    // Whole-chip click (filter-chip toggle pattern). Same shape as ListRowNode.Action.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null
+) : ViewNode;
+
+// v8.0.0 (COMP-13a) — ChipListNode. Container for ChipNode children — the
+// flex-wrap horizontal pill cluster. Tree-validator enforces child-type
+// invariant with byte-identical error message across TS + .NET.
+public record ChipListNode(
+    // Typed IReadOnlyList<ViewNode> (NOT IReadOnlyList<ChipNode>) so
+    // System.Text.Json emits the polymorphic "type":"chip" discriminator on
+    // each child (a narrow ChipNode-typed list silently drops the
+    // discriminator — banked posture from FormNode.Buttons +
+    // MessageListNode.Children + DetailListNode.Children + TimelineNode.Children
+    // + SettingListNode.Children). The tree invariant is enforced exclusively
+    // by the runtime validator in ViewTreeValidation.Collect (invalid_tree
+    // with byte-identical error message to the TS twin) — every non-ChipNode
+    // child is rejected there, so the wire-level list is effectively still
+    // ChipNode-only.
+    IReadOnlyList<ViewNode> Children
 ) : ViewNode;
 
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────

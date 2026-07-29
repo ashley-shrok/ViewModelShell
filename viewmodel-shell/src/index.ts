@@ -218,7 +218,9 @@ export type ViewNode =
   | TimelineEntryNode
   | TimelineNode
   | SettingRowNode
-  | SettingListNode;
+  | SettingListNode
+  | ChipNode
+  | ChipListNode;
 
 export interface PageNode {
   type: "page";
@@ -2175,6 +2177,92 @@ export interface SettingListNode {
    *  `<ul>` (sibling, NOT child of the `<ul>`), so the semantic list stays
    *  a clean `<ul>` of `<li>` items. */
   heading?: string;
+}
+
+/**
+ * v8.0.0 (COMP-13) — ChipNode. The tinted-pill primitive for filter chips,
+ * selected tags, category pills. Route-B recipe: framework owns pill layout,
+ * tone palette, dismiss X affordance, and keyboard/a11y for click-anywhere.
+ * Group via {@link ChipListNode} (flex-wrap horizontal cluster).
+ *
+ * Renders as `<span class="vms-chip" role="listitem">` inside a ChipListNode;
+ * optionally upgraded to `role="button"` + `tabIndex=0` + Enter/Space
+ * keyboard-activation when `action` is set (chip IS the button when action set).
+ *
+ * ## 🚨 CRITICAL DIVERGENCE from AlertNode.dismissible
+ *
+ * ChipNode.dismissAction is a **caller-supplied `ActionEvent`** slot
+ * (identity-carrying: `{name: "remove-filter-42"}`, `{name: "unselect-tag-foo"}`).
+ * AlertNode.dismissible is a `boolean` that emits a **fixed local**
+ * `{name: "dismiss"}` at click time. These are intentionally different
+ * postures: chips typically operate on specific identities (per-filter /
+ * per-tag remove); alerts are singletons where a fixed name is unambiguous.
+ *
+ * Chip mirrors {@link ModalNode.dismissAction}'s shape — NOT
+ * AlertNode.dismissible. The renderer calls `on(n.dismissAction)` with the
+ * caller's ActionEvent, NOT `on({name:"dismiss"})`. If a future contributor
+ * reverts this to the AlertNode pattern, the vitest KEY MUTATION TEST fails.
+ * The tree-validator walker records BOTH `dismissAction` and `action` — both
+ * participate in name uniqueness (a chip in a filter set might carry
+ * `remove-filter-42` AND `toggle-filter-42` as two independent operations).
+ *
+ * ## Slot semantics
+ *
+ *  - `label` — REQUIRED string. Rendered as textContent inside the pill
+ *    (safe-string discipline; no innerHTML).
+ *  - `tone?` — closed 4-way union driving `.vms-chip--{tone}` tinted-pill
+ *    palette. Neutral (accent-tinted) if omitted.
+ *  - `icon?` — optional leading icon (reuses v7.0 IconName closed union).
+ *  - `dismissAction?` — CALLER-SUPPLIED ActionEvent. Absent = no X rendered
+ *    (respects "no dead UI"). When set, a `.vms-chip__dismiss` button is
+ *    emitted with `aria-label="Remove {label}"` that dispatches the caller's
+ *    action. When BOTH `action` and `dismissAction` are set, the X's click
+ *    `stopPropagation()`s so the whole-chip action does not double-fire.
+ *  - `action?` — whole-chip click (filter-chip toggle pattern). Same shape as
+ *    {@link ListRowNode.action} — role=button, tabIndex=0, Enter/Space
+ *    dispatch (Space preventDefault).
+ */
+export interface ChipNode {
+  type: "chip";
+  /** Chip pill text. REQUIRED. */
+  label: string;
+  /** Tinted-pill color palette. Neutral (accent-tinted) if omitted. */
+  tone?: "danger" | "warning" | "success" | "info";
+  /** Optional leading icon. Reuses v7.0 IconName closed union. */
+  icon?: IconName;
+  /** Dismiss X button — CALLER-SUPPLIED ActionEvent (identity-carrying:
+   *  `remove-filter-42`, `unselect-tag-foo`). **DEVIATES from
+   *  AlertNode.dismissible** which is a bool that emits a fixed
+   *  `{name:"dismiss"}` locally — Chip needs the app to name the action
+   *  because chips typically operate on specific identities. Mirrors
+   *  {@link ModalNode.dismissAction}, NOT AlertNode.dismissible.
+   *  Absent = no X rendered (respects "no dead UI"). */
+  dismissAction?: ActionEvent;
+  /** Whole-chip click (filter-chip toggle pattern). Same shape as
+   *  {@link ListRowNode.action} — role=button, tabIndex=0, Enter/Space
+   *  keyboard-activation with Space preventDefault. */
+  action?: ActionEvent;
+}
+
+/**
+ * v8.0.0 (COMP-13a) — ChipListNode. Container for ChipNode children — the
+ * flex-wrap horizontal pill cluster. Consumed by filter bars, selected-tag
+ * displays, category pickers.
+ *
+ * Renders as `<div class="vms-chip-list" role="list">` with `flex-wrap:wrap`
+ * + `--vms-space-xs` gap.
+ *
+ * TREE INVARIANT — children must ALL be ChipNode. The tree-validator rejects
+ * non-Chip children with `invalid_tree` and a byte-identical error message
+ * across both backends:
+ * `"ChipListNode.children must all be ChipNodes (found: <type>)"`.
+ */
+export interface ChipListNode {
+  type: "chip-list";
+  /** REQUIRED — ChipNode-only children. The tree-validator rejects mixed /
+   *  non-Chip children with `invalid_tree` (byte-identical error message
+   *  across TS + .NET). */
+  children: ChipNode[];
 }
 
 /**
