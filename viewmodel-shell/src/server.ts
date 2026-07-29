@@ -22,6 +22,8 @@ import type {
   ListNode,
   ListItemNode,
   ListRowNode,
+  MessageNode,
+  MessageListNode,
   FitsNode,
   EmptyStateNode,
   BlockquoteNode,
@@ -202,6 +204,41 @@ function collectActions(
       }
       if (lr.trailing) collectActions(lr.trailing, enclosingForm, out);
       if (lr.action) recordAction(lr.action, enclosingForm, out);
+      return;
+    }
+    case "message": {
+      // v8.0.0 (COMP-06) — MessageNode slots: avatar (ViewNode), content
+      // (string | ViewNode), actions (ButtonNode[]). Descend into every
+      // ViewNode-typed slot; guard content on typeof so a string leaf isn't
+      // fed to the walker. Author + timestamp are primitive strings (no
+      // descent). Actions are dispatch-bearing → each button's action name
+      // participates in name uniqueness.
+      const m = node as MessageNode;
+      if (m.avatar) collectActions(m.avatar, enclosingForm, out);
+      if (typeof m.content !== "string") collectActions(m.content, enclosingForm, out);
+      for (const btn of m.actions ?? []) collectActions(btn, enclosingForm, out);
+      return;
+    }
+    case "message-list": {
+      // v8.0.0 (COMP-06a) — MessageListNode.children MUST be MessageNode[].
+      // Tree-invariant rejection: any non-MessageNode child throws
+      // invalid_tree. Byte-identical error message across TS + .NET (see the
+      // .NET twin arm in ViewTreeValidation.Collect in ViewModels.cs). Same
+      // pattern as ListNode(variant:"rows") mixed-children rejection above.
+      const ml = node as MessageListNode;
+      for (const child of ml.children) {
+        // Cast through unknown — TypeScript's compile-time type is MessageNode[],
+        // but the runtime tree is server-authored JSON that CAN smuggle any
+        // ViewNode in (a hostile deserialization / a buildVm bug). The validator
+        // catches it at runtime with the byte-identical error message.
+        const c = child as unknown as { type: string };
+        if (c.type !== "message") {
+          throw new Error(
+            `MessageListNode.children must all be MessageNodes (found: ${c.type})`
+          );
+        }
+      }
+      for (const child of ml.children) collectActions(child, enclosingForm, out);
       return;
     }
     case "form": {
@@ -540,6 +577,24 @@ function walkForSectionAction(
         if (typeof m !== "string") walkForSectionAction(m, outerInteractive);
       }
       if (lr.trailing) walkForSectionAction(lr.trailing, outerInteractive);
+      return;
+    }
+    case "message": {
+      // v8.0.0 (COMP-06) — MessageNode slots can hold arbitrary ViewNode
+      // subtrees (avatar, content when non-string). Descend for consistency
+      // with every other walk so a future shape can't slip an interactive
+      // section past this validator.
+      const m = node as MessageNode;
+      if (m.avatar) walkForSectionAction(m.avatar, outerInteractive);
+      if (typeof m.content !== "string") walkForSectionAction(m.content, outerInteractive);
+      return;
+    }
+    case "message-list": {
+      // v8.0.0 (COMP-06a) — MessageListNode.children are MessageNodes; descend
+      // into each to catch any nested interactive-section violations in a
+      // message's avatar or content slot.
+      const ml = node as MessageListNode;
+      for (const child of ml.children) walkForSectionAction(child, outerInteractive);
       return;
     }
     case "form": {

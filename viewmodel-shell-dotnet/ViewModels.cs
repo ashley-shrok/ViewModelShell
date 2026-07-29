@@ -2397,6 +2397,24 @@ public static class ViewTreeValidation
                 if (listRow.Trailing is { } lrTrail) WalkForSectionAction(lrTrail, outerInteractive);
                 break;
 
+            case MessageNode message:
+                // v8.0.0 (COMP-06) — MessageNode slots can hold arbitrary
+                // ViewNode subtrees (Avatar, Content). Descend for consistency
+                // with every other walk so a future shape can't slip an
+                // interactive section past this validator. Mirrors the TS
+                // twin `case "message"` arm in server.ts.
+                if (message.Avatar is { } msgAvatar) WalkForSectionAction(msgAvatar, outerInteractive);
+                WalkForSectionAction(message.Content, outerInteractive);
+                break;
+
+            case MessageListNode messageList:
+                // v8.0.0 (COMP-06a) — MessageListNode.Children are
+                // MessageNodes; descend into each to catch nested
+                // interactive-section violations in a message's Avatar or
+                // Content slot.
+                foreach (var child in messageList.Children) WalkForSectionAction(child, outerInteractive);
+                break;
+
             case FormNode form:
                 foreach (var child in form.Children) WalkForSectionAction(child, outerInteractive);
                 break;
@@ -2527,6 +2545,45 @@ public static class ViewTreeValidation
                 }
                 if (listRow.Trailing is { } lrTrail) Collect(lrTrail, enclosingForm, sink);
                 if (listRow.Action is { } lrAction) Record(lrAction, enclosingForm, sink);
+                break;
+
+            case MessageNode message:
+                // v8.0.0 (COMP-06) — MessageNode slots: Avatar (ViewNode?),
+                // Content (ViewNode, required), Actions (ButtonNode[]).
+                // Descend into every ViewNode-typed slot; each button's
+                // Action participates in name uniqueness. Mirrors the TS
+                // twin `case "message"` arm in server.ts.
+                if (message.Avatar is { } msgAvatar) Collect(msgAvatar, enclosingForm, sink);
+                Collect(message.Content, enclosingForm, sink);
+                if (message.Actions is { } msgActions)
+                {
+                    foreach (var btn in msgActions) Collect(btn, enclosingForm, sink);
+                }
+                break;
+
+            case MessageListNode messageList:
+                // v8.0.0 (COMP-06a) — MessageListNode.Children MUST be
+                // MessageNode. The compile-time IReadOnlyList<MessageNode>
+                // type is the primary enforcement; this runtime check is
+                // defense-in-depth for a hostile deserialization path that
+                // smuggles in non-MessageNode entries as ViewNode. Byte-
+                // identical error message across TS + .NET (see the TS twin
+                // `case "message-list"` arm in server.ts).
+                foreach (var child in messageList.Children)
+                {
+                    // Children is IReadOnlyList<MessageNode> at compile time;
+                    // cast through ViewNode so a poisoned collection (e.g. a
+                    // deserializer that produced ViewNode entries and coerced
+                    // the type check) still trips the guard.
+                    ViewNode c = child;
+                    if (c is not MessageNode)
+                    {
+                        var childType = ViewNodeWireName(c);
+                        throw new InvalidOperationException(
+                            $"MessageListNode.children must all be MessageNodes (found: {childType})");
+                    }
+                }
+                foreach (var child in messageList.Children) Collect(child, enclosingForm, sink);
                 break;
 
             case FormNode form:
@@ -2718,6 +2775,8 @@ public static class ViewTreeValidation
         DiffNode      => "diff",
         IconNode      => "icon",
         AvatarNode    => "avatar",
+        MessageNode    => "message",
+        MessageListNode => "message-list",
         _             => node.GetType().Name,
     };
 }
