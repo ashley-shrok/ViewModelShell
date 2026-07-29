@@ -20,7 +20,7 @@ import type {
   EmptyStateNode, BadgeNode, ChartNode,
   BlockquoteNode, CodeBlockNode, BreadcrumbNode, StepsNode, TrackerNode, DiffNode,
   IconNode, IconName, AvatarNode, ListRowNode,
-  MessageNode, MessageListNode, AlertNode,
+  MessageNode, MessageListNode, AlertNode, UserRowNode,
 } from "./index.js";
 import { ICONS } from "./icons-payload.js";
 
@@ -569,6 +569,7 @@ export class BrowserAdapter implements Adapter {
       case "message":      return this.message(n, parent, on);
       case "message-list": return this.messageList(n, parent, on);
       case "alert":        return this.alert(n, parent, on);
+      case "user-row":     return this.userRow(n, parent, on);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -1242,6 +1243,130 @@ export class BrowserAdapter implements Adapter {
       // the row's click handler. Selectors mirror the SectionNode.action
       // wiring at browser.ts:1107-1110 exactly (button / checkbox input +
       // label / field input / any anchor).
+      el.querySelectorAll<HTMLElement>(
+        ".vms-button, .vms-checkbox__input, .vms-checkbox, .vms-field__input, a[href]"
+      ).forEach(ctrl => {
+        ctrl.addEventListener("click", (e) => { e.stopPropagation(); });
+      });
+    }
+
+    parent.appendChild(el);
+  }
+
+  /** v8.0.0 (COMP-09) — UserRowNode renderer. The person-entity display
+   *  recipe. Emits an <li> when in a .vms-user-row-list container, else
+   *  <div class="vms-user-row-standalone">. Grid: [avatar | content |
+   *  trailing? | status]. String-lift trained typography per CONTEXT §1:
+   *    name string → TextNode{style:"body", weight:"medium"} (COMP-01/02)
+   *    meta string → TextNode{style:"muted"}
+   *  Status is a leaf sub-record with a closed 4-value StatusKind enum that
+   *  drives .vms-status-dot--{kind} class emission (palette baked in
+   *  default.css). Whole-row action mirrors listRow() at browser.ts:1220-1250
+   *  — role="button", tabIndex=0, Enter/Space dispatch, aria-label from
+   *  flattened text. Interactive descendants stopPropagation via the same
+   *  selector list as ListRowNode.action. */
+  private userRow(n: UserRowNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    // Container detection — parent's own className tells us whether we're
+    // inside a list or free-floating. Mirrors listRow()'s idiom at
+    // browser.ts:1149.
+    const isInList = parent.classList.contains("vms-user-row-list");
+    const el: HTMLElement = document.createElement(isInList ? "li" : "div");
+    const cls = ["vms-user-row"];
+    if (!isInList) cls.push("vms-user-row-standalone");
+    if (n.action) cls.push("vms-user-row--clickable");
+    // PLAN-CHECKER FIX #1: trailing slot needs a dedicated grid cell. Emit
+    // .vms-user-row--has-trailing when present so the CSS switches from
+    // 3-col to 4-col grid. Mutation-testable: removing the class breaks the
+    // "trailing renders in its correct grid cell" test.
+    if (n.trailing) cls.push("vms-user-row--has-trailing");
+    el.className = cls.join(" ");
+
+    // Avatar slot — any ViewNode (typically AvatarNode from COMP-04).
+    if (n.avatar) {
+      const avatarEl = document.createElement("div");
+      avatarEl.className = "vms-user-row__avatar";
+      this.node(n.avatar, avatarEl, on);
+      el.appendChild(avatarEl);
+    }
+
+    // Content stack — name + optional meta. String slots auto-wrap in trained
+    // TextNode per the string-lift rule (CONTEXT §1).
+    const content = document.createElement("div");
+    content.className = "vms-user-row__content";
+
+    const nameEl = document.createElement("div");
+    nameEl.className = "vms-user-row__name";
+    if (typeof n.name === "string") {
+      // COMP-01 body tier + COMP-02 weight axis — the trained name typography
+      // a user row visually expects.
+      this.node({ type: "text", value: n.name, style: "body", weight: "medium" }, nameEl, on);
+    } else {
+      this.node(n.name, nameEl, on);
+    }
+    content.appendChild(nameEl);
+
+    if (n.meta != null) {
+      const metaEl = document.createElement("div");
+      metaEl.className = "vms-user-row__meta";
+      if (typeof n.meta === "string") {
+        this.node({ type: "text", value: n.meta, style: "muted" }, metaEl, on);
+      } else {
+        this.node(n.meta, metaEl, on);
+      }
+      content.appendChild(metaEl);
+    }
+
+    el.appendChild(content);
+
+    // Trailing slot — any ViewNode. Rendered before the status column so the
+    // 4-column grid `[avatar | content | trailing | status]` places it
+    // between content and status. (When trailing is absent, the grid is 3-col
+    // and status sits directly after content.)
+    if (n.trailing) {
+      const trail = document.createElement("div");
+      trail.className = "vms-user-row__trailing";
+      this.node(n.trailing, trail, on);
+      el.appendChild(trail);
+    }
+
+    // Status slot — small typed sub-record (NOT a ViewNode). Renders a
+    // colored dot + label right-aligned. kind → CSS class mapping is closed:
+    //   online → --success, away → --warning, offline → muted, busy → --error
+    // The CSS ships in default.css. Label emitted via createTextNode (textContent
+    // — safe by construction; no innerHTML).
+    if (n.status) {
+      const statusEl = document.createElement("span");
+      statusEl.className = "vms-user-row__status";
+      const dot = document.createElement("span");
+      dot.className = `vms-status-dot vms-status-dot--${n.status.kind}`;
+      statusEl.appendChild(dot);
+      statusEl.appendChild(document.createTextNode(n.status.label));
+      el.appendChild(statusEl);
+    }
+
+    // Whole-row action — click-anywhere + keyboard + ARIA. Mirrors listRow()
+    // at browser.ts:1220-1250 verbatim (role/tabIndex/aria-label/keydown/
+    // stopPropagation selectors).
+    if (n.action) {
+      const action = n.action;
+      el.tabIndex = 0;
+      el.setAttribute("role", "button");
+      // aria-label from flattened text content (collapse whitespace, slice to
+      // 200 chars — same posture as listRow).
+      const ariaText = (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
+      if (ariaText) el.setAttribute("aria-label", ariaText);
+      el.addEventListener("click", () => { on(action); });
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          on(action);
+        } else if (e.key === " " || e.key === "Spacebar") {
+          e.preventDefault(); // suppress page scroll
+          on(action);
+        }
+      });
+      // Containment: clicks on nested interactive controls must NOT bubble to
+      // the row's click handler. Selectors mirror listRow()'s wiring at
+      // browser.ts:1245-1249 exactly.
       el.querySelectorAll<HTMLElement>(
         ".vms-button, .vms-checkbox__input, .vms-checkbox, .vms-field__input, a[href]"
       ).forEach(ctrl => {
