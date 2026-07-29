@@ -23,6 +23,7 @@ import type {
   MessageNode, MessageListNode, AlertNode, UserRowNode,
   DetailRowNode, DetailListNode,
   TimelineEntryNode, TimelineNode,
+  SettingRowNode, SettingListNode,
 } from "./index.js";
 import { ICONS } from "./icons-payload.js";
 
@@ -576,6 +577,8 @@ export class BrowserAdapter implements Adapter {
       case "detail-list":  return this.detailList(n, parent, on);
       case "timeline":       return this.timeline(n, parent, on);
       case "timeline-entry": return this.timelineEntry(n, parent, on);
+      case "setting-list":   return this.settingList(n, parent, on);
+      case "setting-row":    return this.settingRow(n, parent, on);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -1536,6 +1539,150 @@ export class BrowserAdapter implements Adapter {
       iconWrap.className = "vms-timeline-entry__icon";
       iconWrap.appendChild(this.renderIconSvg(n.icon, "sm", undefined, undefined));
       li.appendChild(iconWrap);
+    }
+
+    parent.appendChild(li);
+  }
+
+  /** v8.0.0 (COMP-12a) — SettingListNode renderer. Container for
+   *  SettingRowNode children with an optional heading. Emits an optional
+   *  <h3 class="vms-setting-list__heading"> as a SIBLING BEFORE the <ul>
+   *  (NOT a child) — same posture as Phase 24 EmptyStateNode's "structural
+   *  elements outside the semantic list" approach; the <ul> stays a clean
+   *  list of <li> items with no non-list-item children. Single bordered
+   *  surface via .vms-setting-list; per-row dividers via CSS on
+   *  .vms-setting-row (see default.css). */
+  private settingList(n: SettingListNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    // Heading is emitted as a SIBLING of the <ul>, not inside. A
+    // non-list-item child inside a <ul> would be semantic garbage and would
+    // trip a11y validators. Same posture as EmptyState (Phase 24) which
+    // places structural elements outside the list.
+    if (n.heading) {
+      const h = document.createElement("h3");
+      h.className = "vms-setting-list__heading";
+      h.textContent = n.heading;
+      parent.appendChild(h);
+    }
+    const ul = document.createElement("ul");
+    ul.className = "vms-setting-list";
+    // Runtime tree may smuggle non-SettingRowNode children — the tree
+    // validator (server.ts collectActions "setting-list" arm) rejects them
+    // with invalid_tree before we get here.
+    this.kids(n.children as unknown as ViewNode[], ul, on);
+    parent.appendChild(ul);
+  }
+
+  /** v8.0.0 (COMP-12) — SettingRowNode renderer. The settings-page primitive
+   *  — one row per toggleable / configurable setting. Emits
+   *  <li class="vms-setting-row [vms-setting-row--clickable]"> with a
+   *  [body | control] grid (1fr auto, align-items:center). The body column
+   *  stacks [icon? label description?]; the control column holds the
+   *  trailing slot vertically centered.
+   *
+   *  STRING-LIFT trained typography:
+   *   - label string → TextNode { style: "body", weight: "medium" }
+   *     (COMP-01/02 body + weight axes from Phase 23).
+   *   - label ViewNode → rendered as-is (escape hatch — rich content OK).
+   *   - description string → TextNode { style: "muted" } inside a <p>.
+   *     The <p class="vms-setting-row__description"> is what receives the
+   *     max-width:42rem readable-line-length cap (CSS-owned, framework
+   *     concern per the Phase 24 primary composite posture).
+   *   - description ViewNode → rendered as-is.
+   *
+   *  TRAILING slot accepts ANY ViewNode. The NATURAL PAIRING is
+   *  CheckboxNode(variant:"switch") from COMP-03 (Phase 23) — the whole
+   *  recipe exists so an app hands the framework
+   *  { label, description, trailing: switch } and gets the shipped
+   *  settings-row layout for free. Also common: ButtonNode, LinkNode.
+   *
+   *  WHOLE-ROW ACTION (opt-in) — same shape as listRow() at browser.ts:1220-
+   *  1250. The stopPropagation selector list is EXTENDED to include
+   *  .vms-field--switch so a click on the trailing switch does NOT
+   *  double-fire the row action (the natural pairing must behave
+   *  correctly — a switch inside a clickable row should toggle without
+   *  triggering the row's own click). */
+  private settingRow(n: SettingRowNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
+    const li = document.createElement("li");
+    const cls = ["vms-setting-row"];
+    if (n.action) cls.push("vms-setting-row--clickable");
+    li.className = cls.join(" ");
+
+    // Body column — icon? + label + description?
+    const body = document.createElement("div");
+    body.className = "vms-setting-row__body";
+    if (n.icon) body.appendChild(this.renderIconSvg(n.icon, "sm", undefined, undefined));
+
+    const label = document.createElement("div");
+    label.className = "vms-setting-row__label";
+    if (typeof n.label === "string") {
+      // String-lift trained typography (COMP-01/02 body + weight axes).
+      // MUTATION test: swap weight:"medium" → weight:"bold" breaks the
+      // typography assertion in test/setting-row.test.ts.
+      this.node({ type: "text", value: n.label, style: "body", weight: "medium" }, label, on);
+    } else {
+      this.node(n.label, label, on);
+    }
+    body.appendChild(label);
+
+    if (n.description != null) {
+      // <p> element receives the .vms-setting-row__description max-width:42rem
+      // readable-line-length cap from default.css. String → TextNode{muted};
+      // ViewNode → rendered as-is (rich content OK).
+      const desc = document.createElement("p");
+      desc.className = "vms-setting-row__description";
+      if (typeof n.description === "string") {
+        this.node({ type: "text", value: n.description, style: "muted" }, desc, on);
+      } else {
+        this.node(n.description, desc, on);
+      }
+      body.appendChild(desc);
+    }
+    li.appendChild(body);
+
+    // Trailing control — any ViewNode; typically CheckboxNode(variant:"switch")
+    // from COMP-03. Vertically centered via grid align-items:center on the
+    // <li> (CSS-owned).
+    if (n.trailing) {
+      const ctrl = document.createElement("div");
+      ctrl.className = "vms-setting-row__control";
+      this.node(n.trailing, ctrl, on);
+      li.appendChild(ctrl);
+    }
+
+    // Whole-row action — click-anywhere + keyboard + ARIA. Mirrors
+    // listRow() at browser.ts:1220-1250 (which mirrors TableRow.action at
+    // browser.ts:3694-3714). The stopPropagation selector list is EXTENDED
+    // to include .vms-field--switch so the natural switch pairing doesn't
+    // double-fire the row action — that's the mitigation for threat
+    // T-25-04-02 and the test/setting-row.test.ts stopPropagation-from-
+    // switch test proves it.
+    if (n.action) {
+      const action = n.action;
+      li.tabIndex = 0;
+      li.setAttribute("role", "button");
+      const ariaText = (li.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
+      if (ariaText) li.setAttribute("aria-label", ariaText);
+      li.addEventListener("click", () => { on(action); });
+      li.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          on(action);
+        } else if (e.key === " " || e.key === "Spacebar") {
+          e.preventDefault(); // suppress page scroll
+          on(action);
+        }
+      });
+      // Containment: clicks on nested interactive controls must NOT bubble
+      // to the row's click handler. Selector list is the ListRowNode.action
+      // list PLUS .vms-field--switch — the checkbox() renderer emits
+      // .vms-checkbox on the <label> (with a .vms-field--switch modifier
+      // for switch variant) and .vms-checkbox__input on the <input>. All
+      // three selectors ensure BOTH click-on-input AND click-on-label
+      // (which native <label>-for semantics would forward) are contained.
+      li.querySelectorAll<HTMLElement>(
+        ".vms-button, .vms-checkbox__input, .vms-checkbox, .vms-field__input, .vms-field--switch, a[href]"
+      ).forEach(ctrl => {
+        ctrl.addEventListener("click", (e) => { e.stopPropagation(); });
+      });
     }
 
     parent.appendChild(li);
