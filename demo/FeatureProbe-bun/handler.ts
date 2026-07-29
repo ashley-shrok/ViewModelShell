@@ -1040,6 +1040,69 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // ── v8.0.0 Foundations (COMP-01..COMP-04) ──
+  // Byte-identical to the .NET twin's Foundations SectionNode. Every branch
+  // introduced by plans 23-01..04 gets at least one emission here + an
+  // expectBodyContains tripwire on the initial GET step, per banked lesson: a
+  // diff can only prove things about code it actually RUNS. Fleet-adoption
+  // discipline (banked from UseVmsShellStaticFiles 6.7.0) is honored — the
+  // primitives ship with parity coverage in the same batch.
+  //   • COMP-01 (caption): TextNode with style:"caption" — proves the closed
+  //     union grew to 7 members and "style":"caption" crosses.
+  //   • COMP-02 (weight, Option A): three TextNodes weight:"regular"/"medium"
+  //     /"bold" — proves the new orthogonal axis crosses the wire.
+  //   • COMP-03 (switch variant): CheckboxNode variant:"switch" + one with
+  //     variant OMITTED — proves the enum crosses AND WhenWritingNull posture.
+  //   • COMP-04 (AvatarNode): a bare AvatarNode (all optionals absent — proves
+  //     gotcha #8 posture, the class-2 defect findNulls catches), one per
+  //     size sm/md/lg/xl (proves the closed AvatarSize enum crosses), one
+  //     per content mode (initials/tone, icon/tone, image-only), and a
+  //     meaning-carrying one (alt set).
+  // NOTE: the CLIENT-SIDE rendering (font sizing per size, .vms-avatar--icon
+  // SVG reuse via renderIconSvg, .vms-field--switch slider styling, .vms-text
+  // --caption text-xs muted-opacity emission) is browser-only and NOT part of
+  // parity — parity proves only that the fields serialize identically across
+  // backends.
+  const foundationsSection: ViewNode = {
+    type: "section",
+    heading: "v8.0.0 Foundations",
+    variant: "card",
+    children: [
+      // ── COMP-01 caption tier ─────────────────────────────
+      { type: "text", value: "Row primary (body)", style: "body" },
+      { type: "text", value: "Row secondary (muted)", style: "muted" },
+      { type: "text", value: "2h ago · READ · Ada L.", style: "caption" },
+
+      // ── COMP-02 weight axis (Option A — new orthogonal field) ────
+      { type: "text", value: "Regular weight", style: "body", weight: "regular" },
+      { type: "text", value: "Medium weight",  style: "body", weight: "medium" },
+      { type: "text", value: "Bold weight",    style: "body", weight: "bold" },
+
+      // ── COMP-03 switch variant ───────────────────────────
+      { type: "checkbox", name: "notifications", bind: "notifications", label: "Notifications", variant: "switch" },
+      // variant OMITTED — proves absent = default (WhenWritingNull posture),
+      // NOT a "variant":"checkbox" fill-in and NOT a "variant":null null-leak.
+      { type: "checkbox", name: "beta", bind: "beta", label: "Beta features (variant omitted)" },
+
+      // ── COMP-04 AvatarNode ───────────────────────────────
+      // Bare — all optionals absent on the wire (proves gotcha #8 posture).
+      { type: "avatar" },
+      // Every size — proves the closed AvatarSize enum crosses on both backends.
+      { type: "avatar", size: "sm", initials: "S" },
+      { type: "avatar", size: "md", initials: "M" },
+      { type: "avatar", size: "lg", initials: "L" },
+      // Meaning-carrying (initials + tone + alt) — the tripwire concentration
+      // point: "size":"xl", "initials":"AL", "tone":"success", alt set.
+      { type: "avatar", size: "xl", initials: "AL", tone: "success", alt: "Ada Lovelace" },
+      // Content-mode coverage — initials + info tone.
+      { type: "avatar", initials: "GH", tone: "info", alt: "Grace Hopper" },
+      // Icon mode — "icon":"user" (a valid IconName), warning tone, larger size.
+      { type: "avatar", icon: "user", tone: "warning", size: "lg", alt: "Anonymous user" },
+      // Image mode — the exact URL is the tripwire; placeholder host, never fetched by parity.
+      { type: "avatar", image: "https://vms.example/avatar-ada.png", alt: "Ada Lovelace" },
+    ],
+  };
+
   // ── Inline rich text (TextNode.runs) ──
   // Covers the absent-vs-present matrix for every optional on InlineRun, plus the
   // two contract cases that are decisions rather than mechanics:
@@ -1190,6 +1253,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       trackerSection,
       diffSection,
       iconsSection,
+      foundationsSection,
       richTextSection,
       lookupSection,
       probeModal,

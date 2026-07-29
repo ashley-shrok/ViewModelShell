@@ -1137,6 +1137,70 @@ public class FeatureProbeController : ControllerBase
                     Icon: IconName.Wrench,
                     Tooltip: "Settings"),
             }));
+        // v8.0.0 Foundations (COMP-01..COMP-04) — byte-identical to the bun
+        // twin foundationsSection. Every branch introduced by plans 23-01..04
+        // gets at least one emission here + an expectBodyContains tripwire on
+        // the initial GET step, per banked lesson: a diff can only prove
+        // things about code it actually RUNS. Fleet-adoption discipline
+        // (banked from UseVmsShellStaticFiles 6.7.0) is honored — the
+        // primitives ship with parity coverage in the same batch.
+        //   • COMP-01 (caption): TextNode with Style:Caption — proves the
+        //     closed union grew to 7 members and "style":"caption" crosses.
+        //   • COMP-02 (weight, Option A): three TextNodes Weight:Regular/
+        //     Medium/Bold — proves the new orthogonal axis crosses the wire.
+        //   • COMP-03 (switch variant): CheckboxNode Variant:Switch + one
+        //     with Variant OMITTED — proves the enum crosses AND
+        //     WhenWritingNull posture on the .NET side.
+        //   • COMP-04 (AvatarNode): a bare AvatarNode (all optionals absent
+        //     — proves gotcha #8 posture, the class-2 defect findNulls
+        //     catches on both backends), one per size sm/md/lg/xl (proves
+        //     the closed AvatarSize enum crosses), one per content mode
+        //     (initials/tone, icon/tone, image-only), and a meaning-
+        //     carrying one (Alt set).
+        // NOTE: the CLIENT-SIDE rendering is browser-only and NOT part of
+        // parity — parity proves only that the fields serialize identically
+        // across backends.
+        pageChildren.Add(new SectionNode(
+            Heading: "v8.0.0 Foundations",
+            Variant: SectionVariant.Card,
+            Children: new ViewNode[]
+            {
+                // COMP-01 caption tier
+                new TextNode("Row primary (body)",       Style: TextStyle.Body),
+                new TextNode("Row secondary (muted)",    Style: TextStyle.Muted),
+                new TextNode("2h ago · READ · Ada L.",   Style: TextStyle.Caption),
+
+                // COMP-02 weight axis (Option A)
+                new TextNode("Regular weight", Style: TextStyle.Body, Weight: TextWeight.Regular),
+                new TextNode("Medium weight",  Style: TextStyle.Body, Weight: TextWeight.Medium),
+                new TextNode("Bold weight",    Style: TextStyle.Body, Weight: TextWeight.Bold),
+
+                // COMP-03 switch variant
+                new CheckboxNode(
+                    Name: "notifications",
+                    Bind: "notifications",
+                    Label: "Notifications",
+                    Action: null,
+                    Tooltip: null,
+                    Variant: CheckboxVariant.Switch),
+                // Variant OMITTED — proves absent = default (WhenWritingNull),
+                // NOT "variant":"checkbox" fill-in and NOT "variant":null.
+                new CheckboxNode(
+                    Name: "beta",
+                    Bind: "beta",
+                    Label: "Beta features (variant omitted)",
+                    Action: null),
+
+                // COMP-04 AvatarNode — bare + sizes + modes.
+                new AvatarNode(),
+                new AvatarNode(Size: AvatarSize.Sm, Initials: "S"),
+                new AvatarNode(Size: AvatarSize.Md, Initials: "M"),
+                new AvatarNode(Size: AvatarSize.Lg, Initials: "L"),
+                new AvatarNode(Size: AvatarSize.Xl, Initials: "AL", Tone: Tone.Success, Alt: "Ada Lovelace"),
+                new AvatarNode(Initials: "GH", Tone: Tone.Info, Alt: "Grace Hopper"),
+                new AvatarNode(Icon: IconName.User, Tone: Tone.Warning, Size: AvatarSize.Lg, Alt: "Anonymous user"),
+                new AvatarNode(Image: "https://vms.example/avatar-ada.png", Alt: "Ada Lovelace"),
+            }));
         // Inline rich text (TextNode.Runs) — byte-identical to the bun twin
         // richTextSection. Covers the absent-vs-present matrix for every optional on
         // InlineRun, plus the two contract cases that are DECISIONS rather than
