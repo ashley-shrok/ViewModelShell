@@ -2591,6 +2591,20 @@ public static class ViewTreeValidation
                 }
                 break;
 
+            case UserRowNode userRow:
+                // v8.0.0 (COMP-09) — UserRowNode slots can hold arbitrary
+                // ViewNode subtrees (Avatar / Name / Meta / Trailing). Descend
+                // into every ViewNode slot for defense-in-depth so a future
+                // shape can't slip an interactive section past this
+                // validator. Status is a leaf sub-record (UserRowStatus) —
+                // no ViewNode content, no descent. Mirrors the TS twin
+                // `case "user-row"` arm in server.ts.
+                if (userRow.Avatar is { } urAvatar) WalkForSectionAction(urAvatar, outerInteractive);
+                WalkForSectionAction(userRow.Name, outerInteractive);
+                if (userRow.Meta is { } urMeta) WalkForSectionAction(urMeta, outerInteractive);
+                if (userRow.Trailing is { } urTrail) WalkForSectionAction(urTrail, outerInteractive);
+                break;
+
             case FormNode form:
                 foreach (var child in form.Children) WalkForSectionAction(child, outerInteractive);
                 break;
@@ -2785,6 +2799,22 @@ public static class ViewTreeValidation
                 {
                     foreach (var btn in alertActions) Collect(btn, enclosingForm, sink);
                 }
+                break;
+
+            case UserRowNode userRow:
+                // v8.0.0 (COMP-09) — UserRowNode slots: Avatar (ViewNode?),
+                // Name (ViewNode, required), Meta (ViewNode?), Trailing
+                // (ViewNode?), Action (whole-row click). Every ViewNode-typed
+                // slot descended into; Action recorded via Record (participates
+                // in name uniqueness the same way ListRowNode.Action does).
+                // Status is a leaf sub-record (UserRowStatus with a closed
+                // StatusKind enum) — NO walker descent. Mirrors the TS twin
+                // `case "user-row"` arm in server.ts.
+                if (userRow.Avatar is { } urAvatar) Collect(urAvatar, enclosingForm, sink);
+                Collect(userRow.Name, enclosingForm, sink);
+                if (userRow.Meta is { } urMeta) Collect(urMeta, enclosingForm, sink);
+                if (userRow.Trailing is { } urTrail) Collect(urTrail, enclosingForm, sink);
+                if (userRow.Action is { } urAction) Record(urAction, enclosingForm, sink);
                 break;
 
             case FormNode form:

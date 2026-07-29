@@ -25,6 +25,7 @@ import type {
   MessageNode,
   MessageListNode,
   AlertNode,
+  UserRowNode,
   FitsNode,
   EmptyStateNode,
   BlockquoteNode,
@@ -257,6 +258,30 @@ function collectActions(
       const a = node as AlertNode;
       if (typeof a.message !== "string") collectActions(a.message, enclosingForm, out);
       for (const btn of a.actions ?? []) collectActions(btn, enclosingForm, out);
+      return;
+    }
+    case "user-row": {
+      // v8.0.0 (COMP-09) — UserRowNode slots: avatar (ViewNode), name
+      // (string | ViewNode), meta (string | ViewNode), trailing (ViewNode),
+      // action (whole-row click). `string | ViewNode` slots (name/meta)
+      // descend ONLY when the value is a ViewNode — the string case is a
+      // leaf (auto-wrapped by the renderer into a TextNode) with no
+      // descendants of its own.
+      //
+      // status is a SMALL TYPED SUB-RECORD (leaf sub-record on the wire —
+      // same posture as LookupItem / FieldOption; NO ViewNode content) — the
+      // walker does NOT descend into it.
+      //
+      // Whole-row action is dispatch-bearing → recordAction (participates in
+      // name uniqueness the same way ListRowNode.action does).
+      const ur = node as UserRowNode;
+      if (ur.avatar) collectActions(ur.avatar, enclosingForm, out);
+      if (typeof ur.name !== "string") collectActions(ur.name, enclosingForm, out);
+      if (ur.meta != null && typeof ur.meta !== "string") {
+        collectActions(ur.meta, enclosingForm, out);
+      }
+      if (ur.trailing) collectActions(ur.trailing, enclosingForm, out);
+      if (ur.action) recordAction(ur.action, enclosingForm, out);
       return;
     }
     case "form": {
@@ -625,6 +650,22 @@ function walkForSectionAction(
       const a = node as AlertNode;
       if (typeof a.message !== "string") walkForSectionAction(a.message, outerInteractive);
       for (const btn of a.actions ?? []) walkForSectionAction(btn, outerInteractive);
+      return;
+    }
+    case "user-row": {
+      // v8.0.0 (COMP-09) — UserRowNode slots can hold arbitrary ViewNode
+      // subtrees (avatar/name-when-non-string/meta-when-non-string/trailing).
+      // Descend into every ViewNode slot for defense-in-depth so a future
+      // shape can't slip an interactive section past this validator.
+      // `string | ViewNode` slots are guarded so we don't feed a string
+      // primitive into the walker. status is a leaf sub-record — no descent.
+      const ur = node as UserRowNode;
+      if (ur.avatar) walkForSectionAction(ur.avatar, outerInteractive);
+      if (typeof ur.name !== "string") walkForSectionAction(ur.name, outerInteractive);
+      if (ur.meta != null && typeof ur.meta !== "string") {
+        walkForSectionAction(ur.meta, outerInteractive);
+      }
+      if (ur.trailing) walkForSectionAction(ur.trailing, outerInteractive);
       return;
     }
     case "form": {
