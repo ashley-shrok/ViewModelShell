@@ -211,7 +211,8 @@ export type ViewNode =
   | ListRowNode
   | MessageNode
   | MessageListNode
-  | AlertNode;
+  | AlertNode
+  | UserRowNode;
 
 export interface PageNode {
   type: "page";
@@ -1815,6 +1816,81 @@ export interface AlertNode {
    *  `dismissible: false`. `WhenWritingDefault` posture on the .NET side —
    *  `false` is ABSENT on the wire (matches TS optional). */
   dismissible?: boolean;
+}
+
+/**
+ * v8.0.0 (COMP-09) — UserRowNode. The person-entity display recipe with typed
+ * semantic slots. Route-B recipe: framework owns grid layout, typography tiers,
+ * spacing, status-dot palette, and a11y; the app hands it content via named
+ * slots. Consumed by member pickers, user lists, contact rows.
+ *
+ * Renders as `<li>` when the parent element carries `.vms-user-row-list`
+ * (in-container, single-bordered-surface + per-row dividers), else as a
+ * standalone `<div>`. Grid: `[avatar | content | trailing? | status]` —
+ * avatar = auto, content = 1fr min-width:0, trailing = auto (when set), status
+ * = auto.
+ *
+ * ## String-lift trained typography (CONTEXT §1, LOCKED)
+ *
+ *  - `name: string` → renderer wraps in `TextNode { style: "body", weight: "medium" }`
+ *    (consumes Phase 23 COMP-01 body + COMP-02 weight axes) — the trained
+ *    row-primary typography a user row visually expects.
+ *  - `meta: string` → renderer wraps in `TextNode { style: "muted" }`.
+ *  - Any slot passed as a `ViewNode` is rendered as-is (escape hatch).
+ *
+ * ## `status` sub-record (NEW machinery — leaf, NOT a ViewNode slot)
+ *
+ * `status?: { label: string; kind: StatusKind }` — a small typed sub-record
+ * (same posture as `LookupItem` / `FieldOption` on the .NET side; NO walker
+ * descent because there is no ViewNode content). `kind` is a CLOSED 4-value
+ * enum that drives the shipped status-dot palette via CSS class emission:
+ *
+ *   online  → `.vms-status-dot--online`  → `--vms-success`
+ *   away    → `.vms-status-dot--away`    → `--vms-warning`
+ *   offline → `.vms-status-dot--offline` → muted (60% of --vms-text-muted)
+ *   busy    → `.vms-status-dot--busy`    → `--vms-error`
+ *
+ * The renderer emits `<span class="vms-user-row__status"><span
+ * class="vms-status-dot vms-status-dot--{kind}"></span>{label}</span>` —
+ * dot BEFORE the label (CONTEXT §1 DOM shape). `label` renders via
+ * `document.createTextNode` (textContent, not innerHTML) — same
+ * safe-string discipline as every other user-facing string.
+ *
+ * ## Whole-row `action`
+ *
+ * When `action` is set the row becomes click-anywhere + keyboard-activatable
+ * + accessible — `role="button"`, `tabIndex=0`, Enter dispatches, Space
+ * preventDefault + dispatches, `aria-label` derived from flattened
+ * name+meta text. Interactive descendants (buttons, checkboxes, links,
+ * fields) `stopPropagation` so they don't double-fire the row action. Same
+ * shape as ListRowNode.action (browser.ts:1220-1250 — Phase 24 COMP-05).
+ */
+export interface UserRowNode {
+  type: "user-row";
+  /** Leading circular slot — typically AvatarNode (COMP-04, Phase 23), but any
+   *  ViewNode acceptable. Consumers wrap explicitly when passing a ViewNode. */
+  avatar?: ViewNode;
+  /** Person display name. REQUIRED. Trained typography: string is auto-wrapped
+   *  in `TextNode { style: "body", weight: "medium" }` at render time
+   *  (consumes Phase 23 COMP-01 body + COMP-02 weight axes). Passing a
+   *  ViewNode is the escape hatch. */
+  name: string | ViewNode;
+  /** Second-line typographically-subordinate meta (e.g. "email · role").
+   *  String → `TextNode { style: "muted" }`; ViewNode → as-is. Omitted =
+   *  no meta line. */
+  meta?: string | ViewNode;
+  /** Right-aligned status indicator — small typed sub-record (NOT a ViewNode
+   *  slot; leaf, no walker descent). `kind` is a closed 4-value enum that
+   *  drives the shipped status-dot palette via CSS class emission. Colors:
+   *  online → success, away → warning, offline → muted, busy → danger. */
+  status?: { label: string; kind: "online" | "away" | "offline" | "busy" };
+  /** Optional trailing slot — extra actions or badge. Any ViewNode. Rendered
+   *  between the content and status columns when both are present. */
+  trailing?: ViewNode;
+  /** Whole-row click (member-picker pattern). Same shape as ListRowNode.action —
+   *  `role="button"`, `tabIndex=0`, Enter/Space dispatch, aria-label from
+   *  flattened name+meta text. Interactive descendants `stopPropagation`. */
+  action?: ActionEvent;
 }
 
 /**

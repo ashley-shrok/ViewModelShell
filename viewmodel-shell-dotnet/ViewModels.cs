@@ -186,6 +186,16 @@ public enum TextWeight { Regular, Medium, Bold }
 [JsonConverter(typeof(KebabEnum<CheckboxVariant>))]
 public enum CheckboxVariant { Checkbox, Switch }
 
+/// <summary>v8.0.0 (COMP-09) — UserRowNode.Status.Kind. Closed 4-value enum
+/// driving the shipped status-dot palette via CSS class emission
+/// (.vms-status-dot--online / --away / --offline / --busy). Wire values
+/// (kebab-lowercase via KebabEnum): "online" / "away" / "offline" / "busy",
+/// byte-identical to the TS closed union. Kind→color mapping baked in
+/// default.css: online→--vms-success, away→--vms-warning, offline→muted
+/// (60% of --vms-text-muted), busy→--vms-error.</summary>
+[JsonConverter(typeof(KebabEnum<StatusKind>))]
+public enum StatusKind { Online, Away, Offline, Busy }
+
 /// <summary>
 /// A section's structural surface kind. `Card` = grouped surface
 /// (background/border/padding/radius, .vms-section--card). `Prose` = block-flow
@@ -802,6 +812,7 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(MessageNode),     "message")]
 [JsonDerivedType(typeof(MessageListNode), "message-list")]
 [JsonDerivedType(typeof(AlertNode),       "alert")]
+[JsonDerivedType(typeof(UserRowNode),     "user-row")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -2306,6 +2317,72 @@ public record AlertNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Dismissible = false
 ) : ViewNode;
 
+/// <summary>v8.0.0 (COMP-09) — UserRowNode.Status sub-record. NOT a ViewNode —
+/// no [JsonDerivedType], no polymorphic "type" discriminator (same posture as
+/// LookupItem / FieldOption). Serializes as a plain object shape
+/// <c>{"label":"...","kind":"..."}</c> byte-identical to the TS twin's
+/// inline object type <c>{ label: string; kind: StatusKind }</c>. Both fields
+/// REQUIRED (non-nullable). Kind carries KebabEnum via the StatusKind enum's
+/// [JsonConverter], so the wire kind string is byte-identical to the TS
+/// closed union.</summary>
+public record UserRowStatus(string Label, StatusKind Kind);
+
+/// <summary>v8.0.0 (COMP-09) — UserRowNode. The person-entity display recipe
+/// with typed semantic slots. Route-B recipe: framework owns grid layout,
+/// typography tiers, spacing, status-dot palette, and a11y; the app hands it
+/// content via named slots. Consumed by member pickers, user lists, contact
+/// rows.
+///
+/// <para>Renders as &lt;li&gt; when the parent element carries .vms-user-row-list
+/// (in-container, single-bordered-surface + per-row dividers), else as a
+/// standalone &lt;div&gt;. Grid: [avatar | content | trailing? | status] —
+/// avatar = auto, content = 1fr min-width:0, trailing = auto (when set),
+/// status = auto.</para>
+///
+/// <para>SLOT-TYPING POLICY (PATTERNS.md §5 Analog C, LOCKED, matches
+/// ListRowNode): every ViewNode-typed slot is <c>ViewNode?</c> (Avatar / Meta
+/// / Trailing) or <c>ViewNode</c> (Name, required) — the TS twin's
+/// <c>string | ViewNode</c> ergonomic convenience is TS-only. The .NET server
+/// wraps a string explicitly (e.g. <c>Name: new TextNode("Alice",
+/// Style: TextStyle.Body, Weight: TextWeight.Medium)</c>).</para>
+///
+/// <para>STATUS is a small typed sub-record (<c>UserRowStatus</c>) — NOT a
+/// ViewNode slot. Leaf. NO walker descent. Kind is a closed 4-value enum
+/// carrying KebabEnum for wire strings byte-identical to the TS closed
+/// union.</para>
+///
+/// <para>Every optional slot carries [JsonIgnore(WhenWritingNull)] so an unset
+/// slot is ABSENT from the wire (never <c>"avatar": null</c>) — the class-2
+/// findNulls defect protection AGENTS.md gotcha #8 exists for.</para>
+///
+/// <para>Whole-row Action mirrors ListRowNode.Action: role="button",
+/// tabIndex=0, Enter/Space dispatch, aria-label from flattened text.
+/// Interactive descendants (buttons, checkboxes, links, fields)
+/// stopPropagation.</para>
+/// </summary>
+public record UserRowNode(
+    // Name is REQUIRED. Typed ViewNode (NOT ViewNode?) so System.Text.Json
+    // emits the polymorphic "type" discriminator — a narrow shape would
+    // silently drop it (banked posture from FormNode.Buttons at :1155-1159;
+    // same rule applies to every ViewNode-typed slot on the composite records).
+    ViewNode Name,
+    // Leading circular slot — typically AvatarNode. ViewNode? per Analog C
+    // (polymorphic emission).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Avatar = null,
+    // Second-line meta. String on the TS side wraps in TextNode{muted};
+    // .NET server wraps explicitly.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Meta = null,
+    // Right-aligned status indicator — small typed sub-record (leaf, no
+    // walker descent). WhenWritingNull so an unset status is ABSENT.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] UserRowStatus? Status = null,
+    // Optional trailing slot — extra actions or badge. ViewNode? per Analog C.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Trailing = null,
+    // Whole-row click (member-picker pattern). Same shape as ListRowNode.Action —
+    // dispatch-bearing ActionDescriptor participating in name-uniqueness (Collect
+    // walker records it via the ViewTreeValidation.Collect arm).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null
+) : ViewNode;
+
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────
 //
 // Mirrors viewmodel-shell/src/server.ts `validateActionNames` byte-for-byte:
@@ -2902,6 +2979,7 @@ public static class ViewTreeValidation
         MessageNode    => "message",
         MessageListNode => "message-list",
         AlertNode     => "alert",
+        UserRowNode   => "user-row",
         _             => node.GetType().Name,
     };
 }
