@@ -210,7 +210,8 @@ export type ViewNode =
   | AvatarNode
   | ListRowNode
   | MessageNode
-  | MessageListNode;
+  | MessageListNode
+  | AlertNode;
 
 export interface PageNode {
   type: "page";
@@ -1716,6 +1717,89 @@ export interface MessageListNode {
    *  preserve-my-place scroll. Optional non-nullable bool — false is ABSENT
    *  on the wire (.NET `WhenWritingDefault` posture; TS optional). */
   followTail?: boolean;
+}
+
+/**
+ * v8.0.0 (COMP-07) — AlertNode. Prominent status-message primitive. The
+ * shape Moxie's discoverability-miss + every "warning banner" app needs.
+ *
+ * TYPED SLOTS + TONE-DRIVEN SEMANTICS: `tone` is REQUIRED — it IS the point
+ * of the node. It simultaneously controls:
+ *   1. Surface palette (`.vms-alert--{tone}` — tinted background + border via
+ *      `color-mix` per default.css).
+ *   2. Default icon (baked-in `ALERT_TONE_ICON` map in `browser.ts` — see
+ *      table below). Overridable via `icon?: IconName`.
+ *   3. Icon glyph color (matches the tone token).
+ *
+ * TONE → DEFAULT ICON MAPPING (baked into the browser renderer; overridable):
+ *   danger  → x-circle
+ *   warning → alert-triangle
+ *   success → check-circle
+ *   info    → info
+ * All four default names are LUCIDE icons in the Phase 22 v7.0 curated set.
+ *
+ * SLOT STRING-LIFT (trained typography):
+ *   `title`   string → `TextNode { style: "body", weight: "medium" }`
+ *   `message` string → `TextNode { style: "muted" }`
+ *   `message` ViewNode → rendered as-is
+ *
+ * DISMISSIBLE — deliberate DEVIATION from `ModalNode.dismissAction`.
+ * `dismissible: true` renders a close-X button that dispatches the RESERVED
+ * fixed action name `"dismiss"` at click time (no `dismissAction: ActionEvent`
+ * slot — the composite emits the ActionEvent LOCALLY rather than accepting a
+ * caller-supplied slot). Apps needing a more-specific name compose their own
+ * dismiss button in `actions[]` and set `dismissible: false`. The trade-off:
+ * ergonomic single-flag opt-in for the 90% case; the escape hatch handles the
+ * 10% that need distinct semantics.
+ *
+ * DOM structure (matches the tasting mockup — `~/.claude/identities/vicky/
+ * bounties/composite-nodes-layer/tasting-page/index.html` Composite #3):
+ * ```
+ * <div class="vms-alert vms-alert--{tone}">
+ *   <div class="vms-alert__icon">{iconSvg}</div>
+ *   <div class="vms-alert__body">
+ *     <div class="vms-alert__title">{title}</div>       (optional)
+ *     <div class="vms-alert__message">{message}</div>
+ *   </div>
+ *   <div class="vms-alert__actions">                    (only if actions[] or dismissible)
+ *     {actions}
+ *     <button class="vms-alert__dismiss" aria-label="Dismiss">✕</button>  (if dismissible)
+ *   </div>
+ * </div>
+ * ```
+ *
+ * Grid: `[icon | body | actions]` — icon = auto, body = 1fr min-width:0,
+ * actions = auto right-aligned. `align-items: start` so a multi-line message
+ * doesn't vertically-center against a small icon.
+ */
+export interface AlertNode {
+  type: "alert";
+  /** REQUIRED — the point of the node. Drives surface tint + border color +
+   *  default icon (see table in the TSDoc block above). Closed union. */
+  tone: "danger" | "warning" | "success" | "info";
+  /** Optional title/headline for the alert. Trained typography: string is
+   *  auto-wrapped in `TextNode { style: "body", weight: "medium" }` (consumes
+   *  Phase 23 COMP-01 + COMP-02). Omitted = no title row. */
+  title?: string;
+  /** REQUIRED — the alert message. `string` → `TextNode { style: "muted" }`;
+   *  `ViewNode` → rendered as-is (consumers who need custom shapes still can). */
+  message: string | ViewNode;
+  /** Optional icon override. When present, wins over the tone default from
+   *  `ALERT_TONE_ICON`. Reuses Phase 22 `IconName` closed union. */
+  icon?: IconName;
+  /** Right-aligned action bar. Default composite convention: `size: "sm"`.
+   *  Omitted or empty array hides the actions column entirely (unless
+   *  `dismissible: true` — the dismiss X lives in the same column). */
+  actions?: ButtonNode[];
+  /** When `true`, renders a close-X button (aria-label="Dismiss") in the
+   *  actions column that dispatches the RESERVED fixed action name
+   *  `{ name: "dismiss" }` at click time. Distinct from
+   *  `ModalNode.dismissAction`, which takes a caller-supplied `ActionEvent`
+   *  slot — Alert emits the name LOCALLY. Apps needing a more-specific name
+   *  compose their own dismiss button in `actions[]` and set
+   *  `dismissible: false`. `WhenWritingDefault` posture on the .NET side —
+   *  `false` is ABSENT on the wire (matches TS optional). */
+  dismissible?: boolean;
 }
 
 /**

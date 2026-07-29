@@ -801,6 +801,7 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(ListRowNode),    "list-row")]
 [JsonDerivedType(typeof(MessageNode),     "message")]
 [JsonDerivedType(typeof(MessageListNode), "message-list")]
+[JsonDerivedType(typeof(AlertNode),       "alert")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -2232,6 +2233,68 @@ public record MessageListNode(
     // identical to the TS optional `followTail?: boolean` which is
     // omitted when unset).
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool FollowTail = false
+) : ViewNode;
+
+/// <summary>v8.0.0 (COMP-07) — AlertNode. Prominent status-message primitive.
+///
+/// <para>TYPED SLOTS + TONE-DRIVEN SEMANTICS: <c>Tone</c> is REQUIRED
+/// (non-nullable) — it IS the point of the node. It simultaneously controls:
+/// (1) surface palette via <c>.vms-alert--{tone}</c> (tinted background +
+/// border via <c>color-mix</c>); (2) default icon (baked-in
+/// <c>ALERT_TONE_ICON</c> map in browser.ts: danger→x-circle,
+/// warning→alert-triangle, success→check-circle, info→info), overridable via
+/// <c>Icon</c>; (3) icon glyph color.</para>
+///
+/// <para>REQUIRED SLOTS: <c>Tone</c> + <c>Message</c>. <c>Message</c> is
+/// typed <c>ViewNode</c> (not <c>ViewNode?</c>) so it stays polymorphic
+/// (System.Text.Json emits the <c>"type"</c> discriminator) — the TS twin's
+/// <c>string | ViewNode</c> convenience wraps in TextNode{style:"muted"} at
+/// render time; the .NET server wraps explicitly.</para>
+///
+/// <para>DISMISSIBLE — deliberate DEVIATION from <c>ModalNode.DismissAction</c>.
+/// <c>Dismissible: true</c> renders a close-X that dispatches the RESERVED
+/// fixed action name <c>"dismiss"</c> at click time (no
+/// <c>DismissAction: ActionDescriptor</c> slot — the composite emits the
+/// ActionEvent LOCALLY rather than accepting a caller-supplied slot). Apps
+/// needing a more-specific name compose their own dismiss button in
+/// <c>Actions</c> and set <c>Dismissible: false</c>. <c>WhenWritingDefault</c>
+/// posture on the bool — <c>false</c> is ABSENT on the wire (byte-identical to
+/// the TS optional <c>dismissible?: boolean</c>).</para>
+///
+/// <para>Every optional slot carries <c>[JsonIgnore(WhenWritingNull)]</c> so
+/// an unset slot is ABSENT from the wire — the class-2 findNulls defect
+/// protection AGENTS.md gotcha #8 exists for.</para>
+/// </summary>
+public record AlertNode(
+    // Tone is REQUIRED (non-nullable) — the point of the node. Real enum per
+    // closed-union-must-be-enum discipline (KebabEnum wire values
+    // "danger"/"warning"/"success"/"info"). Reuses the shipped Tone enum at
+    // :74-75, byte-identical to the TS closed union.
+    Tone Tone,
+    // Message is REQUIRED. Typed ViewNode (NOT ViewNode?) so System.Text.Json
+    // emits the polymorphic "type" discriminator — a narrow shape would
+    // silently drop it (banked posture from FormNode.Buttons at :1155-1159;
+    // same rule applies to every ViewNode-typed slot on the composite records).
+    ViewNode Message,
+    // Optional title/headline. Rendered as textContent through a TextNode
+    // wrap (style:"body", weight:"medium") — trained typography.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Title = null,
+    // Optional icon override. When present, wins over the tone default from
+    // ALERT_TONE_ICON. Reuses Phase 22 IconName closed enum.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null,
+    // Right-aligned action bar. Typed IReadOnlyList<ViewNode>? (NOT
+    // IReadOnlyList<ButtonNode>) so System.Text.Json emits the polymorphic
+    // "type":"button" discriminator on each entry — a narrow ButtonNode-typed
+    // list would silently drop the discriminator (banked posture from
+    // FormNode.Buttons at :1155-1159; same rule applies here). The renderer +
+    // walker cast entries to ButtonNode; a non-button entry is currently
+    // unspec-behavior, matching the FormNode.Buttons contract.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Actions = null,
+    // WhenWritingDefault posture on a non-nullable bool — matches
+    // SectionNode.FollowTail at :999 + MessageListNode.FollowTail at :2234.
+    // false = ABSENT on the wire (byte-identical to the TS optional
+    // `dismissible?: boolean` which is omitted when unset).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Dismissible = false
 ) : ViewNode;
 
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────

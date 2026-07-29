@@ -1264,6 +1264,72 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   margin-top: var(--vms-space-xs);
 }
 
+/* ── AlertNode (COMP-07, v8.0.0) ─────────────────────────────────────────
+   Prominent status message. Grid: [icon | body | actions]. Title semi-bold,
+   message muted. Tone controls color palette (surface + border via color-mix
+   + icon glyph color) + default icon (baked in browser.ts:ALERT_TONE_ICON).
+   `align-items: start` so a multi-line message doesn't vertically-center
+   against a small icon. Deviates from ModalNode.dismissAction: dismissible
+   button emits the RESERVED fixed action name `dismiss` at click time. */
+.vms-alert {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--vms-space-md);
+  align-items: start;
+  padding: var(--vms-space-sm) var(--vms-space-md);
+  border-radius: var(--vms-radius);
+  border: 1px solid transparent;
+}
+.vms-alert--danger  { background: color-mix(in srgb, var(--vms-error) 8%, var(--vms-surface));    border-color: color-mix(in srgb, var(--vms-error) 30%, var(--vms-border)); }
+.vms-alert--warning { background: color-mix(in srgb, var(--vms-warning) 10%, var(--vms-surface)); border-color: color-mix(in srgb, var(--vms-warning) 30%, var(--vms-border)); }
+.vms-alert--success { background: color-mix(in srgb, var(--vms-success) 8%, var(--vms-surface));  border-color: color-mix(in srgb, var(--vms-success) 30%, var(--vms-border)); }
+.vms-alert--info    { background: color-mix(in srgb, var(--vms-info) 8%, var(--vms-surface));     border-color: color-mix(in srgb, var(--vms-info) 30%, var(--vms-border)); }
+.vms-alert__icon {
+  flex-shrink: 0;
+  padding-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.vms-alert--danger  .vms-alert__icon { color: var(--vms-error); }
+.vms-alert--warning .vms-alert__icon { color: var(--vms-warning); }
+.vms-alert--success .vms-alert__icon { color: var(--vms-success); }
+.vms-alert--info    .vms-alert__icon { color: var(--vms-info); }
+.vms-alert__body { min-width: 0; }
+.vms-alert__title {
+  font-size: var(--vms-text-md);
+  font-weight: 600;
+  color: var(--vms-text);
+  line-height: 1.35;
+  margin: 0 0 2px;
+}
+.vms-alert__message {
+  font-size: var(--vms-text-sm);
+  color: var(--vms-text-muted);
+  line-height: 1.5;
+}
+.vms-alert__actions {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+  padding-top: 1px;
+}
+.vms-alert__dismiss {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px;
+  font-size: 1rem;
+  line-height: 1;
+}
+.vms-alert__dismiss:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
 /* ── Text ── */
 .vms-text { flex: 1; line-height: 1.4; word-break: break-word; }
 .vms-text--heading       { font-family: var(--vms-font-head); font-size: var(--vms-text-xl); }
