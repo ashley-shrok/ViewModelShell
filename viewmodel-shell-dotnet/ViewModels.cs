@@ -2290,6 +2290,22 @@ public static class ViewTreeValidation
                 foreach (var child in item.Children) WalkForSectionAction(child, outerInteractive);
                 break;
 
+            case ListRowNode listRow:
+                // v8.0.0 (COMP-05) — ListRowNode slots can hold arbitrary
+                // ViewNode subtrees (including SectionNodes with Action/Link),
+                // so the nested-section-interaction rules must descend into
+                // every ViewNode slot. Mirrors the TS twin `walkForSectionAction`
+                // arm in server.ts.
+                if (listRow.Leading is { } lrLead) WalkForSectionAction(lrLead, outerInteractive);
+                WalkForSectionAction(listRow.Primary, outerInteractive);
+                if (listRow.Secondary is { } lrSec) WalkForSectionAction(lrSec, outerInteractive);
+                if (listRow.Meta is { } lrMeta)
+                {
+                    foreach (var m in lrMeta) WalkForSectionAction(m, outerInteractive);
+                }
+                if (listRow.Trailing is { } lrTrail) WalkForSectionAction(lrTrail, outerInteractive);
+                break;
+
             case FormNode form:
                 foreach (var child in form.Children) WalkForSectionAction(child, outerInteractive);
                 break;
@@ -2362,11 +2378,64 @@ public static class ViewTreeValidation
                 break;
 
             case ListNode list:
+                // v8.0.0 (COMP-05a) — ListNode(variant:"rows") accepts ONLY
+                // ListRowNode children; variant:"items" (or omitted) rejects
+                // ListRowNode children. Both violations fail with invalid_tree
+                // — byte-identical error messages across TS + .NET (see the
+                // twin `case "list"` arm in viewmodel-shell/src/server.ts).
+                if (list.Variant == ListVariant.Rows)
+                {
+                    foreach (var child in list.Children)
+                    {
+                        if (child is not ListRowNode)
+                        {
+                            var childType = ViewNodeWireName(child);
+                            throw new InvalidOperationException(
+                                $"ListNode(variant:\"rows\") accepts only ListRowNode children; " +
+                                $"found a \"{childType}\" child. A rows-variant list is a single-" +
+                                $"bordered-surface container of ListRowNodes — mix by wrapping " +
+                                $"the other node in its own container, or move to variant:\"items\".");
+                        }
+                    }
+                }
+                else
+                {
+                    foreach (var child in list.Children)
+                    {
+                        if (child is ListRowNode)
+                        {
+                            throw new InvalidOperationException(
+                                "ListNode(variant:\"items\") does not accept ListRowNode children; " +
+                                "found a \"list-row\" child. ListRowNode belongs inside a " +
+                                "ListNode(variant:\"rows\") container or rendered standalone. " +
+                                "Either set variant:\"rows\" on this ListNode or move the " +
+                                "list-row out of it.");
+                        }
+                    }
+                }
                 foreach (var child in list.Children) Collect(child, enclosingForm, sink);
                 break;
 
             case ListItemNode item:
                 foreach (var child in item.Children) Collect(child, enclosingForm, sink);
+                break;
+
+            case ListRowNode listRow:
+                // v8.0.0 (COMP-05) — ListRowNode slots: Leading, Primary/
+                // Secondary/Meta[]/Trailing (any ViewNode subtree), Action
+                // (whole-row click). Every ViewNode-typed slot descended into;
+                // Action recorded via Record (participates in name uniqueness
+                // the same way TableRow.Action does). Mirrors the TS twin
+                // `case "list-row"` arm in server.ts.
+                if (listRow.Leading is { } lrLead) Collect(lrLead, enclosingForm, sink);
+                Collect(listRow.Primary, enclosingForm, sink);
+                if (listRow.Secondary is { } lrSec) Collect(lrSec, enclosingForm, sink);
+                if (listRow.Meta is { } lrMeta)
+                {
+                    foreach (var m in lrMeta) Collect(m, enclosingForm, sink);
+                }
+                if (listRow.Trailing is { } lrTrail) Collect(lrTrail, enclosingForm, sink);
+                if (listRow.Action is { } lrAction) Record(lrAction, enclosingForm, sink);
                 break;
 
             case FormNode form:
@@ -2518,6 +2587,48 @@ public static class ViewTreeValidation
     {
         sink.Add((action.Name, enclosingForm));
     }
+
+    /// <summary>Best-effort wire discriminator for a ViewNode. Used only for
+    /// diagnostic error messages (composite tree-invariant violations); the
+    /// canonical serialization discriminator comes from the [JsonDerivedType]
+    /// attributes on the base ViewNode. This helper falls back to the CLR
+    /// type name if it doesn't know the mapping — good enough for a human-
+    /// readable error message.</summary>
+    private static string ViewNodeWireName(ViewNode node) => node switch
+    {
+        PageNode      => "page",
+        SectionNode   => "section",
+        ListNode      => "list",
+        ListItemNode  => "list-item",
+        ListRowNode   => "list-row",
+        FormNode      => "form",
+        FieldNode     => "field",
+        CheckboxNode  => "checkbox",
+        ButtonNode    => "button",
+        TextNode      => "text",
+        LinkNode      => "link",
+        ImageNode     => "image",
+        StatBarNode   => "stat-bar",
+        TabsNode      => "tabs",
+        ProgressNode  => "progress",
+        ModalNode     => "modal",
+        TableNode     => "table",
+        CopyButtonNode => "copy-button",
+        DividerNode   => "divider",
+        FitsNode      => "fits",
+        EmptyStateNode => "empty-state",
+        BadgeNode     => "badge",
+        ChartNode     => "chart",
+        BlockquoteNode => "blockquote",
+        CodeBlockNode => "code-block",
+        BreadcrumbNode => "breadcrumb",
+        StepsNode     => "steps",
+        TrackerNode   => "tracker",
+        DiffNode      => "diff",
+        IconNode      => "icon",
+        AvatarNode    => "avatar",
+        _             => node.GetType().Name,
+    };
 }
 
 /// <summary>

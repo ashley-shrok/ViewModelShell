@@ -21,6 +21,7 @@ import type {
   SectionNode,
   ListNode,
   ListItemNode,
+  ListRowNode,
   FitsNode,
   EmptyStateNode,
   BlockquoteNode,
@@ -143,12 +144,64 @@ function collectActions(
     }
     case "list": {
       const list = node as ListNode;
+      // v8.0.0 (COMP-05a) — ListNode(variant:"rows") accepts ONLY ListRowNode
+      // children; variant:"items" (or omitted) accepts anything OTHER than
+      // ListRowNode as its top-level children (ListRowNode belongs in a
+      // rows-variant container OR standalone; putting one inside a legacy
+      // items list would render but is semantically wrong per CONTEXT §2).
+      // Both violations fail with invalid_tree — byte-identical error message
+      // across TS + .NET (see ViewTreeValidation.Collect in ViewModels.cs).
+      if (list.variant === "rows") {
+        for (const child of list.children) {
+          if (child.type !== "list-row") {
+            throw new Error(
+              `ListNode(variant:"rows") accepts only ListRowNode children; ` +
+              `found a "${child.type}" child. A rows-variant list is a single-` +
+              `bordered-surface container of ListRowNodes — mix by wrapping ` +
+              `the other node in its own container, or move to variant:"items".`
+            );
+          }
+        }
+      } else {
+        for (const child of list.children) {
+          if (child.type === "list-row") {
+            throw new Error(
+              `ListNode(variant:"items") does not accept ListRowNode children; ` +
+              `found a "list-row" child. ListRowNode belongs inside a ` +
+              `ListNode(variant:"rows") container or rendered standalone. ` +
+              `Either set variant:"rows" on this ListNode or move the ` +
+              `list-row out of it.`
+            );
+          }
+        }
+      }
       for (const child of list.children) collectActions(child, enclosingForm, out);
       return;
     }
     case "list-item": {
       const li = node as ListItemNode;
       for (const child of li.children) collectActions(child, enclosingForm, out);
+      return;
+    }
+    case "list-row": {
+      // v8.0.0 (COMP-05) — ListRowNode slots: leading, primary/secondary/
+      // meta[]/trailing (any ViewNode subtree), action (whole-row click).
+      // `string | ViewNode` slots (primary/secondary/meta[i]) descend ONLY
+      // when the value is a ViewNode — the string case is a leaf (auto-wrapped
+      // by the renderer into a TextNode) with no descendants of its own.
+      // Whole-row action is dispatch-bearing → recordAction (participates in
+      // name uniqueness the same way TableRow.action does).
+      const lr = node as ListRowNode;
+      if (lr.leading) collectActions(lr.leading, enclosingForm, out);
+      if (typeof lr.primary !== "string") collectActions(lr.primary, enclosingForm, out);
+      if (lr.secondary != null && typeof lr.secondary !== "string") {
+        collectActions(lr.secondary, enclosingForm, out);
+      }
+      for (const m of lr.meta ?? []) {
+        if (typeof m !== "string") collectActions(m, enclosingForm, out);
+      }
+      if (lr.trailing) collectActions(lr.trailing, enclosingForm, out);
+      if (lr.action) recordAction(lr.action, enclosingForm, out);
       return;
     }
     case "form": {
@@ -469,6 +522,24 @@ function walkForSectionAction(
     case "list-item": {
       const li = node as ListItemNode;
       for (const child of li.children) walkForSectionAction(child, outerInteractive);
+      return;
+    }
+    case "list-row": {
+      // v8.0.0 (COMP-05) — ListRowNode slots can hold arbitrary ViewNode
+      // subtrees (including SectionNodes with action/link), so the
+      // nested-section-interaction rules must descend into every ViewNode
+      // slot — modeled on the empty-state arm below. `string | ViewNode`
+      // slots are guarded so we don't feed a string primitive into the walker.
+      const lr = node as ListRowNode;
+      if (lr.leading) walkForSectionAction(lr.leading, outerInteractive);
+      if (typeof lr.primary !== "string") walkForSectionAction(lr.primary, outerInteractive);
+      if (lr.secondary != null && typeof lr.secondary !== "string") {
+        walkForSectionAction(lr.secondary, outerInteractive);
+      }
+      for (const m of lr.meta ?? []) {
+        if (typeof m !== "string") walkForSectionAction(m, outerInteractive);
+      }
+      if (lr.trailing) walkForSectionAction(lr.trailing, outerInteractive);
       return;
     }
     case "form": {
