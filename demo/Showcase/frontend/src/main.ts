@@ -83,6 +83,11 @@ let state: State = {
     fullName: "", email_co: "", phone: "",
     address1: "", address2: "", city: "", country: "us", zip: "",
     cardName: "", cardNumber: "", cardExpiry: "", cardCvv: "",
+    // v8.0.0 (COMP-03) — switch-variant checkbox bind slots. Wire semantics
+    // are unchanged (boolean value written on toggle); only the visual is a
+    // slider track+thumb. `switchDim` starts ON to demonstrate both states.
+    switchNotifications: true, switchBeta: false, switchDim: true,
+    switchClassic: false,
   },
 };
 
@@ -238,6 +243,80 @@ function componentsView(): ViewNode[] {
       { type: "text", value: "Error message text",           tone: "danger" },
       { type: "text", value: "Warning advisory text",         tone: "warning" },
       { type: "text", value: "$ vms render --verbose\n  ok page\n  ok section\n  ok list (3 items)\n  ok button x2", style: "pre" },
+    ]},
+
+    // ── v8.0.0 Foundations (COMP-01..COMP-04) ────────────────────────────
+    // Four additive primitives that the composite-nodes layer (Phases 24-26)
+    // builds on. Every one is orthogonal and closed-union. Fleet-adoption
+    // discipline (banked from UseVmsShellStaticFiles 6.7.0): the primitives
+    // ship WITH demo adoption in the same batch, otherwise they teach the
+    // wrong thing to consumers reading the reference app.
+    { type: "section", heading: "v8.0.0 Foundations", children: [
+      { type: "text", value: "Four additive primitives that the composite-nodes layer builds on. Each is orthogonal and closed-union — caption is a new style tier (not a size), weight is a new axis (orthogonal to style and tone), switch is a visual variant of the existing CheckboxNode (wire semantics unchanged), and AvatarNode is a new leaf node modeled after IconNode.", style: "muted" },
+
+      // ── COMP-01 caption tier ─────────────────────────────
+      { type: "text", value: "Typographic tiers — body, muted, caption (v8.0.0)", style: "subheading" },
+      { type: "text", value: "Caption is the third tier — smaller than muted, meant for the timestamp/status crumbs that anchor list rows and message meta.", style: "muted" },
+      { type: "section", layout: "row", align: "baseline", children: [
+        { type: "text", value: "Body text — the default reading tier",       style: "body" },
+        { type: "text", value: "Muted — secondary information",              style: "muted" },
+        { type: "text", value: "Caption — 2h ago · READ · Ada L.",           style: "caption" },
+      ]},
+
+      // ── COMP-02 weight axis ──────────────────────────────
+      { type: "text", value: "Weight axis — orthogonal to style (v8.0.0)", style: "subheading" },
+      { type: "text", value: "A body-styled TextNode can be weight:\"medium\" without becoming a heading — the semi-bold body-size anchor that composite rows and cards need.", style: "muted" },
+      { type: "section", layout: "row", align: "baseline", children: [
+        { type: "text", value: "Regular weight (400)", style: "body", weight: "regular" },
+        { type: "text", value: "Medium weight (500)",  style: "body", weight: "medium" },
+        { type: "text", value: "Bold weight (700)",    style: "body", weight: "bold" },
+      ]},
+
+      // ── COMP-03 switch variant ───────────────────────────
+      { type: "text", value: "Switch variant — visual restyle, wire semantics unchanged (v8.0.0)", style: "subheading" },
+      { type: "text", value: "CheckboxNode variant:\"switch\" renders as a slider track+thumb. Wire is still a boolean; role=\"switch\" so screen readers announce \"switch on/off\" instead of \"checked/unchecked\". A plain checkbox alongside for contrast.", style: "muted" },
+      { type: "section", layout: "stack", children: [
+        { type: "checkbox", name: "switchNotifications", bind: "formInputs.switchNotifications", label: "Notifications (on)",     variant: "switch" },
+        { type: "checkbox", name: "switchBeta",          bind: "formInputs.switchBeta",          label: "Beta features (off)",   variant: "switch" },
+        { type: "checkbox", name: "switchDim",           bind: "formInputs.switchDim",           label: "Dim mode — with tooltip", variant: "switch", tooltip: "Reduces backlight on OLED displays after 8pm." },
+        { type: "checkbox", name: "switchClassic",       bind: "formInputs.switchClassic",       label: "Classic checkbox (variant omitted)" },
+      ]},
+
+      // ── COMP-04 AvatarNode ───────────────────────────────
+      { type: "text", value: "Avatar — image / initials / icon / empty (v8.0.0)", style: "subheading" },
+      { type: "text", value: "Circular slot with content-resolution priority: image > initials > icon > empty. Circular only in v1; other shapes deferred. Reuses the IconName closed union for the icon fallback.", style: "muted" },
+
+      { type: "text", value: "Sizes — the same initials at all 4 sizes", style: "muted" },
+      { type: "section", layout: "row", align: "center", children: [
+        { type: "avatar", size: "sm", initials: "AL" },
+        { type: "avatar", size: "md", initials: "AL" },
+        { type: "avatar", size: "lg", initials: "AL" },
+        { type: "avatar", size: "xl", initials: "AL" },
+      ]},
+
+      { type: "text", value: "Tone × initials — the four semantic tones as circle backgrounds", style: "muted" },
+      { type: "section", layout: "row", align: "center", children: [
+        { type: "avatar", initials: "GH", tone: "info",    alt: "Grace Hopper" },
+        { type: "avatar", initials: "AL", tone: "success", alt: "Ada Lovelace" },
+        { type: "avatar", initials: "MG", tone: "warning", alt: "Margaret Hamilton" },
+        { type: "avatar", initials: "DL", tone: "danger",  alt: "Dorothy Vaughan" },
+      ]},
+
+      { type: "text", value: "Tone × icon — the fallback content mode (reuses IconName from v7.0.0)", style: "muted" },
+      { type: "section", layout: "row", align: "center", children: [
+        { type: "avatar", icon: "user",       tone: "info",    size: "lg", alt: "Anonymous user (info)" },
+        { type: "avatar", icon: "user-check", tone: "success", size: "lg", alt: "Verified user" },
+        { type: "avatar", icon: "user-plus",  tone: "warning", size: "lg", alt: "Pending invitation" },
+        { type: "avatar", icon: "user-x",     tone: "danger",  size: "lg", alt: "Blocked user" },
+      ]},
+
+      { type: "text", value: "Image mode + a bare (decorative, empty) avatar", style: "muted" },
+      { type: "section", layout: "row", align: "center", children: [
+        // Inline SVG data URL matches the Showcase image-section pattern at main.ts:260-261.
+        { type: "avatar", size: "lg", image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%237c5cff'/%3E%3C/svg%3E", alt: "Ada Lovelace (image)" },
+        // Bare / decorative — no alt, no content. Renderer emits an empty circle.
+        { type: "avatar", size: "lg" },
+      ]},
     ]},
 
     { type: "section", heading: "Stat bar", children: [
