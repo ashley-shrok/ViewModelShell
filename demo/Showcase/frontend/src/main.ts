@@ -319,6 +319,125 @@ function componentsView(): ViewNode[] {
       ]},
     ]},
 
+    // ── v8.0.0 Primary Composites (COMP-05..COMP-08) ─────────────────────
+    // Four high-frequency composites — the shapes VMS consumers reach for
+    // first. Each ships as a typed-slot recipe: the framework owns layout /
+    // typography / spacing / a11y, the app hands it content via named slots.
+    // Fleet-adoption discipline (banked from UseVmsShellStaticFiles 6.7.0):
+    // composites ship WITH demo adoption in the same batch — the Showcase
+    // is the reference app, and consumers reading it must see the primaries
+    // used in situ, not just documented.
+    { type: "section", heading: "v8.0.0 Primary Composites", children: [
+      { type: "text", value: "Four high-frequency composites — the shapes VMS consumers reach for first. Each ships as a typed-slot recipe: the framework owns layout / typography / spacing / a11y, the app hands it content via named slots.", style: "muted" },
+
+      // ── COMP-05 ListRowNode + ListNode(variant:"rows") ─────────────────
+      { type: "text", value: "ListRowNode — dense list row with 3-tier typography", style: "subheading" },
+      { type: "text", value: "A single-surface list-row primitive with typed slots (leading / primary / secondary / meta[] / trailing). String slots auto-wrap in the trained typography tier — primary=body+medium, secondary=muted, meta=caption. Wrapped in ListNode variant:\"rows\" for the bordered container + per-row dividers. Mixed tones, lifecycle states, and one whole-row click below.", style: "muted" },
+      { type: "list", variant: "rows", children: [
+        // Row 1 — success tone + avatar leading + trailing badge + whole-row click.
+        { type: "list-row",
+          leading: { type: "avatar", initials: "AL", tone: "success" },
+          primary: "Ada Lovelace",
+          secondary: "ada@analytical.example",
+          meta: ["Last active 2h ago", "role: admin"],
+          trailing: { type: "badge", label: "ACTIVE", tone: "success" },
+          tone: "success",
+          action: { name: "showcase-primaries-open-user-ada" },
+        },
+        // Row 2 — info tone + icon leading + state:"active" (selected).
+        { type: "list-row",
+          leading: { type: "avatar", icon: "user", tone: "info" },
+          primary: "Grace Hopper",
+          secondary: "grace@compilers.example",
+          meta: ["Last active 6h ago", "role: engineer"],
+          state: "active",
+          action: { name: "showcase-primaries-open-user-grace" },
+        },
+        // Row 3 — warning tone (no leading, no trailing — the sparse case).
+        { type: "list-row",
+          primary: "Storage almost full",
+          secondary: "92% of quota used across all projects",
+          meta: ["3m ago", "quota watcher"],
+          tone: "warning",
+        },
+        // Row 4 — danger tone with state:"high" (both axes composed).
+        { type: "list-row",
+          leading: { type: "avatar", icon: "alert-triangle", tone: "danger" },
+          primary: "Payment declined",
+          secondary: "Order #42 · card ending 4321",
+          meta: ["3m ago", "issuer decline"],
+          trailing: { type: "badge", label: "DECLINED", tone: "danger" },
+          tone: "danger",
+          state: "high",
+        },
+        // Row 5 — state:"done" (lifecycle, orthogonal to tone).
+        { type: "list-row",
+          leading: { type: "avatar", icon: "check-circle", tone: "success" },
+          primary: "Migration completed",
+          secondary: "All 128 records moved successfully",
+          meta: ["yesterday", "batch job"],
+          state: "done",
+        },
+        // Row 6 — state:"disabled" (lifecycle) — neutral tone.
+        { type: "list-row",
+          leading: { type: "avatar", initials: "DL" },
+          primary: "Deleted user (archived)",
+          secondary: "dorothy@archive.example",
+          meta: ["archived 2 weeks ago"],
+          state: "disabled",
+        },
+      ]},
+
+      // ── COMP-06 MessageNode + MessageListNode ─────────────────────────
+      { type: "text", value: "MessageNode — chat / comment thread with follow-tail", style: "subheading" },
+      { type: "text", value: "MessageListNode contains MessageNode children (tree-validator enforces this). role:\"assistant\" gets a tinted-info content surface; user/system are neutral. followTail:true reuses SectionNode.followTail's shipped scroll-pin mechanism verbatim. Actions bar is always visible — no hover-reveal (banked a11y doctrine).", style: "muted" },
+      { type: "message-list", followTail: true, children: [
+        { type: "message",
+          author: "Ada Lovelace",
+          timestamp: "2:14 PM",
+          content: "Can we ship v8 this week? The composites are looking good on the tasting page.",
+          avatar: { type: "avatar", initials: "AL", tone: "success" },
+          role: "user",
+        },
+        { type: "message",
+          author: "VMS",
+          timestamp: "2:15 PM",
+          content: "Green tree across all gates: parity, demo type-check, framework tests, and .NET tests. Ready to publish once Phase 26 lands.",
+          avatar: { type: "avatar", icon: "sparkles", tone: "info" },
+          role: "assistant",
+          actions: [
+            { type: "button", label: "Copy",       action: { name: "showcase-primaries-message-copy" },       size: "sm" },
+            { type: "button", label: "Regenerate", action: { name: "showcase-primaries-message-regenerate" }, size: "sm" },
+          ],
+        },
+        { type: "message",
+          author: "Ada Lovelace",
+          timestamp: "2:16 PM",
+          content: "Perfect. I'll flag the release ritual for Friday.",
+          avatar: { type: "avatar", initials: "AL", tone: "success" },
+          role: "user",
+        },
+      ]},
+
+      // ── COMP-07 AlertNode — one per tone + dismissible + icon override ──
+      { type: "text", value: "AlertNode — every tone, with the default tone→icon mapping", style: "subheading" },
+      { type: "text", value: "tone is REQUIRED — it IS the point of the node. It drives the surface tint, the border, and the default icon glyph (danger→x-circle, warning→alert-triangle, success→check-circle, info→info). Icon override on the last one; dismissible:true renders a close-X that dispatches the reserved fixed action name \"dismiss\" (framework-emitted, not caller-supplied).", style: "muted" },
+      { type: "alert", tone: "danger",  title: "Payment declined",       message: "Your card was refused. Please try another payment method." },
+      { type: "alert", tone: "warning", title: "Storage almost full",    message: "You've used 92% of your quota. Consider archiving old projects.", dismissible: true },
+      { type: "alert", tone: "success", title: "Refund processed",       message: "A refund of $124.00 has been issued to your original payment method." },
+      { type: "alert", tone: "info",    title: "New version available",  message: "v8.0.0 ships the Primary Composites layer — see the changelog for details.", icon: "sparkles" },
+
+      // ── COMP-08 EmptyStateNode (NEW schema: title/description) ─────────
+      { type: "text", value: "EmptyStateNode — the friendly \"nothing here\" recipe", style: "subheading" },
+      { type: "text", value: "Icon (large in a tinted-circle backdrop) + title + description + optional action button. RENAMED in v8.0.0: heading→title, message→description (aligns with the composite-nodes-layer trained typography — title is subheading-ish, description is muted with a readable-measure cap).", style: "muted" },
+      { type: "empty-state",
+        icon: "receipt",
+        title: "No orders yet",
+        description: "Once customers place orders they'll show up here. In the meantime, check out the docs to see how order lifecycles work.",
+        action: { type: "button", label: "Read the docs", action: { name: "showcase-primaries-empty-state-cta" }, emphasis: "primary" },
+      },
+    ]},
+
     { type: "section", heading: "Stat bar", children: [
       { type: "stat-bar", stats: [
         { label: "active",    value: "12" },
