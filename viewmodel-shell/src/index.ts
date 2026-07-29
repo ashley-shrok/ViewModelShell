@@ -212,7 +212,9 @@ export type ViewNode =
   | MessageNode
   | MessageListNode
   | AlertNode
-  | UserRowNode;
+  | UserRowNode
+  | DetailRowNode
+  | DetailListNode;
 
 export interface PageNode {
   type: "page";
@@ -1891,6 +1893,107 @@ export interface UserRowNode {
    *  `role="button"`, `tabIndex=0`, Enter/Space dispatch, aria-label from
    *  flattened name+meta text. Interactive descendants `stopPropagation`. */
   action?: ActionEvent;
+}
+
+/**
+ * v8.0.0 (COMP-10) — DetailRowNode. Aligned key-value display recipe with typed
+ * semantic slots for attribute panels, order details, and metadata sidebars.
+ * Route-B recipe: framework owns grid layout, label typography (text-xs
+ * uppercase weight:500 muted, BAKED IN CSS not TextNode-wrapped), value
+ * typography (TextNode body), and semantic HTML — the app hands it content via
+ * named slots.
+ *
+ * Renders as `<div class="vms-detail-row [vms-detail-row--{tone}]">
+ * <dt class="vms-detail-row__label">{icon?}{label}</dt>
+ * <dd class="vms-detail-row__value">{value}</dd></div>` — the `<dt>`/`<dd>`
+ * elements are the screen-reader term/definition semantics; the wrapping `<div>`
+ * exists to carry the grid layout (a bare `<dt>` + `<dd>` sibling pair cannot
+ * be grid-columned as a unit).
+ *
+ * ## String-lift trained typography
+ *
+ *  - `label: string` is a PRIMITIVE (NOT ViewNode-typed). The trained
+ *    typography — `font-size: text-xs; text-transform: uppercase;
+ *    letter-spacing: 0.04em; font-weight: 500; color: text-muted` — is
+ *    BAKED into `.vms-detail-row__label` CSS. The renderer appends a raw
+ *    `document.createTextNode(n.label)` to the `<dt>` — NO TextNode wrap.
+ *    This is deliberate: the label typography is a fixed, non-negotiable
+ *    part of the composite recipe, not a per-instance choice.
+ *  - `value: string` → renderer wraps in `TextNode { style: "body" }`.
+ *  - `value: ViewNode` → rendered as-is (escape hatch).
+ *
+ * ## Tone accent
+ *
+ * When `tone` is set, the row's `<div>` gains `.vms-detail-row--{tone}` which
+ * (via CSS) shifts the value text to the tone-accent color
+ * (`.vms-detail-row--{tone} .vms-detail-row__value { color: var(--vms-{tone}); }`).
+ * Use for "Status: Deleted" (red) or "Balance: paid" (green) semantics.
+ * Absent = no modifier class (default neutral text).
+ *
+ * ## Icon slot
+ *
+ * `icon` (optional) — renders inside the `<dt>` BEFORE the label text.
+ * Consumes v7.0 `IconName` closed union at `sm` size.
+ */
+export interface DetailRowNode {
+  type: "detail-row";
+  /** REQUIRED — the label string. PRIMITIVE (NOT ViewNode-typed). Trained
+   *  typography (text-xs uppercase weight:500 muted) is BAKED into
+   *  `.vms-detail-row__label` CSS; the renderer emits a raw text node inside
+   *  the `<dt>`. Do NOT wrap in TextNode — the composite recipe owns the
+   *  label typography absolutely. */
+  label: string;
+  /** REQUIRED — the value slot. `string` → renderer wraps in
+   *  `TextNode { style: "body" }`; `ViewNode` → rendered as-is. */
+  value: string | ViewNode;
+  /** Optional accent controlling the value text color (via
+   *  `.vms-detail-row--{tone}` on the row `<div>`). Reuses shipped Phase 23
+   *  tone palette. Closed union. Omitted = neutral text (no modifier). */
+  tone?: "danger" | "warning" | "success" | "info";
+  /** Optional leading icon inside the `<dt>` (before the label text).
+   *  Reuses Phase 22 v7.0 `IconName` closed union; renders at `sm` size. */
+  icon?: IconName;
+}
+
+/**
+ * v8.0.0 (COMP-10a) — DetailListNode. Container for DetailRowNode children with
+ * closed-enum label column width and semantic `<dl>` container.
+ *
+ * Renders as `<dl class="vms-detail-list [vms-detail-list--{labelWidth}]">` —
+ * the `<dl>` (definition list) is the screen-reader semantic anchor: each child
+ * `<dt>`/`<dd>` pair announces as a term/definition inside a list of term-
+ * definition pairs. A `<div>` container would drop that semantic, so the choice
+ * of `<dl>` is LOAD-BEARING (mutation-testable — a `<dl>` → `<div>` swap
+ * breaks the semantic-element test in `test/detail-row.test.ts`).
+ *
+ * TREE INVARIANT — children must ALL be DetailRowNode. The tree validator
+ * rejects non-DetailRowNode children with `invalid_tree` and a byte-identical
+ * error message across both backends:
+ * `"DetailListNode.children must all be DetailRowNodes (found: <type>)"`.
+ *
+ * ## `labelWidth` CSS-var pattern
+ *
+ * The container CSS sets `--vms-detail-label: 10rem` (default, matches "md").
+ * `.vms-detail-list--sm` overrides it to `8rem`; `--md` re-sets `10rem`
+ * (a no-op that keeps the closed enum's three values symmetric); `--lg`
+ * sets `12rem`. Each row's grid reads it as
+ * `grid-template-columns: var(--vms-detail-label) 1fr`. Omitting `labelWidth`
+ * on the wire emits no modifier class — the container falls back to the
+ * default `10rem`, byte-identical to `labelWidth: "md"` set explicitly.
+ */
+export interface DetailListNode {
+  type: "detail-list";
+  /** REQUIRED — DetailRowNode-only children. The tree-validator rejects
+   *  mixed / non-DetailRow children with `invalid_tree` (byte-identical
+   *  error message across TS + .NET). */
+  children: DetailRowNode[];
+  /** Fixed label column width. Closed enum:
+   *  `sm` → 8rem, `md` → 10rem (default), `lg` → 12rem.
+   *  Omitted = no modifier class (byte-identical to `md`, since the container's
+   *  default `--vms-detail-label` value is 10rem). Emits
+   *  `.vms-detail-list--{labelWidth}` which sets `--vms-detail-label` on the
+   *  container; each row's grid reads that CSS var. */
+  labelWidth?: "sm" | "md" | "lg";
 }
 
 /**

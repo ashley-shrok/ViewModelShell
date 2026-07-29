@@ -196,6 +196,16 @@ public enum CheckboxVariant { Checkbox, Switch }
 [JsonConverter(typeof(KebabEnum<StatusKind>))]
 public enum StatusKind { Online, Away, Offline, Busy }
 
+/// <summary>v8.0.0 (COMP-10a) — DetailListNode label column width. Closed enum
+/// mapping to fixed rem values (sm=8rem, md=10rem, lg=12rem). Omitted on the
+/// wire = md (default; no modifier class emitted, byte-identical to md set
+/// explicitly). The value is read as the `--vms-detail-label` CSS variable
+/// on `.vms-detail-list`, which each `.vms-detail-row`'s grid consumes as
+/// `grid-template-columns: var(--vms-detail-label) 1fr`. KebabEnum emits
+/// "sm" / "md" / "lg" byte-identical to the TS closed union.</summary>
+[JsonConverter(typeof(KebabEnum<DetailLabelWidth>))]
+public enum DetailLabelWidth { Sm, Md, Lg }
+
 /// <summary>
 /// A section's structural surface kind. `Card` = grouped surface
 /// (background/border/padding/radius, .vms-section--card). `Prose` = block-flow
@@ -813,6 +823,8 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(MessageListNode), "message-list")]
 [JsonDerivedType(typeof(AlertNode),       "alert")]
 [JsonDerivedType(typeof(UserRowNode),     "user-row")]
+[JsonDerivedType(typeof(DetailRowNode),   "detail-row")]
+[JsonDerivedType(typeof(DetailListNode),  "detail-list")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -2381,6 +2393,115 @@ public record UserRowNode(
     // dispatch-bearing ActionDescriptor participating in name-uniqueness (Collect
     // walker records it via the ViewTreeValidation.Collect arm).
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null
+) : ViewNode;
+
+/// <summary>v8.0.0 (COMP-10) — DetailRowNode. Aligned key-value display recipe
+/// with typed semantic slots for attribute panels, order details, and metadata
+/// sidebars. Route-B recipe: framework owns grid layout, label typography
+/// (text-xs uppercase weight:500 muted, BAKED IN CSS not TextNode-wrapped),
+/// value typography (TextNode body), and semantic HTML — the app hands it
+/// content via named slots.
+///
+/// <para>Renders as
+/// <c>&lt;div class="vms-detail-row [vms-detail-row--{tone}]"&gt;
+/// &lt;dt class="vms-detail-row__label"&gt;{icon?}{label}&lt;/dt&gt;
+/// &lt;dd class="vms-detail-row__value"&gt;{value}&lt;/dd&gt;&lt;/div&gt;</c>
+/// — the <c>&lt;dt&gt;</c>/<c>&lt;dd&gt;</c> elements are the screen-reader
+/// term/definition semantics; the wrapping <c>&lt;div&gt;</c> exists to carry
+/// the grid layout (a bare <c>&lt;dt&gt;</c> + <c>&lt;dd&gt;</c> sibling pair
+/// cannot be grid-columned as a unit).</para>
+///
+/// <para>SLOT-TYPING POLICY: <c>Label</c> is a REQUIRED PRIMITIVE
+/// <c>string</c> (NOT ViewNode-typed) — the trained typography
+/// (text-xs uppercase weight:500 muted) is BAKED into
+/// <c>.vms-detail-row__label</c> CSS; the browser renderer appends a raw
+/// text node to the <c>&lt;dt&gt;</c>. This is deliberate: the label
+/// typography is a fixed, non-negotiable part of the composite recipe.
+/// <c>Value</c> is REQUIRED as a <c>ViewNode</c> (NOT <c>ViewNode?</c>) so
+/// System.Text.Json emits the polymorphic <c>"type"</c> discriminator —
+/// the TS twin's <c>string | ViewNode</c> ergonomic convenience is
+/// TS-only; the .NET server wraps a string explicitly
+/// (<c>new TextNode("Open", Style: TextStyle.Body)</c>).</para>
+///
+/// <para>TONE: shifts the value text to the tone-accent color via
+/// <c>.vms-detail-row--{tone} .vms-detail-row__value</c>. Reuses the shipped
+/// <c>Tone</c> enum at :74-75 — byte-identical to the TS closed union.
+/// WhenWritingNull discipline; absent = neutral text.</para>
+///
+/// <para>Every optional slot carries <c>[JsonIgnore(WhenWritingNull)]</c> so
+/// an unset slot is ABSENT from the wire (never <c>"tone": null</c>) — the
+/// class-2 findNulls defect protection AGENTS.md gotcha #8 exists for.</para>
+/// </summary>
+public record DetailRowNode(
+    // Label is REQUIRED. Primitive string (NOT ViewNode) — the trained
+    // typography is baked in .vms-detail-row__label CSS. The browser renderer
+    // emits a raw text node inside the <dt>; no TextNode wrap.
+    string Label,
+    // Value is REQUIRED. Typed ViewNode (NOT ViewNode?, NOT string) so
+    // System.Text.Json emits the polymorphic "type" discriminator on the
+    // nested payload. TS twin's `string | ViewNode` convenience wraps in
+    // TextNode{body} at render time; .NET server wraps explicitly.
+    ViewNode Value,
+    // Optional tone accent — controls the value text color via
+    // .vms-detail-row--{tone}. Reuses shipped Tone enum (:74-75).
+    // WhenWritingNull → absent when null (never `"tone":null`).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
+    // Optional leading icon inside the <dt>, before the label text.
+    // Reuses Phase 22 v7.0 IconName closed enum.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null
+) : ViewNode;
+
+/// <summary>v8.0.0 (COMP-10a) — DetailListNode. Container for DetailRowNode
+/// children with closed-enum label column width and semantic <c>&lt;dl&gt;</c>
+/// container.
+///
+/// <para>Renders as
+/// <c>&lt;dl class="vms-detail-list [vms-detail-list--{labelWidth}]"&gt;</c> —
+/// the <c>&lt;dl&gt;</c> (definition list) is the screen-reader semantic
+/// anchor: each child <c>&lt;dt&gt;</c>/<c>&lt;dd&gt;</c> pair announces as a
+/// term/definition inside a list of term-definition pairs. A <c>&lt;div&gt;</c>
+/// container would drop that semantic, so the choice of <c>&lt;dl&gt;</c> is
+/// LOAD-BEARING (mutation-testable — a <c>&lt;dl&gt;</c> → <c>&lt;div&gt;</c>
+/// swap breaks the semantic-element test in test/detail-row.test.ts).</para>
+///
+/// <para>TREE INVARIANT — children MUST be DetailRowNode. Children is typed
+/// <c>IReadOnlyList&lt;ViewNode&gt;</c> on the record (widening from
+/// DetailRowNode-only is deliberate — a narrow shape drops the polymorphic
+/// <c>"type":"detail-row"</c> discriminator per the FormNode.Buttons banked
+/// posture at :1155-1159), so the tree-shape invariant IS enforced exclusively
+/// at runtime by ViewTreeValidation.Collect — the compile-time type would
+/// silently accept any ViewNode. Byte-identical error message across TS +
+/// .NET: <c>"DetailListNode.children must all be DetailRowNodes (found:
+/// &lt;type&gt;)"</c>.</para>
+///
+/// <para>LABELWIDTH CSS-var pattern: the container CSS sets
+/// <c>--vms-detail-label: 10rem</c> (default, matches "md").
+/// <c>.vms-detail-list--sm</c> overrides it to 8rem, <c>--md</c> re-sets
+/// 10rem (a no-op that keeps the closed enum's three values symmetric),
+/// <c>--lg</c> sets 12rem. Each row's grid reads it as
+/// <c>grid-template-columns: var(--vms-detail-label) 1fr</c>. Omitting
+/// <c>LabelWidth</c> on the wire emits no modifier class — the container
+/// falls back to the default 10rem, byte-identical to
+/// <c>LabelWidth: DetailLabelWidth.Md</c> set explicitly.</para>
+///
+/// <para>WhenWritingNull posture on LabelWidth — absent when null.</para>
+/// </summary>
+public record DetailListNode(
+    // Typed IReadOnlyList<ViewNode> (NOT IReadOnlyList<DetailRowNode>) so
+    // System.Text.Json emits the polymorphic "type":"detail-row" discriminator
+    // on each child (a narrow DetailRowNode-typed list silently drops the
+    // discriminator — banked posture from FormNode.Buttons at :1155-1159 +
+    // MessageListNode.Children at :2250). The tree invariant is enforced
+    // exclusively by the runtime validator in ViewTreeValidation.Collect
+    // (invalid_tree with byte-identical error message to the TS twin) — every
+    // non-DetailRowNode child is rejected there, so the wire-level list is
+    // effectively still DetailRowNode-only.
+    IReadOnlyList<ViewNode> Children,
+    // Fixed label column width. Closed enum (Sm/Md/Lg), KebabEnum emits
+    // "sm"/"md"/"lg". Omitted = no modifier class emitted; container falls
+    // back to default 10rem (byte-identical to Md set explicitly).
+    // WhenWritingNull → absent when null (never `"labelWidth":null`).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DetailLabelWidth? LabelWidth = null
 ) : ViewNode;
 
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────

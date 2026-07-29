@@ -1420,6 +1420,70 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-status-dot--offline { background: color-mix(in srgb, var(--vms-text-muted) 60%, transparent); }
 .vms-status-dot--busy    { background: var(--vms-error); }
 
+/* ── DetailRow + DetailList (COMP-10 + 10a, v8.0.0) ── */
+/* Semantic HTML: <dl class="vms-detail-list"> container + per-row
+   <div class="vms-detail-row"><dt><dd></div>. The <div> wrapper is
+   load-bearing — a bare <dt>+<dd> sibling pair cannot be grid-columned as a
+   unit. `labelWidth` closed enum (sm/md/lg → 8/10/12rem) drives the
+   --vms-detail-label CSS variable each row reads as its grid-template-columns
+   first track. Omitted labelWidth = no modifier class = default 10rem
+   (byte-identical to labelWidth="md" set explicitly). */
+.vms-detail-list {
+  margin: 0;
+  padding: 0;
+  background: var(--vms-surface);
+  border: 1px solid var(--vms-border);
+  border-radius: var(--vms-radius);
+  overflow: hidden;
+  --vms-detail-label: 10rem;   /* default = "md" */
+}
+.vms-detail-list--sm { --vms-detail-label:  8rem; }
+.vms-detail-list--md { --vms-detail-label: 10rem; }   /* no-op; matches default */
+.vms-detail-list--lg { --vms-detail-label: 12rem; }
+
+.vms-detail-row {
+  display: grid;
+  grid-template-columns: var(--vms-detail-label) 1fr;
+  gap: var(--vms-space-md);
+  padding: var(--vms-space-sm) var(--vms-space-md);
+  border-top: 1px solid var(--vms-border);
+  align-items: baseline;
+}
+.vms-detail-list > .vms-detail-row:first-child { border-top: none; }
+
+/* Label typography is BAKED here (mutation-testable: the renderer must NOT
+   wrap the label in a TextNode — the label ships as a raw createTextNode
+   inside the <dt>; changing THIS block is the only place label typography
+   lives). AA-contrast: text-xs uppercase muted × surface is covered by
+   Phase 23 caption-tier hand-check; the label typography reuses the same
+   text-muted color so no regression is introduced. */
+.vms-detail-row__label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vms-text-muted);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.vms-detail-row__value {
+  font-size: var(--vms-text-md);
+  color: var(--vms-text);
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Tone accent — shifts the value text to the tone-accent color. Reuses the
+   shipped Phase 23 tone palette (--vms-error/warning/success/info) already
+   proven AA-normal 4.5:1 against --vms-surface across all 13 themes. */
+.vms-detail-row--danger  .vms-detail-row__value { color: var(--vms-error); }
+.vms-detail-row--warning .vms-detail-row__value { color: var(--vms-warning); }
+.vms-detail-row--success .vms-detail-row__value { color: var(--vms-success); }
+.vms-detail-row--info    .vms-detail-row__value { color: var(--vms-info); }
+
 /* ── Text ── */
 .vms-text { flex: 1; line-height: 1.4; word-break: break-word; }
 .vms-text--heading       { font-family: var(--vms-font-head); font-size: var(--vms-text-xl); }
