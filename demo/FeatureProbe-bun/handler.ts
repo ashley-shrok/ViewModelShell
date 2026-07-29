@@ -1106,6 +1106,123 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // ── v8.0.0 Primary Composites (COMP-05..COMP-08) ──
+  // Byte-identical to the .NET twin's Primary Composites SectionNode. Every
+  // branch introduced by plans 24-01..04 gets at least one emission here + an
+  // expectBodyContains tripwire on the initial GET step, per banked lesson: a
+  // diff can only prove things about code it actually RUNS. Fleet-adoption
+  // discipline is honored — the composites ship with parity coverage in the
+  // same batch (per v5.1 EXTEND pattern; single fixture, appended section).
+  //   • COMP-05 (ListRowNode): one standalone ListRowNode (all slots
+  //     populated: primary/secondary/meta[]/tone/state/action) + a
+  //     ListNode(variant:"rows") wrapper containing two ListRowNodes —
+  //     proves standalone-vs-container dispatch AND the variant:"rows"
+  //     enum crosses the wire.
+  //   • COMP-06 + 06a (MessageNode + MessageListNode): a MessageListNode
+  //     with followTail:true (proves the WhenWritingDefault posture emits
+  //     the literal boolean true on the wire — false is ABSENT) containing
+  //     two MessageNodes with different roles (user + assistant, proves
+  //     the closed role union crosses) + full avatar + timestamp + content
+  //     + actions slots.
+  //   • COMP-07 (AlertNode): one per tone (danger/warning/success/info) +
+  //     one dismissible:true variant (proves the .NET WhenWritingDefault
+  //     posture matches the TS optional bool). Dismiss button emits
+  //     {name:"dismiss"} client-side — the wire carries only the boolean
+  //     posture; parity byte-diffs that.
+  //   • COMP-08 (EmptyStateNode): one with RENAMED title/description +
+  //     NEW icon slot + action button with UNIQUE name empty-state-cta-probe
+  //     — proves the rename cascade reached the demo backends AND the
+  //     action-name walk descends through the renamed shape.
+  // NOTE: the CLIENT-SIDE rendering (grid layout, follow-tail scroll pinning
+  // via data-follow-tail reuse, dismiss button click emission, icon SVG
+  // payload via renderIconSvg, tinted-surface color-mix palettes) is
+  // browser-only and NOT part of parity — parity proves only that the fields
+  // serialize identically across backends.
+  const primaryCompositesSection: ViewNode = {
+    type: "section",
+    heading: "v8.0.0 Primary Composites",
+    variant: "card",
+    children: [
+      // ── COMP-05 ListRowNode (standalone) ────
+      {
+        type: "list-row",
+        primary: "Order #42 · Ada Lovelace",
+        secondary: "Awaiting fulfillment · flagged high priority",
+        meta: ["Placed 2h ago", "priority: high", "channel: web"],
+        tone: "warning",
+        state: "high",
+        action: { name: "list-row-open-42" },
+      },
+      // ── COMP-05a ListNode(variant:"rows") with ListRowNode children ────
+      {
+        type: "list",
+        variant: "rows",
+        children: [
+          {
+            type: "list-row",
+            leading: { type: "avatar", initials: "AL", tone: "success" },
+            primary: "Refunded successfully",
+            secondary: "Refund ID rf_39a2 · $124.00",
+            meta: ["7m ago"],
+            tone: "success",
+            state: "done",
+          },
+          {
+            type: "list-row",
+            primary: "Payment declined",
+            meta: ["issuer decline", "card ending 4321"],
+            tone: "danger",
+          },
+        ],
+      },
+      // ── COMP-06 MessageNode + COMP-06a MessageListNode (followTail:true) ──
+      {
+        type: "message-list",
+        followTail: true,
+        children: [
+          {
+            type: "message",
+            author: "Ada Lovelace",
+            timestamp: "2:14 PM",
+            content: "Can we ship v8 this week?",
+            avatar: { type: "avatar", initials: "AL", tone: "success" },
+            role: "user",
+          },
+          {
+            type: "message",
+            author: "VMS Assistant",
+            timestamp: "2:15 PM",
+            content: "The Phase 24 branch is green; publishing is a maintainer step.",
+            avatar: { type: "avatar", icon: "sparkles", tone: "info" },
+            role: "assistant",
+            actions: [
+              { type: "button", label: "OK", action: { name: "message-noop-1" } },
+            ],
+          },
+        ],
+      },
+      // ── COMP-07 AlertNode (per tone + dismissible) ────────
+      { type: "alert", tone: "warning", title: "Storage almost full", message: "You've used 92% of your quota.", dismissible: true },
+      { type: "alert", tone: "danger",  title: "Payment declined",    message: "Your card was refused." },
+      { type: "alert", tone: "success", title: "Refund processed",    message: "Refund of $124 issued." },
+      { type: "alert", tone: "info",    title: "New version",         message: "v8.0.0 is available." },
+      // ── COMP-08 EmptyStateNode (RENAMED title/description + NEW icon slot) ──
+      // NOTE: `receipt` used (not `inbox` per PATTERNS suggestion) — the
+      // shipped IconName union at index.ts:148-178 does not include "inbox";
+      // `receipt` fits the "orders" narrative and is the same icon the
+      // Showcase (24-06) uses for its empty-state. The icon choice is
+      // subordinate to the tripwires — title/description strings are the
+      // load-bearing tripwires for the rename cascade.
+      {
+        type: "empty-state",
+        icon: "receipt",
+        title: "No orders yet",
+        description: "Once customers place orders they'll show up here.",
+        action: { type: "button", label: "Learn more", action: { name: "empty-state-cta-probe" } },
+      },
+    ],
+  };
+
   // ── Inline rich text (TextNode.runs) ──
   // Covers the absent-vs-present matrix for every optional on InlineRun, plus the
   // two contract cases that are decisions rather than mechanics:
@@ -1257,6 +1374,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       diffSection,
       iconsSection,
       foundationsSection,
+      primaryCompositesSection,
       richTextSection,
       lookupSection,
       probeModal,
