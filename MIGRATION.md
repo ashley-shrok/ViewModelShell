@@ -64,6 +64,16 @@ Framework's own demo apps (FeatureProbe) and tests are updated in the same commi
 
 See the `Unreleased — v8.0.0 (in progress)` section of `CHANGELOG.md` for the full wire-level detail.
 
+### UserRowNode, DetailRowNode + DetailListNode, TimelineEntryNode + TimelineNode, SettingRowNode + SettingListNode, ChipNode + ChipListNode (COMP-09..COMP-13) — new node types
+
+**Additive; no consumer changes required.** Five secondary composite pairs with `[JsonDerivedType]` discriminators; older adapters silently emit nothing for unknown types (existing behavior for forward compatibility). No wire renames, no field removals — every existing v7.x + Phase 24 consumer keeps working untouched.
+
+See the `Unreleased — v8.0.0 (in progress)` section of `CHANGELOG.md` for the full wire-level detail per composite.
+
+**One deliberate deviation to know about**: `ChipNode.dismissAction` is a CALLER-SUPPLIED `ActionEvent` slot (identity-carrying name like `remove-filter-42`), distinct from `AlertNode.dismissible` (Phase 24) which emits a fixed-name `{name: "dismiss"}` locally. Consumers building filter-chip UIs should model each chip's dismiss dispatch with a unique per-chip name in state — the framework does not auto-name. If both `action` and `dismissAction` are set on the same chip, the X click stops propagation so the whole-chip click does not double-fire.
+
+**Two ::before CSS mechanisms baked in**: TimelineNode ships a vertical rail via `::before` on the `<ol>` container + a per-entry dot via `::before` on each `<li>` (tone-encoded border color). Apps cannot compose this from primitives — the composite exists specifically to bake it in per "apps describe, never decorate." UserRowNode ships a status-dot palette (`.vms-status-dot--{online|away|offline|busy}`) — reuses the shipped tone-color palette. Neither requires any consumer action.
+
 ---
 
 ## Upgrading to npm `7.0.0` / NuGet `7.0.0` — ONE break: `TrackerCell.label` → `TrackerCell.tooltip`
