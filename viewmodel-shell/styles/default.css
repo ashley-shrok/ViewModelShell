@@ -1283,6 +1283,24 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   border: 1px solid var(--vms-border);
   border-radius: var(--vms-radius);
   padding: var(--vms-space-sm) var(--vms-space-md);
+  /* 8.0.2 (F1) — Long unbreakable inline content (URLs, inline <code>, ...) was
+     bursting past the bubble edge. `overflow-wrap: anywhere` lets the line
+     breaker fall back to any character on inline content; `min-width: 0` honors
+     the enclosing grid track's shrink (`.vms-message__body` already carries
+     min-width:0 on the body wrapper — see above). Reported by Angel from /ai
+     composite adoption; the <pre> child case has its own scoped rule below. */
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+/* 8.0.2 (F1) — TextNode(style:"pre") inside a message uses white-space:pre
+   (correct HTML semantics) and so ignores overflow-wrap. Scope internal
+   horizontal scroll to the message bubble so a long pre line scrolls WITHIN
+   the bubble instead of pushing the whole content box out. Kept scoped to
+   .vms-message__content so .vms-text--pre elsewhere retains its current
+   inline-preserved-whitespace behavior. */
+.vms-message__content .vms-text--pre {
+  max-width: 100%;
+  overflow-x: auto;
 }
 .vms-message--assistant .vms-message__content {
   background: color-mix(in srgb, var(--vms-info) 6%, var(--vms-surface));
@@ -1734,7 +1752,18 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-chip__dismiss:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; opacity: 1; }
 
 /* ── Text ── */
-.vms-text { flex: 1; line-height: 1.4; word-break: break-word; }
+/* 8.0.2 (F2) — `flex: 1` was in this base rule so TextNode could fill flex-ROW
+   containers (per the tooltip-anchoring comment at browser.ts around the text()
+   method). As a base it also fires on the MAIN axis inside flex-COLUMN parents
+   — pushing a bare TextNode child of a fill-height sidebar SectionNode to grow
+   vertically and shove following siblings off-screen (Angel /ai, 2026-07-30).
+   Narrow the grow to the layout-row cluster primitives — the ONLY legitimate
+   horizontal-fill parents in the shipped framework (audited: `.vms-form-row`
+   doesn't exist, StatBar renders bespoke <span>s not .vms-text, all other
+   flex-row .vms-* parents have no .vms-text child in a grow position). */
+.vms-text { line-height: 1.4; word-break: break-word; }
+.vms-page--row > .vms-text,
+.vms-section--row > .vms-text { flex: 1; }
 .vms-text--heading       { font-family: var(--vms-font-head); font-size: var(--vms-text-xl); }
 .vms-text--subheading    { font-size: var(--vms-text-lg); font-weight: 600; }
 .vms-text--body          { line-height: 1.6; }

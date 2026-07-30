@@ -6,6 +6,33 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 8.0.2 — 2026-07-30 — MessageNode content overflow + TextNode flex overreach (CSS-only)
+
+**npm `@ashley-shrok/viewmodel-shell`:** `8.0.2` (patch, from `8.0.1`). NuGet `AshleyShrok.ViewModelShell` unchanged (stays at `8.0.0`). **CSS-only — no wire change, no code change, no consumer action.**
+
+### What changed
+
+Two independent structural CSS gaps on shipped v8.0.0 composites/primitives, both hitting on first real consumer adoption in the same session.
+
+**F1 — `MessageNode.content` horizontal overflow.** `.vms-message__content` had no `overflow-wrap`, `min-width:0`, or overflow handling for its child content. A `TextNode(style:"pre")` inside the bubble (correctly using `white-space:pre` per HTML semantics) bursts horizontally past the bubble edge; the same class of failure fires for long unbreakable inline content (URLs, `<code>` spans). **Fix:** `overflow-wrap: anywhere; min-width: 0;` on `.vms-message__content` handles long unbreakable inline content; scoped `.vms-message__content .vms-text--pre { max-width: 100%; overflow-x: auto; }` gives pre children internal horizontal scroll instead of bursting. `.vms-text--pre` outside a message keeps its current no-wrap behavior.
+
+**F2 — `TextNode` `flex: 1` over-reach in flex-column parents.** The universal `.vms-text { flex: 1 }` base rule was there to fill flex-ROW containers (per the tooltip-anchoring comment in `browser.ts` around the text renderer). But as a *base* rule it also fires on the MAIN axis inside flex-COLUMN parents — inside a `PageNode{ layout:"sidebar", fill:true, align:"stretch" }`, a bare `TextNode` child of the sidebar section grows vertically to fill leftover column space, pushing following siblings (e.g. the conversation list) to the bottom of the viewport. **Fix:** remove `flex: 1` from the `.vms-text` base rule; restore it only on `.vms-page--row > .vms-text` and `.vms-section--row > .vms-text` — the only legitimate horizontal-fill parents in the shipped framework. Audited: `.vms-form-row` doesn't exist as a class; `StatBar` renders bespoke `<span>` elements, not `.vms-text`; no other flex-row `.vms-*` parent has a `.vms-text` child in a grow position.
+
+### Why this shipped
+
+Angel (AitherIntelligence /ai adoption, 2026-07-30) hit both while landing v8.0.0 composites. F1 fired on the third assistant turn in a chat session (`copyMessage/5`) where `MessageNode.content` is a `SectionNode` holding a `TextNode(style:"pre")` — Ashley eyeballed it live ("the text runs almost as much as the bubble is long already outside the border"). F2 fired on the sidebar built as `SectionNode{ heading:"Conversations", children:[buttonsRow, TextNode("Today", muted), ListNode(rows)] }` inside the fill+sidebar page — the "Today" TextNode grew vertically and pushed the one conversation ListRow to the very bottom of the sidebar.
+
+Third instance in a month of the pattern "shipped composite/primitive fires a structural CSS defect on first real consumer adoption" (after v6.12.1 tooltip clipping at viewport edges and v8.0.1 ListRowNode narrow-column stack). Bounty `composite-preship-adoption-gate` opened to design a pre-ship adoption-context harness that catches this class before ship — a matrix of composite × common-surrounding-context (flex-row / flex-column / narrow-column / fill-height / long-inline-content) run on every ship.
+
+### Verification
+
+- Recreated Angel's exact failing trees (pulled via `GET /ai/api/chat` on his live dev server) in a tailnet A/B tasting page against the real shipped `BrowserAdapter`. F2 rendered in isolated iframes so `fill:true = 100dvh` executes honestly at bounded panel height. Ashley eyeballed and signed off ("both are fixed visually").
+- Green-tree gate at release commit: `npm run build` + all six `check:*` scripts + vitest (1250 passed) + `viewmodel-shell-dotnet/Tests` (428 passed) + every `demo/**/*.Tests.csproj` + parity (17 backends).
+
+Bounties: `message-content-overflow-wrap`, `text-flex-overreach-in-column` (both from Angel via relay DM), `composite-preship-adoption-gate` (pattern, opened this session).
+
+---
+
 ## npm 8.0.1 — 2026-07-30 — ListRowNode narrow-column stack (CSS-only)
 
 **npm `@ashley-shrok/viewmodel-shell`:** `8.0.1` (patch, from `8.0.0`). NuGet `AshleyShrok.ViewModelShell` unchanged (stays at `8.0.0`). **CSS-only — no wire change, no code change, no consumer action.**
