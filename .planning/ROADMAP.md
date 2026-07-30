@@ -430,4 +430,12 @@ Plans:
   8. **No consumer broken silently**: pre-publish grep of every VMS demo + framework test for `EmptyStateNode(Heading|Message` (the pre-v8 field spelling) returns zero occurrences (all internal callsites already migrated in Phase 24).
   9. **Phase 26 SUMMARY records**: green-tree evidence, comprehensive verification page URL + Ashley's sign-off + timestamped screenshot log, agent-skill.md diff (if any), CHANGELOG/MIGRATION heading diff, version-file diff, registry verify output, tag + advance-main verify, `#vms-changelog` announce URL.
 
-**Plans:** 1/6 plans executed
+**Plans:** 6 plans complete
+
+Plans:
+- [x] 26-01-PLAN.md — Comprehensive tailnet verification page (wave 1, Showcase served on 100.113.23.63:8186)
+- [x] 26-02-PLAN.md — agent-skill.md audit + byte-copy verify (wave 1, file-disjoint from 26-01)
+- [x] 26-03-PLAN.md — Full green-tree gate + Ashley visual sign-off (wave 2, depends on 26-01 + 26-02)
+- [x] 26-04-PLAN.md — CHANGELOG/MIGRATION heading finalize + aligned version bump to 8.0.0 (wave 3, depends on 26-03)
+- [x] 26-05-PLAN.md — Operator publish + tag v8.0.0 + advance main (wave 4, depends on 26-04)
+- [x] 26-06-PLAN.md — Announce on #vms-changelog + phase SUMMARY (wave 5, depends on 26-05)
