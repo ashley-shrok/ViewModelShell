@@ -1242,6 +1242,113 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // v8.0.0 Secondary Composites (COMP-09..COMP-13) — byte-identical to the
+  // .NET twin secondaryCompositesSection. Every branch introduced by plans
+  // 25-01..05 gets at least one emission here + an expectBodyContains
+  // tripwire on the initial GET step, per banked lesson: a diff can only
+  // prove things about code it actually RUNS. Fleet-adoption discipline is
+  // honored — the composites ship with parity coverage in the same batch
+  // (per v5.1 EXTEND pattern; single fixture, appended section).
+  //   • COMP-09 (UserRowNode): one with all slots populated (avatar + name +
+  //     meta + status:{label:'Online', kind:'online'} + action name
+  //     user-row-open-jd) — proves the StatusKind closed enum crosses AND
+  //     the action-name walk descends through UserRowNode.action.
+  //   • COMP-10 + 10a (DetailRowNode + DetailListNode): one DetailListNode
+  //     with labelWidth:'lg' (proves DetailLabelWidth closed enum crosses;
+  //     absent case is implicitly proved by other backends) containing three
+  //     DetailRowNodes — two neutral + one tone:'danger' (proves the tone
+  //     closed union crosses on the row-level).
+  //   • COMP-11 + 11a (TimelineEntryNode + TimelineNode): one TimelineNode
+  //     containing three TimelineEntryNodes covering danger/warning/success
+  //     tones (proves the tone-driven dot-border palette crosses).
+  //   • COMP-12 + 12a (SettingRowNode + SettingListNode): one SettingListNode
+  //     with heading + two SettingRowNodes — one exercises the
+  //     CheckboxNode(variant:'switch') pairing per CONTEXT §9 as the trailing
+  //     control; one exercises a ButtonNode trailing with UNIQUE action name
+  //     setting-row-configure-digest (proves the action-name walk descends
+  //     through SettingRowNode.trailing).
+  //   • COMP-13 + 13a (ChipNode + ChipListNode): one ChipListNode containing
+  //     four ChipNodes covering the full slot matrix — dismissAction-only
+  //     (name chip-remove-filter-active), tone-only, action-only (name
+  //     chip-toggle-tag-clickme), and BOTH action+dismissAction (proves the
+  //     two ActionEvent slots coexist and each participates in name
+  //     uniqueness — UNIQUE names chip-toggle-tag-both + chip-remove-tag-both).
+  // NOTE: the CLIENT-SIDE rendering (timeline rail-and-dot ::before mechanism,
+  // status-dot palette, chip tinted-pill color-mix palettes, DetailList grid
+  // label column, SettingRow trailing-slot vertical centering) is browser-only
+  // and NOT part of parity — parity proves only that the fields serialize
+  // identically across backends.
+  const secondaryCompositesSection: ViewNode = {
+    type: "section",
+    heading: "v8.0.0 Secondary Composites",
+    variant: "card",
+    children: [
+      // ── COMP-09 UserRowNode (all slots populated) ─────────────────
+      // Wrap TextNodes explicitly on the wire so bun matches .NET (which cannot
+      // use the `string | ViewNode` TS convenience — same convention as Phase 24
+      // primary composites).
+      {
+        type: "user-row",
+        avatar: { type: "avatar", initials: "JD", tone: "info" },
+        name: { type: "text", value: "Jane Dougherty", style: "body", weight: "medium" },
+        meta: { type: "text", value: "jane.d · SRE Lead", style: "muted" },
+        status: { label: "Online", kind: "online" },
+        action: { name: "user-row-open-jd" },
+      },
+      // ── COMP-10 + 10a DetailListNode with DetailRowNodes + labelWidth ──
+      {
+        type: "detail-list",
+        labelWidth: "lg",   // proves the closed enum crosses (not just default/absent)
+        children: [
+          { type: "detail-row", label: "Status",     value: { type: "text", value: "Open", style: "body" } },
+          { type: "detail-row", label: "Assignee",   value: { type: "text", value: "Jane Dougherty", style: "body" } },
+          { type: "detail-row", label: "Deleted",    value: { type: "text", value: "purged 2h ago", style: "body" }, tone: "danger" },
+        ],
+      },
+      // ── COMP-11 + 11a TimelineNode with TimelineEntryNodes covering tones ──
+      {
+        type: "timeline",
+        children: [
+          { type: "timeline-entry", time: "2:47 PM", description: { type: "text", value: "Incident opened", style: "body" }, tone: "danger" },
+          { type: "timeline-entry", time: "2:49 PM", description: { type: "text", value: "Acknowledged by Jane", style: "body" }, tone: "warning" },
+          { type: "timeline-entry", time: "2:58 PM", description: { type: "text", value: "Rollback verified", style: "body" }, tone: "success" },
+        ],
+      },
+      // ── COMP-12 + 12a SettingListNode with SettingRowNodes ─────────
+      // Exercises the CheckboxNode(variant:"switch") pairing per CONTEXT §9.
+      {
+        type: "setting-list",
+        heading: "Notification preferences",
+        children: [
+          {
+            type: "setting-row",
+            label: { type: "text", value: "Email notifications", style: "body", weight: "medium" },
+            description: { type: "text", value: "Receive an email for every incident update.", style: "muted" },
+            trailing: { type: "checkbox", name: "setting-email", label: "", variant: "switch", bind: "settings.email" },
+          },
+          {
+            type: "setting-row",
+            label: { type: "text", value: "Weekly digest", style: "body", weight: "medium" },
+            description: { type: "text", value: "A Monday-morning summary of the past week.", style: "muted" },
+            trailing: { type: "button", label: "Configure", action: { name: "setting-row-configure-digest" } },
+          },
+        ],
+      },
+      // ── COMP-13 + 13a ChipListNode with ChipNodes ─────────────────
+      // Proves BOTH dismissAction slot (caller-supplied name, distinct from
+      // AlertNode.dismissible's fixed name) AND action slot.
+      {
+        type: "chip-list",
+        children: [
+          { type: "chip", label: "active",   tone: "success", dismissAction: { name: "chip-remove-filter-active" } },
+          { type: "chip", label: "warning",  tone: "warning" },
+          { type: "chip", label: "clickme",  action: { name: "chip-toggle-tag-clickme" } },
+          { type: "chip", label: "both",     tone: "info", action: { name: "chip-toggle-tag-both" }, dismissAction: { name: "chip-remove-tag-both" } },
+        ],
+      },
+    ],
+  };
+
   // ── Inline rich text (TextNode.runs) ──
   // Covers the absent-vs-present matrix for every optional on InlineRun, plus the
   // two contract cases that are decisions rather than mechanics:
@@ -1394,6 +1501,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       iconsSection,
       foundationsSection,
       primaryCompositesSection,
+      secondaryCompositesSection,
       richTextSection,
       lookupSection,
       probeModal,

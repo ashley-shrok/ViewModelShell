@@ -1308,6 +1308,87 @@ public class FeatureProbeController : ControllerBase
                     Description: "Once customers place orders they'll show up here.",
                     Action: new ButtonNode(Label: "Learn more", Action: new ActionDescriptor("empty-state-cta-probe"))),
             }));
+        // v8.0.0 Secondary Composites (COMP-09..COMP-13) — byte-identical to the
+        // bun twin secondaryCompositesSection. Every branch introduced by plans
+        // 25-01..05 gets at least one emission here + an expectBodyContains
+        // tripwire on the initial GET step, per banked lesson: a diff can only
+        // prove things about code it actually RUNS. Fleet-adoption discipline
+        // is honored — the composites ship with parity coverage in the same
+        // batch (per v5.1 EXTEND pattern; single fixture, appended section).
+        //   • COMP-09 (UserRowNode): one with all slots populated
+        //     (Avatar + Name + Meta + Status:{Label:"Online", Kind:Online} +
+        //     Action name user-row-open-jd) — proves the StatusKind closed
+        //     enum crosses AND the action-name walk descends through
+        //     UserRowNode.Action.
+        //   • COMP-10 + 10a (DetailRowNode + DetailListNode): one
+        //     DetailListNode with LabelWidth:Lg (proves DetailLabelWidth
+        //     closed enum crosses) containing three DetailRowNodes — two
+        //     neutral + one Tone:Danger (proves the tone closed union
+        //     crosses on the row-level).
+        //   • COMP-11 + 11a (TimelineEntryNode + TimelineNode): one
+        //     TimelineNode containing three TimelineEntryNodes covering
+        //     Danger/Warning/Success tones.
+        //   • COMP-12 + 12a (SettingRowNode + SettingListNode): one
+        //     SettingListNode with Heading + two SettingRowNodes — one
+        //     exercises the CheckboxNode(Variant:Switch) pairing per
+        //     CONTEXT §9 as Trailing; one exercises a ButtonNode Trailing
+        //     with UNIQUE action name setting-row-configure-digest.
+        //   • COMP-13 + 13a (ChipNode + ChipListNode): one ChipListNode
+        //     containing four ChipNodes covering the full slot matrix —
+        //     dismissAction-only (chip-remove-filter-active), tone-only,
+        //     action-only (chip-toggle-tag-clickme), and BOTH action +
+        //     dismissAction (UNIQUE names chip-toggle-tag-both +
+        //     chip-remove-tag-both).
+        // NOTE: the CLIENT-SIDE rendering is browser-only and NOT part of
+        // parity — parity proves only that the fields serialize identically
+        // across backends.
+        pageChildren.Add(new SectionNode(
+            Heading: "v8.0.0 Secondary Composites",
+            Variant: SectionVariant.Card,
+            Children: new ViewNode[]
+            {
+                // COMP-09 UserRowNode
+                new UserRowNode(
+                    Name: new TextNode("Jane Dougherty", Style: TextStyle.Body, Weight: TextWeight.Medium),
+                    Avatar: new AvatarNode(Initials: "JD", Tone: Tone.Info),
+                    Meta: new TextNode("jane.d · SRE Lead", Style: TextStyle.Muted),
+                    Status: new UserRowStatus("Online", StatusKind.Online),
+                    Action: new ActionDescriptor("user-row-open-jd")),
+                // COMP-10 + 10a DetailListNode with LabelWidth:Lg
+                new DetailListNode(
+                    Children: new ViewNode[] {
+                        new DetailRowNode(Label: "Status",   Value: new TextNode("Open", Style: TextStyle.Body)),
+                        new DetailRowNode(Label: "Assignee", Value: new TextNode("Jane Dougherty", Style: TextStyle.Body)),
+                        new DetailRowNode(Label: "Deleted",  Value: new TextNode("purged 2h ago", Style: TextStyle.Body), Tone: Tone.Danger),
+                    },
+                    LabelWidth: DetailLabelWidth.Lg),
+                // COMP-11 + 11a TimelineNode with 3 TimelineEntryNodes covering tones
+                new TimelineNode(Children: new ViewNode[] {
+                    new TimelineEntryNode(Time: "2:47 PM", Description: new TextNode("Incident opened",       Style: TextStyle.Body), Tone: Tone.Danger),
+                    new TimelineEntryNode(Time: "2:49 PM", Description: new TextNode("Acknowledged by Jane",  Style: TextStyle.Body), Tone: Tone.Warning),
+                    new TimelineEntryNode(Time: "2:58 PM", Description: new TextNode("Rollback verified",     Style: TextStyle.Body), Tone: Tone.Success),
+                }),
+                // COMP-12 + 12a SettingListNode with SettingRowNodes (CheckboxNode Variant:Switch pairing)
+                new SettingListNode(
+                    Children: new ViewNode[] {
+                        new SettingRowNode(
+                            Label: new TextNode("Email notifications", Style: TextStyle.Body, Weight: TextWeight.Medium),
+                            Description: new TextNode("Receive an email for every incident update.", Style: TextStyle.Muted),
+                            Trailing: new CheckboxNode(Name: "setting-email", Bind: "settings.email", Label: "", Action: null, Variant: CheckboxVariant.Switch)),
+                        new SettingRowNode(
+                            Label: new TextNode("Weekly digest", Style: TextStyle.Body, Weight: TextWeight.Medium),
+                            Description: new TextNode("A Monday-morning summary of the past week.", Style: TextStyle.Muted),
+                            Trailing: new ButtonNode(Label: "Configure", Action: new ActionDescriptor("setting-row-configure-digest"))),
+                    },
+                    Heading: "Notification preferences"),
+                // COMP-13 + 13a ChipListNode with ChipNodes
+                new ChipListNode(Children: new ViewNode[] {
+                    new ChipNode(Label: "active",   Tone: Tone.Success, DismissAction: new ActionDescriptor("chip-remove-filter-active")),
+                    new ChipNode(Label: "warning",  Tone: Tone.Warning),
+                    new ChipNode(Label: "clickme",  Action: new ActionDescriptor("chip-toggle-tag-clickme")),
+                    new ChipNode(Label: "both",     Tone: Tone.Info, Action: new ActionDescriptor("chip-toggle-tag-both"), DismissAction: new ActionDescriptor("chip-remove-tag-both")),
+                }),
+            }));
         // Inline rich text (TextNode.Runs) — byte-identical to the bun twin
         // richTextSection. Covers the absent-vs-present matrix for every optional on
         // InlineRun, plus the two contract cases that are DECISIONS rather than
