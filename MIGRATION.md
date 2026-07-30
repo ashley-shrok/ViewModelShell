@@ -6,6 +6,40 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to npm `8.0.3` — nothing to do (fix), one Playwright edge case
+
+**npm `@ashley-shrok/viewmodel-shell`: `8.0.3`.** NuGet unchanged (stays at `8.0.0`). **No wire change. No code change required.** The renderer fixes a CSS-Containment scope bug in the v8.0.1 `ListRowNode` narrow-column stack (standalone rows — those whose parent is not `.vms-list` — were silently unfixed; the stack CQ now applies to every `ListRowNode` regardless of wrapper).
+
+The one thing to know: **standalone `ListRowNode` now emits one extra outer `<div>` in the DOM.**
+
+```html
+<!-- npm 8.0.2 (was): -->
+<div class="vms-list-row vms-list-row-standalone">…</div>
+
+<!-- npm 8.0.3 (is now): -->
+<div class="vms-list-row-standalone-container">
+  <div class="vms-list-row vms-list-row-standalone">…</div>
+</div>
+```
+
+The new outer `<div class="vms-list-row-standalone-container">` establishes the container-query context for the CQ narrow-column stack rule to target the row correctly. It's `display: block` and carries no other semantics.
+
+**Who is affected:**
+
+- **Playwright / DOM-shape tests that walk the parent chain** (e.g. `page.locator('.vms-section > .vms-list-row')`) — the row is now one level deeper. Add the wrapper to the selector, or query the row directly by class (`page.locator('.vms-list-row-standalone')`).
+- **Consumers using `.vms-list-row-standalone` or `.vms-list-row` selectors directly** (not caring about parent chain) — **no change required**.
+- **`ListRowNode` inside `ListNode(variant:"rows")`** — the primary consumer path — **byte-identical DOM to 8.0.2**. No test updates needed for in-list rendering.
+
+Bump the package version and continue:
+
+```bash
+npm install @ashley-shrok/viewmodel-shell@8.0.3
+```
+
+Nothing else. If your `ListRowNode`s were rendering fine at wide widths and collapsing at narrow, the collapse is now gone. If you were composition-swapping to `ListNode(variant:"rows")` as a workaround for the standalone bug, you can revert that swap.
+
+---
+
 ## Upgrading to v8.0.0 — ONE break: `EmptyStateNode` field rename
 
 ### Phase 23 foundations — purely additive

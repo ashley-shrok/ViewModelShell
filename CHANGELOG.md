@@ -6,6 +6,48 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 8.0.3 — 2026-07-30 — ListRowNode standalone CQ scope — wrap standalone rows in outer container-type element
+
+**npm `@ashley-shrok/viewmodel-shell`:** `8.0.3` (patch, from `8.0.2`). NuGet `AshleyShrok.ViewModelShell` unchanged (stays at `8.0.0`). **CSS + renderer — no wire change. One consumer-visible DOM emission delta (see MIGRATION note below).**
+
+### What changed
+
+The v8.0.1 narrow-column stack fix only worked for `ListRowNode`s wrapped in `ListNode(variant:"rows")`. For `ListRowNode`s rendered STANDALONE — i.e. whenever the parent element is not `.vms-list` (a `SectionNode` wrapper is the canonical case) — the CQ silently did nothing, and the row still collapsed under a chip-heavy trailing slot exactly like the pre-8.0.1 bug. Metis prod has been hitting this since 8.0.1 shipped: `IncidentsViewBuilder.BuildIncidentTable` wraps 200 `ListRowNode`s in `SectionNode(id:"incident-list-stack")`, which puts each row in the standalone path.
+
+Root cause is a CSS Containment spec quirk. The 8.0.1 patch put `container-type: inline-size` on TWO selectors: `.vms-list--rows` (correct — the `<ul>` is the container, the row is a descendant, CQ restyles the row and children) and `.vms-list-row-standalone` (INCORRECT — the row IS the container; CSS Containment forbids a container's own CQ rules from applying to itself). For standalone rows the `.vms-list-row` rule inside `@container` was silently ignored, the grid-area assignments on children had no `grid-template-areas` to reference, and the row kept its default `grid-template-columns: auto 1fr auto` — the ChipList in trailing took max-content, primary text shattered via `overflow-wrap: anywhere`.
+
+**Fix:** introduce a new class `.vms-list-row-standalone-container { display: block; container-type: inline-size; }` and have the renderer emit an outer `<div>` with that class around any standalone `.vms-list-row`. The row becomes a descendant of a genuine container, the CQ restyles it correctly, and the stack shape now applies to standalone rows too. `.vms-list-row-standalone` no longer carries `container-type` (kept for the border-surface styling only). Rows inside `ListNode(variant:"rows")` — the primary consumer path — emit byte-identical DOM to 8.0.2.
+
+### Why this shipped
+
+Molly (Metis adoption, 2026-07-30) eyeballed 8.0.1 on Metis prod and reported a "different failure mode" — the collapse she'd been living with for a week hadn't actually been fixed on her app, the CQ patch just wasn't reaching her wire. Diagnostic surfaced over several relay round-trips: my patch's `.vms-list-row-standalone` container-type declaration is ineffective per CSS Containment spec; the standalone path silently doesn't get the CQ stack. Metis's `SectionNode` wrapper is a legitimate composition per the typed-slots pattern in `AGENTS.md` (a composite should work regardless of what wraps it), so this was the framework's bug, not Metis's. A composite that silently does nothing when a consumer writes reasonable code violates the "nothing important fails quietly" rule in `AGENTS.md`.
+
+### Verification
+
+- Built a real Metis local repro from the byte-identical prod bundle (Molly captured shell + JS + wire from :5001), served on the tailnet with dev-identity cookie + detail-open wire so it hydrates directly into the failing state. Reproduced the collapse against pre-fix assets; confirmed the fix against post-fix assets. Ashley eyeballed the A/B/C tasting (LEFT pre-fix SectionNode broken · MIDDLE pre-fix ListNode workaround · RIGHT post-fix SectionNode fixed) and confirmed RIGHT matches MIDDLE.
+- Updated `viewmodel-shell/test/list-row.test.ts` — standalone test now asserts the outer wrapper's presence; new negative test verifies the in-list path emits NO wrapper (byte-identical DOM for the primary consumer path).
+- Green-tree gate at release commit: `npm run build` + all six `check:*` scripts + vitest (1251 passed, +1 new negative test vs 8.0.2) + `viewmodel-shell-dotnet/Tests` (428 passed) + every `demo/**/*.Tests.csproj` (191 tests across 5 projects) + parity (all backends agree).
+
+### Consumer-visible DOM emission delta (MIGRATION)
+
+**Standalone** `ListRowNode` (whenever parent is not `.vms-list`) now renders inside an outer `<div class="vms-list-row-standalone-container">`:
+
+```html
+<!-- 8.0.2 (pre-fix): -->
+<div class="vms-list-row vms-list-row-standalone">…</div>
+
+<!-- 8.0.3 (post-fix): -->
+<div class="vms-list-row-standalone-container">
+  <div class="vms-list-row vms-list-row-standalone">…</div>
+</div>
+```
+
+Consumers using `.vms-list-row-standalone` or `.vms-list-row` selectors directly (not caring about parent chain) are **unaffected**. Playwright / DOM-shape tests that assumed the row is a *direct child* of its parent will need one extra step in the selector chain. **In-list** rendering (`ListNode(variant:"rows")` wrapper) is byte-identical to 8.0.2.
+
+Bounty: `listrow-narrow-collapse` (from Molly via relay DM; the "real" fix, distinct from 8.0.1 which patched the ListNode path only).
+
+---
+
 ## npm 8.0.2 — 2026-07-30 — MessageNode content overflow + TextNode flex overreach (CSS-only)
 
 **npm `@ashley-shrok/viewmodel-shell`:** `8.0.2` (patch, from `8.0.1`). NuGet `AshleyShrok.ViewModelShell` unchanged (stays at `8.0.0`). **CSS-only — no wire change, no code change, no consumer action.**
