@@ -438,6 +438,104 @@ function componentsView(): ViewNode[] {
       },
     ]},
 
+    // ── v8.0.0 Secondary Composites (COMP-09..COMP-13) ────────────────────
+    { type: "section", heading: "v8.0.0 Secondary Composites", children: [
+      { type: "text", value: "Five secondary composites completing the v8.0.0 shipped set: person entities, key-value details, activity timelines, settings rows with switches, and dismissible chip clusters.", style: "muted" },
+
+      // ── COMP-09 UserRowNode (visual coverage across status kinds) ─────────
+      { type: "text", value: "UserRowNode — person entity display with avatar + status dot", style: "subheading" },
+      { type: "text", value: "Displays a person with optional avatar, name, meta line, and right-aligned status dot. Status kind is a closed 4-value enum (online/away/offline/busy) mapped to shipped tone colors.", style: "muted" },
+      { type: "user-row",
+        avatar: { type: "avatar", initials: "JD", tone: "info" },
+        name: "Jane Dougherty",
+        meta: "jane.d · SRE Lead",
+        status: { label: "Online", kind: "online" },
+        action: { name: "showcase-secondary-user-open-jd" },
+      },
+      { type: "user-row",
+        avatar: { type: "avatar", initials: "AL", tone: "success" },
+        name: "Ada Lovelace",
+        meta: "ada@example.com · admin",
+        status: { label: "Away", kind: "away" },
+        action: { name: "showcase-secondary-user-open-al" },
+      },
+      { type: "user-row",
+        avatar: { type: "avatar", initials: "GH", tone: "warning" },
+        name: "Grace Hopper",
+        meta: "grace@example.com · engineer",
+        status: { label: "Offline", kind: "offline" },
+      },
+      { type: "user-row",
+        avatar: { type: "avatar", initials: "AT", tone: "danger" },
+        name: "Alan Turing",
+        meta: "alan@example.com · researcher",
+        status: { label: "In a meeting", kind: "busy" },
+      },
+
+      // ── COMP-10 + 10a DetailListNode with labelWidth showcase ─────────────
+      { type: "text", value: "DetailRowNode + DetailListNode — key-value with aligned label column (dl/dt/dd semantics)", style: "subheading" },
+      { type: "text", value: "Renders as proper <dl> semantic HTML with a fixed label column driven by labelWidth (sm/md/lg = 8/10/12rem). Trained typography: label = text-xs uppercase muted; value = body.", style: "muted" },
+      { type: "detail-list", labelWidth: "md", children: [
+        { type: "detail-row", label: "Status", value: "Open", tone: "success" },
+        { type: "detail-row", label: "Assignee", value: "Jane Dougherty" },
+        { type: "detail-row", label: "Priority", value: "P1 — production impact", tone: "warning" },
+        { type: "detail-row", label: "Deleted", value: "purged 2h ago", tone: "danger" },
+      ]},
+
+      // ── COMP-11 + 11a TimelineNode (activity feed with rail + dot) ────────
+      { type: "text", value: "TimelineEntryNode + TimelineNode — activity feed with baked-in rail + dot markers", style: "subheading" },
+      { type: "text", value: "This composite exists specifically to bake in the vertical rail and per-entry dot markers — a shape today's primitives literally cannot produce (apps describe, never decorate). Tone-encoded dot borders.", style: "muted" },
+      { type: "timeline", children: [
+        { type: "timeline-entry", time: "2:47 PM", description: "Incident opened", tone: "danger" },
+        { type: "timeline-entry", time: "2:49 PM", description: "Acknowledged by Jane", tone: "warning" },
+        { type: "timeline-entry", time: "2:52 PM", description: "Root cause identified in billing service" },
+        { type: "timeline-entry", time: "2:58 PM", description: "Rollback verified", tone: "success" },
+        { type: "timeline-entry", time: "3:02 PM", description: "Postmortem scheduled for tomorrow", tone: "info" },
+      ]},
+
+      // ── COMP-12 + 12a SettingListNode + CheckboxNode(variant:"switch") ────
+      // Exercises the natural pairing per CONTEXT §9: 3 rows with switch, 1 with Button.
+      { type: "text", value: "SettingRowNode + SettingListNode — label + description + trailing control", style: "subheading" },
+      { type: "text", value: "Natural pairing with CheckboxNode(variant:\"switch\") from COMP-03 in the trailing slot. Also common: ButtonNode, LinkNode. Optional list heading above.", style: "muted" },
+      { type: "setting-list", heading: "Notification preferences", children: [
+        {
+          type: "setting-row",
+          label: "Email notifications",
+          description: "Receive an email for every incident update.",
+          trailing: { type: "checkbox", name: "settings.email", label: "", variant: "switch", bind: "showcase.settings.email" },
+        },
+        {
+          type: "setting-row",
+          label: "SMS alerts for P1 incidents",
+          description: "Text messages sent to your primary phone number for critical incidents only.",
+          trailing: { type: "checkbox", name: "settings.sms", label: "", variant: "switch", bind: "showcase.settings.sms" },
+        },
+        {
+          type: "setting-row",
+          label: "Slack DMs",
+          description: "Direct messages via the VMS-Slack integration.",
+          trailing: { type: "checkbox", name: "settings.slack", label: "", variant: "switch", bind: "showcase.settings.slack" },
+        },
+        {
+          type: "setting-row",
+          label: "Weekly digest",
+          description: "A Monday-morning summary of the past week's incidents.",
+          trailing: { type: "button", label: "Configure", action: { name: "showcase-secondary-setting-configure-digest" } },
+        },
+      ]},
+
+      // ── COMP-13 + 13a ChipListNode (filter set with dismiss + toggle) ─────
+      { type: "text", value: "ChipNode + ChipListNode — dismissible pill cluster (filter set / selected tags)", style: "subheading" },
+      { type: "text", value: "dismissAction is a caller-supplied ActionEvent (identity-carrying like remove-filter-42) — distinct from AlertNode.dismissible which emits a fixed name. Both action and dismissAction may coexist; X's click stopPropagates.", style: "muted" },
+      { type: "chip-list", children: [
+        { type: "chip", label: "active",    tone: "success", dismissAction: { name: "showcase-secondary-chip-remove-active" } },
+        { type: "chip", label: "warning",   tone: "warning" },
+        { type: "chip", label: "clickable", action: { name: "showcase-secondary-chip-toggle-clickable" } },
+        { type: "chip", label: "both",      tone: "info", action: { name: "showcase-secondary-chip-toggle-both" }, dismissAction: { name: "showcase-secondary-chip-remove-both" } },
+        { type: "chip", label: "with-icon", tone: "danger", icon: "alert-triangle", dismissAction: { name: "showcase-secondary-chip-remove-with-icon" } },
+      ]},
+    ]},
+
     { type: "section", heading: "Stat bar", children: [
       { type: "stat-bar", stats: [
         { label: "active",    value: "12" },
