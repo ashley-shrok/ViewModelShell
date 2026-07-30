@@ -410,3 +410,24 @@ Plans:
 - [x] 25-08-PLAN.md — FeatureProbe parity extension + 15 tripwires
 - [x] 25-09-PLAN.md — CHANGELOG.md + MIGRATION.md v8.0.0 additive entries
 - [x] 25-10-PLAN.md — Full green-tree gate + Ashley visual sign-off + requirement cross-check
+
+### Phase 26: v8.0.0 release closeout — comprehensive verification + aligned major publish
+
+**Goal:** Close the v8.0.0 milestone (Phases 23-25) with an aligned major release on both packages. Build a **comprehensive tailnet verification page** covering all 10 shipped composites (COMP-05..13a) + 3 wire tweaks (Phase 24's `EmptyStateNode` rewrite + Phase 25's landings) + 1 new primitive (`AvatarNode` COMP-04) + 4 foundations (COMP-01..04) for a full-milestone visual sign-off in one served page — the compensating discipline that makes the "apps don't test their UI" thesis honest (per AGENTS.md standing directive on verification pages). Finalize `CHANGELOG.md` heading `Unreleased — v8.0.0 (in progress)` → `v8.0.0 — <publish-date>`, finalize `MIGRATION.md` heading similarly. Verify `agent-skill.md` still accurate for v8.0 wire (Phase 25 was additive — likely inventory grow only; no wire-shape break). Bump `viewmodel-shell/package.json` 7.1.0 → **8.0.0** and `AshleyShrok.ViewModelShell.csproj` 7.0.0 → **8.0.0** (aligned major; the sole v8.0 wire break was Phase 24's `EmptyStateNode` rename, per AGENTS.md publishing runbook). Operator publish + tag `v8.0.0` + advance `main` + registry verify + announce on `#vms-changelog` new `room_id !E211RrsKCygK7Ev6uacpswousKy9JZiGEVLquJpC3cU`.
+
+**Requirements**: No new COMP-XX (v8.0.0 milestone is COMP-01..13a; Phases 23-25 shipped them all). Phase 26 is the release ritual + full-milestone verification for that set.
+
+**Depends on:** Phase 25 (all 10 composites landed on main + CHANGELOG + MIGRATION accumulated; commit `358e6f0`). Design of record: `.planning/design/composite-nodes-layer.md`. AGENTS.md publishing runbook + operator auth precheck.
+
+**Success Criteria** (what must be TRUE):
+  1. **Comprehensive tailnet verification page** served on `100.113.23.63:<port>` demonstrates all 10 shipped composites + 4 foundations + 3 wire tweaks + 1 new primitive in one page, driven by the real bundle (built `dist/browser.js` + shipped `default.css` + all theme files), with theme switcher; smoke-tested `curl` 200 before hand-off; Ashley signs off visually.
+  2. **`agent-skill.md` verified accurate for v8.0** — either unchanged (if Phase 25 additions don't require operator-manual updates) or updated + byte-copied to `viewmodel-shell-dotnet/AgentSkill.md` per AGENTS.md maintainer rule; parity gate proves both sources + both served HTTP twins byte-identical.
+  3. **CHANGELOG.md heading finalized** `Unreleased — v8.0.0 (in progress)` → `v8.0.0 — <publish-date>`; MIGRATION.md `## Upgrading to v8.0.0 (in progress)` heading finalized similarly. Batch-then-ship reminder removed from finalized section.
+  4. **Aligned version bump**: `viewmodel-shell/package.json` version → `8.0.0`; `viewmodel-shell-dotnet/AshleyShrok.ViewModelShell.csproj` `<Version>` → `8.0.0`.
+  5. **Green-tree gate green** one final time BEFORE any registry action: full framework + parity + all `demo/**/*.Tests.csproj` + core-globals + demo-types + no-demo-style + test-types + aa-contrast.
+  6. **Operator publish + tag + advance main**: `.env` sync, `npm publish` (prepublishOnly rebuilds `dist/`), `dotnet pack -c Release` + `dotnet nuget push`, curl-verify BOTH registries return `8.0.0` as latest, annotated tag `v8.0.0` at release commit + push, verify `git merge-base --is-ancestor v8.0.0 main` (the load-bearing "release must merge into main" gate — the missed-2-releases-2026-06-14 lesson).
+  7. **Announce on `#vms-changelog`** — new room `!E211RrsKCygK7Ev6uacpswousKy9JZiGEVLquJpC3cU` (Nelly's heads-up post fleet-wide Continuwuity rebuild). Message summarizes the 10 composites + wire tweaks + the single BREAKING (`EmptyStateNode` rename) + link to CHANGELOG.
+  8. **No consumer broken silently**: pre-publish grep of every VMS demo + framework test for `EmptyStateNode(Heading|Message` (the pre-v8 field spelling) returns zero occurrences (all internal callsites already migrated in Phase 24).
+  9. **Phase 26 SUMMARY records**: green-tree evidence, comprehensive verification page URL + Ashley's sign-off + timestamped screenshot log, agent-skill.md diff (if any), CHANGELOG/MIGRATION heading diff, version-file diff, registry verify output, tag + advance-main verify, `#vms-changelog` announce URL.
+
+**Plans:** 0 plans (to be created by /gsd:plan-phase 26)
