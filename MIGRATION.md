@@ -6,9 +6,7 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
-## Upgrading to v8.0.0 (in progress) — ONE break: `EmptyStateNode` field rename
-
-**Batch-then-ship:** v8.0.0 publishes at Phase 26 closeout with all 10 composites + 3 wire tweaks + 4 foundations in one aligned release. This entry accumulates as Phase 23-26 land; it flips to a versioned release heading at Phase 26.
+## Upgrading to v8.0.0 — ONE break: `EmptyStateNode` field rename
 
 ### Phase 23 foundations — purely additive
 
@@ -62,13 +60,13 @@ Framework's own demo apps (FeatureProbe) and tests are updated in the same commi
 
 **`MessageListNode.followTail` scroll behavior:** identical to the shipped `SectionNode.followTail` — the append-only feed pins to the new bottom if the user was near the bottom before the re-render, or preserves their scrollTop if they had scrolled up. Reuses the same DOM signal (`data-follow-tail`), so a feed with both a `MessageListNode` and a `SectionNode.followTail: true` would be walked in document order (each independently pinned/preserved by ordinal — the shipped behavior generalizes). No new adapter code beyond `el.dataset.followTail = ""` on the message-list container.
 
-See the `Unreleased — v8.0.0 (in progress)` section of `CHANGELOG.md` for the full wire-level detail.
+See the `v8.0.0 — 2026-07-30` section of `CHANGELOG.md` for the full wire-level detail.
 
 ### UserRowNode, DetailRowNode + DetailListNode, TimelineEntryNode + TimelineNode, SettingRowNode + SettingListNode, ChipNode + ChipListNode (COMP-09..COMP-13) — new node types
 
 **Additive; no consumer changes required.** Five secondary composite pairs with `[JsonDerivedType]` discriminators; older adapters silently emit nothing for unknown types (existing behavior for forward compatibility). No wire renames, no field removals — every existing v7.x + Phase 24 consumer keeps working untouched.
 
-See the `Unreleased — v8.0.0 (in progress)` section of `CHANGELOG.md` for the full wire-level detail per composite.
+See the `v8.0.0 — 2026-07-30` section of `CHANGELOG.md` for the full wire-level detail per composite.
 
 **One deliberate deviation to know about**: `ChipNode.dismissAction` is a CALLER-SUPPLIED `ActionEvent` slot (identity-carrying name like `remove-filter-42`), distinct from `AlertNode.dismissible` (Phase 24) which emits a fixed-name `{name: "dismiss"}` locally. Consumers building filter-chip UIs should model each chip's dismiss dispatch with a unique per-chip name in state — the framework does not auto-name. If both `action` and `dismissAction` are set on the same chip, the X click stops propagation so the whole-chip click does not double-fire.
 

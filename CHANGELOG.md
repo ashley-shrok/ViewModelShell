@@ -6,9 +6,7 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
-## Unreleased — v8.0.0 (in progress)
-
-> **Batch-then-ship:** v8.0.0 publishes at Phase 26 closeout with all 10 composites + 3 wire tweaks + 4 foundations in one aligned release. Do NOT publish Phase 24 as its own release. See `.planning/design/composite-nodes-layer.md` for the milestone design of record.
+## v8.0.0 — 2026-07-30
 
 ### Added
 
