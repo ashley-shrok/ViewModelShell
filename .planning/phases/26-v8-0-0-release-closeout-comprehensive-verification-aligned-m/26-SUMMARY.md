@@ -29,7 +29,7 @@ Main-ancestor gate: ✓ `git merge-base --is-ancestor v8.0.0 main` exit 0.
 | 2 | [26-03](./26-03-SUMMARY.md) | Full green-tree gate + Ashley visual sign-off | 1250 vitest / 428 framework .NET / 191 demo .NET / parity byte-identical. Ashley APPROVED via `/id reset` |
 | 3 | [26-04](./26-04-SUMMARY.md) | CHANGELOG/MIGRATION heading finalize + 7.1.0/7.0.0 → 8.0.0 bump | 4-file atomic staging; post-bump verify green; HEAD unchanged |
 | 4 | [26-05](./26-05-SUMMARY.md) | Operator publish + tag + advance main | Release commit `2e31dca` on main; both registries at 8.0.0 via direct-curl verify; tag pushed; main-ancestor gate exit 0; Vite killed |
-| 5 | [26-06](./26-06-SUMMARY.md) | Announce + phase SUMMARY | Announce ESCALATED (vicky not member of `!E211Rrs...`); Ashley to invite OR post herself; phase rollup + ROADMAP closed |
+| 5 | [26-06](./26-06-SUMMARY.md) | Announce + phase SUMMARY | Announce POSTED to fresh Synapse `!QvlInhfVNZRUxQPtcR:thenasty.taild9b663.ts.net` (`#vms-announcements`; event `$_JDdp_x4XyhgNkx9k2zqg6-QgorX2if4NV1UuUFt9Ss`); phase rollup + ROADMAP closed |
 
 ## What v8.0.0 shipped
 
@@ -65,4 +65,4 @@ Old: `{ heading, message?, action? }` → New: `{ icon?, title, description?, ac
 
 ## Milestone officially CLOSED
 
-Every phase deliverable is on disk + on `main` + on the registries + on tag. The single open item is the Continuwuity announce, pending Ashley's routing decision (invite vicky OR post herself); the announce text is copy-ready in 26-06-SUMMARY.md. Future v8.0.x patches / v8.x.0 minors open as new phases per the phased-milestone convention.
+Every phase deliverable is on disk + on `main` + on the registries + on tag + posted to fleet `#vms-announcements` (fresh Synapse room `!QvlInhfVNZRUxQPtcR:thenasty.taild9b663.ts.net` per Nelly's cutover). Future v8.0.x patches / v8.x.0 minors open as new phases per the phased-milestone convention.

@@ -7,23 +7,24 @@ completed: 2026-07-30
 
 # 26-06 SUMMARY — v8.0.0 milestone CLOSED (announce escalated)
 
-## (i) Announce state — ESCALATED to operator
+## (i) Announce state — POSTED
 
-**Membership check:** vicky's relay account (`@vicky:thenasty.taild9b663.ts.net`) is a member of exactly ONE Matrix room:
+**Room resolution:** the original target `!E211RrsKCygK7Ev6uacpswousKy9JZiGEVLquJpC3cU` was superseded intra-plan by Nelly moving `#vms-announcements` back to Synapse as a fresh room with yesterday's design:
 
+- **New room:** `!QvlInhfVNZRUxQPtcR:thenasty.taild9b663.ts.net`
+- **Design:** vicky is PL100 (sole poster), `@nelly` + `@pixie` invited as read-only subscribers
+- **Auto-join:** vicky's receiver Monitor auto-joined the invite; membership confirmed by `/joined_rooms` (target present)
+
+**Posted event:**
 ```
-!zceXPujmIzsDkRuaUQ:thenasty.taild9b663.ts.net  (@ashley ↔ @vicky (tg-bridge))
+event_id: $_JDdp_x4XyhgNkx9k2zqg6-QgorX2if4NV1UuUFt9Ss
+room_id:  !QvlInhfVNZRUxQPtcR:thenasty.taild9b663.ts.net
+txn_id:   vms-800-1785428057
 ```
 
-That's the DM with Ashley, not `#vms-changelog`. Target room `!E211RrsKCygK7Ev6uacpswousKy9JZiGEVLquJpC3cU` is not in the joined-rooms list, and a probe `POST /rooms/.../join` returned `M_UNKNOWN: Can't join remote room because no servers that are in the room have been provided.` (Matrix federation requires either an invite or a `via` server hint — vicky has neither.)
+Original escalation to Ashley (invite vicky OR post herself against `!E211Rrs...`) was superseded by Nelly's Synapse cutover — the new announcements room design pre-authorized vicky as sole poster, so no operator action was needed.
 
-Per plan Task 1(a) escalation clause: **STOP + surface state + provide copy-ready text.**
-
-**Ashley — two options:**
-1. **Invite `@vicky:thenasty.taild9b663.ts.net` to `!E211RrsKCygK7Ev6uacpswousKy9JZiGEVLquJpC3cU`.** Then I re-run Task 1 and post the announce; the SUMMARY gets updated with the returned event id.
-2. **Post the announce text below yourself** (copy-paste from the block). No further vicky action needed on this plan.
-
-### Copy-ready announce text (single message, Continuwuity Markdown):
+### Announce text posted (single message, GFM-flavored):
 
 ````
 🚀 **viewmodel-shell v8.0.0** — aligned major release (npm + NuGet)
@@ -59,7 +60,7 @@ Green-tree at release commit: vitest 1250/1 skipped, framework .NET Tests 428, a
 | 26-03 | Full green-tree gate + Ashley visual sign-off | ✓ 1250 vitest / 428 framework .NET / 191 demo .NET / parity byte-identical; Ashley **APPROVED** at `/id reset` | [26-03-SUMMARY.md](./26-03-SUMMARY.md) |
 | 26-04 | CHANGELOG/MIGRATION heading finalize + version bump to 8.0.0 | ✓ 4-file atomic staging; post-bump verify green | [26-04-SUMMARY.md](./26-04-SUMMARY.md) |
 | 26-05 | Operator publish + tag + advance main | ✓ Both registries serve 8.0.0; tag `v8.0.0` at `2e31dca`; `merge-base --is-ancestor v8.0.0 main` exit 0 | [26-05-SUMMARY.md](./26-05-SUMMARY.md) |
-| 26-06 | Announce + phase SUMMARY | ⏳ Announce ESCALATED — Ashley to invite vicky OR post herself; rollup + ROADMAP closed | this file |
+| 26-06 | Announce + phase SUMMARY | ✓ Announce POSTED to `!QvlInhfVNZRUxQPtcR:thenasty.taild9b663.ts.net` (fresh Synapse `#vms-announcements`; event `$_JDdp_...`); rollup + ROADMAP closed | this file |
 
 ## (iii) Milestone-scope state (from 26-05)
 
@@ -76,8 +77,4 @@ Green-tree at release commit: vitest 1250/1 skipped, framework .NET Tests 428, a
 
 The v8.0.0 milestone is officially **CLOSED**. Every future v8.0.x patch or v8.x.0 minor opens as its own new phase per the phased-milestone convention. Route B composite-nodes layer (Phases 23-25) is consumer-installable in an aligned major on both packages.
 
-The one open item on this plan is the announce (Task 1) — pending Ashley's choice of path (invite vicky OR post herself). Every other phase-scope deliverable is on disk + on-registry + on-`main`.
-
-## Plan 26 announce path — pending Ashley
-
-Post-decision update: this SUMMARY gets an `announce_event_id: <event>` line added under Section (i) if Ashley invites vicky and vicky posts. If Ashley posts herself, this SUMMARY stays as-is + closes clean.
+All phase-scope deliverables landed: disk + registries + `main` + tag + fleet announce. Milestone closes clean.
