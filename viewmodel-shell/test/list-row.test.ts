@@ -169,14 +169,29 @@ describe("ListRowNode container detection (COMP-05)", () => {
     expect(li!.className).not.toContain("vms-list-row-standalone");
   });
 
-  it("emits <div class='vms-list-row-standalone'> when standalone", () => {
+  // Regression guard for the v8.0.3 CQ scope fix — the wrapper appears
+  // ONLY in the standalone path so the in-list DOM stays byte-identical
+  // for the primary consumer path.
+  it("emits <div class='vms-list-row-standalone-container'> wrapper around the standalone row", () => {
     const { container, render } = setup();
     render({ type: "list-row", primary: "Standalone row" });
-    const div = container.querySelector("div.vms-list-row.vms-list-row-standalone");
+    const div = container.querySelector("div.vms-list-row-standalone-container > div.vms-list-row.vms-list-row-standalone");
     expect(div).not.toBeNull();
     expect(div!.tagName).toBe("DIV");
     // The <li> path should NOT be taken.
     expect(container.querySelector("li.vms-list-row")).toBeNull();
+  });
+
+  it("does NOT wrap the row when inside a ListNode(variant:'rows') container", () => {
+    const { container, render } = setup();
+    render({
+      type: "list",
+      variant: "rows",
+      children: [{ type: "list-row", primary: "Foo" }],
+    });
+    // In-list path: NO outer wrapper; the <li> lives directly under the <ul>.
+    expect(container.querySelectorAll(".vms-list-row-standalone-container").length).toBe(0);
+    expect(container.querySelectorAll(".vms-list--rows > li.vms-list-row").length).toBeGreaterThan(0);
   });
 });
 

@@ -1215,8 +1215,13 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
    `1fr` clamped to min-content and the primary text shattered to one char
    per line by `overflow-wrap: anywhere`. Container-query stack keeps the
    composite honest at narrow widths without a viewport breakpoint (P1). */
-.vms-list--rows,
-.vms-list-row-standalone { container-type: inline-size; }
+.vms-list--rows { container-type: inline-size; }
+
+/* Standalone rows can't be their OWN CQ container — a container's rules
+   don't apply to itself per CSS Containment spec. Wrap in an outer element
+   that owns the CQ context; the row becomes a descendant that CQ can restyle.
+   Renderer emits this wrapper only in the standalone path (browser.ts:listRow). */
+.vms-list-row-standalone-container { display: block; container-type: inline-size; }
 
 @container (max-width: 28rem) {
   .vms-list-row {

@@ -1262,7 +1262,20 @@ export class BrowserAdapter implements Adapter {
       });
     }
 
-    parent.appendChild(el);
+    // v8.0.3 CQ scope fix — outer wrapper establishes the CQ context.
+    // .vms-list-row-standalone can't be its own container per CSS Containment
+    // spec (a container's rules don't apply to itself). See default.css:
+    // .vms-list-row-standalone-container. In-list path is unchanged (byte-
+    // identical DOM); the <ul class="vms-list--rows"> IS the CQ container
+    // and the <li class="vms-list-row"> is a descendant already.
+    if (isInList) {
+      parent.appendChild(el);
+    } else {
+      const wrapper = document.createElement("div");
+      wrapper.className = "vms-list-row-standalone-container";
+      wrapper.appendChild(el);
+      parent.appendChild(wrapper);
+    }
   }
 
   /** v8.0.0 (COMP-09) — UserRowNode renderer. The person-entity display
