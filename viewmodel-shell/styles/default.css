@@ -1206,6 +1206,37 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   border-top: 1px solid var(--vms-border);
 }
 
+/* Narrow-column stack (v8.0.1) — promote .vms-list--rows to an inline-size
+   container, then below 28rem CQI switch each row from `auto 1fr auto` to
+   single-column `1fr` stacked leading→content→trailing. Standalone rows
+   get their own container context. Fixes the ChipList-in-trailing collapse
+   Molly hit on Metis: grid `auto` sizes trailing to max-content, which for
+   a ChipListNode is the sum of all chips on one line, leaving the middle
+   `1fr` clamped to min-content and the primary text shattered to one char
+   per line by `overflow-wrap: anywhere`. Container-query stack keeps the
+   composite honest at narrow widths without a viewport breakpoint (P1). */
+.vms-list--rows,
+.vms-list-row-standalone { container-type: inline-size; }
+
+@container (max-width: 28rem) {
+  .vms-list-row {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "leading"
+      "content"
+      "trailing";
+    row-gap: var(--vms-space-xs);
+  }
+  .vms-list-row__leading  { grid-area: leading;  justify-self: start; }
+  .vms-list-row__content  { grid-area: content; }
+  .vms-list-row__trailing {
+    grid-area: trailing;
+    justify-self: start;
+    white-space: normal;
+    padding-top: 0;
+  }
+}
+
 /* ── MessageNode + MessageListNode (COMP-06, COMP-06a, v8.0.0) ────────────
    Chat/comment. Grid: [avatar | body]. Body = header row (author + timestamp)
    + padded content surface + optional action bar. role controls surface tone

@@ -6,6 +6,33 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## npm 8.0.1 — 2026-07-30 — ListRowNode narrow-column stack (CSS-only)
+
+**npm `@ashley-shrok/viewmodel-shell`:** `8.0.1` (patch, from `8.0.0`). NuGet `AshleyShrok.ViewModelShell` unchanged (stays at `8.0.0`). **CSS-only — no wire change, no code change, no consumer action.**
+
+### What changed
+
+`ListRowNode` (COMP-05, v8.0.0) collapsed catastrophically when its container was narrower than a chip-heavy Trailing slot could hold on one line — Primary/Secondary/Meta text shattered to one character per line, making rows unreadable.
+
+Root cause: `.vms-list-row` used `grid-template-columns: auto 1fr auto`. A `ChipListNode` in Trailing sized to `max-content` (sum of all chips concatenated) because grid `auto` refuses to constrain it; chips only wrap when their own container is width-limited. That left the middle `1fr` clamped to min-content, and `overflow-wrap: anywhere` on `.vms-list-row__primary` broke words to one char per line.
+
+**Fix:** container-query stack on `.vms-list--rows` and `.vms-list-row-standalone`. Below 28rem CQI, each row's grid switches from `auto 1fr auto` to single-column `1fr` with `leading` → `content` → `trailing` stacked in doc order; `.vms-list-row__trailing` drops `white-space: nowrap` so a `ChipListNode` in trailing wraps normally. Zero viewport breakpoints (P1 policy), zero wire change, additive — existing wide-column consumers unchanged.
+
+### Why this shipped
+
+Molly (Metis adoption, 2026-07-30) hit this on the incidents-page pretty-pass swap #7: `ListRowNode` with Avatar leading + string Primary/Secondary/Meta + `ChipListNode` trailing (3–4 tone-tinted chips per row) inside a Layout.Sidebar whose first-child was capped at 24rem — opening the detail pane narrowed the list column further and collapsed every row. She reverted swap #7 locally so Ashley could keep iterating on the rest of the pretty-pass.
+
+`ChipListNode` in a `trailing` slot is a legitimate use per the typed-slots pattern in `AGENTS.md` (§ Route B: "slots are typed by SEMANTIC NAME, not by node type — a slot called `trailing` accepts any ViewNode subtree"), so this was the composite's job to survive, not the app's job to work around. This was the "too-rigid recipe" failure mode of the design-of-record firing on the first real narrow-column consumer.
+
+### Verification
+
+- Recreated Molly's exact tree shape (Avatar + string P/S/Meta + ChipListNode with 3–4 tinted chips, tone-encoded state axis) in a tailnet A/B tasting page against the real shipped `BrowserAdapter`; Ashley eyeballed and signed off across the width-slider range (180–480px) and every shipped theme. Cross-validated against Molly's real Metis repro at prod-snapshot scale (1,887 open incidents, 200 ListRows / 416 chips per page).
+- Green-tree gate at release commit.
+
+Bounty: `listrow-narrow-collapse` (from Molly via relay DM).
+
+---
+
 ## NuGet `AshleyShrok.ViewModelShell.Markdown` 0.2.1 — 2026-07-30 — rebuild against VMS 8.0.0 core
 
 **NuGet Markdown companion:** `0.2.1` (patch, from `0.2.0`). Core NuGet `AshleyShrok.ViewModelShell` unchanged (stays at `8.0.0`); npm unchanged. **Consumer action required for anyone on VMS 8.x** — see below.
