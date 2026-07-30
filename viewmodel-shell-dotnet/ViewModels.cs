@@ -1071,9 +1071,15 @@ public record ListNode(
     // ListItem-only container (byte-identical to the pre-Phase-24 render).
     // Rows = a single-bordered-surface container accepting ONLY ListRowNode
     // children (tree-validator rejects mixed). Positional field appended at the
-    // END (zero-retype construction sites — same convention as CheckboxNode.
-    // Variant Phase 23). Nullable enum + WhenWritingNull per the file-header
-    // rule; matches the TS `variant?: "items" | "rows"` closed union.
+    // END. Nullable enum + WhenWritingNull per the file-header rule; matches
+    // the TS `variant?: "items" | "rows"` closed union.
+    // ⚠️ BINARY-BREAKING for pre-8.0.0 companion assemblies. The "zero-retype"
+    // reasoning only holds for IN-TREE source recompiles; a companion NuGet
+    // packed against pre-8.0.0 core has the 3-arg ctor baked into its IL and
+    // will throw MissingMethodException at first-real-use against 8.0.0+.
+    // Enforced by parity/check-companion-binary-compat.sh. See AGENTS.md
+    // "Conventions for evolving the framework" — every VMS core MAJOR bump
+    // requires a companion rebuild in the same session.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ListVariant? Variant = null
 ) : ViewNode;
 
@@ -1603,12 +1609,18 @@ public record TextNode(
     // 6.12.0 (TOOL-01) — hover-only info tooltip. See FieldNode.Tooltip.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null,
     // v8.0.0 (COMP-02) — type-weight axis, orthogonal to Style and Tone.
-    // Appended LAST (same "append-last for zero-retype construction sites" rule
-    // as Runs / Level / Tooltip above — every existing 1-/2-/3-/4-/5-/6-arg
-    // construction site is unaffected). PASS BY NAME (Weight: TextWeight.Medium).
+    // Appended LAST. PASS BY NAME (Weight: TextWeight.Medium).
     // Wire posture: WhenWritingNull => absent, NEVER "weight":null (gotcha #8).
     // Omitted = the framework default weight for the node's Style (400 for
     // body/muted/caption; the shipped style's own weight for heading/subheading).
+    // ⚠️ BINARY-BREAKING for pre-8.0.0 companion assemblies. Every prior
+    // Runs / Level / Tooltip append was safe IN-TREE (source recompile) but
+    // the same class of change breaks companion NuGets packed against the
+    // OLD arity: a Markdown 0.2.0 assembly's baked newobj still calls the
+    // 6-arg ctor and the 8.0.0 JIT raises MissingMethodException. Enforced
+    // by parity/check-companion-binary-compat.sh. See AGENTS.md "Conventions
+    // for evolving the framework" — every VMS core MAJOR bump requires a
+    // companion rebuild in the same session.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TextWeight? Weight = null
 ) : ViewNode
 {

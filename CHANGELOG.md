@@ -6,6 +6,41 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## NuGet `AshleyShrok.ViewModelShell.Markdown` 0.2.1 — 2026-07-30 — rebuild against VMS 8.0.0 core
+
+**NuGet Markdown companion:** `0.2.1` (patch, from `0.2.0`). Core NuGet `AshleyShrok.ViewModelShell` unchanged (stays at `8.0.0`); npm unchanged. **Consumer action required for anyone on VMS 8.x** — see below.
+
+### Consumer action required
+
+- **On VMS core `AshleyShrok.ViewModelShell >= 8.0.0`:** upgrade `AshleyShrok.ViewModelShell.Markdown` to `0.2.1`. 0.2.0 crashes at first-real-use with `MissingMethodException` because its baked IL references the pre-8.0.0 `TextNode` and `ListNode` ctors (see below).
+- **On VMS core `<= 7.x`:** stay on `0.2.0`. `0.2.1` pins `AshleyShrok.ViewModelShell >= 8.0.0` as its floor — NuGet will refuse to resolve it against a 7.x core, which is exactly right.
+
+### Why this shipped
+
+Amelia (Athena adoption via relay, 2026-07-30) hit a runtime `MissingMethodException` on the very first `MarkdownConverter.ToViewNodes` call — every text-emitting shape (paragraphs, headings, emphasis, blockquotes, task-list items) threw. Reflection confirmed the diagnosis: VMS 8.0.0's `TextNode` gained a 7th positional ctor parameter (`TextWeight? Weight`, COMP-02, commit `77609b7`) and `ListNode` gained a 4th (`ListVariant? Variant`, COMP-05a, commit `6e1b229`). Both are binary-breaking despite being source-compatible — a companion assembly's baked `newobj` opcode references the OLD ctor signature by exact-arity, and the JIT can't resolve it against the new core.
+
+Markdown 0.2.0 was compiled while core was at 7.0.0 (its .nuspec `<ProjectReference>` auto-pinned `>= 7.0.0`), so its published IL calls the 6-arg TextNode and 3-arg ListNode ctors. VMS 8.0.0 no longer offers either signature. Rebuilding against core 8.0.0 regenerates the ctor calls with the current arities and re-pins the nuspec floor to `>= 8.0.0`. Fixes both crash sites in one rebuild — no source changes to `MarkdownConverter.cs`.
+
+### Why the miss
+
+Three overlapping gaps, all mine:
+
+1. **The maintainer-rule comments on TextNode and ListNode were wrong in scope.** They reasoned about the trailing-positional-append convention purely in terms of in-tree source-call-site retype cost — true for internal recompiles, silent on downstream binary compatibility.
+2. **No CI step exercised packed companion IL against a packed core.** The framework, Markdown, and demo Tests all reach the core via `<ProjectReference>` (source rebuild), so the exact class of bug Amelia hit was structurally invisible to CI.
+3. **No fleet convention required companion rebuilds on core majors.** Markdown 0.2.0 was left alone through the 8.0.0 ship; its nuspec `>= 7.0.0` let NuGet resolve it alongside 8.0.0 with no complaint, deferring the crash to first-real-use.
+
+**All three fixed in this ship:**
+- Maintainer rule promoted to `AGENTS.md` (Conventions for evolving the framework): on any VMS core MAJOR bump, every companion NuGet is rebuilt + republished with a bumped floor in the same session. Positional-record-ctor changes are binary-breaking regardless of default values.
+- New CI gate `parity/check-companion-binary-compat.sh` (wired into `.github/workflows/parity.yml` as "Companion NuGet binary-compat"). Packs core + every companion csproj from source, installs both from a local NuGet feed into a throwaway consumer, and constructs one of every node the companion builds. Any `MissingMethodException` fails the build. Discovery-based: adding a new companion csproj carrying a `ProjectReference` to core covers it automatically. Verified RED against Markdown 0.2.0 vs core 8.0.0 (reproduces Amelia's exact exception) and GREEN against 0.2.1 vs 8.0.0.
+
+### Green-tree at release commit
+
+- vitest 1250 passed / 1 skipped (78 files) · check:core-globals · check:demo-types (21 projects) · framework .NET Tests 428 · Markdown Tests 34 · all 5 demo Tests projects (33+28+39+30+61 = 191) · `bun run parity/run.ts` all backends agree · new companion-binary-compat gate green (7 distinct node types constructed, all required ctors resolved).
+
+Bounty: `markdown-binary-compat-8x` (self-discovered from Amelia's relay DM).
+
+---
+
 ## v8.0.0 — 2026-07-30
 
 ### Added

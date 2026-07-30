@@ -151,3 +151,16 @@ jobs:
 
       - name: Run cross-backend parity tests
         run: cd parity && bun run run.ts
+
+      - name: Companion NuGet binary-compat
+        # Packs core + every companion csproj under viewmodel-shell-dotnet/*/
+        # from source, installs both from a local NuGet feed into a throwaway
+        # consumer, and constructs one of every node the companion builds.
+        # Closes the invisible-to-CI hole where a companion NuGet packed
+        # against core vN silently crashes with MissingMethodException on a
+        # consumer that installs core v(N+1) — because in-tree Tests all
+        # source-rebuild via ProjectReference and never see packed IL. This
+        # gate is the first thing that actually exercises packed IL against a
+        # packed core. Discovery-based: a new companion csproj carrying a
+        # ProjectReference to the core is covered automatically.
+        run: bash parity/check-companion-binary-compat.sh
