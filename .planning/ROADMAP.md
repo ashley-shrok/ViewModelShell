@@ -440,3 +440,40 @@ Plans:
 - [x] 26-04-PLAN.md — CHANGELOG/MIGRATION heading finalize + aligned version bump to 8.0.0 (wave 3, depends on 26-03)
 - [x] 26-05-PLAN.md — Operator publish + tag v8.0.0 + advance main (wave 4, depends on 26-04)
 - [x] 26-06-PLAN.md — Announce on #vms-changelog + phase SUMMARY (wave 5, depends on 26-05)
+
+### Phase 27: Composite state axis uniformity — close the state? gap across all composites, unify --active styling (STYLE-3: left accent + bold primary)
+
+**Goal:** Close the framework's `state?: string` axis gap uniformly across all composites, and unify the shipped `--active` styling to a single rule set (STYLE-3: `border-left: 3px solid var(--vms-accent) + font-weight: 600` on the composite's semantic primary text slot). Two moving parts: (a) add `state?: string` to the 6 composites currently missing it (UserRowNode, MessageNode, DetailRowNode, TimelineEntryNode, SettingRowNode, ChipNode) — both backends byte-identical; (b) unify the shipped `--active` CSS rule across the 3 composites that already have `state?` — REPLACE ListItem + ListRow's shipped `--active` rules with STYLE-3 (documented visual change; MIGRATION.md flags), add TableRow's first-time shipped `--active` rule. ChipNode ships the wire field for uniformity but ships NO shipped `--active` rule (deferred per composite-nodes-layer.md — Chip's tinted-pill shape doesn't map to STYLE-3's border-left + bold-primary convention). Also ships `--done`/`--disabled` opacity rules on the 6 new composites per ListRow precedent. Aligned MINOR release npm + NuGet 8.1.0.
+
+**Requirements:** STATE-AXIS-TS, STATE-AXIS-DOTNET, STATE-AXIS-EMIT, STATE-AXIS-CSS-UNIFY, STATE-AXIS-VITEST, STATE-AXIS-DOTNET-TESTS, STATE-AXIS-PARITY, STATE-AXIS-VERIFICATION-PAGE, STATE-AXIS-GREEN-TREE-GATE, STATE-AXIS-DOCS, STATE-AXIS-RELEASE
+
+**Depends on:** Phase 26 (v8.0.0 shipped; 8.0.x baseline)
+
+**Success Criteria** (what must be TRUE):
+  1. `state?: string` field present on all 6 target composite interfaces in `viewmodel-shell/src/index.ts` with mirrored TSDoc.
+  2. Matching `State` trailing-append parameters on all 6 .NET records in `viewmodel-shell-dotnet/ViewModels.cs` with `[JsonIgnore(WhenWritingNull)]` per gotcha #8.
+  3. 6 new BEM class emission sites in `viewmodel-shell/src/browser.ts`, one per composite (`.vms-{composite}--{state}`).
+  4. Unified STYLE-3 `--active` rules across 7 composites (ListItem REPLACED, TableRow NET-NEW, ListRow REPLACED, plus UserRow, Message, DetailRow, SettingRow), plus Timeline per pixel-geometry decision (STYLE-3 default, STYLE-6 fallback if collision); ChipNode ships NO `--active` rule (deferred, documented).
+  5. `--done` + `--disabled` opacity rules landed on the 6 new composites per ListRow precedent (opacity 0.72 / 0.55).
+  6. Consolidated vitest coverage: `test/composite-state-axis.test.ts` asserts BEM emission + STYLE-3 CSS effect + Chip guardrail + Message role×state composition + ListItem/ListRow regression on the visual change.
+  7. Consolidated .NET serialization tests: `Tests/CompositeStateAxisSerializationTests.cs` proves WhenWritingNull round-trip on all 6 new State params + class-2 findNulls defense + arbitrary-state round-trip.
+  8. FeatureProbe fixture extended in all 3 backends (Bun handler, Node server, .NET controller) with `state:"active"` on each of the 6 new composites; `parity/fixtures/feature-probe.json` gains per-composite tripwires + Phase-27 `$comment` sentence. `bun run parity/run.ts` green.
+  9. Comprehensive tailnet verification page (`demo/StateAxisVerification-bun/`) served on 100.113.23.63:3020 with 2×9 grid × 13-theme switcher × real bundle; Ashley visual sign-off recorded; before/after screenshots saved for MIGRATION.md.
+ 10. Full green-tree gate green per AGENTS.md: framework vitest + core-globals + demo-types + AA-contrast + parity + `viewmodel-shell-dotnet/Tests` + every `demo/**/*.Tests.csproj` + Markdown companion compile check.
+ 11. Docs shipped: CHANGELOG.md v8.1.0 section (Added / Changed / Note); MIGRATION.md upgrade section with before/after visual references; AGENTS.md "Route B composite-nodes layer" inventory gains Phase 27 note.
+ 12. Aligned MINOR release npm 8.0.3 → 8.1.0 + NuGet 8.0.0 → 8.1.0; operator-gated auth precheck + publish; annotated tag `v8.1.0` at release commit + pushed; `git merge-base --is-ancestor v8.1.0 main` verified; announced on `#vms-changelog` (`!E211RrsKCygK7Ev6uacpswousKy9JZiGEVLquJpC3cU`); Angel DM'd that composition-swap unblocks.
+
+**Plans:** 1/11 plans executed
+
+Plans:
+- [x] 27-01-PLAN.md — TS wire additions: state?: string on 6 composite interfaces in index.ts (wave 1)
+- [ ] 27-02-PLAN.md — .NET twin: State trailing-append on 6 records in ViewModels.cs with WhenWritingNull (wave 1, file-disjoint from 27-01)
+- [ ] 27-03-PLAN.md — browser.ts renderer emission: 6 new BEM state-class push sites (wave 2, depends on 27-01)
+- [ ] 27-04-PLAN.md — default.css unification pass: REPLACE ListItem + ListRow --active, add TableRow --active net-new, add 5 new composite --active + 6 --done/--disabled opacity rules (wave 3, depends on 27-01 + 27-03)
+- [ ] 27-05-PLAN.md — Consolidated vitest coverage (composite-state-axis.test.ts) for all 8 composites + Chip guardrail + regression cases (wave 4, depends on 27-03 + 27-04)
+- [ ] 27-06-PLAN.md — Consolidated .NET serialization tests (CompositeStateAxisSerializationTests.cs) for 6 new State params + findNulls defense (wave 4, depends on 27-02)
+- [ ] 27-07-PLAN.md — Parity fixture extension: FeatureProbe 3-backend state:"active" emissions + expectBodyContains tripwires + $comment (wave 5, depends on 27-01/02/03/05/06)
+- [ ] 27-08-PLAN.md — Tailnet verification page (demo/StateAxisVerification-bun/) + Ashley visual sign-off + before/after screenshots (wave 6, depends on 27-04 + 27-05)
+- [ ] 27-09-PLAN.md — Full green-tree gate: framework vitest + core-globals + demo-types + AA-contrast + parity + all .NET Tests + Markdown companion compile (wave 7, depends on 27-07 + 27-08)
+- [ ] 27-10-PLAN.md — Docs: CHANGELOG.md v8.1.0 + MIGRATION.md upgrade section + AGENTS.md inventory note (wave 8, depends on 27-09)
+- [ ] 27-11-PLAN.md — Operator-gated release: version bump + auth precheck + npm publish + NuGet publish + tag v8.1.0 + advance main + announce #vms-changelog (wave 9, depends on 27-10)
