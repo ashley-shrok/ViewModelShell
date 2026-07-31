@@ -1217,6 +1217,20 @@ function buildVm(state: FeatureProbeState): ViewNode {
               { type: "button", label: "OK", action: { name: "message-noop-1" } },
             ],
           },
+          // Phase 27-07: state:"active" state-probe message. Unique author
+          // string anchors the per-composite tripwire (`message-state-probe`).
+          // Composes multiplicatively with role:"assistant" per Plan 27-01
+          // TSDoc annotation (no cascade collision: `.vms-message--assistant`
+          // tints surface, `.vms-message--active` paints left-accent border).
+          {
+            type: "message",
+            author: "message-state-probe",
+            timestamp: "2:16 PM",
+            content: { type: "text", value: "Probing state:\"active\" on MessageNode.", style: "body" },
+            avatar: { type: "avatar", initials: "SP", tone: "info" },
+            role: "assistant",
+            state: "active",
+          },
         ],
       },
       // ── COMP-07 AlertNode (per tone + dismissible) ────────
@@ -1295,6 +1309,19 @@ function buildVm(state: FeatureProbeState): ViewNode {
         status: { label: "Online", kind: "online" },
         action: { name: "user-row-open-jd" },
       },
+      // ── Phase 27-07: state:"active" state-probe instance ──────────
+      // Per-composite dedicated probe (unique identifier) so the parity
+      // fixture's expectBodyContains can trip on `user-row-state-probe`
+      // AND the field emission is provably exercised on THIS composite
+      // (not merely on some OTHER state-carrying composite in the tree).
+      // Banked lesson AGENTS.md "know what a diff can and cannot prove":
+      // a per-composite tripwire binds each backend's emission independently.
+      {
+        type: "user-row",
+        name: { type: "text", value: "State Probe", style: "body", weight: "medium" },
+        action: { name: "user-row-state-probe" },
+        state: "active",
+      },
       // ── COMP-10 + 10a DetailListNode with DetailRowNodes + labelWidth ──
       {
         type: "detail-list",
@@ -1303,6 +1330,9 @@ function buildVm(state: FeatureProbeState): ViewNode {
           { type: "detail-row", label: "Status",     value: { type: "text", value: "Open", style: "body" } },
           { type: "detail-row", label: "Assignee",   value: { type: "text", value: "Jane Dougherty", style: "body" } },
           { type: "detail-row", label: "Deleted",    value: { type: "text", value: "purged 2h ago", style: "body" }, tone: "danger" },
+          // Phase 27-07: state:"active" state-probe row. Unique label anchors
+          // the per-composite tripwire (`detail-row-state-probe`).
+          { type: "detail-row", label: "detail-row-state-probe", value: { type: "text", value: "on", style: "body" }, state: "active" },
         ],
       },
       // ── COMP-11 + 11a TimelineNode with TimelineEntryNodes covering tones ──
@@ -1312,6 +1342,9 @@ function buildVm(state: FeatureProbeState): ViewNode {
           { type: "timeline-entry", time: "2:47 PM", description: { type: "text", value: "Incident opened", style: "body" }, tone: "danger" },
           { type: "timeline-entry", time: "2:49 PM", description: { type: "text", value: "Acknowledged by Jane", style: "body" }, tone: "warning" },
           { type: "timeline-entry", time: "2:58 PM", description: { type: "text", value: "Rollback verified", style: "body" }, tone: "success" },
+          // Phase 27-07: state:"active" state-probe entry. Unique description
+          // text anchors the per-composite tripwire (`timeline-entry-state-probe`).
+          { type: "timeline-entry", time: "3:00 PM", description: { type: "text", value: "timeline-entry-state-probe", style: "body" }, state: "active" },
         ],
       },
       // ── COMP-12 + 12a SettingListNode with SettingRowNodes ─────────
@@ -1332,6 +1365,14 @@ function buildVm(state: FeatureProbeState): ViewNode {
             description: { type: "text", value: "A Monday-morning summary of the past week.", style: "muted" },
             trailing: { type: "button", label: "Configure", action: { name: "setting-row-configure-digest" } },
           },
+          // Phase 27-07: state:"active" state-probe row. Unique action name
+          // anchors the per-composite tripwire (`setting-row-state-probe`).
+          {
+            type: "setting-row",
+            label: { type: "text", value: "State probe setting", style: "body", weight: "medium" },
+            trailing: { type: "button", label: "Probe", action: { name: "setting-row-state-probe" } },
+            state: "active",
+          },
         ],
       },
       // ── COMP-13 + 13a ChipListNode with ChipNodes ─────────────────
@@ -1344,6 +1385,12 @@ function buildVm(state: FeatureProbeState): ViewNode {
           { type: "chip", label: "warning",  tone: "warning" },
           { type: "chip", label: "clickme",  action: { name: "chip-toggle-tag-clickme" } },
           { type: "chip", label: "both",     tone: "info", action: { name: "chip-toggle-tag-both" }, dismissAction: { name: "chip-remove-tag-both" } },
+          // Phase 27-07: state:"active" state-probe chip. Unique label
+          // anchors the per-composite tripwire (`chip-state-probe`).
+          // NOTE: framework ships NO --active rule for Chip (deferred per
+          // Phase 27 CONTEXT §Out-of-scope); the field crosses the wire
+          // for uniformity per the typed-slots pattern.
+          { type: "chip", label: "chip-state-probe", state: "active" },
         ],
       },
     ],
