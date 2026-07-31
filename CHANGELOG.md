@@ -6,6 +6,29 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 8.1.0 — <YYYY-MM-DD> (npm + NuGet aligned)
+
+Milestone: **composite state axis uniformity**. The framework's `state?: string` axis is now uniformly shipped across all row/composite types (9 total including `ChipNode` which carries the field but ships no `--active` rule), and the shipped `--active` rendering is unified to STYLE-3 (left-border accent + weight:600 on the composite's semantic primary text slot). See `.planning/design/composite-nodes-layer.md` §3 for the axis + typed-slots convention this closes; Phase 27 in `.planning/ROADMAP.md`.
+
+### Added
+
+- **`state?: string` wire field on 6 composites (both backends)** — `UserRowNode`, `MessageNode`, `DetailRowNode`, `TimelineEntryNode`, `SettingRowNode`, `ChipNode`. Freeform, optional, absent when unset (`[JsonIgnore(WhenWritingNull)]` on the .NET side per gotcha #8). Framework ships CSS for `active` on all 5 non-Chip additions (STYLE-3) plus `done`/`disabled` opacity per composite (per shipped `ListRowNode` precedent — see Note re Chip). Unrecognized values render an unstyled `.vms-{composite}--{state}` class (still round-trips).
+- **`.vms-table__row--active` CSS rule** — TableRow's `state?` was previously emitted by the renderer (`browser.ts` string concatenation) but had no shipped rule; ships now as **border-only** STYLE-3 (`border-left: 3px solid var(--vms-accent)`; no `font-weight: 600` sibling rule per §Slot mapping — table rows have no semantic primary text slot). Not a visual regression: consumers who never set `state:"active"` on `TableRow` before see zero effect; consumers who did set it now see the shipped border-left affordance instead of the pre-Phase-27 unstyled render.
+- **`--done` (opacity 0.72) + `--disabled` (opacity 0.55) rules on 6 new composites** — `.vms-{message,user-row,detail-row,timeline-entry,setting-row,chip}--done` and `--disabled` opacity rules mirror the shipped `ListRowNode` precedent at `default.css:1188-1189`, extending lifecycle-vocabulary uniformity across the row/composite family. Ashley picked `ship` at Plan 27-04 rather than defer these to a follow-up phase.
+
+### Changed
+
+- **`.vms-list-item--active` CSS rule REPLACED** with STYLE-3 (was: `border-color: var(--vms-accent); background: var(--vms-accent-glow);`; now: `border-left: 3px solid var(--vms-accent); padding-left: calc(var(--vms-space-md) - 3px);` — no `font-weight: 600` sibling rule because the `ListItem` renderer emits no dedicated primary-text slot class). Consumers who set `state:"active"` on `ListItemNode` see a visual change — see MIGRATION.md v8.1.0 for the before/after.
+- **`.vms-list-row--active` CSS rule REPLACED** with STYLE-3 (was: `background: var(--vms-accent-glow);`; now: `border-left-color: var(--vms-accent);` — reuses the base rule's pre-existing `border-left: 3px solid transparent` from Phase 24's tone-axis mechanism; ships companion `.vms-list-row--active .vms-list-row__primary { font-weight: 600; }` on the semantic primary slot). Consumers who set `state:"active"` on `ListRowNode` see a visual change — see MIGRATION.md v8.1.0 for the before/after.
+
+### Note
+
+- **`ChipNode` ships the `state?` field but NO shipped `--active` rule** — intentionally out-of-scope per `.planning/design/composite-nodes-layer.md` and Phase 27 CONTEXT §Out-of-scope (Chip's tinted-pill shape doesn't map to STYLE-3's border-left + bold-primary convention; the pill IS the primary). Setting `state:"active"` on a chip emits the `.vms-chip--active` class but the class carries no shipped rule; the chip renders identically to its no-state form. Ashley confirmed this omission verbatim at the Phase 27 verification page ("okay that's fine"). Chip's `--done` and `--disabled` opacity rules DO ship (per bullet above). A later release can design Chip's shipped `--active` when the use case surfaces. An inline CSS comment at the composite's rule block in `default.css` records the rationale for future maintainers reading the stylesheet.
+- **Wire protocol token stays `viewmodel-shell/1.0`** — all wire additions are additive optional fields.
+- **MINOR bump** — no wire break; no consumer required to change code. Consumers who currently don't set `state:"active"` on `ListItemNode` or `ListRowNode` see zero effect. Companion NuGet (`viewmodel-shell-dotnet/Markdown`) compile-verified against 8.1.0 headers; no republish required (MINOR core bump, not MAJOR, so AGENTS.md's "major bump = companion rebuild storm" rule does not fire).
+
+---
+
 ## npm 8.0.3 — 2026-07-30 — ListRowNode standalone CQ scope — wrap standalone rows in outer container-type element
 
 **npm `@ashley-shrok/viewmodel-shell`:** `8.0.3` (patch, from `8.0.2`). NuGet `AshleyShrok.ViewModelShell` unchanged (stays at `8.0.0`). **CSS + renderer — no wire change. One consumer-visible DOM emission delta (see MIGRATION note below).**
