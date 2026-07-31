@@ -1298,6 +1298,7 @@ export class BrowserAdapter implements Adapter {
     const el: HTMLElement = document.createElement(isInList ? "li" : "div");
     const cls = ["vms-user-row"];
     if (!isInList) cls.push("vms-user-row-standalone");
+    if (n.state) cls.push(`vms-user-row--${n.state}`);
     if (n.action) cls.push("vms-user-row--clickable");
     // PLAN-CHECKER FIX #1: trailing slot needs a dedicated grid cell. Emit
     // .vms-user-row--has-trailing when present so the CSS switches from
@@ -1457,6 +1458,7 @@ export class BrowserAdapter implements Adapter {
     const row = document.createElement("div");
     const cls = ["vms-detail-row"];
     if (n.tone) cls.push(`vms-detail-row--${n.tone}`);
+    if (n.state) cls.push(`vms-detail-row--${n.state}`);
     row.className = cls.join(" ");
 
     const dt = document.createElement("dt");
@@ -1531,6 +1533,7 @@ export class BrowserAdapter implements Adapter {
     const li = document.createElement("li");
     const cls = ["vms-timeline-entry"];
     if (n.tone) cls.push(`vms-timeline-entry--${n.tone}`);
+    if (n.state) cls.push(`vms-timeline-entry--${n.state}`);
     li.className = cls.join(" ");
 
     // time — always string, always caption-tier trained typography (COMP-01)
@@ -1620,6 +1623,7 @@ export class BrowserAdapter implements Adapter {
   private settingRow(n: SettingRowNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
     const li = document.createElement("li");
     const cls = ["vms-setting-row"];
+    if (n.state) cls.push(`vms-setting-row--${n.state}`);
     if (n.action) cls.push("vms-setting-row--clickable");
     li.className = cls.join(" ");
 
@@ -1738,6 +1742,7 @@ export class BrowserAdapter implements Adapter {
     const span = document.createElement("span");
     const cls = ["vms-chip"];
     if (n.tone) cls.push(`vms-chip--${n.tone}`);
+    if (n.state) cls.push(`vms-chip--${n.state}`);
     if (n.action) cls.push("vms-chip--clickable");
     span.className = cls.join(" ");
     span.setAttribute("role", "listitem");
@@ -1796,6 +1801,7 @@ export class BrowserAdapter implements Adapter {
     const wrap = document.createElement("div");
     const cls = ["vms-message"];
     if (n.role) cls.push(`vms-message--${n.role}`);
+    if (n.state) cls.push(`vms-message--${n.state}`);
     wrap.className = cls.join(" ");
 
     // Avatar column — auto-sized (matches AvatarNode's size). The column
