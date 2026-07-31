@@ -2244,7 +2244,11 @@ public record MessageNode(
     // UNCONDITIONALLY when non-empty; no hover-reveal (banked a11y doctrine).
     // The renderer + walker cast entries to ButtonNode; a non-button entry
     // is currently unspec-behavior, matching the FormNode.Buttons contract.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Actions = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ViewNode>? Actions = null,
+    // Message lifecycle STATE (NOT role — that's Role for surface tint).
+    // Framework ships active/done/disabled; composes multiplicatively with Role.
+    // Emits .vms-message--{state}.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? State = null
 ) : ViewNode;
 
 /// <summary>v8.0.0 (COMP-06a) — MessageListNode. Container for MessageNode
@@ -2410,7 +2414,10 @@ public record UserRowNode(
     // Whole-row click (member-picker pattern). Same shape as ListRowNode.Action —
     // dispatch-bearing ActionDescriptor participating in name-uniqueness (Collect
     // walker records it via the ViewTreeValidation.Collect arm).
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null,
+    // Row lifecycle STATE (NOT severity — user rows have no tone axis).
+    // Freeform token; framework ships active/done/disabled. Emits .vms-user-row--{state}.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? State = null
 ) : ViewNode;
 
 /// <summary>v8.0.0 (COMP-10) — DetailRowNode. Aligned key-value display recipe
@@ -2466,7 +2473,10 @@ public record DetailRowNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
     // Optional leading icon inside the <dt>, before the label text.
     // Reuses Phase 22 v7.0 IconName closed enum.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null,
+    // Row lifecycle STATE (NOT severity — that's Tone). Freeform token;
+    // framework ships active/done/disabled. Emits .vms-detail-row--{state}.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? State = null
 ) : ViewNode;
 
 /// <summary>v8.0.0 (COMP-10a) — DetailListNode. Container for DetailRowNode
@@ -2572,7 +2582,11 @@ public record TimelineEntryNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
     // Optional icon inside the dot slot (larger dot). Reuses Phase 22 v7.0
     // IconName closed enum.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IconName? Icon = null,
+    // Entry lifecycle STATE (NOT severity — that's Tone). Freeform token;
+    // framework ships active/done/disabled. Emits .vms-timeline-entry--{state}.
+    // Composes with the shipped ::before rail-dot mechanism (see default.css).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? State = null
 ) : ViewNode;
 
 /// <summary>v8.0.0 (COMP-11a) — TimelineNode. Container for TimelineEntryNode
@@ -2663,7 +2677,11 @@ public record SettingRowNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? Trailing = null,
     // Whole-row click (opt-in). Same shape as ListRowNode.Action.
     // WhenWritingNull → absent when null.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null,
+    // Row lifecycle STATE (NOT severity — setting rows have no tone axis).
+    // Freeform token; framework ships active/done/disabled.
+    // Emits .vms-setting-row--{state}.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? State = null
 ) : ViewNode;
 
 /// <summary>v8.0.0 (COMP-12a) — SettingListNode. Container for
@@ -2732,7 +2750,11 @@ public record ChipNode(
     // AlertNode.Dismissible. Chip needs identity-carrying dispatch.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? DismissAction = null,
     // Whole-chip click (filter-chip toggle pattern). Same shape as ListRowNode.Action.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? Action = null,
+    // Chip lifecycle STATE (NOT severity — that's Tone). Freeform token;
+    // framework ships NO --active rule for Chip (deferred, see design of
+    // record); field exists for wire uniformity. Emits .vms-chip--{state}.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? State = null
 ) : ViewNode;
 
 // v8.0.0 (COMP-13a) — ChipListNode. Container for ChipNode children — the
