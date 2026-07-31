@@ -6,7 +6,7 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
-## 8.1.0 — <YYYY-MM-DD> (npm + NuGet aligned)
+## 8.1.0 — 2026-07-30 (npm + NuGet aligned)
 
 Milestone: **composite state axis uniformity**. The framework's `state?: string` axis is now uniformly shipped across all row/composite types (9 total including `ChipNode` which carries the field but ships no `--active` rule), and the shipped `--active` rendering is unified to STYLE-3 (left-border accent + weight:600 on the composite's semantic primary text slot). See `.planning/design/composite-nodes-layer.md` §3 for the axis + typed-slots convention this closes; Phase 27 in `.planning/ROADMAP.md`.
 
