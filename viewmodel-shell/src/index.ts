@@ -1709,6 +1709,17 @@ export interface MessageNode {
    *  Actions are ALWAYS VISIBLE when present (no hover-reveal — banked
    *  a11y doctrine). Omitted or empty array hides the bar entirely. */
   actions?: ButtonNode[];
+  /** Message lifecycle STATE (NOT severity — no `tone` axis on Message;
+   *  `role` drives surface tint, `state` drives lifecycle). Freeform,
+   *  app-extensible token; the framework ships styling for `active`,
+   *  `done`, `disabled`. Appended as a BEM modifier: `.vms-message--{state}`.
+   *  An unrecognized state renders an unstyled class (it still round-trips;
+   *  just no shipped rule). Composes MULTIPLICATIVELY with the shipped
+   *  `.vms-message--{role}` classes on the same wrapper `<div>` — the two
+   *  BEM modifiers stack (`.vms-message--assistant.vms-message--active`)
+   *  with no cascade collision (role tints the content surface; state
+   *  paints a left-accent border on the wrapper). Orthogonal to `role`. */
+  state?: string;
 }
 
 /**
@@ -1895,6 +1906,15 @@ export interface UserRowNode {
   /** Optional trailing slot — extra actions or badge. Any ViewNode. Rendered
    *  between the content and status columns when both are present. */
   trailing?: ViewNode;
+  /** User-row lifecycle STATE (NOT severity — Message-style; UserRow has no
+   *  `tone` axis, `status` drives the online/away/offline/busy dot).
+   *  Freeform, app-extensible token; the framework ships styling for
+   *  `active`, `done`, `disabled`. Appended as a BEM modifier:
+   *  `.vms-user-row--{state}`. An unrecognized state renders an unstyled
+   *  class (it still round-trips; just no shipped rule). Orthogonal to
+   *  `status` (the status dot is an independent axis — a user row can be
+   *  `state:"active"` AND `status:{kind:"away"}` simultaneously). */
+  state?: string;
   /** Whole-row click (member-picker pattern). Same shape as ListRowNode.action —
    *  `role="button"`, `tabIndex=0`, Enter/Space dispatch, aria-label from
    *  flattened name+meta text. Interactive descendants `stopPropagation`. */
@@ -1956,6 +1976,14 @@ export interface DetailRowNode {
    *  `.vms-detail-row--{tone}` on the row `<div>`). Reuses shipped Phase 23
    *  tone palette. Closed union. Omitted = neutral text (no modifier). */
   tone?: "danger" | "warning" | "success" | "info";
+  /** Detail-row lifecycle STATE (NOT severity — that's `tone`). Freeform,
+   *  app-extensible token; the framework ships styling for `active`, `done`,
+   *  `disabled` (mirrors ListRowNode.state). Appended as a BEM modifier:
+   *  `.vms-detail-row--{state}`. An unrecognized state renders an unstyled
+   *  class (it still round-trips; just no shipped rule). Orthogonal to
+   *  `tone` (a row can be `state:"active"` AND `tone:"warning"` — one paints
+   *  a left-accent border on the wrapper, the other tints the value text). */
+  state?: string;
   /** Optional leading icon inside the `<dt>` (before the label text).
    *  Reuses Phase 22 v7.0 `IconName` closed union; renders at `sm` size. */
   icon?: IconName;
@@ -2046,6 +2074,20 @@ export interface TimelineEntryNode {
    *  `.vms-timeline-entry--{tone}` on the row `<li>`). Reuses shipped Phase 23
    *  tone palette. Closed union. Omitted = default accent border. */
   tone?: "danger" | "warning" | "success" | "info";
+  /** Timeline-entry lifecycle STATE (NOT severity — that's `tone`). Freeform,
+   *  app-extensible token; the framework ships styling for `active`, `done`,
+   *  `disabled` (mirrors ListRowNode.state). Appended as a BEM modifier:
+   *  `.vms-timeline-entry--{state}`. An unrecognized state renders an
+   *  unstyled class (it still round-trips; just no shipped rule).
+   *  Orthogonal to `tone`. **Interaction with the shipped `::before` rail +
+   *  per-entry dot mechanism** (see TimelineNode above): the `--active`
+   *  left-border approach may collide with the entry's own `::before` dot
+   *  positioned at `-1.5rem` on the rail. Plan 27-04 resolves whether
+   *  STYLE-3 (border-left) survives that geometry, or whether Timeline falls
+   *  back to a bg-tint variant of `--active` (STYLE-6, kept only for
+   *  Timeline). No behavior change from THIS wire-shape addition — the
+   *  interaction is a CSS-only concern. */
+  state?: string;
   /** Optional icon inside the dot slot (larger dot). Reuses Phase 22 v7.0
    *  `IconName` closed union; renders at `sm` size. */
   icon?: IconName;
@@ -2142,6 +2184,15 @@ export interface SettingRowNode {
    *  `ButtonNode`, `LinkNode`. Vertically centered against the
    *  label+description stack via grid `align-items: center`. */
   trailing?: ViewNode;
+  /** Setting-row lifecycle STATE (SettingRow has no `tone` axis — its trailing
+   *  control carries the semantic weight). Freeform, app-extensible token;
+   *  the framework ships styling for `active`, `done`, `disabled` (mirrors
+   *  ListRowNode.state). Appended as a BEM modifier:
+   *  `.vms-setting-row--{state}`. An unrecognized state renders an unstyled
+   *  class (it still round-trips; just no shipped rule). Common use:
+   *  `state:"active"` for "this setting is currently highlighted" (jumped-to
+   *  from a search result / anchored deep link). */
+  state?: string;
   /** Whole-row click (opt-in). Same shape as ListRowNode.action —
    *  `role="button"`, `tabIndex=0`, Enter/Space dispatch, aria-label from
    *  flattened body text. Interactive descendants (buttons, checkboxes,
@@ -2228,6 +2279,19 @@ export interface ChipNode {
   label: string;
   /** Tinted-pill color palette. Neutral (accent-tinted) if omitted. */
   tone?: "danger" | "warning" | "success" | "info";
+  /** Chip lifecycle STATE (NOT severity — that's `tone`). Freeform,
+   *  app-extensible token; appended as a BEM modifier:
+   *  `.vms-chip--{state}`. **The framework ships NO `--active` rule for
+   *  Chip** — STYLE-3's "left-border + bold primary text" active affordance
+   *  doesn't map to a tinted-pill shape (chips have no border-left
+   *  convention, and the pill IS the primary). This field ships for wire
+   *  uniformity per the typed-slots pattern (composite-nodes-layer.md §3)
+   *  and future extensibility; unrecognized values including `"active"`
+   *  render an unstyled `.vms-chip--{state}` class (still round-trips).
+   *  A follow-up phase can design Chip's shipped `--active` when the use
+   *  case surfaces — deferred per Phase 27 CONTEXT §Out-of-scope.
+   *  Orthogonal to `tone`. */
+  state?: string;
   /** Optional leading icon. Reuses v7.0 IconName closed union. */
   icon?: IconName;
   /** Dismiss X button — CALLER-SUPPLIED ActionEvent (identity-carrying:
