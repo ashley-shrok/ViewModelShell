@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Agent discoverability — this is a ViewModel Shell app (GET-only, static). -->
+  <meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/1.0","endpoint":"/api/probe/tree","actionEndpoint":"/api/probe/tree"}'>
+  <!-- Page marker — the smoke-test greps for this string to confirm a 200. -->
+  <meta name="page" content="state-axis-verification">
+  <title>Phase 27 state axis verification — Tailnet sign-off</title>
+
+  <!-- The REAL shipped default.css served verbatim by server.ts from
+       viewmodel-shell/styles/default.css. Always loaded (light baseline). -->
+  <link rel="stylesheet" href="/vms/default.css" />
+
+  <!-- Dynamic theme layer — a themeless "Default" starts empty (data URL that
+       parses as valid CSS). The theme switcher below rewrites the href to
+       /vms/themes/<name>.css. Layered AFTER default.css so `:root` overrides
+       take effect. -->
+  <link rel="stylesheet" id="theme-css" href="data:text/css,%2F*%20themeless%20default%20*%2F" />
+</head>
+<body>
+  <!-- Theme switcher (host-chrome; NOT part of the view tree). Populated at
+       runtime from /api/themes so the option list matches
+       viewmodel-shell/styles/themes/ verbatim (the dir CAN'T go stale). No
+       app-level stylesheet-block anywhere in this file; the toolbar's inline
+       style attributes are a bare minimum for the host-chrome affordance to
+       be visible above the mounted VMS tree. -->
+  <div style="display:flex;gap:.75rem;align-items:center;padding:.75rem 1rem;border-bottom:1px solid #8884;font:14px system-ui,sans-serif;flex-wrap:wrap;">
+    <strong>Theme:</strong>
+    <select id="theme-select" style="font:inherit;padding:.25rem .5rem;">
+      <option value="__default__">Default (no theme override)</option>
+    </select>
+    <span id="theme-name" style="opacity:.7;">Default</span>
+  </div>
+
+  <div id="app"></div>
+
+  <script>
+    // Populate the theme switcher from /api/themes so the option list is
+    // never out of sync with viewmodel-shell/styles/themes/. Then wire the
+    // change handler to swap the #theme-css <link> href.
+    (function () {
+      var themeLink = document.getElementById("theme-css");
+      var select = document.getElementById("theme-select");
+      var label = document.getElementById("theme-name");
+
+      // Fetch the enumerated theme list from the server (which reads the
+      // directory at startup — single source of truth).
+      fetch("/api/themes")
+        .then(function (r) { return r.json(); })
+        .then(function (payload) {
+          (payload.themes || []).forEach(function (name) {
+            var opt = document.createElement("option");
+            opt.value = name;
+            opt.textContent = name;
+            select.appendChild(opt);
+          });
+        })
+        .catch(function () {
+          // Non-fatal — the switcher just stays with only "Default".
+        });
+
+      select.addEventListener("change", function () {
+        var picked = select.value;
+        if (picked === "__default__") {
+          themeLink.setAttribute("href", "data:text/css,%2F*%20themeless%20default%20*%2F");
+          label.textContent = "Default";
+        } else {
+          themeLink.setAttribute("href", "/vms/themes/" + picked + ".css");
+          label.textContent = picked;
+        }
+      });
+    })();
+  </script>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
