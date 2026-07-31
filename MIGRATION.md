@@ -6,6 +6,92 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to v8.1.0
+
+**NO CODE CHANGE required.** v8.1.0 is CSS-only + additive wire fields. Consumers
+who currently don't set `state:"active"` on `ListItemNode` or `ListRowNode` see
+zero effect. Consumers who DO set it will see a visual change to the shipped
+`--active` rendering.
+
+Bump both packages to align:
+
+```bash
+npm install @ashley-shrok/viewmodel-shell@8.1.0
+```
+
+```bash
+dotnet add package AshleyShrok.ViewModelShell --version 8.1.0
+```
+
+MINOR bump on both. Wire protocol token stays `viewmodel-shell/1.0` (all wire
+additions are additive optional fields).
+
+### Visual change: `--active` rendering unified (STYLE-3)
+
+Pre-8.1.0, the 3 shipped composites carrying `state?: string` rendered `--active`
+differently:
+
+- `ListItemNode` — colored border + accent-glow background.
+- `TableRow` — the class was emitted by the renderer but had no shipped rule (visually inert).
+- `ListRowNode` — accent-glow background only.
+
+Post-8.1.0, all 8 non-Chip composites carrying `state?: string` render `--active`
+uniformly per STYLE-3:
+
+```css
+.vms-{composite}--active {
+  border-left: 3px solid var(--vms-accent);
+  padding-left: calc(var(--vms-space-md) - 3px);
+}
+.vms-{composite}--active .vms-{composite}__{primary-slot} {
+  font-weight: 600;
+}
+```
+
+Two per-composite exceptions to the shape above (both intentional, both documented at Plan 27-04):
+
+- **`ListItemNode`** ships the border-only variant — no `font-weight: 600` sibling rule, because the `ListItemNode` renderer emits no dedicated primary-text slot class (content goes directly into the `<li>` root).
+- **`TableRow`** ships the border-only variant per the CONTEXT §Slot-mapping decision — a multi-cell table row has no single semantic primary text slot to weight.
+- **`ListRowNode`** ships a color-only mutation (`border-left-color: var(--vms-accent)`) instead of a full `border-left:` declaration, because its base rule already reserved `border-left: 3px solid transparent` for the Phase 24 tone-axis mechanism. No padding-compensation needed. The `font-weight: 600` sibling rule on `.vms-list-row__primary` ships as normal.
+- **`ChipNode`** ships NO `--active` rule at all — deferred (see ChipNode note below).
+
+### No code change required
+
+This is CSS-only. Consumers who upgrade to v8.1.0 see the new look automatically
+on any existing `state:"active"` composition. No wire change, no callsite edits,
+no rebuild needed beyond the package bump.
+
+### Before / After
+
+The Phase 27 verification page (`demo/StateAxisVerification-bun/`, served at `http://100.113.23.63:3020/` during Ashley's sign-off on 2026-07-31) was the visual gate for the two REPLACED rules. Screenshots of the before/after delta for the two shipped consumer-visible changes:
+
+- **`ListItemNode --active`** — was: colored border on all four sides + accent-glow background surface. Now: a 3px left-border accent stripe against the composite's normal surface. Screenshots (if captured, per Plan 27-08 spec): `~/.claude/screenshots/phase-27-before-listitem.png` / `~/.claude/screenshots/phase-27-after-listitem.png`.
+- **`ListRowNode --active`** — was: accent-glow background surface (no border affordance). Now: the pre-existing 3px transparent left-border (Phase 24 tone-axis mechanism) is filled with `var(--vms-accent)`, plus `font-weight: 600` on the row's `__primary` slot. Screenshots: `~/.claude/screenshots/phase-27-before-listrow.png` / `~/.claude/screenshots/phase-27-after-listrow.png`.
+
+Rationale (Ashley-locked at Phase 27 tasting, 2026-07-30): the 3 pre-8.1.0 renderings of `state:"active"` were mutually inconsistent (border vs bg vs unstyled), which the tasting called out as the exact incoherence that motivated closing the axis gap. Uniform axis presence AND uniform axis look go together — see the CHANGELOG v8.1.0 `Changed` subsection for the exact CSS diff.
+
+### TableRow gains `--active` for the first time
+
+`TableRow` previously emitted the `.vms-table__row--active` class from the renderer (via string concatenation) but had **no shipped rule**, so `state:"active"` on a table row rendered visually inert. v8.1.0 ships the STYLE-3 border-only rule for the first time. This is **not** a visual regression: consumers who never set `state:"active"` on `TableRow` see zero effect; consumers who did set it now see the shipped border-left affordance where they previously saw no visual affordance at all.
+
+### 6 new composites gain `state?: string`
+
+Additive optional wire fields on `UserRowNode`, `MessageNode`, `DetailRowNode`, `TimelineEntryNode`, `SettingRowNode`, `ChipNode`. Consumers can now set `state: "active"` (or `"done"`, `"disabled"`, or any freeform token) on these composites to trigger the shipped `--active` (or lifecycle-opacity) rendering. Existing compositions that omit the field see no effect. On the .NET twin every added `State` parameter carries `[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]` per gotcha #8 (absent when unset — no `"state": null` on the wire).
+
+Framework-styled state tokens per composite:
+
+- `--active` — STYLE-3 border-left + `font-weight: 600` on the composite's semantic primary slot (shipped on all 5 non-Chip additions).
+- `--done` — `opacity: 0.72` (shipped on all 6 additions including Chip).
+- `--disabled` — `opacity: 0.55` (shipped on all 6 additions including Chip).
+
+Unrecognized values (e.g. `state:"pending"`) emit an unstyled `.vms-{composite}--{state}` class — the field still round-trips cleanly for app-specific vocabulary, the framework just doesn't paint anything for it.
+
+### ChipNode note
+
+`ChipNode.state?` ships as a wire field for uniformity with the typed-slots pattern, but ships **NO** framework `--active` CSS rule (intentionally out-of-scope for v8.1.0 — Chip's tinted-pill shape doesn't map to STYLE-3's border-left + bold-primary convention; the pill IS the primary). Setting `state:"active"` on a chip emits the `.vms-chip--active` class but the class has no shipped rule; the chip renders identically to its no-state form. `--done` (opacity 0.72) and `--disabled` (opacity 0.55) rules DO ship on Chip alongside the other 5 additions. A later release can design Chip's shipped `--active` when the use case surfaces (filter-chip "selected" state, for example, today uses a separate mechanism outside the state axis).
+
+---
+
 ## Upgrading to npm `8.0.3` — nothing to do (fix), one Playwright edge case
 
 **npm `@ashley-shrok/viewmodel-shell`: `8.0.3`.** NuGet unchanged (stays at `8.0.0`). **No wire change. No code change required.** The renderer fixes a CSS-Containment scope bug in the v8.0.1 `ListRowNode` narrow-column stack (standalone rows — those whose parent is not `.vms-list` — were silently unfixed; the stack CQ now applies to every `ListRowNode` regardless of wrapper).
