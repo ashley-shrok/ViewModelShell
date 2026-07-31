@@ -1144,11 +1144,23 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 /* Selection state for master-detail / list-detail patterns (D-27). The
    currently-selected row. Stronger than the semantic hints (selection is
    the primary state) and stable through hover. Themable: uses only seam
-   tokens, so it works across every shipped theme. */
+   tokens, so it works across every shipped theme.
+
+   Phase 27 (v8.1.0) — state axis uniformity. REPLACES the pre-Phase-27
+   border-color + accent-glow bg with STYLE-3 (left-border accent + primary
+   text weight:600) per Ashley's tasting decision (Q2 = STYLE-3, Q3 = close-
+   the-whole-gap). ListItemNode ships the border-only variant of STYLE-3
+   because the composite emits no dedicated primary-text slot class
+   (browser.ts renders content directly into <li> as text nodes / children,
+   with only .vms-list-item__marker for ordered/checklist markers) — matches
+   TableRow's exception rationale in CONTEXT §Slot-mapping. The 3px border
+   is compensated by shrinking padding-left so content baseline doesn't
+   shift. This is a documented visual change to shipped consumers
+   (MIGRATION.md flags it for 8.0.x → 8.1.0). */
 .vms-list-item--active,
 .vms-list-item--active:hover {
-  border-color: var(--vms-accent);
-  background: var(--vms-accent-glow);
+  border-left: 3px solid var(--vms-accent);
+  padding-left: calc(var(--vms-space-md) - 3px);
 }
 
 /* ── ListRowNode (COMP-05, v8.0.0) + ListNode(variant:"rows") (COMP-05a) ────
@@ -1187,7 +1199,15 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-list-row--info    { border-left-color: var(--vms-info); }
 .vms-list-row--done { opacity: 0.72; }
 .vms-list-row--disabled { opacity: 0.55; }
-.vms-list-row--active { background: var(--vms-accent-glow); }
+/* Phase 27 (v8.1.0) — state axis uniformity. REPLACES the pre-Phase-27
+   accent-glow bg with STYLE-3 (left-border accent + primary text weight:600)
+   per Ashley's tasting (Q2 = STYLE-3). ListRow's base rule at :1177 already
+   reserves `border-left: 3px solid transparent`, so this sets `border-left-
+   color:` only (no padding-left compensation needed — the 3px was already
+   consuming space). Documented visual change to shipped consumers
+   (MIGRATION.md 8.0.x → 8.1.0). */
+.vms-list-row--active { border-left-color: var(--vms-accent); }
+.vms-list-row--active .vms-list-row__primary { font-weight: 600; }
 
 .vms-list-row__leading { display: flex; align-items: center; padding-top: 1px; }
 .vms-list-row__content { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -1317,6 +1337,19 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   justify-content: flex-end;
   margin-top: var(--vms-space-xs);
 }
+
+/* Phase 27 (v8.1.0) — state axis uniformity. STYLE-3 --active (border-left +
+   author weight:600) per Ashley's tasting (Q2 = STYLE-3; primary-slot = author
+   per open_planner_review item 1 = identity/who over content/what). NO
+   padding-left compensation: .vms-message base is a grid wrapper with NO
+   padding-left to preserve. Composes multiplicatively with
+   `.vms-message--{role}` on the same wrapper (role tints the content surface;
+   state paints the wrapper's left accent) — no cascade collision. --done and
+   --disabled ship per ListRow precedent (opacity 0.72 / 0.55). */
+.vms-message--active { border-left: 3px solid var(--vms-accent); }
+.vms-message--active .vms-message__author { font-weight: 600; }
+.vms-message--done { opacity: 0.72; }
+.vms-message--disabled { opacity: 0.55; }
 
 /* ── AlertNode (COMP-07, v8.0.0) ─────────────────────────────────────────
    Prominent status message. Grid: [icon | body | actions]. Title semi-bold,
@@ -1474,6 +1507,19 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-status-dot--offline { background: color-mix(in srgb, var(--vms-text-muted) 60%, transparent); }
 .vms-status-dot--busy    { background: var(--vms-error); }
 
+/* Phase 27 (v8.1.0) — state axis uniformity. STYLE-3 --active (border-left +
+   name weight:600). Base .vms-user-row padding-left = var(--vms-space-md), so
+   the 3px border is compensated by shrinking padding-left. --done / --disabled
+   ship per ListRow precedent (opacity 0.72 / 0.55). Orthogonal to `status` —
+   a user row can be state:"active" AND status:{kind:"away"} simultaneously. */
+.vms-user-row--active {
+  border-left: 3px solid var(--vms-accent);
+  padding-left: calc(var(--vms-space-md) - 3px);
+}
+.vms-user-row--active .vms-user-row__name { font-weight: 600; }
+.vms-user-row--done { opacity: 0.72; }
+.vms-user-row--disabled { opacity: 0.55; }
+
 /* ── DetailRow + DetailList (COMP-10 + 10a, v8.0.0) ── */
 /* Semantic HTML: <dl class="vms-detail-list"> container + per-row
    <div class="vms-detail-row"><dt><dd></div>. The <div> wrapper is
@@ -1537,6 +1583,20 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-detail-row--warning .vms-detail-row__value { color: var(--vms-warning); }
 .vms-detail-row--success .vms-detail-row__value { color: var(--vms-success); }
 .vms-detail-row--info    .vms-detail-row__value { color: var(--vms-info); }
+
+/* Phase 27 (v8.1.0) — state axis uniformity. STYLE-3 --active (border-left +
+   value weight:600). Base .vms-detail-row padding-left = var(--vms-space-md),
+   compensated. --done / --disabled per ListRow precedent (opacity 0.72 /
+   0.55). Orthogonal to `tone` — a row can be state:"active" AND tone:"warning"
+   simultaneously (border paints the wrapper's left accent; tone tints the
+   value text). */
+.vms-detail-row--active {
+  border-left: 3px solid var(--vms-accent);
+  padding-left: calc(var(--vms-space-md) - 3px);
+}
+.vms-detail-row--active .vms-detail-row__value { font-weight: 600; }
+.vms-detail-row--done { opacity: 0.72; }
+.vms-detail-row--disabled { opacity: 0.55; }
 
 /* ── TimelineEntry + Timeline (COMP-11 + 11a, v8.0.0) ────────────────────────
  * 🚨 GENUINELY NEW CSS MECHANISM: rail-and-dot via ::before pseudo-elements.
@@ -1630,6 +1690,22 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   color: var(--vms-accent);
 }
 
+/* Phase 27 (v8.1.0) — state axis uniformity. STYLE-3 --active (border-left +
+   description weight:600) per Ashley's tasting selection (Q2 = STYLE-3, chosen
+   over the STYLE-6 bg-tint fallback based on pixel-geometry pre-check: the
+   ::before dot lives EXTERNAL to the entry box at `left: -1.5rem` translated
+   3px right, while the entry's own border-left sits at `left: 0` — 1.5rem
+   (24px) horizontal separation, NO collision). NO padding-left compensation:
+   base .vms-timeline-entry has NO left padding (only padding-bottom), so the
+   3px border simply consumes 3px of the entry's leading edge and content
+   reflows accordingly — the ::before dot is unaffected (it's positioned
+   relative to the entry's left edge, which the border-left doesn't shift).
+   --done / --disabled per ListRow precedent (opacity 0.72 / 0.55). */
+.vms-timeline-entry--active { border-left: 3px solid var(--vms-accent); }
+.vms-timeline-entry--active .vms-timeline-entry__description { font-weight: 600; }
+.vms-timeline-entry--done { opacity: 0.72; }
+.vms-timeline-entry--disabled { opacity: 0.55; }
+
 /**
  * v8.0.0 (COMP-12 + 12a) — SettingRowNode + SettingListNode. The settings-page
  * recipe: a group of setting rows with label + optional description +
@@ -1703,6 +1779,20 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   gap: var(--vms-space-xs);
 }
 
+/* Phase 27 (v8.1.0) — state axis uniformity. STYLE-3 --active (border-left +
+   label weight:600). Base .vms-setting-row uses `padding: var(--vms-space-md)`
+   shorthand → padding-left = var(--vms-space-md), compensated. --done /
+   --disabled per ListRow precedent (opacity 0.72 / 0.55). Common use:
+   state:"active" for "this setting is currently highlighted" (jumped-to from
+   a search result / anchored deep link). */
+.vms-setting-row--active {
+  border-left: 3px solid var(--vms-accent);
+  padding-left: calc(var(--vms-space-md) - 3px);
+}
+.vms-setting-row--active .vms-setting-row__label { font-weight: 600; }
+.vms-setting-row--done { opacity: 0.72; }
+.vms-setting-row--disabled { opacity: 0.55; }
+
 /* ── Chip + ChipList (COMP-13 + 13a, v8.0.0) ──
    Tinted-pill primitive for filter chips, selected tags, category pills.
    AA-normal 4.5:1 hand-check for tinted-pill × 4 tones × 13 themes = 52
@@ -1755,6 +1845,17 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 }
 .vms-chip__dismiss:hover { opacity: 1; background: color-mix(in srgb, currentColor 15%, transparent); }
 .vms-chip__dismiss:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; opacity: 1; }
+
+/* Phase 27 (v8.1.0) — state axis uniformity. ChipNode ships --done + --disabled
+   opacity per ListRow precedent (0.72 / 0.55), but ships NO --active rule
+   (deferred, see composite-nodes-layer.md and Phase 27 CONTEXT §Out-of-scope).
+   Chip's tinted-pill shape does not map to STYLE-3's border-left + bold-primary
+   convention — chips have no border-left convention, and the pill IS the
+   primary. A shipped --active for Chip is a future phase when the use case
+   surfaces. state:"active" on a Chip today renders an unstyled
+   .vms-chip--active class (still round-trips). */
+.vms-chip--done { opacity: 0.72; }
+.vms-chip--disabled { opacity: 0.55; }
 
 /* ── Text ── */
 /* 8.0.2 (F2) — `flex: 1` was in this base rule so TextNode could fill flex-ROW
@@ -2375,6 +2476,14 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-table__row--done     { opacity: 0.6; }
 .vms-table__row--disabled { opacity: 0.55; color: var(--vms-text-muted); }
 .vms-table__row--running  { background: color-mix(in srgb, var(--vms-accent) 8%, transparent); }
+/* Phase 27 (v8.1.0) — state axis uniformity. TableRow gains --active alongside
+   ListItem/ListRow uniformly. Border-only variant of STYLE-3 (border-left
+   accent, NO weight:600 sibling rule) per CONTEXT §Slot-mapping: table rows
+   have no semantic primary text slot to bold. NO padding compensation: table
+   cells own their own varied padding, and the border sits on the <tr>. This
+   is NOT a visual change to shipped consumers (no prior rule existed; the
+   class was already emitted by the renderer but rendered unstyled). */
+.vms-table__row--active { border-left: 3px solid var(--vms-accent); }
 /* Row TONE (severity) — the universal status axis (was the old critical/danger;
    critical → danger). Tints derive from theme vars (color-mix), so a custom
    :root theme recolors them automatically; no app CSS, no literals. */
