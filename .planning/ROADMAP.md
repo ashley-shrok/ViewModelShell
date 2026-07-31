@@ -463,7 +463,7 @@ Plans:
  11. Docs shipped: CHANGELOG.md v8.1.0 section (Added / Changed / Note); MIGRATION.md upgrade section with before/after visual references; AGENTS.md "Route B composite-nodes layer" inventory gains Phase 27 note.
  12. Aligned MINOR release npm 8.0.3 → 8.1.0 + NuGet 8.0.0 → 8.1.0; operator-gated auth precheck + publish; annotated tag `v8.1.0` at release commit + pushed; `git merge-base --is-ancestor v8.1.0 main` verified; announced on `#vms-changelog` (`!E211RrsKCygK7Ev6uacpswousKy9JZiGEVLquJpC3cU`); Angel DM'd that composition-swap unblocks.
 
-**Plans:** 10/11 plans executed
+**Plans:** 11/11 plans complete
 
 Plans:
 - [x] 27-01-PLAN.md — TS wire additions: state?: string on 6 composite interfaces in index.ts (wave 1)
@@ -476,4 +476,4 @@ Plans:
 - [x] 27-08-PLAN.md — Tailnet verification page (demo/StateAxisVerification-bun/) + Ashley visual sign-off + before/after screenshots (wave 6, depends on 27-04 + 27-05)
 - [x] 27-09-PLAN.md — Full green-tree gate: framework vitest + core-globals + demo-types + AA-contrast + parity + all .NET Tests + Markdown companion compile (wave 7, depends on 27-07 + 27-08)
 - [x] 27-10-PLAN.md — Docs: CHANGELOG.md v8.1.0 + MIGRATION.md upgrade section + AGENTS.md inventory note (wave 8, depends on 27-09)
-- [ ] 27-11-PLAN.md — Operator-gated release: version bump + auth precheck + npm publish + NuGet publish + tag v8.1.0 + advance main + announce #vms-changelog (wave 9, depends on 27-10)
+- [x] 27-11-PLAN.md — Operator-gated release: version bump + auth precheck + npm publish + NuGet publish + tag v8.1.0 + advance main + announce #vms-changelog (wave 9, depends on 27-10)
