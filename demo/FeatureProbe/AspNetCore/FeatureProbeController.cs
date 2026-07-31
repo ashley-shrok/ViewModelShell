@@ -1294,6 +1294,18 @@ public class FeatureProbeController : ControllerBase
                             Actions: new ViewNode[] {
                                 new ButtonNode(Label: "OK", Action: new ActionDescriptor("message-noop-1")),
                             }),
+                        // Phase 27-07: State:"active" state-probe message. Unique Author
+                        // string anchors the per-composite tripwire (message-state-probe).
+                        // Composes multiplicatively with Role:Assistant per Plan 27-01
+                        // TSDoc annotation (no cascade collision: .vms-message--assistant
+                        // tints surface, .vms-message--active paints left-accent border).
+                        new MessageNode(
+                            Author: "message-state-probe",
+                            Content: new TextNode("Probing state:\"active\" on MessageNode.", Style: TextStyle.Body),
+                            Timestamp: "2:16 PM",
+                            Avatar: new AvatarNode(Initials: "SP", Tone: Tone.Info),
+                            Role: MessageRole.Assistant,
+                            State: "active"),
                     },
                     FollowTail: true),
                 // COMP-07 AlertNode per tone + Dismissible:true
@@ -1354,12 +1366,23 @@ public class FeatureProbeController : ControllerBase
                     Meta: new TextNode("jane.d · SRE Lead", Style: TextStyle.Muted),
                     Status: new UserRowStatus("Online", StatusKind.Online),
                     Action: new ActionDescriptor("user-row-open-jd")),
+                // Phase 27-07: State:"active" state-probe UserRow. Unique
+                // Action name anchors the per-composite tripwire
+                // (user-row-state-probe).
+                new UserRowNode(
+                    Name: new TextNode("State Probe", Style: TextStyle.Body, Weight: TextWeight.Medium),
+                    Action: new ActionDescriptor("user-row-state-probe"),
+                    State: "active"),
                 // COMP-10 + 10a DetailListNode with LabelWidth:Lg
                 new DetailListNode(
                     Children: new ViewNode[] {
                         new DetailRowNode(Label: "Status",   Value: new TextNode("Open", Style: TextStyle.Body)),
                         new DetailRowNode(Label: "Assignee", Value: new TextNode("Jane Dougherty", Style: TextStyle.Body)),
                         new DetailRowNode(Label: "Deleted",  Value: new TextNode("purged 2h ago", Style: TextStyle.Body), Tone: Tone.Danger),
+                        // Phase 27-07: State:"active" state-probe row. Unique
+                        // Label anchors the per-composite tripwire
+                        // (detail-row-state-probe).
+                        new DetailRowNode(Label: "detail-row-state-probe", Value: new TextNode("on", Style: TextStyle.Body), State: "active"),
                     },
                     LabelWidth: DetailLabelWidth.Lg),
                 // COMP-11 + 11a TimelineNode with 3 TimelineEntryNodes covering tones
@@ -1367,6 +1390,10 @@ public class FeatureProbeController : ControllerBase
                     new TimelineEntryNode(Time: "2:47 PM", Description: new TextNode("Incident opened",       Style: TextStyle.Body), Tone: Tone.Danger),
                     new TimelineEntryNode(Time: "2:49 PM", Description: new TextNode("Acknowledged by Jane",  Style: TextStyle.Body), Tone: Tone.Warning),
                     new TimelineEntryNode(Time: "2:58 PM", Description: new TextNode("Rollback verified",     Style: TextStyle.Body), Tone: Tone.Success),
+                    // Phase 27-07: State:"active" state-probe entry. Unique
+                    // Description text anchors the per-composite tripwire
+                    // (timeline-entry-state-probe).
+                    new TimelineEntryNode(Time: "3:00 PM", Description: new TextNode("timeline-entry-state-probe", Style: TextStyle.Body), State: "active"),
                 }),
                 // COMP-12 + 12a SettingListNode with SettingRowNodes (CheckboxNode Variant:Switch pairing)
                 new SettingListNode(
@@ -1379,6 +1406,13 @@ public class FeatureProbeController : ControllerBase
                             Label: new TextNode("Weekly digest", Style: TextStyle.Body, Weight: TextWeight.Medium),
                             Description: new TextNode("A Monday-morning summary of the past week.", Style: TextStyle.Muted),
                             Trailing: new ButtonNode(Label: "Configure", Action: new ActionDescriptor("setting-row-configure-digest"))),
+                        // Phase 27-07: State:"active" state-probe row. Unique
+                        // Action name anchors the per-composite tripwire
+                        // (setting-row-state-probe).
+                        new SettingRowNode(
+                            Label: new TextNode("State probe setting", Style: TextStyle.Body, Weight: TextWeight.Medium),
+                            Trailing: new ButtonNode(Label: "Probe", Action: new ActionDescriptor("setting-row-state-probe")),
+                            State: "active"),
                     },
                     Heading: "Notification preferences"),
                 // COMP-13 + 13a ChipListNode with ChipNodes
@@ -1387,6 +1421,13 @@ public class FeatureProbeController : ControllerBase
                     new ChipNode(Label: "warning",  Tone: Tone.Warning),
                     new ChipNode(Label: "clickme",  Action: new ActionDescriptor("chip-toggle-tag-clickme")),
                     new ChipNode(Label: "both",     Tone: Tone.Info, Action: new ActionDescriptor("chip-toggle-tag-both"), DismissAction: new ActionDescriptor("chip-remove-tag-both")),
+                    // Phase 27-07: State:"active" state-probe chip. Unique
+                    // Label anchors the per-composite tripwire
+                    // (chip-state-probe). NOTE: framework ships NO --active
+                    // rule for Chip (deferred per Phase 27 CONTEXT
+                    // §Out-of-scope); the field crosses the wire for
+                    // uniformity per the typed-slots pattern.
+                    new ChipNode(Label: "chip-state-probe", State: "active"),
                 }),
             }));
         // Inline rich text (TextNode.Runs) — byte-identical to the bun twin
