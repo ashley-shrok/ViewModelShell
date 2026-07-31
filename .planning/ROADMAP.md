@@ -463,14 +463,14 @@ Plans:
  11. Docs shipped: CHANGELOG.md v8.1.0 section (Added / Changed / Note); MIGRATION.md upgrade section with before/after visual references; AGENTS.md "Route B composite-nodes layer" inventory gains Phase 27 note.
  12. Aligned MINOR release npm 8.0.3 → 8.1.0 + NuGet 8.0.0 → 8.1.0; operator-gated auth precheck + publish; annotated tag `v8.1.0` at release commit + pushed; `git merge-base --is-ancestor v8.1.0 main` verified; announced on `#vms-changelog` (`!E211RrsKCygK7Ev6uacpswousKy9JZiGEVLquJpC3cU`); Angel DM'd that composition-swap unblocks.
 
-**Plans:** 4/11 plans executed
+**Plans:** 5/11 plans executed
 
 Plans:
 - [x] 27-01-PLAN.md — TS wire additions: state?: string on 6 composite interfaces in index.ts (wave 1)
 - [x] 27-02-PLAN.md — .NET twin: State trailing-append on 6 records in ViewModels.cs with WhenWritingNull (wave 1, file-disjoint from 27-01)
 - [x] 27-03-PLAN.md — browser.ts renderer emission: 6 new BEM state-class push sites (wave 2, depends on 27-01)
 - [x] 27-04-PLAN.md — default.css unification pass: REPLACE ListItem + ListRow --active, add TableRow --active net-new, add 5 new composite --active + 6 --done/--disabled opacity rules (wave 3, depends on 27-01 + 27-03)
-- [ ] 27-05-PLAN.md — Consolidated vitest coverage (composite-state-axis.test.ts) for all 8 composites + Chip guardrail + regression cases (wave 4, depends on 27-03 + 27-04)
+- [x] 27-05-PLAN.md — Consolidated vitest coverage (composite-state-axis.test.ts) for all 8 composites + Chip guardrail + regression cases (wave 4, depends on 27-03 + 27-04)
 - [ ] 27-06-PLAN.md — Consolidated .NET serialization tests (CompositeStateAxisSerializationTests.cs) for 6 new State params + findNulls defense (wave 4, depends on 27-02)
 - [ ] 27-07-PLAN.md — Parity fixture extension: FeatureProbe 3-backend state:"active" emissions + expectBodyContains tripwires + $comment (wave 5, depends on 27-01/02/03/05/06)
 - [ ] 27-08-PLAN.md — Tailnet verification page (demo/StateAxisVerification-bun/) + Ashley visual sign-off + before/after screenshots (wave 6, depends on 27-04 + 27-05)
