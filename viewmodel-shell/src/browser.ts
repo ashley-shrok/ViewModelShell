@@ -1021,11 +1021,14 @@ export class BrowserAdapter implements Adapter {
     this.editorKeysSeen.add(key);
 
     // Field wrapper — mirrors FieldNode's shape (label above input; state-axis
-    // BEM modifier applied to the wrapper).
+    // BEM modifier applied to the wrapper). `data-editor-key` is the pointer
+    // the RichTextToolbarNode composite reads via closest() to resolve which
+    // editor a nested-slot toolbar drives (Plan 28-05 richTextToolbarInvoke).
     const wrapper = document.createElement("div");
     const classes = ["vms-rich-text-field"];
     if (n.state) classes.push(`vms-rich-text-field--state-${n.state}`);
     wrapper.className = classes.join(" ");
+    wrapper.dataset.editorKey = key;
 
     if (n.label) {
       const label = document.createElement("label");
@@ -1233,24 +1236,93 @@ export class BrowserAdapter implements Adapter {
   }
 
   /**
-   * v8.2.0 (RICH-02) INTERIM — Plan 28-05 replaces this body after the D-03
-   * Route B tasting sign-off. Placeholder renders an empty container so the
-   * dispatch arm is exhaustive and TypeScript does not flag an unhandled
-   * ViewNode union member. When the composite is used AS A NESTED SLOT of
-   * RichTextFieldNode, richTextField() owns its rendering (via the default-
-   * toolbar path when omitted, or by rendering the composite here inline
-   * when supplied); this method's STANDALONE case (rare, mostly the tasting
-   * page) is what Plan 28-05 finalizes.
+   * v8.2.0 (RICH-02) — RichTextToolbarNode composite renderer. Emits the
+   * first-class .vms-rich-text-toolbar strip with one <button> per entry in
+   * `n.tools[]`, plus BEM modifier classes for the closed-enum variance axes
+   * (`size`, `tone`, `state`). If `tools` is empty/missing the renderer falls
+   * back to the shipped FLOOR (backwards-compat for consumers that supply the
+   * slot only to pin a size/tone axis).
+   *
+   * NESTED-SLOT PATH: richTextField() calls this with `parent = wrapper` BEFORE
+   * appending the editor host, so the composite renders inline above the
+   * editor. The toolbar walks up the DOM via closest(".vms-rich-text-field")
+   * to find its ancestor field's `data-editor-key`, then dispatches the
+   * clicked tool through `applyRichTextTool(entry.editor, tool)` — reusing
+   * the exact same chain-command mapping as the default-toolbar strip.
+   *
+   * STANDALONE PATH: a bare RichTextToolbarNode (no ancestor RichTextFieldNode)
+   * still renders — variance classes still emit, buttons still appear — but
+   * clicks console.warn once per click and are inert. Rare (tasting/demo
+   * only). Warn-not-throw contract per the STRIDE T-28-13 disposition.
    */
   private richTextToolbar(
-    _n: RichTextToolbarNode,
+    n: RichTextToolbarNode,
     parent: HTMLElement,
     _on: (a: ActionEvent) => void,
   ): void {
     const el = document.createElement("div");
-    el.className = "vms-rich-text-toolbar";
-    el.dataset.placeholder = "pre-tasting";
+    const classes = ["vms-rich-text-toolbar"];
+    if (n.size)  classes.push(`vms-rich-text-toolbar--size-${n.size}`);
+    if (n.tone)  classes.push(`vms-rich-text-toolbar--tone-${n.tone}`);
+    if (n.state) classes.push(`vms-rich-text-toolbar--state-${n.state}`);
+    el.className = classes.join(" ");
+    el.setAttribute("role", "toolbar");
+
+    // Empty/missing tools[] defaults to the full FLOOR — a toolbar node
+    // present with no tools still renders a functional strip (matches the
+    // default-toolbar path so a consumer who supplies the slot solely to
+    // pin `size:"compact"` gets sensible output).
+    const FLOOR: RichTextTool[] = [
+      "bold", "italic", "link", "bullet-list", "ordered-list",
+      "heading-1", "heading-2", "heading-3", "inline-code", "code-block",
+      "blockquote",
+    ];
+    const tools = (n.tools && n.tools.length > 0) ? n.tools : FLOOR;
+
+    for (const tool of tools) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `vms-rich-text-toolbar__tool vms-rich-text-toolbar__tool--${tool}`;
+      btn.dataset.tool = tool;
+      btn.textContent = this.richTextToolLabel(tool);
+      btn.setAttribute("aria-label", this.richTextToolLabel(tool));
+      btn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        this.richTextToolbarInvoke(el, tool);
+      });
+      el.appendChild(btn);
+    }
     parent.appendChild(el);
+  }
+
+  /**
+   * Resolve the ancestor RichTextField's editor and invoke the TipTap chain
+   * command via the shared `applyRichTextTool()` helper (byte-identical to
+   * the default-toolbar path — no duplicated chain logic). Walks up from the
+   * clicked toolbar to find `.vms-rich-text-field`, then looks up the editor
+   * from `editorInstances` via the wrapper's `data-editor-key` attribute
+   * (written by richTextField() at mount).
+   *
+   * Standalone case (no ancestor RichTextField): logs a one-shot console.warn
+   * and returns — the click is inert, but does not throw. Per STRIDE T-28-13:
+   * this is the ONLY safe cross-editor-hijack posture; the closest() walk
+   * stops at the nearest field wrapper, so a standalone toolbar cannot
+   * silently drive a sibling editor.
+   */
+  private richTextToolbarInvoke(toolbarEl: HTMLElement, tool: RichTextTool): void {
+    const fieldEl = toolbarEl.closest(".vms-rich-text-field") as HTMLElement | null;
+    if (!fieldEl) {
+      console.warn(
+        "[ViewModelShell]",
+        "RichTextToolbarNode rendered standalone (no ancestor RichTextFieldNode); toolbar clicks are inert.",
+      );
+      return;
+    }
+    const key = fieldEl.dataset.editorKey;
+    if (!key) return;
+    const entry = this.editorInstances.get(key);
+    if (!entry?.editor) return;
+    this.applyRichTextTool(entry.editor, tool);
   }
 
   private section(n: SectionNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
