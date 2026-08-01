@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Agent discoverability — this iframe is a ViewModel Shell app. -->
+  <meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/1.0","endpoint":"/api/composite/tree","actionEndpoint":"/api/composite/tree"}'>
+  <meta name="page" content="rich-text-tasting-composite">
+  <title>AFTER — RichTextFieldNode + RichTextToolbarNode composite</title>
+
+  <!-- IFRAME-SCOPED CSS: this <link> is OWNED by this iframe document, NOT
+       shared with the parent or the sibling panel. That's the whole point
+       of the iframe A/B — each panel loads its own copy so a browser-cache
+       hit or a shared theme swap can't cross-contaminate the comparison. -->
+  <link rel="stylesheet" href="/vms/default.css" />
+  <link rel="stylesheet" id="theme-css" href="data:text/css,%2F*%20themeless%20default%20*%2F" />
+
+  <!-- Theme-swap listener — parent broadcasts { type: "vms-theme", name } on
+       switcher change; this iframe swaps its OWN #theme-css link href in
+       response. NO shared globals: each iframe listens independently. -->
+  <script>
+    (function () {
+      window.addEventListener("message", function (evt) {
+        var data = evt.data;
+        if (!data || data.type !== "vms-theme") return;
+        var link = document.getElementById("theme-css");
+        if (!link) return;
+        if (data.name == null) {
+          link.setAttribute("href", "data:text/css,%2F*%20themeless%20default%20*%2F");
+        } else {
+          link.setAttribute("href", "/vms/themes/" + data.name + ".css");
+        }
+      });
+    })();
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="./panel-composite.ts"></script>
+</body>
+</html>
