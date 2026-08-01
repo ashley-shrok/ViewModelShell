@@ -504,6 +504,23 @@ function collectActions(
       // check here first.
       return;
     }
+    case "rich-text-field": {
+      // v8.2.0 (RICH-01) — RichTextFieldNode is a leaf (no action-bearing
+      // descendants; its `toolbar?` slot's `tools[]` are enum tokens naming
+      // built-in TipTap chain commands, resolved CLIENT-SIDE — never a
+      // dispatch that could collide with another action's name). The arm
+      // exists so a future refactor that adds a dispatch-bearing slot fails
+      // the TypeScript exhaustiveness check here first.
+      return;
+    }
+    case "rich-text-toolbar": {
+      // v8.2.0 (RICH-02) — RichTextToolbarNode is a leaf (tools[] are enum
+      // tokens naming built-in TipTap chain commands, resolved CLIENT-SIDE —
+      // never a framework-side dispatch that could collide with another
+      // action's name). Same exhaustive-switch defense-in-depth as
+      // rich-text-field above.
+      return;
+    }
     case "tabs": {
       const tabs = node as TabsNode;
       for (const tab of tabs.tabs) recordAction(tab.action, enclosingForm, out);
