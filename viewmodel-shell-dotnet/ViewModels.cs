@@ -258,6 +258,109 @@ public enum ListVariant { Items, Rows }
 [JsonConverter(typeof(KebabEnum<MessageRole>))]
 public enum MessageRole { User, Assistant, System }
 
+/// <summary>v8.2.0 (RICH-02) — RichTextToolbarNode size axis. Closed 2-value
+/// enum controlling toolbar density (Compact = smaller button hitboxes + tighter
+/// gaps; Expanded = default, roomier). Wire values (kebab-lowercase via
+/// KebabEnum): "compact" / "expanded", byte-identical to the TS closed union
+/// <c>"compact" | "expanded"</c> in viewmodel-shell/src/index.ts. Only two
+/// single-token members — KebabEnum handles conversion naturally with no digit-
+/// boundary hazard (contrast RichTextTool which needs its own converter).
+/// </summary>
+[JsonConverter(typeof(KebabEnum<RichTextToolbarSize>))]
+public enum RichTextToolbarSize { Compact, Expanded }
+
+/// <summary>v8.2.0 (RICH-01/RICH-02) — JSON converter for RichTextTool that
+/// walks a static dictionary mapping each enum member to its exact literal wire
+/// string (kebab-case with digit-boundary awareness, e.g. Heading1 → "heading-1").
+///
+/// <para>NOT KebabEnum{T}: the framework's KebabCaseLower policy fails to
+/// insert a hyphen between letters and digits, so Heading1 → "heading1" (not
+/// "heading-1") — a silent cross-backend drift with the TS twin's
+/// <c>"heading-1"</c> / <c>"heading-2"</c> / <c>"heading-3"</c> union literals.
+/// Same posture as IconNameConverter (see :263-275). This converter spells
+/// every member's wire value explicitly.</para>
+///
+/// <para>The dictionary is the single source of truth for the .NET wire
+/// contract of this closed union. Every new member must be added here in the
+/// same change that adds the enum member; a build-time integrity check (below)
+/// throws on missing entries so the requirement disappears structurally rather
+/// than having to be remembered.</para></summary>
+public sealed class RichTextToolConverter : JsonConverter<RichTextTool>
+{
+    // Explicit member → wire-string mapping. Byte-identical to the TS
+    // RichTextTool union literals in viewmodel-shell/src/index.ts (Plan 28-01).
+    private static readonly IReadOnlyDictionary<RichTextTool, string> _toWire = new Dictionary<RichTextTool, string>
+    {
+        [RichTextTool.Bold] = "bold",
+        [RichTextTool.Italic] = "italic",
+        [RichTextTool.Link] = "link",
+        [RichTextTool.BulletList] = "bullet-list",
+        [RichTextTool.OrderedList] = "ordered-list",
+        [RichTextTool.Heading1] = "heading-1",
+        [RichTextTool.Heading2] = "heading-2",
+        [RichTextTool.Heading3] = "heading-3",
+        [RichTextTool.InlineCode] = "inline-code",
+        [RichTextTool.CodeBlock] = "code-block",
+        [RichTextTool.Blockquote] = "blockquote",
+    };
+
+    private static readonly IReadOnlyDictionary<string, RichTextTool> _fromWire
+        = _toWire.ToDictionary(kv => kv.Value, kv => kv.Key);
+
+    // Build-time integrity check — every enum value present in _toWire. Runs
+    // on the type's static initialization; a missing entry throws at
+    // JsonSerializer construction time, not silently at wire time.
+    static RichTextToolConverter()
+    {
+        var missing = Enum.GetValues<RichTextTool>()
+            .Where(v => !_toWire.ContainsKey(v))
+            .ToList();
+        if (missing.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"RichTextToolConverter: missing wire-value mapping for enum members: " +
+                string.Join(", ", missing));
+        }
+    }
+
+    public override RichTextTool Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var s = reader.GetString();
+        if (s is null || !_fromWire.TryGetValue(s, out var tool))
+        {
+            throw new JsonException($"Unknown RichTextTool wire value: {s ?? "(null)"}");
+        }
+        return tool;
+    }
+
+    public override void Write(Utf8JsonWriter writer, RichTextTool value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(_toWire[value]);
+    }
+}
+
+/// <summary>v8.2.0 (RICH-01/RICH-02) — RichTextToolbarNode/RichTextFieldNode
+/// tool identifier. Closed 11-value floor (D-08 Slack/GitHub floor: bold,
+/// italic, link, bullet-list, ordered-list, heading-1..3, inline-code,
+/// code-block, blockquote). Widening later is additive (mirrors ChartNode.kind
+/// closed-widen-later posture); consumers/agents key off the string, never
+/// assume a fixed set.
+///
+/// <para>NOT [JsonConverter(typeof(KebabEnum{RichTextTool}))] — the members
+/// Heading1/Heading2/Heading3 need digit-boundary hyphens ("heading-1" not
+/// "heading1"), and KebabCaseLower does not split digits from letters (same
+/// footgun the IconName enum documents at :400-403). RichTextToolConverter
+/// owns the explicit mapping. Byte-identical to the TS closed union
+/// <c>RichTextTool</c> in viewmodel-shell/src/index.ts.</para></summary>
+[JsonConverter(typeof(RichTextToolConverter))]
+public enum RichTextTool
+{
+    Bold, Italic, Link,
+    BulletList, OrderedList,
+    Heading1, Heading2, Heading3,
+    InlineCode, CodeBlock, Blockquote
+}
+
 /// <summary>v7.0.0 (ICON-01/02) — JSON converter for IconName that walks a
 /// static dictionary mapping each enum member to its exact literal Lucide
 /// name (kebab-case with digit-boundary awareness, e.g. Trash2 → "trash-2").
@@ -831,6 +934,8 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(SettingListNode),   "setting-list")]
 [JsonDerivedType(typeof(ChipNode),          "chip")]
 [JsonDerivedType(typeof(ChipListNode),      "chip-list")]
+[JsonDerivedType(typeof(RichTextFieldNode),   "rich-text-field")]
+[JsonDerivedType(typeof(RichTextToolbarNode), "rich-text-toolbar")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -2772,6 +2877,159 @@ public record ChipListNode(
     // child is rejected there, so the wire-level list is effectively still
     // ChipNode-only.
     IReadOnlyList<ViewNode> Children
+) : ViewNode;
+
+/// <summary>v8.2.0 (RICH-02) — RichTextToolbarNode. Route B composite (typed
+/// slots + closed-enum variance) for the rich text toolbar. Framework owns
+/// layout, button styling, tone tokens, keyboard shortcuts, focus management,
+/// a11y (aria-labels + shortcut hints); the app declares WHICH tools appear.
+///
+/// <para>Route B tasting (D-03): the earned-a-composite rule (AGENTS.md +
+/// .planning/design/composite-nodes-layer.md §2) requires a served before/
+/// after tasting page + Ashley visual sign-off BEFORE this composite lands in
+/// code as a shipped inventory row. The wire contract lands NOW (this record +
+/// its TS twin) so Plans 28-03/-05/-07 parallelize against a committed shape;
+/// the composite's shipped-inventory row + tasting-gated renderer are the
+/// LATER plans that carry the D-03 gate.</para>
+///
+/// <para>TYPED SLOTS + CLOSED-ENUM VARIANCE (composite-nodes-layer.md §3):
+/// slots are typed by SEMANTIC NAME (Tools is the composite's semantically-
+/// primary slot); variance is expressed through CLOSED-ENUM AXES only (Size,
+/// Tone, State) — never raw CSS or free-form fields. Every slot is optional
+/// EXCEPT the one that names what the composite IS (Tools). Tools is a real
+/// <c>IReadOnlyList{RichTextTool}</c> enum list (not <c>IReadOnlyList{string}</c>)
+/// per closed-union-must-be-enum discipline — a bad value fails the .NET
+/// compiler at author time, mirroring the TS closed-union protection (the
+/// class-1 defect gotcha #9 documents).</para>
+///
+/// <para>ANTICIPATED CUSTOMIZATION SURFACE (D-02 rationale; NOT built this
+/// phase — the composite IS the abstraction seam that lets later plans add
+/// these without changing app code): visibleTools filtering, headings-dropdown,
+/// position variants (top/bottom/floating), compact/expanded density,
+/// overflow-to-kebab. Future-additive; the shape here does not preclude.
+/// </para>
+///
+/// <para>Every optional slot carries <c>[JsonIgnore(WhenWritingNull)]</c> so an
+/// unset slot is ABSENT from the wire (never <c>"size": null</c>) — the
+/// class-2 findNulls defect protection AGENTS.md gotcha #8 exists for.</para>
+///
+/// <para>Leaf posture in the walkers: Tools[] entries are ENUM TOKENS naming
+/// built-in TipTap chain commands resolved CLIENT-SIDE by the renderer's
+/// TipTap chain (Plan 28-03); they are NEVER framework-side action-name
+/// dispatches that could collide via ValidateActionNames. Both walkers
+/// (Collect + WalkForSectionAction) carry no-op arms per Analog D exhaustive-
+/// switch discipline — see the twin arms in viewmodel-shell/src/server.ts.
+/// </para></summary>
+public record RichTextToolbarNode(
+    // Tools is REQUIRED — the composite's semantically-primary slot per
+    // typed-slots §3 (a toolbar with no tools is not a toolbar). Real
+    // IReadOnlyList<RichTextTool> (closed enum), NOT IReadOnlyList<string> —
+    // per closed-union-must-be-enum discipline. RichTextToolConverter emits
+    // each entry's kebab-with-digit-boundary wire value (e.g. Heading1 →
+    // "heading-1"), byte-identical to the TS closed union.
+    IReadOnlyList<RichTextTool> Tools,
+    // Toolbar density — closed enum (D-02 anticipated axis). Omitted =
+    // "expanded" (framework default). Real enum per closed-union-must-be-enum;
+    // wire values "compact" / "expanded" via KebabEnum.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RichTextToolbarSize? Size = null,
+    // Semantic tone — reuses the framework-wide Tone enum (mirrors
+    // ButtonNode.Tone). Omitted = neutral. Wire values "danger"/"warning"/
+    // "success"/"info" via KebabEnum. Composes multiplicatively with Size.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Tone? Tone = null,
+    // Toolbar lifecycle STATE (NOT severity — that's Tone; NOT density —
+    // that's Size). Freeform, app-extensible token per Phase 27's state-axis
+    // uniformity. Emits .vms-rich-text-toolbar--{state}.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? State = null
+) : ViewNode;
+
+/// <summary>v8.2.0 (RICH-01) — RichTextFieldNode. First-class WYSIWYG rich
+/// text input primitive. Dedicated NEW NODE (NOT FieldNode(inputType:"rich"))
+/// per D-01: rich text has a class of anticipated customization surface
+/// (allowedMarks / allowedNodes, mentionsProvider, plainTextValueBind,
+/// heightMin / heightMax, sanitizeConfig, imageUpload) that would ONLY apply
+/// to rich fields and would bloat FieldNode with a section every other
+/// inputType ignores. Future customization pressure earned the shape its own
+/// primitive.
+///
+/// <para>WIRE VALUE (D-06): the field's <c>Bind</c> path carries a MARKDOWN
+/// STRING (not HTML, not JSON). The renderer converts editor HTML → markdown
+/// via turndown at write time; the initial-content pre-load flows through the
+/// existing <c>marked</c> dep at editor mount. Zero XSS surface on the wire
+/// — no HTML crosses the wire.</para>
+///
+/// <para>BUNDLING (D-04): TipTap 2.x + turndown are bundled into the main
+/// @ashley-shrok/viewmodel-shell package, lazy-imported from browser.ts via
+/// dynamic <c>import()</c> — matches the Chart.js precedent. Consumers who
+/// never render a RichTextFieldNode ship ZERO TipTap/turndown bytes.
+/// Symmetric requirement: the lazy import MUST actually be lazy (verified by
+/// an adapter test in Plan 28-04). Fail-loud on library-load failure per
+/// AGENTS.md §"The capability seam".</para>
+///
+/// <para>D-Q4 SANITIZATION: display-side rendering flows through the existing
+/// viewmodel-shell/src/markdown.ts → InlineRuns pipeline (no new render code).
+/// The read-side sanitization audit-and-confirm targets that file's
+/// linkHrefRewrite seam + the Markdown companion NuGet.</para>
+///
+/// <para>FEATURE-SURFACE FLOOR (D-08): bold, italic, link, ordered/unordered
+/// list, headings h1-h3, inline code, code block, blockquote (the RichTextTool
+/// closed union above). Everything else deferred to real signal.</para>
+///
+/// <para>ANTICIPATED CUSTOMIZATION SURFACE (deferred per CONTEXT §Deferred;
+/// slot shape MUST not preclude future addition): allowedMarks / allowedNodes,
+/// mentionsProvider, plainTextValueBind, heightMin / heightMax, sanitizeConfig,
+/// imageUpload, comment-only mode. All future-additive.</para>
+///
+/// <para>Every optional field carries <c>[JsonIgnore(WhenWritingNull)]</c> so
+/// an unset field is ABSENT from the wire (never <c>"label": null</c>) — the
+/// class-2 findNulls defect protection AGENTS.md gotcha #8 exists for. The
+/// optional bools (Required, Disabled) carry <c>WhenWritingDefault</c> so
+/// <c>false</c> is ABSENT (matching the TS optional <c>required?</c> /
+/// <c>disabled?</c> posture; same shape as FieldNode.Required / Disabled).
+/// </para>
+///
+/// <para>Leaf posture in the walkers: RichTextFieldNode has no action-bearing
+/// descendants; its Toolbar slot's inner Tools[] are ENUM TOKENS naming built-
+/// in TipTap chain commands resolved CLIENT-SIDE, never framework-side
+/// dispatches. Both walkers (Collect + WalkForSectionAction) carry no-op arms
+/// per Analog D exhaustive-switch discipline — see the twin arms in
+/// viewmodel-shell/src/server.ts.</para></summary>
+public record RichTextFieldNode(
+    // Field identifier — same role as FieldNode.Name (used for form-harvest,
+    // aria-labelledby wiring, and the internal keying that survives the
+    // adapter render()'s innerHTML wipe — see the Chart.chartInstances
+    // precedent in browser.ts). REQUIRED.
+    string Name,
+    // Bind path — the JSONPath-ish key into `state` this field reads from and
+    // writes back to. On input/change the browser converts editor HTML →
+    // markdown (turndown) and writes the markdown string to Bind. Same
+    // contract as FieldNode.Bind. REQUIRED — a bindless rich text field has
+    // no value round-trip and is meaningless.
+    string Bind,
+    // Optional user-facing label; renders as <label htmlFor=...>. Same shape
+    // as FieldNode.Label.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Label = null,
+    // Optional placeholder shown when the editor is empty. Rendered via
+    // TipTap's Placeholder extension.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Placeholder = null,
+    // Optional toolbar. Typed narrowly as RichTextToolbarNode? (NOT ViewNode?)
+    // — a consumer would never legitimately pass a random ViewNode as a
+    // toolbar. Contrast with MessageNode.Actions typed IReadOnlyList<ViewNode>?
+    // where polymorphism matters; the narrowing rule fires only when
+    // polymorphism matters. Omitted = the framework's DEFAULT toolbar (the
+    // Slack/GitHub floor).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RichTextToolbarNode? Toolbar = null,
+    // Form field required flag. WhenWritingDefault posture — matches
+    // FieldNode.Required at the field-node level. false = ABSENT on the wire
+    // (byte-identical to the TS optional `required?: boolean` which is omitted
+    // when unset).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Required = false,
+    // When true, the editor is read-only. WhenWritingDefault posture — matches
+    // FieldNode.Disabled. false = ABSENT on the wire.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Disabled = false,
+    // Lifecycle state — same freeform axis as other Phase 27 row/composite
+    // types. Framework ships styling for active/done/disabled. Emits
+    // .vms-rich-text-field--{state}.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? State = null
 ) : ViewNode;
 
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────
