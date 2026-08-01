@@ -3401,10 +3401,143 @@ button.vms-breadcrumb__link {
   pointer-events: none;
 }
 
-/* v8.2.0 (RICH-02) INTERIM — Plan 28-05 replaces this with the shipped Route B
-   composite CSS after the D-03 tasting sign-off. A tiny non-zero min-height so
-   a stray standalone placeholder is inspectable in dev but has no visible
-   footprint in prod (data-placeholder="pre-tasting" is the tripwire). */
-.vms-rich-text-toolbar[data-placeholder="pre-tasting"] {
-  min-height: 1px;
+/* v8.2.0 — RichTextToolbarNode (RICH-02).
+ * ---------------------------------------------------------------
+ * First-class Route B composite for the rich text toolbar. Emits
+ * .vms-rich-text-toolbar (strip) + .vms-rich-text-toolbar__tool (per-button)
+ * + closed-enum variance modifiers (size / tone / state). The base strip
+ * shape mirrors .vms-rich-text-field__toolbar-default so a consumer who
+ * supplies the composite gets a visually-continuous replacement for the
+ * shipped default; the composite path additionally exposes tone/state.
+ *
+ * Every color/spacing value goes through --vms-* tokens (AGENTS.md
+ * §Design system — no raw CSS on the wire, no viewport breakpoints).
+ * Layout policy P1: no @media, no viewport queries — the strip
+ * flex-wraps intrinsically.
+ */
+.vms-rich-text-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vms-space-2xs);
+  padding: var(--vms-space-2xs) var(--vms-space-xs);
+  border: 1px solid var(--vms-border);
+  border-radius: var(--vms-radius) var(--vms-radius) 0 0;
+  background: var(--vms-surface-2);
+}
+/* When the composite toolbar precedes the editor host, drop the editor's
+   top border/radius so the two chrome pieces sit flush — same seam as
+   the default-toolbar rule above. */
+.vms-rich-text-toolbar + .vms-rich-text-field__editor {
+  border-top: none;
+  border-radius: 0 0 var(--vms-radius) var(--vms-radius);
+}
+.vms-rich-text-toolbar__tool {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--vms-space-2xs) var(--vms-space-xs);
+  border: 1px solid transparent;
+  border-radius: var(--vms-radius);
+  background: transparent;
+  color: var(--vms-text);
+  font-family: var(--vms-font-body);
+  font-size: var(--vms-text-sm);
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--vms-t), border-color var(--vms-t);
+}
+.vms-rich-text-toolbar__tool:hover {
+  background: var(--vms-surface);
+  border-color: var(--vms-border);
+}
+.vms-rich-text-toolbar__tool:focus-visible {
+  outline: 2px solid var(--vms-accent);
+  outline-offset: 1px;
+}
+
+/* Size variance — compact packs tighter; expanded is the shipped default
+   (present as a class for wire uniformity, no metrics change). */
+.vms-rich-text-toolbar--size-compact {
+  padding: calc(var(--vms-space-2xs) / 2) var(--vms-space-2xs);
+  gap: calc(var(--vms-space-2xs) / 2);
+}
+.vms-rich-text-toolbar--size-compact .vms-rich-text-toolbar__tool {
+  padding: calc(var(--vms-space-2xs) / 2) var(--vms-space-2xs);
+  font-size: var(--vms-text-xs);
+}
+
+/* Tone variance — 4 tone-tinted backgrounds via color-mix (Phase 25 Chip
+   precedent). Buttons read against the pair the base --vms-surface-2 covers
+   plus a 10% tint — AA headroom is inherited; no NEW fg/bg pair is
+   introduced. */
+.vms-rich-text-toolbar--tone-danger {
+  background: color-mix(in srgb, var(--vms-error)   10%, var(--vms-surface-2));
+}
+.vms-rich-text-toolbar--tone-warning {
+  background: color-mix(in srgb, var(--vms-warning) 10%, var(--vms-surface-2));
+}
+.vms-rich-text-toolbar--tone-success {
+  background: color-mix(in srgb, var(--vms-success) 10%, var(--vms-surface-2));
+}
+.vms-rich-text-toolbar--tone-info {
+  background: color-mix(in srgb, var(--vms-info)    10%, var(--vms-surface-2));
+}
+
+/* State variance — STYLE-3 uniformity mirror per Phase 27 (.vms-list-row,
+   .vms-user-row, etc.). --active = border-left 3px --vms-accent; --done =
+   opacity 0.72; --disabled = opacity 0.55 + pointer-events:none. */
+.vms-rich-text-toolbar--state-active {
+  border-left: 3px solid var(--vms-accent);
+  padding-left: calc(var(--vms-space-xs) - 3px);
+}
+.vms-rich-text-toolbar--state-done {
+  opacity: 0.72;
+}
+.vms-rich-text-toolbar--state-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* v8.2.0 (RICH-01) — Editor-host inner-node styling. TipTap renders raw
+ * <blockquote>, <pre><code>, and inline <code> inside .vms-rich-text-field
+ * __editor; Plan 28-03's CSS scope covered only the field wrapper / toolbar
+ * / editor host. Ashley's Plan 28-04 sign-off surfaced the gap ("code blocks
+ * and quotes don't look like I would expect"); these rules close it, keeping
+ * the shipped editor internals aligned with the shipped design system's
+ * quote/code affordances elsewhere. Every value goes through --vms-* tokens;
+ * no @media. */
+.vms-rich-text-field__editor blockquote {
+  border-left: 3px solid var(--vms-border);
+  padding-left: var(--vms-space-sm);
+  margin: var(--vms-space-xs) 0;
+  color: var(--vms-text-muted);
+  font-style: italic;
+}
+.vms-rich-text-field__editor pre {
+  background: var(--vms-code-bg);
+  color: var(--vms-code-fg);
+  border: 1px solid var(--vms-border);
+  border-radius: var(--vms-radius-sm);
+  padding: var(--vms-space-sm);
+  font-family: var(--vms-font-mono);
+  font-size: var(--vms-text-sm);
+  line-height: var(--vms-control-line);
+  overflow-x: auto;
+  margin: var(--vms-space-xs) 0;
+}
+.vms-rich-text-field__editor code {
+  background: var(--vms-code-bg);
+  color: var(--vms-code-fg);
+  padding: 0 var(--vms-space-2xs);
+  border-radius: var(--vms-radius-sm);
+  font-family: var(--vms-font-mono);
+  font-size: var(--vms-text-sm);
+}
+/* Code inside pre resets its own background/padding — otherwise you get
+   double-styling (a code chip inside a code block wrapper). */
+.vms-rich-text-field__editor pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
 }
