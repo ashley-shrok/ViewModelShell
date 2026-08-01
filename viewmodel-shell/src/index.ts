@@ -211,6 +211,8 @@ export type ViewNode =
   | ListRowNode
   | MessageNode
   | MessageListNode
+  | RichTextFieldNode
+  | RichTextToolbarNode
   | AlertNode
   | UserRowNode
   | DetailRowNode
@@ -1753,6 +1755,186 @@ export interface MessageListNode {
    *  on the wire (.NET `WhenWritingDefault` posture; TS optional). */
   followTail?: boolean;
 }
+
+// ─── Phase 28 (v8.2.0) — Rich text WYSIWYG input primitive ─────────────────
+//
+// RichTextFieldNode (RICH-01, leaf-input primitive) + RichTextToolbarNode
+// (RICH-02, Route B composite) + RichTextTool (closed union floor). Placed
+// here in the Route B composites section, immediately after the
+// MessageNode/MessageListNode pair (per Plan 28-01 §Task 1 location hint),
+// so composite recipes cluster together in source order.
+
+/**
+ * v8.2.0 (RICH-01) — RichTextFieldNode. First-class WYSIWYG rich text input
+ * primitive. Wire value is a MARKDOWN STRING on `bind`; the browser renders a
+ * TipTap editor + framework-owned toolbar + turndown HTML→markdown on
+ * input/change. Bundled TipTap 2.x + turndown, lazy-imported from `browser.ts`
+ * (Chart.js precedent) — consumers who never render one ship ZERO bytes.
+ * Display-side rendering flows through the existing markdown.ts → InlineRuns
+ * pipeline (no new render code).
+ *
+ * ## Why a dedicated node (D-01)
+ *
+ * Rich text has a class of anticipated customization surface that would ONLY
+ * apply to rich fields and would bloat FieldNode with a section every other
+ * inputType ignores. Ashley's principle (banked 2026-07-31): future
+ * customization pressure earns the shape its own primitive. See
+ * `.planning/phases/28-.../28-CONTEXT.md` §Decisions D-01.
+ *
+ * ## Wire format is a MARKDOWN STRING (D-06)
+ *
+ * Zero XSS surface on the wire: no HTML crosses this interface. The `bind`
+ * path reads/writes a markdown string. On write, the browser converts editor
+ * HTML → markdown via turndown; on initial-content pre-load, existing
+ * `marked` converts markdown → HTML for `editor.setContent()`.
+ *
+ * ## Feature-surface floor (D-08)
+ *
+ * Slack/GitHub level: bold, italic, link, ordered list, unordered list,
+ * headings h1-h3, inline code, code block, blockquote. See `RichTextTool` for
+ * the closed union of tool names. Everything else (mentions, embeds, tables,
+ * image upload, comment-only mode) is deferred to a future phase.
+ *
+ * ## Sanitization posture (D-Q4)
+ *
+ * Because the wire value is markdown, there is NO HTML sanitization concern
+ * on the wire. Display-side sanitization is audit-and-confirmed against the
+ * existing `markdown.ts` → InlineRuns pipeline (`linkHrefRewrite` seam at
+ * markdown.ts:53-67). If a gap surfaces, per-response invariant tests catch
+ * it in parity.
+ *
+ * ## ANTICIPATED CUSTOMIZATION SURFACE
+ *
+ * (Deferred per CONTEXT §Deferred; the shape below MUST NOT preclude any of
+ * these; each future addition slots in as an additional `?` field.)
+ *
+ * - `allowedMarks` / `allowedNodes` — comment-only vs full-editor mode. Angel-
+ *   flagged for `/ai`. Waits for concrete signal.
+ * - `mentionsProvider` — future consumer of the mention-picker-primitive
+ *   bounty (Molly). Slot shape here MUST not preclude eventual integration
+ *   (`mentionsProvider?: MentionPickerNode`).
+ * - `plainTextValueBind` — Notion-pattern plain-text projection for
+ *   search/preview/agent-audience. Real ask; defer to a follow-up phase on
+ *   real signal. Framework-derives-it constraint applies (server-derives from
+ *   the markdown on read; NOT app-side).
+ * - `heightMin` / `heightMax` — editor viewport bounds.
+ * - `sanitizeConfig` — per-field sanitizer overrides.
+ * - `imageUpload` — pasted image handling. Intersects with existing file-input
+ *   surface + `file-upload-progress-drag-drop` bounty. Future phase.
+ */
+export interface RichTextFieldNode {
+  type: "rich-text-field";
+  /** Field identifier — same role as FieldNode.name (used for form-harvest,
+   *  aria-labelledby wiring, and the internal keying that survives render()'s
+   *  innerHTML wipe — see the Chart.chartInstances precedent). REQUIRED. */
+  name: string;
+  /** Bind path — the JSONPath-ish key into `state` this field reads from and
+   *  writes back to. On input/change the browser converts editor HTML →
+   *  markdown (turndown) and writes the markdown string to `bind`. Same
+   *  contract as FieldNode.bind. REQUIRED. */
+  bind: string;
+  /** Optional user-facing label; renders as <label htmlFor=...>. Same shape
+   *  as FieldNode.label. */
+  label?: string;
+  /** Optional placeholder shown when the editor is empty. Rendered via TipTap
+   *  Placeholder extension. */
+  placeholder?: string;
+  /** Optional toolbar. Typed slot — accepts a RichTextToolbarNode. Omitted =
+   *  the framework's DEFAULT toolbar (the Slack/GitHub floor). Passing an
+   *  explicit toolbar overrides. */
+  toolbar?: RichTextToolbarNode;
+  /** Form field required flag; when true, HTML5 `required`. */
+  required?: boolean;
+  /** When true, the editor is read-only (no toolbar clicks, no keystrokes).
+   *  Same shape as FieldNode.disabled. */
+  disabled?: boolean;
+  /** Lifecycle state — same freeform axis as other row/composite `state?:
+   *  string` per Phase 27's uniformity. Framework ships styling for `active`,
+   *  `done`, `disabled`. Appended as a BEM modifier:
+   *  `.vms-rich-text-field--{state}`. An unrecognized state renders an
+   *  unstyled class (it still round-trips; just no shipped rule). */
+  state?: string;
+}
+
+/**
+ * v8.2.0 (RICH-02) — RichTextToolbarNode. Route B composite (typed slots +
+ * closed-enum variance) for the rich text toolbar. Framework owns layout,
+ * button styling, tone tokens, keyboard shortcuts, focus management, a11y
+ * (aria-labels + shortcut hints); the app declares WHICH tools appear.
+ *
+ * ## Route B tasting (D-03)
+ *
+ * The earned-a-composite rule (AGENTS.md §"Route B composite-nodes layer" +
+ * `.planning/design/composite-nodes-layer.md` §2) requires a served
+ * before/after tasting page + Ashley's visual sign-off BEFORE this composite
+ * lands as a shipped-inventory row. This wire-type addition (Plan 28-01) is
+ * the CONTRACT; the composite renderer + shipped-inventory row lands in a
+ * later Phase 28 plan gated on the tasting.
+ *
+ * ## Typed-slots pattern (design doc §3)
+ *
+ *   - Slots are typed by SEMANTIC NAME, not by node type.
+ *   - Variance is expressed through CLOSED-ENUM AXES (never raw CSS/style).
+ *   - Every slot is optional except the one that names what the composite IS
+ *     (`tools[]` here — a toolbar with no tools is not a toolbar).
+ *
+ * ## ANTICIPATED CUSTOMIZATION
+ *
+ * (D-02 rationale; NOT built this phase — the composite is the ABSTRACTION
+ * SEAM that lets us add them later without changing app code. The shape below
+ * must not preclude any of these.)
+ *
+ * - `visibleTools` — per-toolbar tool-set overrides.
+ * - `headings-dropdown` — collapse h1/h2/h3 into a single dropdown control.
+ * - Toolbar position variants — top / bottom / floating.
+ * - Compact / expanded variants (D-02 anticipated axis; already exposed via
+ *   `size` below).
+ * - Overflow-to-kebab — narrow-container tool triage.
+ */
+export interface RichTextToolbarNode {
+  type: "rich-text-toolbar";
+  /** The list of tools to render. Closed union of the floor's tool names
+   *  (D-08). REQUIRED (a toolbar with no tools is not a toolbar). */
+  tools: RichTextTool[];
+  /** Compact vs expanded — a closed enum (D-02 anticipated axis). Omitted =
+   *  "expanded". */
+  size?: "compact" | "expanded";
+  /** Semantic tone — the framework-wide tone axis (mirrors ButtonNode.tone).
+   *  Omitted = neutral. */
+  tone?: "danger" | "warning" | "success" | "info";
+  /** Lifecycle state (same freeform axis as other Phase 27 composites).
+   *  Appended as `.vms-rich-text-toolbar--{state}`. */
+  state?: string;
+}
+
+/**
+ * v8.2.0 (RICH-01/RICH-02) — RichTextTool. Closed union of tool names for
+ * `RichTextToolbarNode.tools[]`.
+ *
+ * ## D-08 Slack/GitHub feature-surface floor
+ *
+ * The 11 values below are the locked initial floor. Widening later is
+ * additive (per gotcha #9's forward-compat posture): a new tool name added
+ * to this union is a MINOR bump, not a break — consumers / agents key off the
+ * STRING value, never assume a fixed set. Mirrors the same closed-widen-later
+ * posture as `ChartNode.kind` at index.ts:2462-2465.
+ *
+ * See `.planning/phases/28-.../28-CONTEXT.md` §Decisions D-08 for the rationale
+ * (Slack/GitHub is the "everyone recognises this" ceiling; adding more without
+ * signal violates the "earned a composite" governance rule applied to axes).
+ */
+export type RichTextTool =
+  | "bold"
+  | "italic"
+  | "link"
+  | "bullet-list"
+  | "ordered-list"
+  | "heading-1"
+  | "heading-2"
+  | "heading-3"
+  | "inline-code"
+  | "code-block"
+  | "blockquote";
 
 /**
  * v8.0.0 (COMP-07) — AlertNode. Prominent status-message primitive. The
