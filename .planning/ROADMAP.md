@@ -477,3 +477,27 @@ Plans:
 - [x] 27-09-PLAN.md — Full green-tree gate: framework vitest + core-globals + demo-types + AA-contrast + parity + all .NET Tests + Markdown companion compile (wave 7, depends on 27-07 + 27-08)
 - [x] 27-10-PLAN.md — Docs: CHANGELOG.md v8.1.0 + MIGRATION.md upgrade section + AGENTS.md inventory note (wave 8, depends on 27-09)
 - [x] 27-11-PLAN.md — Operator-gated release: version bump + auth precheck + npm publish + NuGet publish + tag v8.1.0 + advance main + announce #vms-changelog (wave 9, depends on 27-10)
+
+### Phase 28: Rich text WYSIWYG input primitive — `FieldNode(inputType:"rich")` + bundled TipTap + markdown-string wire
+
+**Goal:** Ship a first-class rich text WYSIWYG input primitive. Consumers declare `FieldNode(inputType:"rich")` (exact node shape TBD in discuss-phase — extension vs new `RichTextFieldNode`); the framework bundles a headless TipTap 2.x editor and owns the toolbar (via `ButtonNode` + tone/emphasis axes + `--vms-*` design tokens — composite vs `SectionNode(layout:"row")` composition TBD). Wire format is a **markdown string** on the field's bind path, converted client-side via `turndown`; on later display the value flows through the existing markdown → InlineRuns pipeline (`viewmodel-shell/src/markdown.ts` + Markdown companion NuGet) with zero new render code. Feature-surface floor: bold, italic, link, ordered/unordered list, headings (h1–h3), inline code, code block, blockquote — Slack/GitHub level. **Locked from spike + Ashley alignment 2026-07-31 → 2026-08-01:** library = TipTap; wire = markdown-string; shape = primitive+bundled (NOT attach-a-library seam); alternatives (Lexical, Quill, Milkdown, Milkdown Crepe) evaluated + rejected in bounty `rich-text-input`. Additive; wire token stays `viewmodel-shell/1.0`. Bundling strategy (main package vs opt-in subpath `/rich-text`) TBD in discuss-phase.
+
+**Requirements:** TBD (defined in discuss-phase + plan-phase)
+
+**Depends on:** Phase 27 (v8.1.0 baseline)
+
+**Success Criteria** (what must be TRUE — refined during discuss-phase + plan-phase):
+  1. A `FieldNode` with the rich inputType renders a WYSIWYG editor with the floor toolbar; the bound value is a valid markdown string on submit.
+  2. Round-trip is clean: an existing markdown-string bind pre-loads into the editor cleanly for the floor content; user edits produce well-formed markdown on submit.
+  3. Consumers who don't use rich text ship zero TipTap/turndown bytes (bundling strategy TBD; the containment invariant is not).
+  4. Wire round-trips byte-identically across TS + .NET backends; both tree-validators descend into the node; `bun run parity/run.ts` green with a FeatureProbe fixture exercising it.
+  5. TUI adapter has a defined legible fallback (textarea over the markdown-string, since the wire is already markdown).
+  6. Comprehensive tailnet verification page served on 100.: floor-feature exercise walk-through, real bundle, Ashley visual sign-off recorded.
+  7. Full green-tree gate green per AGENTS.md (framework vitest + core-globals + demo-types + AA-contrast + parity + all .NET Tests + Markdown companion compile).
+  8. Docs shipped: CHANGELOG.md section, MIGRATION.md upgrade note (additive; no breaking), AGENTS.md pattern entry.
+  9. Aligned MINOR release (npm + NuGet — version TBD; likely 8.2.0), operator-gated auth precheck + publish, annotated tag, main advanced, announced on `#vms-announcements`.
+
+**Plans:** TBD
+
+Plans:
+- [ ] TBD — plans emerge from `/gsd:plan-phase 28` after `/gsd:discuss-phase 28` produces CONTEXT.md
