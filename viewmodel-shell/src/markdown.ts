@@ -29,6 +29,38 @@ import type {
 } from "./index.js";
 import { richText } from "./index.js";
 
+/** Shipped whitelist of allowed URL schemes for markdown-emitted link hrefs.
+ *  Applied at every href emission site (regular `[label](href)` links AND
+ *  autolinks `<scheme:...>`) BEFORE the opt-in `linkHrefRewrite` hook — so
+ *  a consumer's hook sees an already-sanitized href (an empty string for
+ *  disallowed schemes).
+ *
+ *  Whitelist over blocklist per web-security orthodoxy: unknown schemes
+ *  default to safe (rejected → empty string), not exploitable. A future
+ *  scheme this framework hasn't heard of is refused, not passed through.
+ *
+ *  Allowed: `http`, `https`, `mailto`, `tel`, `ftp`. Relative URLs (no
+ *  scheme prefix — including bare paths `/foo`, fragments `#bar`, and
+ *  query-only `?q=1`) are also allowed.
+ *
+ *  Disallowed (returns `""`): `javascript:`, `data:`, `vbscript:`, `file:`,
+ *  and ANY other scheme not in the whitelist. An empty href downstream
+ *  produces a no-op link — the label text still renders, but clicking it
+ *  does nothing dangerous. Fail-loud principle: the framework never leaves
+ *  a consumer one config mistake away from a stored-XSS bug.
+ *
+ *  Byte-aligned with the .NET twin `AshleyShrok.ViewModelShell.Markdown`
+ *  (`MarkdownConverter.SanitizeHref`). Any change here MUST be mirrored. */
+const ALLOWED_LINK_SCHEMES = ["http", "https", "mailto", "tel", "ftp"];
+function sanitizeHref(raw: string): string {
+  const trimmed = raw.trim();
+  // Relative / fragment / query with no scheme prefix → allowed.
+  const schemeMatch = /^([a-zA-Z][a-zA-Z0-9+.\-]*):/.exec(trimmed);
+  if (!schemeMatch) return trimmed;
+  const scheme = schemeMatch[1].toLowerCase();
+  return ALLOWED_LINK_SCHEMES.includes(scheme) ? trimmed : "";
+}
+
 export interface MarkdownOptions {
   /** When true, every parsed `LinkNode`/`InlineRun` link is marked `external`
    *  (opens outside the current app context — new tab + noopener in the
@@ -295,11 +327,22 @@ function convertInline(
         // For autolinks we substitute the rewritten href as the visible text
         // too — otherwise the label would lie about where the click goes.
         // For regular labeled links the author's label stays untouched.
-        const href = opts.linkHrefRewrite ? opts.linkHrefRewrite(l.href) : l.href;
+        // Shipped whitelist sanitizer runs BEFORE the opt-in rewrite hook:
+        // disallowed schemes (`javascript:`, `data:`, `vbscript:`, `file:`, …)
+        // become "" here regardless of consumer config, so `linkHrefRewrite`
+        // never sees a raw dangerous scheme (audit disposition D-Q4:
+        // CONSUMER-DEPENDENT → shipped default MUST be safe).
+        const sanitized = sanitizeHref(l.href);
+        const href = opts.linkHrefRewrite ? opts.linkHrefRewrite(sanitized) : sanitized;
         const isAutolink = l.text === l.href;
+        // For autolinks, use the (possibly-sanitized) href as visible text
+        // when it's non-empty, else fall back to the original raw label so
+        // the user sees what they wrote (with a dead href) rather than a
+        // silent empty span.
+        const autolinkText = href !== "" ? href : l.text;
         const inner = l.tokens && l.tokens.length > 0 && !isAutolink
           ? l.tokens
-          : ([{ type: "text", raw: href, text: href, escaped: false }] as Token[]);
+          : ([{ type: "text", raw: autolinkText, text: autolinkText, escaped: false }] as Token[]);
         out.push(
           ...convertInline(inner, opts, {
             ...ctx,

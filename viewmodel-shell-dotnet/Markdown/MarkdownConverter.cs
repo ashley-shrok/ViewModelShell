@@ -71,6 +71,44 @@ public static class MarkdownConverter
         .UseAdvancedExtensions()
         .Build();
 
+    /// <summary>Shipped whitelist of allowed URL schemes for markdown-emitted
+    /// link hrefs. Applied at every href emission site (regular
+    /// <c>[label](href)</c> links AND autolinks <c>&lt;scheme:...&gt;</c>)
+    /// BEFORE the opt-in <see cref="MarkdownOptions.LinkHrefRewrite"/> hook —
+    /// so a consumer's hook sees an already-sanitized href (an empty string
+    /// for disallowed schemes).
+    /// <para>Whitelist over blocklist per web-security orthodoxy: unknown
+    /// schemes default to safe (rejected → empty string), not exploitable.
+    /// A future scheme this framework hasn't heard of is refused, not
+    /// passed through.</para>
+    /// <para>Allowed: <c>http</c>, <c>https</c>, <c>mailto</c>, <c>tel</c>,
+    /// <c>ftp</c>. Relative URLs (no scheme prefix — including bare paths
+    /// <c>/foo</c>, fragments <c>#bar</c>, and query-only <c>?q=1</c>) are
+    /// also allowed.</para>
+    /// <para>Disallowed (returns <c>""</c>): <c>javascript:</c>, <c>data:</c>,
+    /// <c>vbscript:</c>, <c>file:</c>, and ANY other scheme not in the
+    /// whitelist. An empty href downstream produces a no-op link — the label
+    /// text still renders, but clicking it does nothing dangerous. Fail-loud
+    /// principle: the framework never leaves a consumer one config mistake
+    /// away from a stored-XSS bug.</para>
+    /// <para>Byte-aligned with the TS twin
+    /// <c>@ashley-shrok/viewmodel-shell/markdown</c> (<c>sanitizeHref</c>).
+    /// Any change here MUST be mirrored.</para></summary>
+    private static readonly string[] AllowedLinkSchemes = new[] { "http", "https", "mailto", "tel", "ftp" };
+
+    private static readonly System.Text.RegularExpressions.Regex SchemeRegex =
+        new(@"^([a-zA-Z][a-zA-Z0-9+.\-]*):", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    internal static string SanitizeHref(string raw)
+    {
+        var trimmed = raw.Trim();
+        // Relative / fragment / query with no scheme prefix → allowed.
+        var m = SchemeRegex.Match(trimmed);
+        if (!m.Success) return trimmed;
+        var scheme = m.Groups[1].Value.ToLowerInvariant();
+        return System.Linq.Enumerable.Contains(AllowedLinkSchemes, scheme) ? trimmed : "";
+    }
+
     /// <summary>Parse <paramref name="md"/> into a flat block-level
     /// <see cref="ViewNode"/> list. Compose into any children slot —
     /// <c>new PageNode(Children: MarkdownConverter.ToViewNodes(md))</c>,
@@ -305,15 +343,24 @@ public static class MarkdownConverter
             }
             case LinkInline link when !link.IsImage:
             {
-                var href = link.Url ?? "";
-                if (opts.LinkHrefRewrite is not null) href = opts.LinkHrefRewrite(href);
+                var raw = link.Url ?? "";
+                // Shipped whitelist sanitizer runs BEFORE the opt-in rewrite hook:
+                // disallowed schemes (javascript:, data:, vbscript:, file:, …)
+                // become "" here regardless of consumer config, so LinkHrefRewrite
+                // never sees a raw dangerous scheme (audit disposition D-Q4:
+                // CONSUMER-DEPENDENT → shipped default MUST be safe).
+                var sanitized = SanitizeHref(raw);
+                var href = opts.LinkHrefRewrite is not null ? opts.LinkHrefRewrite(sanitized) : sanitized;
                 var next = ctx with { Href = href, External = opts.External };
                 var inner = ConvertInline(link, opts, next);
                 if (inner.Count == 0)
                 {
                     // Empty label -> emit the URL as the run text so agents/TUI
-                    // adapters still see something readable.
-                    runs.Add(MakeRun(href, next));
+                    // adapters still see something readable. When the href was
+                    // sanitized to "", fall back to the raw label so the user
+                    // sees what they wrote (with a dead href) rather than a
+                    // silent empty span.
+                    runs.Add(MakeRun(href.Length > 0 ? href : raw, next));
                 }
                 else
                 {
@@ -332,10 +379,15 @@ public static class MarkdownConverter
                 break;
             case AutolinkInline auto:
             {
-                var url = auto.Url ?? "";
-                if (opts.LinkHrefRewrite is not null) url = opts.LinkHrefRewrite(url);
+                var raw = auto.Url ?? "";
+                // Whitelist sanitizer BEFORE the rewrite hook (see LinkInline case).
+                var sanitized = SanitizeHref(raw);
+                var url = opts.LinkHrefRewrite is not null ? opts.LinkHrefRewrite(sanitized) : sanitized;
                 var next = ctx with { Href = url, External = opts.External };
-                runs.Add(MakeRun(url, next));
+                // If sanitized to "", use the raw label as visible text so the
+                // user sees what they wrote (with a dead href) rather than an
+                // empty span. Autolinks: label === url by definition.
+                runs.Add(MakeRun(url.Length > 0 ? url : raw, next));
                 break;
             }
             case ContainerInline container:
