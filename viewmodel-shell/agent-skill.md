@@ -214,6 +214,76 @@ An invented value is **just a value whose label equals itself** — there is no 
 - 🚨 **Any cap is VISIBLE in the tree. Nothing truncates silently.** If a server caps its results, it says so in the tree (the app renders a `TextNode`, per the canonical *"Refine your filter — N matches, max is X"* pattern). You should never be handed a silently truncated list. The anti-pattern this exists to avoid is real: a surveyed platform applies a 15-result cap *post-authorization* behind a hard 250-row SQL ceiling, so in a large table an exact-match record can be **silently invisible**. If you see a cap message, narrow the query — do not conclude the record doesn't exist.
 - 🚨 **The picker's filter is UX, never authorization.** What `candidates` offers is a search-scoping convenience, **not an access boundary** — do not infer authorization from it. The server authorizes in the action handler with the real auth context, exactly as every other VMS action does. A value absent from `candidates` is not thereby forbidden, and a value present in `candidates` is not thereby permitted.
 
+## Rich text fields (RICH-01, RICH-02)
+
+Two node types added in v8.2.0 for user-authored rich text: `rich-text-field` (a leaf-input primitive) and `rich-text-toolbar` (a composite for the editor's tool strip).
+
+### Wire value is a MARKDOWN STRING
+
+🚨 **The `bind` path carries a plain markdown string. No HTML crosses this interface — ever.** A `rich-text-field`'s bind reads and writes exactly the same shape as any other text input: a `string` at a dotted path inside `state`. The browser renders the string as a WYSIWYG editor (TipTap + a framework-owned toolbar); on input/change the editor's HTML is converted to markdown client-side and written back to `bind`. As a wire-driving agent you never see HTML, never render the editor, never dispatch toolbar clicks, and never need TipTap. Toolbar buttons are CLIENT-SIDE UX; their effect is to mutate the markdown string, which you can produce directly.
+
+Round-trip is the ordinary rule: read `state[bindPath]`, write your updated markdown string at the same path, dispatch as normal. Display-side of the same markdown string later flows through the shipped markdown → InlineRuns pipeline — the string you submit is the string that renders back.
+
+### `rich-text-field` reference
+
+```json
+{ "type": "rich-text-field",
+  "name": "body",
+  "bind": "form.body",
+  "label": "Description",
+  "placeholder": "Type something…",
+  "required": true,
+  "toolbar": { "type": "rich-text-toolbar",
+               "tools": ["bold", "italic", "link", "bullet-list", "ordered-list",
+                         "heading-1", "heading-2", "heading-3",
+                         "inline-code", "code-block", "blockquote"] } }
+```
+
+| Field | Meaning |
+|---|---|
+| `name` | REQUIRED. Field identifier — same role as `FieldNode.name`. |
+| `bind` | REQUIRED. Dotted path into `state` where the markdown string lives. Read + write here. |
+| `label` | Optional user-facing label. |
+| `placeholder` | Optional placeholder shown when the editor is empty. |
+| `toolbar` | Optional typed slot — a `rich-text-toolbar` node. **Providing this REPLACES the framework's default toolbar** (the Slack/GitHub floor). Omit to accept the default. |
+| `required` | Optional boolean; when true, the field is required. |
+| `disabled` | Optional boolean; when true, the editor is read-only. |
+| `state` | Optional freeform lifecycle string (same axis as other v8.1.0 composites — `active`, `done`, `disabled`, or app-specific). |
+
+### `rich-text-toolbar` reference
+
+```json
+{ "type": "rich-text-toolbar",
+  "tools": ["bold", "italic", "link", "bullet-list", "ordered-list"],
+  "size": "compact",
+  "tone": "info" }
+```
+
+| Field | Meaning |
+|---|---|
+| `tools` | REQUIRED. An array of tool names (see the closed union below). A toolbar with no tools is not a toolbar. |
+| `size` | Optional closed union: `compact | expanded`. Omitted = `expanded`. |
+| `tone` | Optional closed union: `danger | warning | success | info`. Omitted = neutral. |
+| `state` | Optional freeform lifecycle string (same axis as other v8.1.0 composites). |
+
+Providing a `rich-text-toolbar` as the `toolbar` slot on a `rich-text-field` **replaces the framework's default toolbar entirely** — the tools you list are the tools that render, in that order.
+
+### Tool names (v8.2.0 floor)
+
+The closed initial set of `tools[]` values, matching the Slack/GitHub feature-surface floor:
+
+`bold`, `italic`, `link`, `bullet-list`, `ordered-list`, `heading-1`, `heading-2`, `heading-3`, `inline-code`, `code-block`, `blockquote`.
+
+**Forward-compat rule — silently ignore unknown tool names.** Widening the set later is additive (a new tool name is a MINOR bump, not a break). Key off the string values you see, never assume a fixed set — if you encounter a name you do not recognize, skip it, do not fail. (This mirrors the same closed-widen-later posture as `ChartNode.kind`.)
+
+### Driving a rich text field cold — the five steps
+
+1. `GET <endpoint>` and receive `{ ok, vm, state }`.
+2. Locate the `rich-text-field` in `vm` (walk the tree; match `type === "rich-text-field"`). Note its `bind` path.
+3. Read the current markdown at `state[bindPath]`.
+4. Update `state[bindPath]` to the markdown string you want to submit (write your own markdown — headings, `**bold**`, `` `inline code` ``, lists, links, etc.).
+5. `POST <actionEndpoint>` with the action envelope (`{ "name": "<save-action>", "state": <updated state> }`, JSON or multipart per the *Action dispatch shape* rules above). Read `ok`/`rejected` per the usual response-envelope rules.
+
 ## Files
 
 File uploads use the multipart form above. One form entry per file input, keyed by the input's `name` attribute (from the corresponding node's `name` field in the tree). The file's binary content is the entry's value. JSON-body dispatch cannot carry files; use multipart.
