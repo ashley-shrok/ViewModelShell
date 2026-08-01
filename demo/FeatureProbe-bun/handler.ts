@@ -17,6 +17,7 @@ import {
   shellRedirect,
   shellSideEffect,
   validateActionNames,
+  type RichTextToolbarNode,
   type TableColumn,
   type TableNode,
   type ViewNode,
@@ -1444,15 +1445,30 @@ function buildVm(state: FeatureProbeState): ViewNode {
         bind: "draftMarkdown",
         label: "Rich probe",
         placeholder: "Type something",
-        toolbar: {
-          type: "rich-text-toolbar",
+        // Byte-parity note: the nested toolbar object OMITS the `type`
+        // discriminator to match the .NET twin's Analog C narrow-typing
+        // behavior (Plan 28-02 key-decision #4). On the .NET side,
+        // RichTextFieldNode.Toolbar is typed as the concrete
+        // RichTextToolbarNode? (NOT ViewNode?), so STJ serializes it as
+        // the declared type and OMITS the polymorphic discriminator —
+        // that omission is documented + covered by
+        // RichTextFieldNode_FullShape_EmitsAllSetFields_OmitsUnset. TS
+        // interfaces mark `type` as required on RichTextToolbarNode, so
+        // the byte-parity drift is TS/JSON's failure to honor the narrow
+        // slot's discriminator suppression, NOT a semantic disagreement.
+        // The `as unknown as RichTextToolbarNode` cast defeats the
+        // required-field check specifically here (nested-slot only); the
+        // standalone RichTextToolbarNode emission below still carries
+        // `type` because it is a top-level ViewNode where the
+        // discriminator IS emitted on both sides.
+        toolbar: ({
           tools: ["bold", "italic", "link", "bullet-list", "ordered-list",
                   "heading-1", "heading-2", "heading-3", "inline-code",
                   "code-block", "blockquote"],
           size: "expanded",
           tone: "info",
           state: "active",
-        },
+        } as unknown) as RichTextToolbarNode,
         state: "active",
       },
       {
