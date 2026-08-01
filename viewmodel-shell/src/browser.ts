@@ -25,6 +25,7 @@ import type {
   TimelineEntryNode, TimelineNode,
   SettingRowNode, SettingListNode,
   ChipNode, ChipListNode,
+  RichTextFieldNode, RichTextToolbarNode, RichTextTool,
 } from "./index.js";
 import { ICONS } from "./icons-payload.js";
 
@@ -97,6 +98,27 @@ export class BrowserAdapter implements Adapter {
   // second render still applies once the import resolves. Instances are
   // mark-swept (destroy()'d + deleted) in render() when the new tree drops them.
   private chartInstances = new Map<string, { canvas: HTMLCanvasElement; chart: any | null; latest: any | null }>();
+  // v8.2.0 (RICH-01) — persist TipTap Editor instances across render() calls,
+  // for exactly the reason chartInstances does (see the block-comment above):
+  // the Editor's DOM host + its caret + its selection + its undo history must
+  // survive the innerHTML wipe. Mark-swept in render() against editorKeysSeen,
+  // exactly as chartInstances is. Values are `any` because the tiptap +
+  // turndown modules are LAZY-loaded (avoids a top-level import that would
+  // defeat D-04's zero-bytes-for-non-consumers guarantee).
+  //
+  // `host` is the <div> the Editor is attached to — reused across renders (its
+  // internal DOM state IS the editor state, and TipTap will re-attach it
+  // seamlessly). `latestBindValue` is the last markdown value we've seen on
+  // this bind, used to decide whether an incoming server value differs from
+  // what the user has typed — a difference means "the server changed it,
+  // setContent()"; equality means "we already have that content, do NOT
+  // setContent() or we'd wipe the user's caret/selection/undo history".
+  private editorInstances = new Map<string, {
+    host: HTMLElement;
+    editor: any | null;
+    turndown: any | null;
+    latestBindValue: string;
+  }>();
   // Phase 21 (LOOK-05) — the lookup's aria-live status regions, keyed by
   // FieldNode.name. DELIBERATELY PERSISTENT across renders (NOT reset like the
   // per-render fields below), for exactly the reason chartInstances is: these
@@ -205,6 +227,11 @@ export class BrowserAdapter implements Adapter {
   // it, so a lookup removed from the tree drops its live regions rather than
   // leaking them across a long session. Same idiom as chartKeysSeen above.
   private lookupKeysSeen = new Set<string>();
+  // v8.2.0 (RICH-01) — per-render bookkeeping for the editorInstances map,
+  // exact same idiom as chartKeyCounter + chartKeysSeen. Both reset at the top
+  // of render() and drive the post-rebuild mark-sweep of editorInstances.
+  private editorKeyCounter = new Map<string, number>();
+  private editorKeysSeen = new Set<string>();
 
   constructor(private container: HTMLElement) {}
 
@@ -322,6 +349,12 @@ export class BrowserAdapter implements Adapter {
     this.chartKeyCounter = new Map();
     this.chartKeysSeen = new Set();
 
+    // v8.2.0 (RICH-01) — reset the per-render TipTap editor bookkeeping (NOT
+    // editorInstances, which is deliberately persistent). Same posture as the
+    // chart bookkeeping above.
+    this.editorKeyCounter = new Map();
+    this.editorKeysSeen = new Set();
+
     this.container.innerHTML = "";
     this.node(vm, this.container, onAction);
 
@@ -334,6 +367,20 @@ export class BrowserAdapter implements Adapter {
       if (!this.chartKeysSeen.has(key)) {
         entry.chart?.destroy();
         this.chartInstances.delete(key);
+      }
+    }
+
+    // v8.2.0 (RICH-01) — mark-sweep the editorInstances map against the keys
+    // rendered this pass, exact same shape as the chart sweep above. A
+    // RichTextFieldNode removed from the new tree destroys its TipTap Editor
+    // and drops the entry rather than leaking it across a long session. The
+    // editor DOM host is naturally already gone (part of the innerHTML wipe);
+    // the destroy() call is what tears down TipTap's event listeners, undo
+    // manager, and internal state.
+    for (const [key, entry] of this.editorInstances) {
+      if (!this.editorKeysSeen.has(key)) {
+        entry.editor?.destroy();
+        this.editorInstances.delete(key);
       }
     }
 
@@ -582,6 +629,8 @@ export class BrowserAdapter implements Adapter {
       case "setting-row":    return this.settingRow(n, parent, on);
       case "chip":           return this.chip(n, parent, on);
       case "chip-list":      return this.chipList(n, parent, on);
+      case "rich-text-field":   return this.richTextField(n, parent, on);
+      case "rich-text-toolbar": return this.richTextToolbar(n, parent, on);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -936,6 +985,272 @@ export class BrowserAdapter implements Adapter {
    */
   private chartFailLoud(msg: string): void {
     console.error("[ViewModelShell]", new Error(msg));
+  }
+
+  /**
+   * v8.2.0 (RICH-01) — RichTextFieldNode. First-class WYSIWYG rich text input
+   * primitive. Wire value is a MARKDOWN STRING on `bind`; the editor renders
+   * TipTap (bundled + lazy-imported per D-04 / Chart.js precedent). On the
+   * editor's `update` event turndown converts editor HTML → markdown and
+   * writes the markdown string to `bind` — the exact same write-back seam
+   * FieldNode(textarea) uses.
+   *
+   * The Editor + host DOM SURVIVE render()'s innerHTML wipe via the
+   * `editorInstances` persist-across-renders map (byte-analog of
+   * `chartInstances`). Reusing the host preserves the user's caret,
+   * selection, undo history, and IME composition state — a fresh Editor per
+   * render would wipe them all.
+   *
+   * The lazy import from `loadRichText()` keeps consumers who never render a
+   * RichTextFieldNode at ZERO TipTap/turndown bytes (D-04). The symmetric
+   * test in `test/rich-text.test.ts` proves that guarantee holds.
+   */
+  private richTextField(
+    n: RichTextFieldNode,
+    parent: HTMLElement,
+    _on: (a: ActionEvent) => void,
+  ): void {
+    // Stable key: `name` disambiguated by per-render ordinal (mirrors the
+    // chart title+ordinal scheme). Multiple RichTextFieldNodes with the same
+    // name in one tree still get distinct keys that compute identically
+    // across renders.
+    const baseKey = n.name;
+    const ordinal = this.editorKeyCounter.get(baseKey) ?? 0;
+    this.editorKeyCounter.set(baseKey, ordinal + 1);
+    const key = `${baseKey}#${ordinal}`;
+    this.editorKeysSeen.add(key);
+
+    // Field wrapper — mirrors FieldNode's shape (label above input; state-axis
+    // BEM modifier applied to the wrapper).
+    const wrapper = document.createElement("div");
+    const classes = ["vms-rich-text-field"];
+    if (n.state) classes.push(`vms-rich-text-field--state-${n.state}`);
+    wrapper.className = classes.join(" ");
+
+    if (n.label) {
+      const label = document.createElement("label");
+      label.className = "vms-rich-text-field__label";
+      label.htmlFor = `vms-${n.name}`;
+      label.textContent = n.label;
+      wrapper.appendChild(label);
+    }
+
+    // Default toolbar strip (D-08 floor) — rendered ONLY when the app has NOT
+    // supplied its own `toolbar?` slot. When they have, richTextToolbar()
+    // renders that composite in its place (Plan 28-05 replaces the placeholder).
+    if (!n.toolbar) {
+      wrapper.appendChild(this.renderDefaultRichTextToolbar(key));
+    } else {
+      this.richTextToolbar(n.toolbar, wrapper, _on);
+    }
+
+    const stateValue = this.readBind(n.bind);
+    const md = stateValue == null ? "" : String(stateValue);
+
+    const existing = this.editorInstances.get(key);
+    if (existing) {
+      // Reuse the SAME host across renders — its DOM state IS the editor
+      // state. This preserves caret / selection / undo history.
+      wrapper.appendChild(existing.host);
+      // Only setContent if the SERVER changed the value (differs from what
+      // the user last typed). Equality means "we already have that content"
+      // — calling setContent anyway would wipe caret/selection/undo history.
+      if (existing.editor && md !== existing.latestBindValue) {
+        // Reuse existing markdown-loader via loadRichText — but here the
+        // editor exists, so we just re-parse + setContent inline.
+        void (async (): Promise<void> => {
+          const marked = await import("marked");
+          const html = marked.marked.parse(md);
+          existing.editor.commands.setContent(html);
+          existing.latestBindValue = md;
+        })();
+      }
+      parent.appendChild(wrapper);
+      return;
+    }
+
+    // First render of this key: create the host + kick the lazy loader (do
+    // NOT await inside the synchronous render()). Mirrors the chart()
+    // `void this.loadChart(...)` pattern at browser.ts:882-884.
+    const host = document.createElement("div");
+    host.className = "vms-rich-text-field__editor";
+    host.id = `vms-${n.name}`;
+    if (n.placeholder) host.dataset.placeholder = n.placeholder;
+    if (n.disabled) host.setAttribute("aria-disabled", "true");
+    wrapper.appendChild(host);
+    this.editorInstances.set(key, {
+      host,
+      editor: null,
+      turndown: null,
+      latestBindValue: md,
+    });
+    void this.loadRichText(key, n);
+
+    parent.appendChild(wrapper);
+  }
+
+  /**
+   * Default toolbar strip renderer — D-08 Slack/GitHub floor. Emits a
+   * `.vms-rich-text-field__toolbar-default` container with one button per
+   * shipped tool. Button clicks resolve to TipTap chain commands lazily via
+   * the loaded editor at editorInstances.get(key).editor.chain()....
+   */
+  private renderDefaultRichTextToolbar(key: string): HTMLElement {
+    const strip = document.createElement("div");
+    strip.className = "vms-rich-text-field__toolbar-default";
+    strip.setAttribute("role", "toolbar");
+    const FLOOR: RichTextTool[] = [
+      "bold", "italic", "link", "bullet-list", "ordered-list",
+      "heading-1", "heading-2", "heading-3", "inline-code", "code-block",
+      "blockquote",
+    ];
+    for (const tool of FLOOR) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `vms-rich-text-field__tool vms-rich-text-field__tool--${tool}`;
+      btn.textContent = this.richTextToolLabel(tool);
+      btn.setAttribute("aria-label", this.richTextToolLabel(tool));
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const entry = this.editorInstances.get(key);
+        if (!entry?.editor) return;
+        this.applyRichTextTool(entry.editor, tool);
+      });
+      strip.appendChild(btn);
+    }
+    return strip;
+  }
+
+  private richTextToolLabel(tool: RichTextTool): string {
+    switch (tool) {
+      case "bold":         return "Bold";
+      case "italic":       return "Italic";
+      case "link":         return "Link";
+      case "bullet-list":  return "Bulleted list";
+      case "ordered-list": return "Numbered list";
+      case "heading-1":    return "Heading 1";
+      case "heading-2":    return "Heading 2";
+      case "heading-3":    return "Heading 3";
+      case "inline-code":  return "Inline code";
+      case "code-block":   return "Code block";
+      case "blockquote":   return "Quote";
+    }
+  }
+
+  private applyRichTextTool(editor: any, tool: RichTextTool): void {
+    const chain = editor.chain().focus();
+    switch (tool) {
+      case "bold":         chain.toggleBold().run(); return;
+      case "italic":       chain.toggleItalic().run(); return;
+      case "link": {
+        const url = typeof window !== "undefined"
+          ? window.prompt?.("URL") ?? null
+          : null;
+        if (url === null) return;
+        if (url === "") { chain.unsetLink().run(); return; }
+        chain.setLink({ href: url }).run();
+        return;
+      }
+      case "bullet-list":  chain.toggleBulletList().run(); return;
+      case "ordered-list": chain.toggleOrderedList().run(); return;
+      case "heading-1":    chain.toggleHeading({ level: 1 }).run(); return;
+      case "heading-2":    chain.toggleHeading({ level: 2 }).run(); return;
+      case "heading-3":    chain.toggleHeading({ level: 3 }).run(); return;
+      case "inline-code":  chain.toggleCode().run(); return;
+      case "code-block":   chain.toggleCodeBlock().run(); return;
+      case "blockquote":   chain.toggleBlockquote().run(); return;
+    }
+  }
+
+  /**
+   * Lazily import TipTap + turndown + marked; construct the Editor for `key`.
+   * The three dynamic imports run in a single `Promise.all` under one
+   * try/catch — a single rejection fails loud via `richTextFailLoud()` and
+   * NEVER a silent no-op fallback (AGENTS.md "The capability seam" fail-loud
+   * rule; same posture as `chartFailLoud`).
+   *
+   * Marked is used for the initial-content pre-load only (markdown → HTML →
+   * editor.commands.setContent) per Q7 in the phase context. On subsequent
+   * user input, turndown converts editor HTML → markdown and writes to the
+   * bind path (the round-trip closes cleanly against the display-side
+   * markdown.ts → InlineRuns pipeline).
+   */
+  private async loadRichText(key: string, n: RichTextFieldNode): Promise<void> {
+    let tiptap: any, starterKit: any, turndownMod: any, marked: any;
+    try {
+      [tiptap, starterKit, turndownMod, marked] = await Promise.all([
+        import("@tiptap/core"),
+        import("@tiptap/starter-kit"),
+        import("turndown"),
+        import("marked"),
+      ]);
+    } catch {
+      this.richTextFailLoud(
+        "RichTextFieldNode present but TipTap or turndown failed to load. " +
+        "Run: npm install @tiptap/core @tiptap/starter-kit turndown"
+      );
+      return;
+    }
+    const entry = this.editorInstances.get(key);
+    // A later render may have mark-swept this key before the import resolved.
+    if (!entry) return;
+
+    const TurndownCtor = turndownMod.default;
+    const turndownSvc = new TurndownCtor({
+      headingStyle: "atx",
+      codeBlockStyle: "fenced",
+      bulletListMarker: "-",
+    });
+
+    const initialHtml = marked.marked.parse(entry.latestBindValue);
+
+    const StarterKit = starterKit.default;
+    const editor = new tiptap.Editor({
+      element: entry.host,
+      extensions: [StarterKit],
+      content: initialHtml,
+      editable: !n.disabled,
+    });
+    editor.on("update", () => {
+      const html: string = editor.getHTML();
+      const md: string = turndownSvc.turndown(html);
+      entry.latestBindValue = md;
+      this.writeBind(n.bind, md);
+    });
+
+    entry.editor = editor;
+    entry.turndown = turndownSvc;
+  }
+
+  /**
+   * Fail-loud for a missing / broken TipTap load — routed through the SAME
+   * sanctioned seam as chartFailLoud (AGENTS.md fail-loud rule for
+   * capabilities with no safe default). NEVER a silent no-op, NEVER a
+   * floating unhandled rejection — deterministic + spy-able in tests.
+   */
+  private richTextFailLoud(msg: string): void {
+    console.error("[ViewModelShell]", new Error(msg));
+  }
+
+  /**
+   * v8.2.0 (RICH-02) INTERIM — Plan 28-05 replaces this body after the D-03
+   * Route B tasting sign-off. Placeholder renders an empty container so the
+   * dispatch arm is exhaustive and TypeScript does not flag an unhandled
+   * ViewNode union member. When the composite is used AS A NESTED SLOT of
+   * RichTextFieldNode, richTextField() owns its rendering (via the default-
+   * toolbar path when omitted, or by rendering the composite here inline
+   * when supplied); this method's STANDALONE case (rare, mostly the tasting
+   * page) is what Plan 28-05 finalizes.
+   */
+  private richTextToolbar(
+    _n: RichTextToolbarNode,
+    parent: HTMLElement,
+    _on: (a: ActionEvent) => void,
+  ): void {
+    const el = document.createElement("div");
+    el.className = "vms-rich-text-toolbar";
+    el.dataset.placeholder = "pre-tasting";
+    parent.appendChild(el);
   }
 
   private section(n: SectionNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
