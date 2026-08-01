@@ -28,6 +28,11 @@
   "bin": {
     "vms-tui": "dist/tui-cli.js"
   },
+  "dependencies": {
+    "@tiptap/core": "^2.11.0",
+    "@tiptap/starter-kit": "^2.11.0",
+    "turndown": "^7.2.0"
+  },
   "scripts": {
     "build": "tsc -b tsconfig.tui.json",
     "check:core-globals": "node scripts/check-core-platform-globals.mjs",
@@ -46,6 +51,7 @@
     "@types/bun": "^1.1.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
+    "@types/turndown": "^5.0.5",
     "chart.js": "^4",
     "jsdom": "^25.0.1",
     "lucide-static": "^1.27.0",
