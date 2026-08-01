@@ -46,7 +46,16 @@ public record FeatureProbeState(
     string LookupOwner,
     string LookupTag,
     IReadOnlyList<string> LookupWatchers,
-    string LookupQuery
+    string LookupQuery,
+    // 8.2.0 (RICH-01) — rich text field bind slot. Round-tripped as a markdown
+    // string per D-06 (the wire contract carries markdown, NOT HTML — zero XSS
+    // on the wire; sanitization is a display-side concern). Seeded
+    // byte-identically to the bun/node twin — a divergent seed fails the
+    // parity diff for a reason unrelated to the wire, banked lesson from
+    // CONTEXT §7. Trailing-append per gotcha #8 companion-safe rule
+    // (FeatureProbe uses ProjectReference, so source-rebuild — safe; the
+    // discipline is kept regardless).
+    string DraftMarkdown
 )
 {
     public static FeatureProbeState Initial() => new(
@@ -68,7 +77,8 @@ public record FeatureProbeState(
         LookupOwner: "u-1",
         LookupTag: "urgent",
         LookupWatchers: ["u-2", "t-7"],
-        LookupQuery: ""
+        LookupQuery: "",
+        DraftMarkdown: "# Rich text probe\n\n**bold** _italic_ `code`"
     );
 }
 
@@ -1429,6 +1439,72 @@ public class FeatureProbeController : ControllerBase
                     // uniformity per the typed-slots pattern.
                     new ChipNode(Label: "chip-state-probe", State: "active"),
                 }),
+            }));
+        // ── v8.2.0 Rich text probes (RICH-01 + RICH-02) ─────────────
+        // Byte-identical to the bun/node twin richTextProbesSection.
+        // Static-shape probes for the Phase 28 rich-text primitives.
+        // Every branch introduced by Plans 28-01..05 gets at least one
+        // emission here + an expectBodyContains tripwire on the initial
+        // GET step, per banked lesson AGENTS.md gotcha #9 corollary: a
+        // diff can only prove things about code it actually RUNS. A
+        // per-branch tripwire binds each backend's emission independently.
+        //   • RICH-01 (RichTextFieldNode) instance #1 — carries an
+        //     EXPLICIT nested RichTextToolbarNode slot with the full D-08
+        //     tools list + Size:Expanded + Tone:Info + State:"active" +
+        //     field-level State:"active" + Label + Placeholder. UNIQUE
+        //     Name "rich-text-state-probe" anchors the per-branch tripwire
+        //     so a future refactor dropping THIS specific emission fails
+        //     LOUDLY.
+        //   • RICH-01 (RichTextFieldNode) instance #2 — WITHOUT the
+        //     toolbar slot, exercising the framework-default toolbar path
+        //     (Plan 28-03). Proves the Toolbar? optional field is
+        //     absent-on-wire, not null (WhenWritingNull posture).
+        //   • RICH-02 (RichTextToolbarNode) standalone — top-level
+        //     toolbar without a parent RichTextFieldNode, exercising
+        //     Plan 28-05's standalone rendering path. Tools narrowed to
+        //     [Bold, Italic] so the "tools":["bold","italic" substring
+        //     is a stable tripwire.
+        // Analog C's narrow-typing rule: RichTextFieldNode.Toolbar is
+        // typed narrowly (RichTextToolbarNode?, NOT ViewNode?) so the
+        // NESTED toolbar does NOT carry a polymorphic "type" discriminator
+        // when nested inside RichTextFieldNode (STJ emits only the
+        // declared-type's own properties). The STANDALONE emission below
+        // IS a top-level ViewNode, so its discriminator ("type":
+        // "rich-text-toolbar") DOES emit — that's what the fixture
+        // tripwire `"type":"rich-text-toolbar"` binds.
+        // NOTE: the CLIENT-SIDE TipTap ProseMirror editor is browser-only
+        // and NOT part of parity — parity proves only that the rich-text
+        // node shapes serialize identically across backends. The wire
+        // footprint does NOT change with TipTap adoption (Plan 28-03's
+        // D-04 lazy-import posture) — TipTap is a client-side dep only;
+        // the wire is still the markdown-string field bind.
+        pageChildren.Add(new SectionNode(
+            Heading: "v8.2.0 Rich text probes",
+            Variant: SectionVariant.Card,
+            Children: new ViewNode[]
+            {
+                new RichTextFieldNode(
+                    Name: "rich-text-state-probe",
+                    Bind: "draftMarkdown",
+                    Label: "Rich probe",
+                    Placeholder: "Type something",
+                    Toolbar: new RichTextToolbarNode(
+                        Tools: new[] {
+                            RichTextTool.Bold, RichTextTool.Italic, RichTextTool.Link,
+                            RichTextTool.BulletList, RichTextTool.OrderedList,
+                            RichTextTool.Heading1, RichTextTool.Heading2, RichTextTool.Heading3,
+                            RichTextTool.InlineCode, RichTextTool.CodeBlock, RichTextTool.Blockquote
+                        },
+                        Size: RichTextToolbarSize.Expanded,
+                        Tone: Tone.Info,
+                        State: "active"),
+                    State: "active"),
+                new RichTextFieldNode(
+                    Name: "rich-text-no-toolbar-probe",
+                    Bind: "draftMarkdown",
+                    Label: "Default toolbar probe"),
+                new RichTextToolbarNode(
+                    Tools: new[] { RichTextTool.Bold, RichTextTool.Italic }),
             }));
         // Inline rich text (TextNode.Runs) — byte-identical to the bun twin
         // richTextSection. Covers the absent-vs-present matrix for every optional on
