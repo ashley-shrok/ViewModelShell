@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Page marker — the smoke-test greps for this string to confirm a 200. -->
+  <meta name="page" content="rich-text-tasting">
+  <title>Phase 28 rich text tasting — before/after (Route B sign-off)</title>
+
+  <!-- IMPORTANT: no shared VMS <link> or <script> at parent level. Each
+       iframe (src/panel-primitives.html, src/panel-composite.html) is a
+       SELF-CONTAINED page with its OWN <link rel="stylesheet"> +
+       <script type="module" src="./panel-*.ts"> — per the banked v8.0.3
+       iframe-scoping rule (2026-07-30). A shared asset here would cross-
+       contaminate the A/B comparison and defeat the earned-a-composite
+       tasting's whole purpose. Only the theme-switcher chrome below is
+       parent-scoped, and it broadcasts theme changes to both iframes via
+       postMessage rather than sharing a stylesheet link. -->
+</head>
+<body style="margin:0;font:14px system-ui,sans-serif;">
+  <!-- Theme switcher (host-chrome; NOT part of any view tree). Populated at
+       runtime from /api/themes so the option list matches
+       viewmodel-shell/styles/themes/ verbatim (the dir CAN'T go stale). On
+       change, broadcasts the picked theme to both iframes via postMessage;
+       each iframe swaps its OWN #theme-css <link> href in response. -->
+  <div style="display:flex;gap:.75rem;align-items:center;padding:.75rem 1rem;border-bottom:1px solid #8884;background:#f6f6f6;">
+    <strong>Phase 28 tasting — Route B (RichTextToolbarNode)</strong>
+    <span style="opacity:.5;">·</span>
+    <label for="theme-select">Theme:</label>
+    <select id="theme-select" style="font:inherit;padding:.25rem .5rem;">
+      <option value="__default__">Default (no theme override)</option>
+    </select>
+    <span id="theme-name" style="opacity:.7;">Default</span>
+    <span style="flex:1"></span>
+    <span style="opacity:.5;font-size:12px;">Iframe-scoped per banked v8.0.3 lesson · same shipped renderer &amp; CSS in both panels · only the toolbar wire differs</span>
+  </div>
+
+  <!-- Two iframes, one per panel. Each is a full self-contained page.
+       50/50 grid; each iframe is 100vh minus the header row so it fills
+       the viewport. -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px;height:calc(100vh - 55px);box-sizing:border-box;background:#e8e8e8;">
+    <iframe
+      id="iframe-primitives"
+      src="/src/panel-primitives.html"
+      title="BEFORE — primitives-composed rich text input"
+      style="width:100%;height:100%;border:1px solid #8886;background:white;"
+    ></iframe>
+    <iframe
+      id="iframe-composite"
+      src="/src/panel-composite.html"
+      title="AFTER — RichTextFieldNode + RichTextToolbarNode composite"
+      style="width:100%;height:100%;border:1px solid #8886;background:white;"
+    ></iframe>
+  </div>
+
+  <!-- Parent bootstrap. No VMS mount here — only theme-switcher wiring +
+       postMessage broadcast to the two iframes. Kept in a module script
+       (Vite entry via rollupOptions.input.index) so we get TS type-checking
+       under bun --check + Vite's dead-code detection if this file grows. -->
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
