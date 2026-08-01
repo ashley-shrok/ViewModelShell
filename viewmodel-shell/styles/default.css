@@ -3289,3 +3289,122 @@ button.vms-breadcrumb__link {
 .vms-diff--side-by-side .vms-diff__cell--new-linenum {
   border-left: 1px solid var(--vms-border);
 }
+
+/* v8.2.0 — RichTextFieldNode (RICH-01) ─────────────────────────────────────
+ * WYSIWYG rich text input primitive; TipTap editor host + default toolbar
+ * strip (D-08 Slack/GitHub floor: bold, italic, link, bullet/ordered list,
+ * heading-1/2/3, inline-code, code-block, blockquote). Every color/spacing
+ * value goes through --vms-* tokens (per AGENTS.md §Design system — no raw
+ * CSS on the wire, no viewport breakpoints). Toolbar strip uses the shipped
+ * .vms-field peer's shape so a rich text input reads as a sibling of the
+ * text/textarea primitives.
+ *
+ * State axis (STYLE-3 per Phase 27 uniformity — v8.1.0 patterns-established):
+ * --active = border-left 3px solid --vms-accent + primary weight 600;
+ * --done = opacity 0.72; --disabled = opacity 0.55 + pointer-events:none.
+ * Unrecognized state values render an unstyled .vms-rich-text-field--{state}
+ * class (round-trips cleanly; framework ships no rule).
+ */
+.vms-rich-text-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vms-space-2xs);
+}
+.vms-rich-text-field__label {
+  font-size: var(--vms-text-sm);
+  color: var(--vms-text-muted);
+}
+.vms-rich-text-field__editor {
+  min-height: 8rem;
+  padding: var(--vms-space-sm) var(--vms-space-md);
+  border: 1px solid var(--vms-border);
+  border-radius: var(--vms-radius);
+  background: var(--vms-surface);
+  color: var(--vms-text);
+  font-family: var(--vms-font-body);
+  font-size: var(--vms-text-md);
+  line-height: var(--vms-control-line);
+}
+/* Focus-within, not :focus — TipTap's ProseMirror editor puts focus on an
+   inner contenteditable, not the host <div>. focus-within lifts the ring to
+   the host so the whole editor block gets the ring the shipped
+   .vms-field__input:focus does. */
+.vms-rich-text-field__editor:focus-within {
+  border-color: var(--vms-accent);
+  box-shadow: 0 0 0 3px var(--vms-accent-glow);
+  outline: none;
+}
+/* Default toolbar strip (rendered when RichTextFieldNode.toolbar is omitted).
+   Sits above the editor host, sharing its horizontal footprint; joins the
+   editor visually via border-bottom:none + matching border-radius. */
+.vms-rich-text-field__toolbar-default {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vms-space-2xs);
+  padding: var(--vms-space-2xs) var(--vms-space-xs);
+  border: 1px solid var(--vms-border);
+  border-bottom: none;
+  border-radius: var(--vms-radius) var(--vms-radius) 0 0;
+  background: var(--vms-surface-2);
+}
+/* When the toolbar is present, drop the editor's top-left/top-right radius
+   so the two chrome pieces sit flush. */
+.vms-rich-text-field__toolbar-default + .vms-rich-text-field__editor {
+  border-top: none;
+  border-radius: 0 0 var(--vms-radius) var(--vms-radius);
+}
+/* Compact icon-button-like tools. Fg + bg through tokens. No hover animation
+   token needed — reuses the shipped --vms-t transition. */
+.vms-rich-text-field__tool {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--vms-space-2xs) var(--vms-space-xs);
+  border: 1px solid transparent;
+  border-radius: var(--vms-radius);
+  background: transparent;
+  color: var(--vms-text);
+  font-family: var(--vms-font-body);
+  font-size: var(--vms-text-sm);
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--vms-t), border-color var(--vms-t);
+}
+.vms-rich-text-field__tool:hover {
+  background: var(--vms-surface);
+  border-color: var(--vms-border);
+}
+.vms-rich-text-field__tool:focus-visible {
+  outline: 2px solid var(--vms-accent);
+  outline-offset: 1px;
+}
+
+/* Phase 27 (v8.1.0) — state axis uniformity. STYLE-3 --active (border-left +
+   editor primary-text weight:600). Base .vms-rich-text-field is flex-column
+   (no per-side padding on the wrapper), so the 3px border is a pure additive
+   accent — no padding compensation needed here (contrast with UserRow /
+   DetailRow which have wrapper padding-left the border cannibalizes). --done
+   / --disabled per ListRow precedent (opacity 0.72 / 0.55). Orthogonal to
+   tone — a rich text field can be state:"active" AND (once tone lands as an
+   axis on this node) tone:"warning" simultaneously. */
+.vms-rich-text-field--state-active {
+  border-left: 3px solid var(--vms-accent);
+  padding-left: var(--vms-space-2xs);
+}
+.vms-rich-text-field--state-active .vms-rich-text-field__editor {
+  font-weight: 600;
+}
+.vms-rich-text-field--state-done {
+  opacity: 0.72;
+}
+.vms-rich-text-field--state-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* v8.2.0 (RICH-02) INTERIM — Plan 28-05 replaces this with the shipped Route B
+   composite CSS after the D-03 tasting sign-off. A tiny non-zero min-height so
+   a stray standalone placeholder is inspectable in dev but has no visible
+   footprint in prod (data-placeholder="pre-tasting" is the tripwire). */
+.vms-rich-text-toolbar[data-placeholder="pre-tasting"] {
+  min-height: 1px;
+}
