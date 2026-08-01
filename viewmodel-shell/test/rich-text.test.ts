@@ -414,3 +414,169 @@ describe("RichTextFieldNode — mark-sweep destroys editor on removal", () => {
     expect((adapter as any).editorInstances.size).toBe(1);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// Plan 28-05 — RichTextToolbarNode composite renderer
+// ─────────────────────────────────────────────────────────────────────────
+//
+// The composite renderer replaces Plan 28-03's placeholder body. Coverage:
+//   (a) standalone renders the requested tools[] as buttons under the composite
+//   (b-d) closed-enum variance axes (size / tone / state) emit their BEM
+//       modifier classes
+//   (e) nested-slot use replaces the shipped default-toolbar strip; DOM
+//       ordering is toolbar-before-editor within the field wrapper
+//   (f) omitting the slot preserves the shipped default-toolbar path (no
+//       .vms-rich-text-toolbar element, .vms-rich-text-field__toolbar-default
+//       still present)
+//   (g) standalone (no ancestor field) + click surfaces the warn-not-throw
+//       contract from STRIDE T-28-13
+describe("RichTextToolbarNode composite", () => {
+  it("renders one button per tool under .vms-rich-text-toolbar", () => {
+    const container = freshContainer();
+    const adapter = new BrowserAdapter(container);
+    const sa = mkSA({});
+    const tree: ViewNode = {
+      type: "page",
+      children: [
+        { type: "rich-text-toolbar", tools: ["bold", "italic"] },
+      ],
+    };
+    adapter.render(tree, () => {}, sa);
+
+    const strip = container.querySelector(".vms-rich-text-toolbar");
+    expect(strip).not.toBeNull();
+    const buttons = strip!.querySelectorAll("button");
+    expect(buttons.length).toBe(2);
+    expect(buttons[0].dataset.tool).toBe("bold");
+    expect(buttons[1].dataset.tool).toBe("italic");
+  });
+
+  it("emits .vms-rich-text-toolbar--size-compact when size:\"compact\"", () => {
+    const container = freshContainer();
+    const adapter = new BrowserAdapter(container);
+    const sa = mkSA({});
+    const tree: ViewNode = {
+      type: "page",
+      children: [
+        { type: "rich-text-toolbar", tools: ["bold"], size: "compact" },
+      ],
+    };
+    adapter.render(tree, () => {}, sa);
+    const strip = container.querySelector(".vms-rich-text-toolbar");
+    expect(strip).not.toBeNull();
+    expect(strip!.classList.contains("vms-rich-text-toolbar--size-compact")).toBe(true);
+  });
+
+  it("emits .vms-rich-text-toolbar--tone-info when tone:\"info\"", () => {
+    const container = freshContainer();
+    const adapter = new BrowserAdapter(container);
+    const sa = mkSA({});
+    const tree: ViewNode = {
+      type: "page",
+      children: [
+        { type: "rich-text-toolbar", tools: ["bold"], tone: "info" },
+      ],
+    };
+    adapter.render(tree, () => {}, sa);
+    const strip = container.querySelector(".vms-rich-text-toolbar");
+    expect(strip).not.toBeNull();
+    expect(strip!.classList.contains("vms-rich-text-toolbar--tone-info")).toBe(true);
+  });
+
+  it("emits .vms-rich-text-toolbar--state-active when state:\"active\"", () => {
+    const container = freshContainer();
+    const adapter = new BrowserAdapter(container);
+    const sa = mkSA({});
+    const tree: ViewNode = {
+      type: "page",
+      children: [
+        { type: "rich-text-toolbar", tools: ["bold"], state: "active" },
+      ],
+    };
+    adapter.render(tree, () => {}, sa);
+    const strip = container.querySelector(".vms-rich-text-toolbar");
+    expect(strip).not.toBeNull();
+    expect(strip!.classList.contains("vms-rich-text-toolbar--state-active")).toBe(true);
+  });
+
+  it("nested-slot toolbar renders BEFORE .vms-rich-text-field__editor within the field wrapper", async () => {
+    const container = freshContainer();
+    const adapter = new BrowserAdapter(container);
+    const sa = mkSA({ draft: "" });
+    const tree: ViewNode = {
+      type: "page",
+      children: [
+        {
+          type: "rich-text-field",
+          name: "note",
+          bind: "draft",
+          toolbar: {
+            type: "rich-text-toolbar",
+            tools: ["bold", "italic"],
+          },
+        },
+      ],
+    };
+    adapter.render(tree, () => {}, sa);
+    await flush();
+
+    const field = container.querySelector(".vms-rich-text-field");
+    expect(field).not.toBeNull();
+    const composite = field!.querySelector(".vms-rich-text-toolbar");
+    const editor = field!.querySelector(".vms-rich-text-field__editor");
+    expect(composite).not.toBeNull();
+    expect(editor).not.toBeNull();
+
+    // Ordering: composite toolbar comes BEFORE the editor host inside the field.
+    // DOCUMENT_POSITION_FOLLOWING (0x04) on composite's `compareDocumentPosition(editor)`
+    // means the editor follows the composite in tree order.
+    const rel = composite!.compareDocumentPosition(editor!);
+    expect(rel & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // And the shipped default-toolbar strip is REPLACED (must not render).
+    expect(field!.querySelector(".vms-rich-text-field__toolbar-default")).toBeNull();
+  });
+
+  it("omitting the toolbar slot preserves the default-toolbar path", async () => {
+    const container = freshContainer();
+    const adapter = new BrowserAdapter(container);
+    const sa = mkSA({ draft: "" });
+    const tree: ViewNode = {
+      type: "page",
+      children: [
+        { type: "rich-text-field", name: "note", bind: "draft" },
+      ],
+    };
+    adapter.render(tree, () => {}, sa);
+    await flush();
+
+    const field = container.querySelector(".vms-rich-text-field");
+    expect(field).not.toBeNull();
+    expect(field!.querySelector(".vms-rich-text-field__toolbar-default")).not.toBeNull();
+    expect(field!.querySelector(".vms-rich-text-toolbar")).toBeNull();
+  });
+
+  it("standalone toolbar click (no ancestor RichTextFieldNode) console.warns and does NOT throw", () => {
+    const container = freshContainer();
+    const adapter = new BrowserAdapter(container);
+    const sa = mkSA({});
+    const tree: ViewNode = {
+      type: "page",
+      children: [
+        { type: "rich-text-toolbar", tools: ["bold"] },
+      ],
+    };
+    adapter.render(tree, () => {}, sa);
+
+    const btn = container.querySelector<HTMLButtonElement>(".vms-rich-text-toolbar__tool");
+    expect(btn).not.toBeNull();
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(() => btn!.click()).not.toThrow();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    // Message names the standalone / missing-ancestor case per the warn contract.
+    const args = warnSpy.mock.calls[0];
+    const joined = args.map(String).join(" ");
+    expect(joined.toLowerCase()).toMatch(/standalone|no ancestor richtextfieldnode/);
+  });
+});
