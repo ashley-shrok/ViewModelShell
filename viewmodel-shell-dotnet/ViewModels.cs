@@ -3373,6 +3373,22 @@ public static class ViewTreeValidation
                 // posture as IconNode.
                 break;
 
+            case RichTextFieldNode:
+                // v8.2.0 (RICH-01) — RichTextFieldNode is a terminal leaf (no
+                // SectionNode descendants; the Toolbar slot's inner Tools are
+                // RichTextTool enum tokens naming built-in TipTap chain
+                // commands resolved CLIENT-SIDE, not SectionNodes). Same
+                // terminal-leaf posture as AvatarNode. Mirrors the TS twin
+                // `case "rich-text-field"` arm in server.ts.
+                break;
+
+            case RichTextToolbarNode:
+                // v8.2.0 (RICH-02) — RichTextToolbarNode is a terminal leaf
+                // (no SectionNode descendants; Tools[] are RichTextTool enum
+                // tokens resolved CLIENT-SIDE by the TipTap chain, not
+                // SectionNodes). Mirrors the TS twin arm.
+                break;
+
             // Leaf-like nodes (FieldNode, CheckboxNode, ButtonNode, TextNode,
             // LinkNode, ImageNode, StatBarNode, TabsNode, ProgressNode,
             // TableNode, CopyButtonNode, BadgeNode, ChartNode, BreadcrumbNode,
@@ -3757,6 +3773,23 @@ public static class ViewTreeValidation
             case AvatarNode:
                 // v8.0.0 (COMP-04) — AvatarNode is a leaf (no children, no
                 // action). Same terminal-leaf posture as IconNode.
+                break;
+
+            case RichTextFieldNode:
+                // v8.2.0 (RICH-01) — RichTextFieldNode is a leaf (no action-
+                // bearing descendants; the Toolbar slot's inner Tools are
+                // RichTextTool enum tokens naming built-in TipTap chain
+                // commands resolved CLIENT-SIDE, never framework-side
+                // dispatches that could collide via ValidateActionNames).
+                // Same terminal-leaf posture as AvatarNode. Mirrors the TS
+                // twin `case "rich-text-field"` arm in server.ts.
+                break;
+
+            case RichTextToolbarNode:
+                // v8.2.0 (RICH-02) — RichTextToolbarNode is a leaf (Tools[]
+                // are RichTextTool enum tokens resolved CLIENT-SIDE by the
+                // TipTap chain, never framework-side ActionDescriptor
+                // dispatches). Mirrors the TS twin arm.
                 break;
 
             case TabsNode tabs:
