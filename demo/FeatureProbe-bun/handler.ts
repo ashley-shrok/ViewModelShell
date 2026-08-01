@@ -59,6 +59,12 @@ interface FeatureProbeState {
   lookupTag: string;
   lookupWatchers: string[];
   lookupQuery: string;
+  // 8.2.0 (RICH-01) — rich text field bind slot. Round-tripped as a markdown
+  // string per D-06 (the wire contract carries markdown, NOT HTML — zero XSS
+  // on the wire; sanitization is a display-side concern). Seeded
+  // byte-identically to the .NET twin — a divergent seed fails the parity
+  // diff for a reason unrelated to the wire, banked lesson from CONTEXT §7.
+  draftMarkdown: string;
 }
 
 function initialState(): FeatureProbeState {
@@ -81,6 +87,7 @@ function initialState(): FeatureProbeState {
     lookupTag: "urgent",
     lookupWatchers: ["u-2", "t-7"],
     lookupQuery: "",
+    draftMarkdown: "# Rich text probe\n\n**bold** _italic_ `code`",
   };
 }
 
@@ -1396,6 +1403,73 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // ── v8.2.0 Rich text probes (RICH-01 + RICH-02) ────────────────────
+  // Byte-identical to the .NET twin richTextProbesSection. Static-shape
+  // probes for the Phase 28 rich-text primitives. Every branch introduced
+  // by Plans 28-01..05 gets at least one emission here + an
+  // expectBodyContains tripwire on the initial GET step, per banked lesson
+  // AGENTS.md gotcha #9 corollary: a diff can only prove things about code
+  // it actually RUNS. A per-branch tripwire binds each backend's emission
+  // independently.
+  //   • RICH-01 (RichTextFieldNode) instance #1 — carries an EXPLICIT
+  //     nested RichTextToolbarNode slot with the full D-08 tools list +
+  //     size:"expanded" + tone:"info" + state:"active" + field-level
+  //     state:"active" + label + placeholder. UNIQUE `name`
+  //     "rich-text-state-probe" anchors the per-branch tripwire so a
+  //     future refactor dropping THIS specific emission fails LOUDLY.
+  //   • RICH-01 (RichTextFieldNode) instance #2 — WITHOUT the toolbar
+  //     slot, exercising the framework-default toolbar path (Plan 28-03).
+  //     Proves the `toolbar?` optional field is absent-on-wire, not null
+  //     (WhenWritingNull posture on the .NET side).
+  //   • RICH-02 (RichTextToolbarNode) standalone — top-level toolbar
+  //     without a parent RichTextFieldNode, exercising Plan 28-05's
+  //     standalone rendering path. Tools narrowed to [bold, italic] so
+  //     the `"tools":["bold","italic"` substring is a stable tripwire.
+  // NOTE: the CLIENT-SIDE TipTap ProseMirror editor (contentEditable,
+  // markdown ↔ HTML conversion via turndown, toolbar button emissions,
+  // Placeholder extension, keyboard shortcuts, focus/selection state)
+  // is browser-only and NOT part of parity — parity proves only that the
+  // rich-text node shapes serialize identically across backends. The
+  // wire footprint does NOT change with TipTap adoption (Plan 28-03's
+  // D-04 lazy-import posture) — TipTap is a client-side dep only; the
+  // wire is still the markdown-string field bind.
+  const richTextProbesSection: ViewNode = {
+    type: "section",
+    heading: "v8.2.0 Rich text probes",
+    variant: "card",
+    children: [
+      {
+        type: "rich-text-field",
+        name: "rich-text-state-probe",
+        bind: "draftMarkdown",
+        label: "Rich probe",
+        placeholder: "Type something",
+        toolbar: {
+          type: "rich-text-toolbar",
+          tools: ["bold", "italic", "link", "bullet-list", "ordered-list",
+                  "heading-1", "heading-2", "heading-3", "inline-code",
+                  "code-block", "blockquote"],
+          size: "expanded",
+          tone: "info",
+          state: "active",
+        },
+        state: "active",
+      },
+      {
+        type: "rich-text-field",
+        name: "rich-text-no-toolbar-probe",
+        bind: "draftMarkdown",
+        label: "Default toolbar probe",
+        // NO toolbar slot — exercises the framework-default toolbar path.
+      },
+      {
+        type: "rich-text-toolbar",
+        tools: ["bold", "italic"],
+        // Standalone — exercises Plan 28-05's standalone rendering path.
+      },
+    ],
+  };
+
   // ── Inline rich text (TextNode.runs) ──
   // Covers the absent-vs-present matrix for every optional on InlineRun, plus the
   // two contract cases that are decisions rather than mechanics:
@@ -1549,6 +1623,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       foundationsSection,
       primaryCompositesSection,
       secondaryCompositesSection,
+      richTextProbesSection,
       richTextSection,
       lookupSection,
       probeModal,
