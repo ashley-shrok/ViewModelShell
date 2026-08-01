@@ -458,11 +458,16 @@ public static class MarkdownConverter
         }
         // Collapse to plain when NO run carries formatting or a link — the
         // BrowserAdapter's rich-runs path is bypassed, keeping the wire minimal
-        // and byte-identical to the TS twin's "all plain" collapse.
+        // and byte-identical to the TS twin's "all plain" collapse. An empty
+        // Href ("" — the marker for a sanitizer-rejected scheme) is treated as
+        // absent for collapse purposes so the two backends emit the same wire
+        // for a sanitized link (bare TextNode.Value, no runs[], no Href — the
+        // wire form matching gotcha #8's "an option not set is absent"
+        // principle even though the sanitizer's contract is to WRITE "").
         bool anyRich = false;
         foreach (var r in runs)
         {
-            if (r.Bold || r.Italic || r.Strike || r.Code || r.Href is not null) { anyRich = true; break; }
+            if (r.Bold || r.Italic || r.Strike || r.Code || !string.IsNullOrEmpty(r.Href)) { anyRich = true; break; }
         }
         if (!anyRich)
         {
