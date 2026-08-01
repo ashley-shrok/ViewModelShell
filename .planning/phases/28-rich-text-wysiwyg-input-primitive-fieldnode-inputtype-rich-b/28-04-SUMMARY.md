@@ -211,9 +211,20 @@ None. The framework's shipped renderer (Plan 28-03) works cleanly against a `ric
 
 **Task 4 — Route B tasting sign-off (Ashley's `autonomous: false` visual gate).** The tasting page is live at http://100.113.23.63:3021/. See the "Verification checklist" section above for the specific things to eyeball and the four possible responses (`taste ok` / `taste ok — with: …` / `taste retry` / `taste blocked: …`). Plan 28-05 remains BLOCKED until this SUMMARY records the sign-off signal.
 
-## Ashley's sign-off response
+## Ashley's sign-off response (2026-07-31)
 
-**{PENDING — this section will be populated with Ashley's verbatim response once she signs off. Do NOT mark this plan complete until her response is recorded here verbatim.}**
+**Verdict:** `taste ok — with: fix code-block + quote editor-host rendering in Plan 28-05`
+
+**Ashley's exact words:** *"Okay, the buttons seem to do stuff now, although they're definitely not all giving the full expected outcome, like code blocks and quotes don't look like I would expect code blocks and quotes to look, but I don't know if you're that far yet."*
+
+**Interpretation & follow-up:** Shape sign-off is granted (11-button toolbar + composite wrapper + editor host is the shape she approves). The unstyled `<blockquote>` and `<pre><code>` inside the editor host is a genuine gap in Plan 28-03's CSS scope — Plan 28-03 landed only the field wrapper / toolbar / editor host classes; it did NOT add rules for TipTap's inner nodes. **Folded into Plan 28-05's CSS scope**: adds `.vms-rich-text-field__editor blockquote { … }` + `.vms-rich-text-field__editor pre { … }` + `.vms-rich-text-field__editor code { … }` rules using existing `--vms-*` tokens so the editor-internal rendering matches the shipped design system before the comprehensive verification page (Plan 28-09).
+
+**Tasting-page deltas made mid-review** (bank as postscript; also inform any future Route B tasting):
+
+1. **Empty-toolbar bug** — the executor built panel-composite.ts to pass an explicit `RichTextToolbarNode` slot on the field, which routed to the shipped placeholder `richTextToolbar()` renderer (empty div — no visible toolbar). Ashley reported "I don't see a toolbar under the after section." Fix: dropped the explicit slot from panel-composite.ts's tree so the shipped `renderDefaultRichTextToolbar()` (fully wired 11-button TipTap toolbar) renders instead. This is the honest baseline for the tasting — what a consumer gets "for free" from the composite when they don't customize.
+2. **Dead-buttons attempt** — first mid-review fix used a `paintProposedToolbar()` shim to inject dead visual buttons into the placeholder div. Ashley reported "buttons don't do anything." Reverted the shim; the fix above (drop explicit slot) is what actually gave her working buttons.
+
+**Lesson for future Route B tastings (worth banking in vicky.md at next `/id save`):** when the shipped renderer for a slot is still a placeholder (interim body pending a follow-up plan), do NOT pass that slot in the tasting tree — let the shipped DEFAULT path render instead. A tasting that routes through a placeholder is a tasting of nothing.
 
 ## Next Phase Readiness
 
@@ -248,6 +259,6 @@ Plan 28-05 (RichTextToolbarNode composite implementation) is READY to execute on
 - HTTP 200 on parent + both panels + default CSS via tailnet IP (100.113.23.63:3021) — 4/4 URLs green.
 - Structural iframe-scoping verified via curl: parent has 2 `<iframe>` + only `assets/index-*.js` (theme chrome); each panel has its OWN `<link href="/vms/default.css">` + own `<script src=/assets/panel-*-*.js>`; no shared parent-level VMS asset.
 
-## Self-Check: PASSED — SIGN-OFF PENDING
+## Self-Check: PASSED — SIGN-OFF LANDED
 
-**Task 4 is the operator sign-off gate — the SUMMARY records everything the plan's autonomous portion could deliver. Plan 28-05 is BLOCKED until Ashley's verbatim response is appended to the "Ashley's sign-off response" section above.**
+**Task 4 sign-off received 2026-07-31.** Ashley granted `taste ok — with: fix code-block + quote editor-host rendering in Plan 28-05` (see "Ashley's sign-off response" above). Plan 28-05 unblocked with the CSS-polish fold-in baked into its scope.

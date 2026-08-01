@@ -61,28 +61,19 @@ function buildTree(): ViewNode {
         style: "muted",
       },
       {
+        // Tasting: NO explicit `toolbar` slot — lets the shipped
+        // renderDefaultRichTextToolbar() paint the fully-wired D-08 floor
+        // toolbar (real TipTap chain commands via applyRichTextTool()).
+        // This is exactly what a consumer gets "for free" from the composite
+        // when they don't customize — the honest baseline for Ashley to
+        // compare against the LEFT panel's hand-composed dead buttons.
+        // Plan 28-05 will make the CUSTOMIZED slot render the same shape
+        // with different `tools[]` / `size` axes.
         type: "rich-text-field",
         name: "notes",
         bind: "draft",
         label: "Notes",
         placeholder: "Write something…",
-        toolbar: {
-          type: "rich-text-toolbar",
-          tools: [
-            "bold",
-            "italic",
-            "link",
-            "bullet-list",
-            "ordered-list",
-            "heading-1",
-            "heading-2",
-            "heading-3",
-            "inline-code",
-            "code-block",
-            "blockquote",
-          ],
-          size: "expanded",
-        },
       },
     ],
   };
