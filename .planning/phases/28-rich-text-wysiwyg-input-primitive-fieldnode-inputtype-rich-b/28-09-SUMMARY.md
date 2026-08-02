@@ -258,13 +258,13 @@ None. The framework's shipped renderer + shipped CSS + shipped validators all wo
 
 The verification page is live at **http://100.113.23.63:3022/**. See the "Verification checklist" section above for the specific things to eyeball per scenario, the sanitization proof rider, and the per-theme regressions to look for. The four possible responses (`verified` / `verified — with: …` / `retry` / `blocked: …`) determine whether Plans 28-10 (green-tree) and 28-11 (release ritual) unblock.
 
-## Ashley's sign-off response (recorded on receipt)
+## Ashley's sign-off response (2026-08-02)
 
-**Verdict:** _(pending — awaiting Ashley's response via the orchestrator)_
+**Verdict:** `verified`
 
-**Ashley's exact words:** _(to be recorded verbatim)_
+**Ashley's exact words:** *"loooks great"*
 
-**Interpretation & follow-up:** _(to be filled in based on the verdict)_
+**Interpretation & follow-up:** Unconditional release-gate sign-off. No adjustments. Plans 28-10 (green-tree gate), 28-11 (docs staging), and 28-12 (operator-gated release) unblocked. All 8 scenarios × 12-theme walkthrough passed her eyeball — including the editor-host CSS polish from her Plan 28-04 adjustment (scenario 8: blockquote left-border + italic-muted, code-block mono + bordered card) and the sanitization proof rider on scenario 1 (dangerous-scheme links render as plain text, not clickable).
 
 ## Next Phase Readiness
 
@@ -297,6 +297,6 @@ The verification page is live at **http://100.113.23.63:3022/**. See the "Verifi
 - Real-validator gate: `curl /api/probe/tree` returns `_validator: "passed"`.
 - Tree contents verified via grep on the response body: all 8 scenarios' bind paths + all 3 state values + all axis values (compact/expanded/tone:info) + the adversarial sanitization seed all present as expected.
 
-## Self-Check: PASSED — SIGN-OFF PENDING
+## Self-Check: PASSED — SIGN-OFF LANDED
 
-**Task 4 sign-off is Ashley's release-gate call.** The verification page is live at http://100.113.23.63:3022/ and every automated check has passed. Awaiting Ashley's `verified` / `verified — with: <adjustments>` / `retry` / `blocked: <reason>` response via the orchestrator; Plans 28-10 + 28-11 block on it.
+**Task 4 sign-off received 2026-08-02.** Ashley granted unconditional `verified` (see "Ashley's sign-off response" above). Plans 28-10, 28-11, and 28-12 unblocked. Verification server killed post-sign-off.
