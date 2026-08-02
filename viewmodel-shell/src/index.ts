@@ -125,6 +125,24 @@ export interface Adapter {
    *  when it is absent (non-browser targets like the TUI have no reload
    *  concept). */
   reload?(): void;
+  /** 9.0.0 (SKEW-05) — display a non-dismissible framework-owned modal
+   *  that hard-locks the page after client/server version skew is detected.
+   *  Fires from the shell on BOTH signals (VmsVersionSkewError from
+   *  checkVersionSkew AND VmsActionError code:"stale_client" from a dispatch),
+   *  unless the consumer opted out via ShellOptions.onVersionSkew:"custom".
+   *  The shipped BrowserAdapter implementation renders backdrop + dialog +
+   *  single [Reload] button that calls this.reload() (see Plan 29-06 and
+   *  browser.ts). The optional `info` arg surfaces build ids for a custom
+   *  adapter that wants to render them for debugging.
+   *  FAIL-QUIET BY ABSENCE — modeled on setPreventUnload/setBusy/toast/reload,
+   *  NOT on navigate/storage/saveFile: the underlying skew signals ALSO
+   *  surface via onError (VmsVersionSkewError / VmsActionError), so an adapter
+   *  without this verb (TUI, a custom target) still LEARNS of the skew and
+   *  can recover its own way. The core MUST NOT call failCapability when this
+   *  verb is absent — a missing modal is a missed UX nicety, never a
+   *  correctness/security bug (the fail-closed guard on the server rejects
+   *  the stale request regardless). */
+  showSkewLock?(info?: { clientBuild?: string; serverBuild?: string }): void;
 }
 
 // ─── Node types ───────────────────────────────────────────────────────────────
@@ -2869,6 +2887,19 @@ export interface ShellOptions {
    *  the whole version-skew feature is off; behavior is byte-identical to a
    *  build without it. */
   clientBuildId?: string;
+  /** 9.0.0 (SKEW-06) — opt-out from the shipped hard-lock modal behavior.
+   *  Default = "default" (or omitted): on either version-skew signal
+   *  (VmsVersionSkewError from checkVersionSkew, or a stale_client
+   *  VmsActionError from a dispatch), the shell (1) sets an internal
+   *  skewLocked flag that drops all further dispatches AND skips renders,
+   *  (2) stops polling, and (3) calls adapter.showSkewLock() to display the
+   *  framework-owned non-dismissible modal whose [Reload] button calls
+   *  adapter.reload(). Set to "custom" to preserve pre-9.0.0 behavior: the
+   *  signals still surface via onError (unchanged), but the shell does NOT
+   *  lock, does NOT stop polling, and does NOT call showSkewLock — consumers
+   *  with their own affordance (per-app custom onError handlers, e.g.
+   *  Kitsune's / PBMInvoices' banners) keep their own path. */
+  onVersionSkew?: "default" | "custom";
 }
 
 export interface ShellSideEffect {
