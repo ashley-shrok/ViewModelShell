@@ -125,6 +125,25 @@ public class VersioningTests
     private static ResultExecutingContext MakeResultContext(IActionResult result) =>
         new(MakeActionContext(), [], result, controller: new object());
 
+    /// <summary>
+    /// 9.0.0 (SKEW-01) — Twin of <see cref="MakeResultContext"/> that constructs an
+    /// <see cref="ActionExecutingContext"/> for <see cref="ShellVersionGuardFilter"/>
+    /// unit tests. Accepts an optional pre-built <see cref="HttpContext"/> so the
+    /// caller can preload the <c>X-VMS-Client-Build</c> header before wrapping.
+    /// </summary>
+    private static ActionExecutingContext MakeActionExecutingContext(HttpContext? httpCtx = null)
+    {
+        var actionCtx = new ActionContext(
+            httpCtx ?? new DefaultHttpContext(),
+            new RouteData(),
+            new MvcActionDescriptor());
+        return new ActionExecutingContext(
+            actionCtx,
+            new List<IFilterMetadata>(),
+            new Dictionary<string, object?>(),
+            controller: new object());
+    }
+
     [Fact]
     public void VersionResultFilter_StampsServerBuild_OnShellResponseObjectResult()
     {
@@ -259,6 +278,18 @@ public class VersioningTests
             .OfType<TypeFilterAttribute>()
             .Count(f => f.ImplementationType == typeof(ShellVersionResultFilter)) == 1;
 
+    // 9.0.0 (SKEW-01) — twin of HasVersionFilter for the new global action-filter
+    // guard shipped in Plan 29-02. Same shape: exactly ONE ShellVersionGuardFilter
+    // in the MvcOptions.Filters pipeline. The `== 1` (rather than `>= 1`) is
+    // load-bearing for the dedup test — a double-registered action filter would
+    // throw twice on a mismatched request (400 stale_client on the first throw,
+    // then a second uncaught throw the ShellExceptionFilter is no longer wired to
+    // handle for that pipeline pass), so the count must be strictly one.
+    private static bool HasVersionGuardFilter(IServiceProvider sp) =>
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MvcOptions>>().Value.Filters
+            .OfType<TypeFilterAttribute>()
+            .Count(f => f.ImplementationType == typeof(ShellVersionGuardFilter)) == 1;
+
     [Fact]
     public void AddVmsShellVersioning_String_SelfRegistersResultFilter()
     {
@@ -290,5 +321,114 @@ public class VersioningTests
         services.AddVmsShellVersioning("build-x");
         using var sp = services.BuildServiceProvider();
         Assert.True(HasVersionFilter(sp), "dedup guard must keep exactly one ShellVersionResultFilter");
+    }
+
+    // ─── 9.0.0 — ShellVersionGuardFilter behavior tests (Plan 29-05 for SKEW-01) ─
+    // Coverage for the four documented short-circuit branches of the global action
+    // filter shipped in Plan 29-02. Together with the parity fixture in Plan 29-07
+    // (which exercises the filter over a real HTTP request) these constitute the
+    // full unit + integration coverage of the guard.
+
+    [Fact]
+    public void VersionGuardFilter_HeaderMismatch_ThrowsStaleClient()
+    {
+        var http = new DefaultHttpContext();
+        http.Request.Headers["X-VMS-Client-Build"] = "old-build";
+        var ctx = MakeActionExecutingContext(http);
+        var filter = new ShellVersionGuardFilter(new VmsVersioningOptions { CurrentBuild = "new-build" });
+
+        var ex = Assert.Throws<StaleClientException>(() => filter.OnActionExecuting(ctx));
+
+        Assert.Equal("old-build", ex.ClientBuild);
+        Assert.Equal("new-build", ex.CurrentBuild);
+    }
+
+    [Fact]
+    public void VersionGuardFilter_HeaderMatches_PassesThrough()
+    {
+        var http = new DefaultHttpContext();
+        http.Request.Headers["X-VMS-Client-Build"] = "current-build";
+        var ctx = MakeActionExecutingContext(http);
+        var filter = new ShellVersionGuardFilter(new VmsVersioningOptions { CurrentBuild = "current-build" });
+
+        filter.OnActionExecuting(ctx); // must not throw
+
+        Assert.Null(ctx.Result); // did not short-circuit
+    }
+
+    [Fact]
+    public void VersionGuardFilter_NoHeader_PassesThrough()
+    {
+        // Per CONTEXT: absent header → pass through (agent-driven curl still works).
+        // Mirrors the shipped Parse_NoHeader_PassesThrough semantics.
+        var ctx = MakeActionExecutingContext(); // no header set
+        var filter = new ShellVersionGuardFilter(new VmsVersioningOptions { CurrentBuild = "any-build" });
+
+        filter.OnActionExecuting(ctx); // must not throw
+
+        Assert.Null(ctx.Result);
+    }
+
+    [Fact]
+    public void VersionGuardFilter_EmptyCurrentBuild_SkipsGuard()
+    {
+        // Per CONTEXT additive-posture: empty CurrentBuild → inert (versioning off;
+        // behavior byte-identical to versioning-off apps). Even a "mismatching"
+        // header is ignored because there's no server-side build to mismatch AGAINST.
+        var http = new DefaultHttpContext();
+        http.Request.Headers["X-VMS-Client-Build"] = "some-build";
+        var ctx = MakeActionExecutingContext(http);
+        var filter = new ShellVersionGuardFilter(new VmsVersioningOptions { CurrentBuild = "" });
+
+        filter.OnActionExecuting(ctx); // must not throw
+
+        Assert.Null(ctx.Result);
+    }
+
+    // ─── 9.0.0 — ShellVersionGuardFilter self-registration tests (Plan 29-05 for SKEW-01) ─
+    // Mirrors the existing AddVmsShellVersioning_*_SelfRegistersResultFilter block
+    // above, asserting the extended AddVersionFilters helper (Plan 29-02) co-registers
+    // the guard alongside the stamp from BOTH AddVmsShellVersioning overloads.
+
+    [Fact]
+    public void AddVmsShellVersioning_String_SelfRegistersGuardFilter()
+    {
+        var services = new ServiceCollection();
+        services.AddControllers();
+        services.AddVmsShellVersioning("build-x");
+        using var sp = services.BuildServiceProvider();
+        Assert.True(HasVersionGuardFilter(sp),
+            "AddVmsShellVersioning(string) must self-register exactly ONE ShellVersionGuardFilter");
+    }
+
+    [Fact]
+    public void AddVmsShellVersioning_NoArg_SelfRegistersGuardFilter()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>(
+            new FakeWebHostEnvironment { WebRootPath = FixtureDir });
+        services.AddControllers();
+        services.AddVmsShellVersioning();
+        using var sp = services.BuildServiceProvider();
+        Assert.True(HasVersionGuardFilter(sp),
+            "no-arg AddVmsShellVersioning() must also self-register the guard");
+    }
+
+    [Fact]
+    public void AddVmsShellVersioning_DoubleCall_DoesNotDoubleRegisterGuard()
+    {
+        // LOAD-BEARING: a double-registered action filter would throw twice on
+        // mismatch, producing a 500 (the second throw is uncaught by the same
+        // ShellExceptionFilter pass that mapped the first throw to 400 stale_client)
+        // rather than the intended 400 stale_client envelope. The dedup guard in
+        // AddVersionFilters (Plan 29-02) is what prevents this — this test is the
+        // executable proof that a future refactor cannot silently remove it.
+        var services = new ServiceCollection();
+        services.AddControllers();
+        services.AddVmsShellVersioning("build-x");
+        services.AddVmsShellVersioning("build-x"); // idempotent
+        using var sp = services.BuildServiceProvider();
+        Assert.True(HasVersionGuardFilter(sp),
+            "Double-call of AddVmsShellVersioning must still result in exactly ONE ShellVersionGuardFilter");
     }
 }
