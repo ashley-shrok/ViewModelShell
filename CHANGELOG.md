@@ -6,7 +6,7 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
-## 9.0.0 — <YYYY-MM-DD> (npm + NuGet aligned) — BREAKING
+## 9.0.0 — 2026-08-02 (npm + NuGet aligned) — BREAKING
 
 Version-skew hard-lock: close two fleet-foundational gaps in v3.8.0's version-skew primitive. **Wire is UNCHANGED (no new fields or codes); this is a BEHAVIOR-only major bump.**
 
@@ -33,6 +33,10 @@ Version-skew hard-lock: close two fleet-foundational gaps in v3.8.0's version-sk
 Design of record: `~/.claude/identities/vicky/bounties/version-skew-recovery-affordance/mechanism-sketch.md` + Ashley post-tasting sign-off 2026-08-02.
 
 Requirements: SKEW-01, SKEW-02, SKEW-03, SKEW-04, SKEW-05, SKEW-06, SKEW-07, SKEW-08, SKEW-09, SKEW-10 (see .planning/phases/29-.../29-CONTEXT.md §requirements_map for canonical definitions).
+
+### Companion NuGet packages
+
+- `AshleyShrok.ViewModelShell.Markdown` bumped to `0.2.2` — rebuilt against core 9.0.0 per AGENTS.md core-major-bump rule (mandatory companion republish on any core MAJOR to preserve binary compat for downstream consumers who upgrade the core). No source change; patch-only version bump for the rebuild. Companion uses `<ProjectReference>` to the core (not a floor-dep `<PackageReference>`), so binary-compat is enforced by the rebuild-and-republish itself — verified via `parity/check-companion-binary-compat.sh` before the release.
 
 ---
 

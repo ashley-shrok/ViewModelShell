@@ -57,6 +57,15 @@ npm install @ashley-shrok/viewmodel-shell@^9.0.0
 dotnet add package AshleyShrok.ViewModelShell --version 9.0.0
 ```
 
+### Companion `AshleyShrok.ViewModelShell.Markdown`
+
+- Companion `AshleyShrok.ViewModelShell.Markdown` bumped to `0.2.2` per AGENTS.md core-major-bump rule (mandatory rebuild + republish on every core MAJOR to preserve binary compat for consumers who upgrade the core NuGet). Consumers who use this companion should upgrade both packages together:
+
+```bash
+dotnet add package AshleyShrok.ViewModelShell --version 9.0.0
+dotnet add package AshleyShrok.ViewModelShell.Markdown --version 0.2.2
+```
+
 ### Ceremony reference
 
 Design of record: `~/.claude/identities/vicky/bounties/version-skew-recovery-affordance/mechanism-sketch.md` + Ashley post-tasting sign-off 2026-08-02.
