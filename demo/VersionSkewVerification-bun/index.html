@@ -15,117 +15,17 @@
        12-theme sweep would be busywork here. -->
   <link rel="stylesheet" href="/vms/default.css" />
 
-  <style>
-    /* Host-chrome ONLY — bare-minimum layout for the verification harness
-       around the three shell mount points. NOT part of any VMS view tree;
-       the shipped CSS above owns everything inside the three shells + the
-       modal that fires inside them. */
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-        Roboto, sans-serif;
-      background: #f6f7f9;
-    }
-    .verification-header {
-      padding: 1rem 1.5rem;
-      border-bottom: 1px solid #ccc;
-      background: #fff;
-    }
-    .verification-header h1 {
-      margin: 0 0 0.25rem 0;
-      font-size: 1.15rem;
-    }
-    .verification-header p {
-      margin: 0;
-      color: #666;
-      font-size: 0.85rem;
-    }
-    .admin-panel {
-      padding: 0.85rem 1.5rem;
-      background: #fff8e0;
-      border-bottom: 1px solid #e8d670;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.75rem;
-      font-size: 0.9rem;
-    }
-    .admin-panel strong {
-      font-weight: 600;
-    }
-    .admin-panel button {
-      padding: 0.35rem 0.75rem;
-      border: 1px solid #b98e00;
-      background: #fff;
-      border-radius: 4px;
-      cursor: pointer;
-      font: inherit;
-    }
-    .admin-panel button:hover {
-      background: #ffefb0;
-    }
-    .admin-panel #current-build {
-      display: inline-block;
-      min-width: 4rem;
-      padding: 0.15rem 0.5rem;
-      background: #fff;
-      border: 1px solid #b98e00;
-      border-radius: 3px;
-      font-family: ui-monospace, SFMono-Regular, "Menlo", "Consolas", monospace;
-    }
-    .scenarios {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 1rem;
-      padding: 1rem 1.5rem;
-    }
-    .scenario {
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      background: #fff;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      min-height: 480px;
-    }
-    .scenario-header {
-      padding: 0.6rem 0.85rem;
-      background: #eef1f5;
-      border-bottom: 1px solid #d5dae1;
-    }
-    .scenario-header h2 {
-      margin: 0 0 0.15rem 0;
-      font-size: 0.98rem;
-    }
-    .scenario-header p {
-      margin: 0;
-      color: #555;
-      font-size: 0.78rem;
-    }
-    .scenario-mount {
-      flex: 1 1 auto;
-      position: relative;
-      overflow: auto;
-    }
-    .scenario-banner {
-      display: none;
-      background: #b73c3c;
-      color: #fff;
-      padding: 0.65rem 0.85rem;
-      font-size: 0.85rem;
-      border-top: 1px solid #7a2626;
-    }
-    @media (max-width: 900px) {
-      .scenarios {
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
+  <!-- Deliberately zero stylesheet block by design — VMS's D-12/D-15 "apps
+       describe, they don't decorate" rule extends to verification harnesses.
+       Host-chrome styling below rides as inline attributes on each element,
+       matching the pattern in demo/NavVerification-bun/index.html and its
+       sibling harnesses. Grid uses intrinsic responsiveness (auto-fit + minmax)
+       so no viewport breakpoints are needed either. -->
 </head>
-<body>
-  <div class="verification-header">
-    <h1>Phase 29 v9.0.0 version-skew hard-lock verification</h1>
-    <p>
+<body style="margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f6f7f9">
+  <div style="padding:1rem 1.5rem;border-bottom:1px solid #ccc;background:#fff">
+    <h1 style="margin:0 0 .25rem 0;font-size:1.15rem">Phase 29 v9.0.0 version-skew hard-lock verification</h1>
+    <p style="margin:0;color:#666;font-size:.85rem">
       Three shells against one Bun server. Each shell is configured differently
       so Ashley can walk through the three CONTEXT-mandated scenarios in one
       page. Real HTTP, real shipped bundle, real shipped default.css.
@@ -136,40 +36,45 @@
        so it stays interactive even after a shell hard-locks. Uses direct
        fetch() to the server's /_admin/* routes (demo-only; NOT a shipped
        VMS feature). -->
-  <div class="admin-panel">
-    <strong>Server build:</strong>
-    <span id="current-build">?</span>
-    <button data-set-build="build-A">Set server to build-A</button>
-    <button data-set-build="build-B">Set server to build-B</button>
-    <button id="reload-page">Reset all shells (reload page)</button>
-    <span style="color: #7a5c00; font-size: 0.82rem;">
+  <div style="padding:.85rem 1.5rem;background:#fff8e0;border-bottom:1px solid #e8d670;display:flex;flex-wrap:wrap;align-items:center;gap:.75rem;font-size:.9rem">
+    <strong style="font-weight:600">Server build:</strong>
+    <span id="current-build" style="display:inline-block;min-width:4rem;padding:.15rem .5rem;background:#fff;border:1px solid #b98e00;border-radius:3px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">?</span>
+    <button type="button" data-set-build="build-A" style="padding:.35rem .75rem;border:1px solid #b98e00;background:#fff;border-radius:4px;cursor:pointer;font:inherit">Set server to build-A</button>
+    <button type="button" data-set-build="build-B" style="padding:.35rem .75rem;border:1px solid #b98e00;background:#fff;border-radius:4px;cursor:pointer;font:inherit">Set server to build-B</button>
+    <button type="button" id="reload-page" style="padding:.35rem .75rem;border:1px solid #b98e00;background:#fff;border-radius:4px;cursor:pointer;font:inherit">Reset all shells (reload page)</button>
+    <span style="color:#7a5c00;font-size:.82rem">
       Flipping the server build here immediately affects the next request from
       any of the three shells below.
     </span>
   </div>
 
-  <div class="scenarios">
+  <!-- grid-template-columns uses auto-fit + minmax(min(300px,100%),1fr) so the
+       three columns collapse to 1 intrinsically when the container narrows —
+       no @media viewport breakpoint needed. -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:1rem;padding:1rem 1.5rem">
     <!-- SCENARIO A: initial-load stale bundle -->
-    <div class="scenario">
-      <div class="scenario-header">
-        <h2>A. Initial-load stale</h2>
-        <p>
+    <div style="border:1px solid #ccc;border-radius:6px;background:#fff;overflow:hidden;display:flex;flex-direction:column;min-height:480px">
+      <div style="padding:.6rem .85rem;background:#eef1f5;border-bottom:1px solid #d5dae1">
+        <h2 style="margin:0 0 .15rem 0;font-size:.98rem">A. Initial-load stale</h2>
+        <p style="margin:0;color:#555;font-size:.78rem">
           clientBuildId = <code>"build-Z"</code> (never matches).
-          The shell tries to load; the server rejects with 400 stale_client
-          BEFORE a VM renders; the shell then attempts a first dispatch to
-          surface the hard-lock modal per CONTEXT §Success Criteria #8(a).
-          No underlying content should paint under the modal.
+          The server rejects the initial GET with 400 stale_client BEFORE a
+          VM renders; the shell's load() catch arm fires the hard-lock modal
+          directly. No underlying content paints. (Post-tasting fix:
+          index.ts:3168 catch arm now calls lockSkew on stale_client, mirroring
+          performRoundTrip; prior behavior required a follow-up dispatch to
+          surface the modal.)
         </p>
       </div>
-      <div class="scenario-mount" id="scenario-a"></div>
-      <div class="scenario-banner" id="scenario-a-banner"></div>
+      <div id="scenario-a" style="flex:1 1 auto;position:relative;overflow:auto"></div>
+      <div id="scenario-a-banner" style="display:none;background:#b73c3c;color:#fff;padding:.65rem .85rem;font-size:.85rem;border-top:1px solid #7a2626"></div>
     </div>
 
     <!-- SCENARIO B: mid-session flip -->
-    <div class="scenario">
-      <div class="scenario-header">
-        <h2>B. Mid-session flip</h2>
-        <p>
+    <div style="border:1px solid #ccc;border-radius:6px;background:#fff;overflow:hidden;display:flex;flex-direction:column;min-height:480px">
+      <div style="padding:.6rem .85rem;background:#eef1f5;border-bottom:1px solid #d5dae1">
+        <h2 style="margin:0 0 .15rem 0;font-size:.98rem">B. Mid-session flip</h2>
+        <p style="margin:0;color:#555;font-size:.78rem">
           clientBuildId = <code>"build-A"</code> (matches server on start).
           Page loads a small form. Ashley clicks "Set server to build-B"
           above, types in the input, then clicks "Increment". The next
@@ -177,15 +82,15 @@
           visibly lost (per CONTEXT accepted trade-off).
         </p>
       </div>
-      <div class="scenario-mount" id="scenario-b"></div>
-      <div class="scenario-banner" id="scenario-b-banner"></div>
+      <div id="scenario-b" style="flex:1 1 auto;position:relative;overflow:auto"></div>
+      <div id="scenario-b-banner" style="display:none;background:#b73c3c;color:#fff;padding:.65rem .85rem;font-size:.85rem;border-top:1px solid #7a2626"></div>
     </div>
 
     <!-- SCENARIO C: opt-out custom -->
-    <div class="scenario">
-      <div class="scenario-header">
-        <h2>C. Opt-out custom</h2>
-        <p>
+    <div style="border:1px solid #ccc;border-radius:6px;background:#fff;overflow:hidden;display:flex;flex-direction:column;min-height:480px">
+      <div style="padding:.6rem .85rem;background:#eef1f5;border-bottom:1px solid #d5dae1">
+        <h2 style="margin:0 0 .15rem 0;font-size:.98rem">C. Opt-out custom</h2>
+        <p style="margin:0;color:#555;font-size:.78rem">
           clientBuildId = <code>"build-A"</code>, onVersionSkew =
           <code>"custom"</code>. On skew, the framework does NOT lock the
           shell — the custom onError handler shows the red banner below
@@ -194,8 +99,8 @@
           byte-for-byte.
         </p>
       </div>
-      <div class="scenario-mount" id="scenario-c"></div>
-      <div class="scenario-banner" id="scenario-c-banner"></div>
+      <div id="scenario-c" style="flex:1 1 auto;position:relative;overflow:auto"></div>
+      <div id="scenario-c-banner" style="display:none;background:#b73c3c;color:#fff;padding:.65rem .85rem;font-size:.85rem;border-top:1px solid #7a2626"></div>
     </div>
   </div>
 
