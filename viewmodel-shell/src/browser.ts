@@ -484,6 +484,82 @@ export class BrowserAdapter implements Adapter {
     window.location.reload();
   }
 
+  /** 9.0.0 (SKEW-05) — implementation of the Adapter.showSkewLock verb.
+   *  Fired by the shell's lockSkew helper on either version-skew signal
+   *  (see viewmodel-shell/src/index.ts checkVersionSkew mismatch branch +
+   *  stale_client catch arm). Framework-owned non-dismissible modal:
+   *  backdrop + centered warning-tone dialog + single [Reload] button that
+   *  calls this.reload(). The consumer's onVersionSkew:"custom" opt-out
+   *  short-circuits BEFORE the verb is invoked, so if execution reaches
+   *  here, we ARE going to hard-lock.
+   *
+   *  Idempotent: a second call while the lock is up finds the existing DOM
+   *  and no-ops (matches toast-region idiom). The container gets `inert`
+   *  so the underlying page is unfocusable/uninteractable while the modal
+   *  is up.
+   *
+   *  DELIBERATE DEVIATIONS from the shipped modal() renderer:
+   *   - NO `.vms-modal__close` X button
+   *   - NO backdrop-click dismiss handler
+   *   - NO Escape key handler
+   *   - NOT part of the render pipeline (imperative verb; attaches to
+   *     document.body directly, not to a parent supplied by render())
+   *  The only path out is the [Reload] button — that IS the point of the
+   *  phase. Silent auto-reload is retired; the user MUST consent. */
+  showSkewLock(_info?: { clientBuild?: string; serverBuild?: string }): void {
+    // Idempotent: second call finds existing DOM and no-ops.
+    if (document.querySelector<HTMLElement>(".vms-skew-lock")) return;
+
+    // Make the underlying page unfocusable while the modal is up (CONTEXT specifics).
+    this.container.setAttribute("inert", "");
+
+    const backdrop = document.createElement("div");
+    backdrop.className = "vms-skew-lock";
+
+    const dialog = document.createElement("div");
+    dialog.className = "vms-skew-lock__dialog";
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-labelledby", "vms-skew-lock-title");
+
+    // Warning-tone icon (Lucide alert-triangle via renderIconSvg — same seam
+    // as AlertNode; matches ALERT_TONE_ICON.warning mapping).
+    const iconWrap = document.createElement("div");
+    iconWrap.className = "vms-skew-lock__icon";
+    iconWrap.appendChild(this.renderIconSvg("alert-triangle", "lg", undefined, undefined));
+    dialog.appendChild(iconWrap);
+
+    const title = document.createElement("div");
+    title.id = "vms-skew-lock-title";
+    title.className = "vms-skew-lock__title";
+    title.textContent = "This app is out of date"; // CONTEXT-locked copy
+    dialog.appendChild(title);
+
+    const body = document.createElement("div");
+    body.className = "vms-skew-lock__body";
+    body.textContent = "Reload to continue. Any unsaved changes will be lost."; // CONTEXT-locked copy
+    dialog.appendChild(body);
+
+    const reloadBtn = document.createElement("button");
+    reloadBtn.type = "button";
+    reloadBtn.className = "vms-skew-lock__reload-btn";
+    reloadBtn.textContent = "Reload"; // CONTEXT-locked copy
+    reloadBtn.addEventListener("click", () => this.reload()); // reuse shipped verb
+    dialog.appendChild(reloadBtn);
+
+    // NO close X button. NO backdrop-click dismiss handler. NO Escape handler.
+    // Only path out is the [Reload] button. This is the point of the phase —
+    // "silent recovery is retired; user must consent to reload."
+
+    backdrop.appendChild(dialog);
+    document.body.appendChild(backdrop);
+
+    // Auto-focus the Reload button for keyboard/SR accessibility (learned gap
+    // from ExpenseTracker's in-modal success card per AGENTS.md's "In-modal
+    // success feedback" section).
+    reloadBtn.focus();
+  }
+
   /** Transient confirmation toast. Lazily creates/reuses a single fixed-corner
    *  host region (.vms-toast-region) appended to <body> so toasts stack and
    *  survive the container's innerHTML wipe on each render(); appends a
