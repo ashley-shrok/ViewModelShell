@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Agent discoverability — this is a ViewModel Shell app (three scenario shells; each independently mounts its own VMS instance against the same /api/shell endpoint pair). -->
+  <meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/1.0","endpoint":"/api/shell","actionEndpoint":"/api/shell/action"}'>
+  <!-- Page marker — the smoke-test greps for this string to confirm a 200. -->
+  <meta name="page" content="version-skew-verification">
+  <title>Phase 29 v9.0.0 version-skew hard-lock verification — Tailnet sign-off</title>
+
+  <!-- The REAL shipped default.css served verbatim by server.ts from
+       viewmodel-shell/styles/default.css. Single theme (default light) — the
+       skew hard-lock is a mechanism proof, not a visual regression proof; the
+       12-theme sweep would be busywork here. -->
+  <link rel="stylesheet" href="/vms/default.css" />
+
+  <style>
+    /* Host-chrome ONLY — bare-minimum layout for the verification harness
+       around the three shell mount points. NOT part of any VMS view tree;
+       the shipped CSS above owns everything inside the three shells + the
+       modal that fires inside them. */
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Roboto, sans-serif;
+      background: #f6f7f9;
+    }
+    .verification-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid #ccc;
+      background: #fff;
+    }
+    .verification-header h1 {
+      margin: 0 0 0.25rem 0;
+      font-size: 1.15rem;
+    }
+    .verification-header p {
+      margin: 0;
+      color: #666;
+      font-size: 0.85rem;
+    }
+    .admin-panel {
+      padding: 0.85rem 1.5rem;
+      background: #fff8e0;
+      border-bottom: 1px solid #e8d670;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.9rem;
+    }
+    .admin-panel strong {
+      font-weight: 600;
+    }
+    .admin-panel button {
+      padding: 0.35rem 0.75rem;
+      border: 1px solid #b98e00;
+      background: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .admin-panel button:hover {
+      background: #ffefb0;
+    }
+    .admin-panel #current-build {
+      display: inline-block;
+      min-width: 4rem;
+      padding: 0.15rem 0.5rem;
+      background: #fff;
+      border: 1px solid #b98e00;
+      border-radius: 3px;
+      font-family: ui-monospace, SFMono-Regular, "Menlo", "Consolas", monospace;
+    }
+    .scenarios {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+      padding: 1rem 1.5rem;
+    }
+    .scenario {
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fff;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 480px;
+    }
+    .scenario-header {
+      padding: 0.6rem 0.85rem;
+      background: #eef1f5;
+      border-bottom: 1px solid #d5dae1;
+    }
+    .scenario-header h2 {
+      margin: 0 0 0.15rem 0;
+      font-size: 0.98rem;
+    }
+    .scenario-header p {
+      margin: 0;
+      color: #555;
+      font-size: 0.78rem;
+    }
+    .scenario-mount {
+      flex: 1 1 auto;
+      position: relative;
+      overflow: auto;
+    }
+    .scenario-banner {
+      display: none;
+      background: #b73c3c;
+      color: #fff;
+      padding: 0.65rem 0.85rem;
+      font-size: 0.85rem;
+      border-top: 1px solid #7a2626;
+    }
+    @media (max-width: 900px) {
+      .scenarios {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="verification-header">
+    <h1>Phase 29 v9.0.0 version-skew hard-lock verification</h1>
+    <p>
+      Three shells against one Bun server. Each shell is configured differently
+      so Ashley can walk through the three CONTEXT-mandated scenarios in one
+      page. Real HTTP, real shipped bundle, real shipped default.css.
+    </p>
+  </div>
+
+  <!-- Admin panel — NOT part of any VMS view tree. Sits outside the shells
+       so it stays interactive even after a shell hard-locks. Uses direct
+       fetch() to the server's /_admin/* routes (demo-only; NOT a shipped
+       VMS feature). -->
+  <div class="admin-panel">
+    <strong>Server build:</strong>
+    <span id="current-build">?</span>
+    <button data-set-build="build-A">Set server to build-A</button>
+    <button data-set-build="build-B">Set server to build-B</button>
+    <button id="reload-page">Reset all shells (reload page)</button>
+    <span style="color: #7a5c00; font-size: 0.82rem;">
+      Flipping the server build here immediately affects the next request from
+      any of the three shells below.
+    </span>
+  </div>
+
+  <div class="scenarios">
+    <!-- SCENARIO A: initial-load stale bundle -->
+    <div class="scenario">
+      <div class="scenario-header">
+        <h2>A. Initial-load stale</h2>
+        <p>
+          clientBuildId = <code>"build-Z"</code> (never matches).
+          The shell tries to load; the server rejects with 400 stale_client
+          BEFORE a VM renders; the shell then attempts a first dispatch to
+          surface the hard-lock modal per CONTEXT §Success Criteria #8(a).
+          No underlying content should paint under the modal.
+        </p>
+      </div>
+      <div class="scenario-mount" id="scenario-a"></div>
+      <div class="scenario-banner" id="scenario-a-banner"></div>
+    </div>
+
+    <!-- SCENARIO B: mid-session flip -->
+    <div class="scenario">
+      <div class="scenario-header">
+        <h2>B. Mid-session flip</h2>
+        <p>
+          clientBuildId = <code>"build-A"</code> (matches server on start).
+          Page loads a small form. Ashley clicks "Set server to build-B"
+          above, types in the input, then clicks "Increment". The next
+          dispatch fires the hard-lock modal and the typed content is
+          visibly lost (per CONTEXT accepted trade-off).
+        </p>
+      </div>
+      <div class="scenario-mount" id="scenario-b"></div>
+      <div class="scenario-banner" id="scenario-b-banner"></div>
+    </div>
+
+    <!-- SCENARIO C: opt-out custom -->
+    <div class="scenario">
+      <div class="scenario-header">
+        <h2>C. Opt-out custom</h2>
+        <p>
+          clientBuildId = <code>"build-A"</code>, onVersionSkew =
+          <code>"custom"</code>. On skew, the framework does NOT lock the
+          shell — the custom onError handler shows the red banner below
+          instead, and the shell remains fully interactive (increment
+          keeps working). Proves the opt-out preserves v3.8.0 behavior
+          byte-for-byte.
+        </p>
+      </div>
+      <div class="scenario-mount" id="scenario-c"></div>
+      <div class="scenario-banner" id="scenario-c-banner"></div>
+    </div>
+  </div>
+
+  <script>
+    // Admin panel wiring — outside the shells so it stays interactive even
+    // after a shell hard-locks (the .vms-skew-lock backdrop is z-index 1200
+    // but it's appended INSIDE the container that BrowserAdapter was mounted
+    // on; the admin panel sits above the mounts as separate DOM).
+    (function () {
+      var buildEl = document.getElementById("current-build");
+      function refresh() {
+        fetch("/_admin/current-build")
+          .then(function (r) { return r.json(); })
+          .then(function (body) {
+            buildEl.textContent = body.build || "?";
+          })
+          .catch(function () {
+            buildEl.textContent = "?";
+          });
+      }
+      refresh();
+      document.querySelectorAll("[data-set-build]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var build = btn.getAttribute("data-set-build");
+          fetch("/_admin/set-build", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ build: build }),
+          })
+            .then(function (r) { return r.json(); })
+            .then(function (body) {
+              buildEl.textContent = body.build || "?";
+            });
+        });
+      });
+      document.getElementById("reload-page").addEventListener("click", function () {
+        // Reset the server to build-A BEFORE reloading so the next page load
+        // finds a clean slate.
+        fetch("/_admin/set-build", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ build: "build-A" }),
+        }).finally(function () {
+          window.location.reload();
+        });
+      });
+    })();
+  </script>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
