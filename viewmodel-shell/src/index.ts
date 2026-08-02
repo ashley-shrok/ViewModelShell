@@ -3280,15 +3280,17 @@ export class ViewModelShell {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       onError ? onError(error) : console.error("[ViewModelShell]", error);
-      // 3.8.0 — Phase 2 fail-closed recovery. The server rejected this mutation
-      // because the tab is running a stale bundle (nothing was applied). Order
-      // per the locked design: surface via onError FIRST (done above), THEN
-      // force a reload to the fresh bundle — the only safe recovery. reload is
-      // fail-quiet by absence (the VmsActionError already surfaced), so this is
-      // a plain optional-chain call, and we return before the below re-render
-      // (the page is reloading; re-rendering the stale tree is pointless).
+      // 9.0.0 (SKEW-04) — hard-lock recovery replaces the shipped silent auto-
+      // reload. Order per the locked design: surface via onError FIRST (done
+      // above), THEN call lockSkew() to set the shell-level flag, stop polling,
+      // and fire adapter.showSkewLock() so the user consents to reload via the
+      // modal's [Reload] button (which itself calls adapter.reload()). This
+      // means adapter.reload() is NO LONGER called here — the button is what
+      // calls it, on user consent. Consumers on onVersionSkew:"custom" bypass
+      // the lock/stop/modal (lockSkew short-circuits internally) and keep
+      // their v3.8.0 onError-only affordance.
       if (error instanceof VmsActionError && error.code === "stale_client") {
-        this.options.adapter.reload?.();
+        this.lockSkew();
         return;
       }
       // 0.8.0 (#11) — re-render the current VM on dispatch error. Adapters
@@ -3559,7 +3561,13 @@ export class ViewModelShell {
     const serverBuild = body.serverBuild;
     if (clientBuild && serverBuild && serverBuild !== clientBuild) {
       const err = new VmsVersionSkewError(serverBuild, clientBuild);
+      // Same onError surface as v3.8.0 — signal preserved for consumer opt-out.
       this.options.onError ? this.options.onError(err) : console.error("[ViewModelShell]", err);
+      // 9.0.0 (SKEW-04) — ALSO lock + fire modal unless the consumer opted out.
+      // lockSkew() handles the onVersionSkew:"custom" gate internally; call sites
+      // do NOT need to gate themselves. Info arg surfaces build ids for custom
+      // adapter debugging.
+      this.lockSkew({ clientBuild, serverBuild });
     }
   }
 
