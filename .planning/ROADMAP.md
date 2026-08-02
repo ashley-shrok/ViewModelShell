@@ -517,7 +517,7 @@ Plans:
 
 **Goal:** Close two fleet-foundational failure modes in the v3.8.0 version-skew primitive, flagged by Ashley 2026-08-02 (via Molly, from Metis:5000). **Gap 1:** the server-side fail-closed guard is per-controller opt-in (`ActionPayload<T>.Parse(HttpRequest, currentBuild)` overload) — controllers using the plain `Parse(actionJson, stateJson)` overload silently accept stale-client requests AND execute them against the stale `_state` (data-integrity risk). **Gap 2:** the client-side recovery is silent — `adapter.reload()` fires with no shipped UX affordance, producing the "clicked a row and the page refreshed" experience. **Gap 3:** detection is deliberately additive so a stale bundle stays fully usable for reads until the first mutation, letting users interact with an out-of-date UI indefinitely. **The harder line, locked with Ashley post-tasting (2026-08-02):** convert the server-side guard from per-controller opt-in to a GLOBAL FILTER (both backends) that rejects any request (GET + POST) with a mismatched `X-VMS-Client-Build` header; client attaches the header on GETs too; a shipped hard-lock modal in `BrowserAdapter` (framework-owned, non-dismissible, `[Reload]` button only) replaces the silent auto-reload and covers BOTH `VmsVersionSkewError` (detection) AND `stale_client` (fail-closed) paths. Result: adopting versioning is one line, and once adopted, no stale bundle can execute an action nor read a fresh view without the user consenting to reload. Lost-in-flight-work cost accepted (typing/scroll lost on modal → reload). Wire is additive (still `serverBuild` + `X-VMS-Client-Build` + 400 stale_client envelope; no new fields). BEHAVIOR change on both auto-reload retirement AND global filter default — semver bump likely major (opt-out seam preserves backwards-compatibility for consumers with pre-existing custom affordances; discuss in plan). Design of record: bounty `version-skew-recovery-affordance` (`~/.claude/identities/vicky/bounties/version-skew-recovery-affordance/mechanism-sketch.md`) + tailnet tasting archived at `http://100.113.23.63:34243/` (~90 min TTL from 2026-08-02 15:35 UTC).
 
-**Requirements:** SKEW-01, SKEW-02, SKEW-03, SKEW-04, SKEW-05, SKEW-06, SKEW-07, SKEW-08, SKEW-09, SKEW-10 (to be defined in `/gsd:plan-phase 29`)
+**Requirements:** SKEW-01, SKEW-02, SKEW-03, SKEW-04, SKEW-05, SKEW-06, SKEW-07, SKEW-08, SKEW-09, SKEW-10
 
 **Depends on:** Phase 28 (v8.2.0 baseline)
 
@@ -534,4 +534,18 @@ Plans:
   10. Docs shipped: CHANGELOG.md section (BREAKING — auto-reload retired + global filter default), MIGRATION.md upgrade section (per-controller `Parse(HttpRequest, currentBuild)` calls become redundant but keep working; consumers with custom `onError` affordances add opt-out flag), AGENTS.md pattern entry + gotcha #9 update (kill the "per-controller opt-in" narrative), agent-skill.md updated + byte-copy to .NET AgentSkill.md.
   11. Aligned release (npm + NuGet — version TBD; likely 9.0.0 MAJOR given auto-reload retirement is a documented behavior change), operator-gated auth precheck + publish, annotated tag, main advanced, announced on `#vms-announcements` + DM'd to Metis maintainer (Molly) with confirmation that the flag is closed.
 
-**Plans:** TBD (defined in `/gsd:plan-phase 29`)
+**Plans:** 12 plans
+
+Plans:
+- [ ] 29-01-PLAN.md — TS Adapter.showSkewLock verb + ShellOptions.onVersionSkew opt-out + skewLocked shell state + lockSkew helper + dispatch/processResponse guards (wave 1, no deps)
+- [ ] 29-02-PLAN.md — .NET ShellVersionGuardFilter + AddVersionFilters co-registration (wave 1, no deps; file-disjoint from 29-01)
+- [ ] 29-03-PLAN.md — Client X-VMS-Client-Build header on GET + retire silent auto-reload + wire lockSkew from checkVersionSkew + stale_client arm + vitest coverage (wave 2, depends on 29-01)
+- [ ] 29-04-PLAN.md — TS server-subpath createVersionGuard factory + vitest coverage (wave 3, depends on 29-03; sequential to avoid test-file collision)
+- [ ] 29-05-PLAN.md — .NET ShellVersionGuardFilter + AddVersionFilters unit tests + dedup regression test (wave 2, depends on 29-02)
+- [ ] 29-06-PLAN.md — BrowserAdapter.showSkewLock DOM + .vms-skew-lock* CSS + jsdom adapter test (wave 4, depends on 29-01 + 29-03 + 29-04; sequential to avoid test-file collision)
+- [ ] 29-07-PLAN.md — parity/run.ts GET-branch header hoist + helpdesk.json GET-stale fixture steps + expectBodyContains tripwires (wave 5, depends on 29-02 + 29-04)
+- [ ] 29-08-PLAN.md — agent-skill.md revised Client build / version skew section + byte-copy to .NET AgentSkill.md + parity check-skill green (wave 6, depends on 29-03 + 29-06)
+- [ ] 29-09-PLAN.md — demo/VersionSkewVerification-bun/ tailnet page + three-scenario walkthrough + Ashley release-gate sign-off (wave 7, depends on 29-03/06/07/08; autonomous: false)
+- [ ] 29-10-PLAN.md — Full green-tree gate: TS batch + .NET batch + parity (wave 8, depends on 29-05/07/08/09)
+- [ ] 29-11-PLAN.md — Docs staging: CHANGELOG.md v9.0.0 BREAKING + MIGRATION.md v9.0.0 upgrade section + AGENTS.md new gotcha + gotcha #9 addendum (wave 9, depends on 29-10; date placeholder preserved for 29-12)
+- [ ] 29-12-PLAN.md — Operator-gated release: inline auth precheck + version bump (core + Markdown companion per core-major-bump rule) + npm publish + NuGet publish (core + companion) + tag v9.0.0 + advance main + announce #vms-announcements + DM Molly + PID cleanup (wave 10, depends on 29-11; autonomous: false)

@@ -76,6 +76,32 @@ Close two fleet-foundational failure modes in the v3.8.0 version-skew primitive:
 
 </decisions>
 
+<requirements_map>
+## Requirements Map (canonical SKEW-XX definitions — added 2026-08-02 after checker feedback)
+
+The ROADMAP-level phase requirement set is SKEW-01..SKEW-10. To avoid the per-plan inconsistency the checker flagged (frontmatter vs. inline TSDoc drift), each SKEW-XX has a canonical definition below. Every plan's `requirements:` frontmatter field AND inline TSDoc annotations MUST align to this map — if a plan touches an area covered by SKEW-XX, it lists that ID; if inline TSDoc names a SKEW-XX, it must be the one the code path actually implements.
+
+| ID | Canonical Definition | Owning Plans (canonical) |
+|----|----------------------|--------------------------|
+| **SKEW-01** | Server-side global filter/guard on BOTH backends (.NET `ShellVersionGuardFilter` + TS `createVersionGuard` factory), self-registered via `AddVmsShellVersioning` (.NET) or applied per-route (TS). Enforces on GET + POST. | 29-02 (.NET filter), 29-04 (TS factory), 29-05 (.NET filter tests) |
+| **SKEW-02** | Per-controller `ActionPayload<T>.Parse(HttpRequest, currentBuild)` overload continues to compile + work as redundant defense-in-depth (backward compat). Covered by preserved existing tests. | 29-02 (preservation), 29-05 (test-preservation gate) |
+| **SKEW-03** | Client attaches `X-VMS-Client-Build` header on GET requests too (was POST-only pre-9.0.0). Hoisted into `load()` so GETs advertise the client build. | 29-03 (client wiring) |
+| **SKEW-04** | Hard-lock modal fires on BOTH signals: `VmsVersionSkewError` (detection) + `VmsActionError code:"stale_client"` (fail-closed). Shell-level `skewLocked` state gates dispatch entry + render. Silent auto-reload retired. | 29-01 (contract: field + helper + guards), 29-03 (behavior swap wiring the two call sites) |
+| **SKEW-05** | Shipped modal DOM/CSS in `BrowserAdapter.showSkewLock`: non-dismissible + `inert` container + [Reload] button + framework-owned copy. Includes `Adapter.showSkewLock?` verb declaration. | 29-01 (verb + helper declaration), 29-06 (adapter implementation + CSS + tests) |
+| **SKEW-06** | User-consented Reload replaces silent auto-reload. `ShellOptions.onVersionSkew?: "default" \| "custom"` opt-out flag preserves pre-9.0.0 behavior for consumers with custom affordances. | 29-01 (flag declaration + helper gate), 29-03 (opt-out test coverage) |
+| **SKEW-07** | Parity fixtures with `expectBodyContains` on stale-GET 400 branch (per AGENTS.md gotcha #9 class-3 lesson). GET-header attachment + GET-guard both proved cross-backend. | 29-07 (parity fixtures + harness fix) |
+| **SKEW-08** | Tailnet verification page walking Ashley through the three CONTEXT-mandated scenarios (initial-load stale, mid-session flip, opt-out custom). Ashley sign-off is the release gate. | 29-09 (verification demo) |
+| **SKEW-09** | Green-tree gate green per AGENTS.md "NEVER PUBLISH OR PUSH ANYTHING BROKEN" rule (TS batch + .NET batch + parity + companion binary-compat). Prerequisite for docs + release. | 29-10 (gate run) |
+| **SKEW-10** | Docs shipped: agent-skill.md (canonical) + AgentSkill.md (.NET byte-copy) + CHANGELOG BREAKING entry + MIGRATION upgrade guide + AGENTS.md gotcha addendum + companion NuGet republish per AGENTS.md core-major-bump rule + release ritual (aligned npm + NuGet publish + tags + main-advance). | 29-08 (agent-skill twins), 29-11 (CHANGELOG + MIGRATION + AGENTS.md), 29-12 (release + companion republish) |
+
+**Rules for enforcement:**
+- A plan whose `files_modified` include the owning file for a SKEW-XX MUST list that ID in `requirements:`.
+- Inline TSDoc `(SKEW-XX)` annotations MUST match the canonical definition, NOT arbitrary planner choice.
+- Every SKEW-XX MUST appear in at least one plan's `requirements:` (union coverage).
+- A plan MAY list additional IDs whose work it touches ancillarily (e.g., 29-01 declares the `Adapter.showSkewLock` verb declaration for SKEW-05 even though 29-06 owns the implementation) — but the CANONICAL owner remains as above.
+
+</requirements_map>
+
 <canonical_refs>
 ## Canonical References
 
@@ -103,6 +129,7 @@ Close two fleet-foundational failure modes in the v3.8.0 version-skew primitive:
   - Gotcha #8 (null omission) — must maintain on any new wire field (but this phase adds none)
   - Gotcha #9 (parity testing) — new fixture with `expectBodyContains` for the GET-stale-header 400 path
   - "Working agreement for agents" — green-tree gate + operator-gated publish
+  - **Core-major-bump companion NuGet rule** (line ~693): `parity/check-companion-binary-compat.sh` is the ONE gate that catches companion binary-compat drift; source-rebuild path is structurally blind to it. Phase 29 is a core MAJOR bump — the gate MUST run in Plan 29-10 (green-tree) AND Plan 29-12 (release pre-bump gate) per this rule.
 - `viewmodel-shell/agent-skill.md` + `viewmodel-shell-dotnet/AgentSkill.md` — Agent-facing wire manual. If the primitive's DOCUMENTED behavior changes (auto-reload retirement, GET-guard, global filter default), update both byte-identically. Parity check-skill in `parity/check-skill.ts` enforces byte-parity.
 - `parity/run.ts` + `parity/backends.json` + `parity/fixtures/` — Cross-backend parity harness. Add a fixture that exercises stale-header on GET (currently no fixture does — Phase 26's helpdesk-seeded fixture is a precedent for adding branch coverage).
 
@@ -136,3 +163,4 @@ Close two fleet-foundational failure modes in the v3.8.0 version-skew primitive:
 
 *Phase: 29-version-skew-hard-lock-global-server-guard-client-hard-lock*
 *Context gathered: 2026-08-02 via PRD Express Path (mechanism sketch + Ashley post-tasting adjustments)*
+*Requirements Map added: 2026-08-02 after checker feedback (canonicalizes SKEW-01..10)*
