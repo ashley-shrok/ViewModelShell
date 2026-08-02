@@ -3541,3 +3541,70 @@ button.vms-breadcrumb__link {
   border-radius: 0;
   font-size: inherit;
 }
+
+/* ── Skew-lock (9.0.0, SKEW-05) — framework-owned non-dismissible reload modal ──
+   Fires from BrowserAdapter.showSkewLock() when the shell detects client/server
+   version skew (see viewmodel-shell/src/browser.ts + src/index.ts lockSkew).
+   Attached to <body>, above every other layer. Container gets `inert` while
+   up so the underlying page is unfocusable/uninteractable. */
+.vms-skew-lock {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--vms-space-md);
+  z-index: 1200; /* above .vms-toast-region (1100) which is above .vms-modal-backdrop (1000) */
+}
+.vms-skew-lock__dialog {
+  background: var(--vms-surface);
+  border: 1px solid var(--vms-border);
+  border-top: 3px solid var(--vms-warning); /* orange top-border per tasting */
+  border-radius: var(--vms-radius);
+  width: 100%;
+  max-width: 420px;
+  padding: var(--vms-space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--vms-space-sm);
+  text-align: center;
+}
+.vms-skew-lock__icon {
+  color: var(--vms-warning);
+  background: color-mix(in srgb, var(--vms-warning) 15%, transparent); /* tinted circle backdrop */
+  border-radius: 50%;
+  padding: var(--vms-space-sm);
+}
+.vms-skew-lock__title {
+  font-family: var(--vms-font-head);
+  font-size: var(--vms-text-xl);
+  font-weight: 600;
+}
+.vms-skew-lock__body {
+  color: var(--vms-text-muted);
+  font-size: var(--vms-text-base);
+}
+.vms-skew-lock__reload-btn {
+  /* Reuses .vms-button--warning.vms-button--primary pair — --vms-warning-fill
+     background + --vms-on-warning-fill foreground is the shipped AA-tested pair,
+     already covered by the fixed 13-pair check:aa-contrast gate. No new pair
+     introduced. */
+  background: var(--vms-warning-fill);
+  color: var(--vms-on-warning-fill);
+  border: 1px solid var(--vms-warning-fill);
+  border-radius: var(--vms-radius);
+  padding: var(--vms-space-sm) var(--vms-space-lg);
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: var(--vms-space-sm);
+}
+.vms-skew-lock__reload-btn:hover {
+  /* Subtle hover per shipped button convention — slightly darkened fill. */
+  background: color-mix(in srgb, var(--vms-warning-fill) 90%, black);
+}
+.vms-skew-lock__reload-btn:focus-visible {
+  outline: 2px solid var(--vms-warning);
+  outline-offset: 2px;
+}
