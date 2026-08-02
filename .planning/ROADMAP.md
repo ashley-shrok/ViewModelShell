@@ -538,7 +538,7 @@ Plans:
 
 Plans:
 - [x] 29-01-PLAN.md — TS Adapter.showSkewLock verb + ShellOptions.onVersionSkew opt-out + skewLocked shell state + lockSkew helper + dispatch/processResponse guards (wave 1, no deps)
-- [ ] 29-02-PLAN.md — .NET ShellVersionGuardFilter + AddVersionFilters co-registration (wave 1, no deps; file-disjoint from 29-01)
+- [x] 29-02-PLAN.md — .NET ShellVersionGuardFilter + AddVersionFilters co-registration (wave 1, no deps; file-disjoint from 29-01)
 - [ ] 29-03-PLAN.md — Client X-VMS-Client-Build header on GET + retire silent auto-reload + wire lockSkew from checkVersionSkew + stale_client arm + vitest coverage (wave 2, depends on 29-01)
 - [ ] 29-04-PLAN.md — TS server-subpath createVersionGuard factory + vitest coverage (wave 3, depends on 29-03; sequential to avoid test-file collision)
 - [ ] 29-05-PLAN.md — .NET ShellVersionGuardFilter + AddVersionFilters unit tests + dedup regression test (wave 2, depends on 29-02)
