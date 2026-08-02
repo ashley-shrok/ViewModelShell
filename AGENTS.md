@@ -78,6 +78,16 @@ These are the bugs that take hours to find:
 
 9. **Cross-backend parity testing lives in `parity/`.** Any new official backend must implement the fixtures listed in `parity/backends.json` and pass `bun run parity/run.ts`. The harness spins up every backend in parallel, runs the same action sequences against each, and diffs normalized responses step-for-step. Any wire-format drift fails the run. ⚠️ The diff is only *half* the gate: it also asserts **per-response invariants** (`findNulls`, `expectBodyContains`) that a comparison structurally cannot make — and a fixture proves nothing about a branch its own configuration never runs. Read "Know what a diff can and cannot prove" under *Conventions for evolving the framework* before adding or reconfiguring a fixture. ⚠️ `dotnet` lives at `~/.dotnet/dotnet` and the harness **spawns it as a child** — `export PATH="$HOME/.dotnet:$PATH"` first or the run dies with a bare `spawn` stack trace naming no cause.
 
+   - **v9.0.0 postscript (Phase 29):** the pre-9.0.0 server-side version-skew guard was per-controller opt-in — a class-1 gotcha #9 defect where controllers using the plain `Parse(actionJson, stateJson)` overload silently accepted stale-client requests. v9.0.0's global filter (`ShellVersionGuardFilter` on .NET; `createVersionGuard` on TS server subpath) closes it. Parity fixture `agt-get-build-stale` in `parity/fixtures/helpdesk.json` is the tripwire per this gotcha's class-3 lesson — a substring-check on the response body proves the guard fires on GET (the branch the pre-9.0.0 fixture could not reach).
+
+10. **Version-skew is a HARD LOCK on the client since v9.0.0, and the server-side guard is GLOBAL, not per-controller opt-in.** Two gotchas fold into one:
+
+    - **Server-side:** `AddVmsShellVersioning(...)` (and the equivalent `createVersionGuard({ currentBuild })` TS-server factory) now enforces on BOTH GET + POST via a global filter. The per-controller `ActionPayload<T>.Parse(HttpRequest, currentBuild)` overload continues to compile + work (defense-in-depth) but the plain `Parse(actionJson, stateJson)` overload — which pre-v9.0.0 silently accepted stale-client requests when used from a controller lacking the guard — now ALSO fail-closes because the global filter short-circuits first. The change is transparent for the consumer's happy path; the RISK is if you were RELYING on the pre-9.0.0 silent-accept for some workflow, that workflow now fails with 400 stale_client. Reload to fresh bundle; nothing was applied.
+
+    - **Client-side:** the shipped `BrowserAdapter` fires a non-dismissible hard-lock modal on any skew signal (detection via `VmsVersionSkewError` OR fail-closed via `VmsActionError code:"stale_client"`). Silent `adapter.reload()` is retired — the user clicks [Reload] to consent. **Consumer opt-out for pre-existing custom affordances:** set `ShellOptions.onVersionSkew: "custom"` — the shell still surfaces the signals via `onError` (byte-parallel to v3.8.0) but does NOT lock, NOT stop polling, and NOT call `showSkewLock`. Consumers with their own affordance (Kitsune, PBMInvoices) set this and keep their own path.
+
+    See CHANGELOG v9.0.0 + MIGRATION v9.0.0 for wiring examples.
+
 ---
 
 ## Architecture
