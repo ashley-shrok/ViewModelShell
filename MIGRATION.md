@@ -6,6 +6,176 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to v8.2.0
+
+**NO CODE CHANGE required.** v8.2.0 is additive wire fields + bundled TipTap + a
+shipped-by-default markdown link sanitizer. Consumers who don't render a
+`RichTextFieldNode` see zero bytes shipped and zero behavior change. Consumers
+who DO consume the markdown → InlineRuns display pipeline pick up the sanitizer
+automatically on rebuild (see the "Note on link sanitization" subsection below).
+
+Bump both packages to align:
+
+```bash
+npm install @ashley-shrok/viewmodel-shell@8.2.0
+```
+
+```bash
+dotnet add package AshleyShrok.ViewModelShell --version 8.2.0
+```
+
+MINOR bump on both. Wire protocol token stays `viewmodel-shell/1.0` (all wire
+additions are additive optional fields).
+
+### New capability: `RichTextFieldNode` + `RichTextToolbarNode`
+
+Two new wire types. The field is a leaf-input primitive; the toolbar is a Route B
+composite (typed slots + closed-enum variance axes per composite-nodes-layer.md
+§3). Wire value is a **markdown string** on the field's bind path; display flows
+through the existing `markdown.ts` → InlineRuns pipeline with zero new render
+code.
+
+**TypeScript backend — minimal usage:**
+
+```typescript
+// The default 11-tool toolbar renders when `toolbar` is OMITTED.
+const view: ViewNode = {
+  type: "page",
+  children: [
+    {
+      type: "rich-text-field",
+      name: "notes",
+      bind: "draft",
+      label: "Notes",
+      placeholder: "Write something…",
+      // toolbar: undefined  → framework renders the DEFAULT (all 11 D-08 tools)
+    },
+  ],
+};
+
+// State round-trips as a markdown string on `bind`:
+interface MyState { draft: string }
+const initial: MyState = { draft: "# Hello\n\nType something with **bold** or `code`." };
+```
+
+Customize the toolbar by passing an explicit `RichTextToolbarNode`:
+
+```typescript
+{
+  type: "rich-text-field",
+  name: "notes",
+  bind: "draft",
+  toolbar: {
+    type: "rich-text-toolbar",
+    tools: ["bold", "italic", "link", "bullet-list", "ordered-list"],
+    size: "compact",
+  },
+}
+```
+
+**.NET backend — minimal usage:**
+
+```csharp
+public record NotesState(string Draft)
+{
+    public static NotesState Initial() => new(Draft: "# Hello\n\nType something.");
+}
+
+private static ViewNode BuildVm(NotesState state) => new PageNode(
+    Children: [
+        new RichTextFieldNode(
+            Name: "notes",
+            Bind: "draft",
+            Label: "Notes",
+            Placeholder: "Write something…"
+            // Toolbar: null  → framework renders the DEFAULT (all 11 D-08 tools)
+        ),
+    ]
+);
+```
+
+Feature-surface floor (D-08): bold, italic, link, ordered list, unordered list,
+heading h1–h3, inline code, code block, blockquote. Everything else
+(mentions, embeds, tables, image upload, comment-only mode) is deferred to a
+future phase.
+
+### Note on bundling
+
+TipTap 2.x + turndown are now bundled in the main `@ashley-shrok/viewmodel-shell`
+package as `dependencies` (NOT `peerDependencies`) — you do not need to install
+anything extra. The library is **lazy-imported from `browser.ts`** via dynamic
+`import()` when a `RichTextFieldNode` first renders, so consumers who don't use
+the node ship zero TipTap/turndown bytes. Verified by an adapter test that
+renders no rich-text field and asserts the modules are not in the initial bundle
+graph, and by Vite's chunk-split output (the TipTap chunk is `index-*.js` ≈ 273 KB
+and only produced on first rich-text render).
+
+If TipTap or turndown fails to load at runtime — offline environment,
+network-restricted CDN, corrupted bundle — the framework surfaces a hard
+`Error` via `console.error("[ViewModelShell]", …)`. **No silent no-op, no
+automatic fallback to a plain textarea.** This is the same fail-loud contract as
+the Chart.js path (AGENTS.md §"The capability seam"). If your app renders a
+`RichTextFieldNode` and the browser cannot load the editor library, you get a
+loud, debuggable error — not a hidden UX degradation that leaves the user typing
+into a mystery box.
+
+### Note on link sanitization (shipped default; both backends)
+
+The display-side markdown → InlineRuns pipeline (`viewmodel-shell/src/markdown.ts`
+and the `AshleyShrok.ViewModelShell.Markdown` NuGet twin) now ships a **WHITELIST**
+URL-scheme sanitizer at every href emission site — regular `[label](href)` links
+and `<scheme:...>` autolinks. **Allowed schemes:** `http`, `https`, `mailto`, `tel`,
+`ftp`, plus no-scheme relative URLs. Everything else — including `javascript:`,
+`data:`, `vbscript:`, `file:`, and any scheme this framework hasn't heard of —
+produces an empty href, which the plain-collapse path absents entirely from the
+emitted `InlineRun` (matching gotcha #8's "an option not set is absent" posture).
+Case-insensitive; leading whitespace stripped before matching; both backends use
+identical scheme lists with 19 byte-parallel adversarial tests on each side.
+
+**What consumers get automatically.** Any app consuming the markdown-string wire
+(including — but not limited to — `RichTextFieldNode`'s round-trip; also every
+`TextNode(style:"markdown")` value and every InlineRun that flows through
+`marked`/`MarkdownConverter`) is now protected against stored-XSS via dangerous
+link schemes by default. Prior to v8.2.0, the opt-in `linkHrefRewrite` /
+`LinkHrefRewrite` hook was the only sanitization surface — apps that had not
+installed it were one config mistake away from a `[click](javascript:alert(1))`
+surface. That gap is closed.
+
+**Composing with `linkHrefRewrite`.** The sanitizer runs BEFORE the opt-in hook,
+so a consumer hook that naively echoes its input can never re-introduce a
+dangerous scheme. To restrict further (e.g. reject `ftp:` in your app):
+
+```typescript
+// TS: the hook receives an already-sanitized href.
+linkHrefRewrite: (href) => href.startsWith("ftp:") ? "" : href;
+```
+
+```csharp
+// .NET: same semantics.
+LinkHrefRewrite = href => href.StartsWith("ftp:") ? "" : href;
+```
+
+**To allow an additional scheme** (e.g. an app-internal `myapp:` protocol) is
+not currently possible — the whitelist is hard-coded. If that requirement
+materializes, file a bug and the shape to add is a
+`MarkdownOptions.additionalAllowedSchemes: string[]` that extends the built-in
+list. Until then, the framework's default whitelist is the ceiling on what
+`InlineRun.href` can carry.
+
+**Visible-text behavior.** When a link's href is sanitized to empty:
+
+- **Regular link** `[click](javascript:alert(1))` — the `InlineRun` collapses to
+  a bare `TextNode.value = "click"` (no runs). The label survives as visible
+  text; the href is gone.
+- **Autolink** `<javascript:alert(1)>` — the `InlineRun` collapses to a bare
+  `TextNode.value = "javascript:alert(1)"` (the raw label preserved as visible
+  text; dead href, honest failure — the user sees the URL was dropped rather
+  than a silent empty span).
+
+Both backends emit byte-identical wire for these cases.
+
+---
+
 ## Upgrading to v8.1.0
 
 **NO CODE CHANGE required.** v8.1.0 is CSS-only + additive wire fields. Consumers
