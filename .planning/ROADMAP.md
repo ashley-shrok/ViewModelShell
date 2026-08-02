@@ -548,4 +548,4 @@ Plans:
 - [x] 29-09-PLAN.md — demo/VersionSkewVerification-bun/ tailnet page + three-scenario walkthrough + Ashley release-gate sign-off (wave 7, depends on 29-03/06/07/08; autonomous: false)
 - [x] 29-10-PLAN.md — Full green-tree gate: TS batch + .NET batch + parity (wave 8, depends on 29-05/07/08/09)
 - [x] 29-11-PLAN.md — Docs staging: CHANGELOG.md v9.0.0 BREAKING + MIGRATION.md v9.0.0 upgrade section + AGENTS.md new gotcha + gotcha #9 addendum (wave 9, depends on 29-10; date placeholder preserved for 29-12)
-- [ ] 29-12-PLAN.md — Operator-gated release: inline auth precheck + version bump (core + Markdown companion per core-major-bump rule) + npm publish + NuGet publish (core + companion) + tag v9.0.0 + advance main + announce #vms-announcements + DM Molly + PID cleanup (wave 10, depends on 29-11; autonomous: false)
+- [x] 29-12-PLAN.md — Operator-gated release: inline auth precheck + version bump (core + Markdown companion per core-major-bump rule) + npm publish + NuGet publish (core + companion) + tag v9.0.0 + advance main + announce #vms-announcements + DM Molly + PID cleanup (wave 10, depends on 29-11; autonomous: false)
