@@ -76,6 +76,47 @@ public sealed class ShellVersionResultFilter : IResultFilter
 }
 
 /// <summary>
+/// 9.0.0 (SKEW-01) — global ACTION filter (twin of <see cref="ShellVersionResultFilter"/>)
+/// that fail-closes any incoming request (GET + POST) whose
+/// <c>X-VMS-Client-Build</c> header does not match the server's current-deployed
+/// build, BEFORE any controller runs. Twins the per-controller
+/// <c>ActionPayload&lt;T&gt;.Parse(HttpRequest, currentBuild)</c> overload's semantics:
+/// absent header → pass through (agent-driven curl still works); empty
+/// <see cref="VmsVersioningOptions.CurrentBuild"/> → inert (versioning off);
+/// header matches → pass through; header mismatches → throw
+/// <see cref="StaleClientException"/> so <see cref="ShellExceptionFilter"/>
+/// maps it to the byte-identical 400 <c>stale_client</c> envelope (no new
+/// envelope path, no new error code). Self-registered by
+/// <see cref="VmsVersioningExtensions.AddVmsShellVersioning(IServiceCollection)"/>
+/// alongside <see cref="ShellVersionResultFilter"/>.
+/// </summary>
+public sealed class ShellVersionGuardFilter : IActionFilter
+{
+    private readonly VmsVersioningOptions _options;
+
+    public ShellVersionGuardFilter(VmsVersioningOptions options)
+    {
+        _options = options;
+    }
+
+    public void OnActionExecuting(ActionExecutingContext context)
+    {
+        var current = _options.CurrentBuild;
+        if (string.IsNullOrEmpty(current)) return; // versioning off → inert
+        var advertised = context.HttpContext.Request.Headers["X-VMS-Client-Build"].ToString();
+        if (string.IsNullOrEmpty(advertised)) return; // absent header → pass through (agent-driven testing)
+        if (advertised == current) return; // match → happy path
+        // Mismatch → throw StaleClientException so ShellExceptionFilter maps to
+        // the byte-identical 400 stale_client envelope. Same exception the per-
+        // controller Parse(HttpRequest, currentBuild) overload throws, so wire is
+        // identical between global guard and pre-existing per-controller guard.
+        throw new StaleClientException(advertised, current);
+    }
+
+    public void OnActionExecuted(ActionExecutedContext context) { }
+}
+
+/// <summary>
 /// 3.11.0 — computes the client build id by hashing the built Vite
 /// <c>manifest.json</c>, the .NET twin of the npm <c>vmsHashManifestBytes</c>
 /// (<c>@ashley-shrok/viewmodel-shell/vite</c>). The LOCKED cross-backend
@@ -122,7 +163,7 @@ public static class VmsVersioningExtensions
         string currentBuild)
     {
         services.AddSingleton(new VmsVersioningOptions { CurrentBuild = currentBuild });
-        AddVersionResultFilter(services);
+        AddVersionFilters(services);
         return services;
     }
 
@@ -155,26 +196,33 @@ public static class VmsVersioningExtensions
             var env = sp.GetRequiredService<IWebHostEnvironment>();
             return new VmsVersioningOptions { CurrentBuild = VmsManifestBuildId.Compute(env.WebRootPath) };
         });
-        AddVersionResultFilter(services);
+        AddVersionFilters(services);
         return services;
     }
 
     /// <summary>
-    /// 3.11.1 — self-register <see cref="ShellVersionResultFilter"/> on
-    /// <see cref="MvcOptions"/> so the Phase-1 <c>serverBuild</c> stamp is part of
-    /// "registering versioning" (previously the app had to add it by hand, and if
-    /// forgotten Phase-1 skew detection silently no-op'd). Dedup-guarded so a
-    /// legacy caller that still adds it manually doesn't register it twice; a
-    /// double-registration would be harmless anyway (the stamp is idempotent), but
-    /// this keeps exactly one filter in the pipeline.
+    /// 9.0.0 — self-register BOTH the shipped <see cref="ShellVersionResultFilter"/>
+    /// (Phase-1 <c>serverBuild</c> stamp) AND the new
+    /// <see cref="ShellVersionGuardFilter"/> (Phase-2 global fail-closed guard, SKEW-01)
+    /// on <see cref="MvcOptions"/> in a single call from
+    /// <see cref="VmsVersioningExtensions.AddVmsShellVersioning(IServiceCollection)"/>.
+    /// Both dedup-guarded so a legacy caller that added either manually doesn't
+    /// double-register; a double-registration would be harmless for the stamp (idempotent)
+    /// but would throw twice for the guard, so the dedup is load-bearing on the guard side.
     /// </summary>
-    private static void AddVersionResultFilter(IServiceCollection services)
+    private static void AddVersionFilters(IServiceCollection services)
     {
         services.Configure<MvcOptions>(o =>
         {
-            bool already = o.Filters.OfType<TypeFilterAttribute>()
+            // Result filter (Phase-1 stamp — unchanged).
+            bool resultAlready = o.Filters.OfType<TypeFilterAttribute>()
                 .Any(f => f.ImplementationType == typeof(ShellVersionResultFilter));
-            if (!already) o.Filters.Add<ShellVersionResultFilter>();
+            if (!resultAlready) o.Filters.Add<ShellVersionResultFilter>();
+
+            // Action filter (Phase-2 global guard — new in 9.0.0, SKEW-01).
+            bool guardAlready = o.Filters.OfType<TypeFilterAttribute>()
+                .Any(f => f.ImplementationType == typeof(ShellVersionGuardFilter));
+            if (!guardAlready) o.Filters.Add<ShellVersionGuardFilter>();
         });
     }
 }
