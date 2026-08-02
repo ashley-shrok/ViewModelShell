@@ -3102,6 +3102,11 @@ export class ViewModelShell {
   // locked across many ticks without flicker.
   private serverBusy = false;
   private userDispatching = false;
+  // 9.0.0 (SKEW-04) — set exactly ONCE by lockSkew() (the private helper below),
+  // never reset (locking is one-way; only reload() clears it, and reload navigates
+  // away, discarding the entire shell instance). Gates dispatch() entry AND
+  // processResponse() render — see the early-return guards below.
+  private skewLocked = false;
 
   constructor(private options: ShellOptions) {}
 
@@ -3532,6 +3537,28 @@ export class ViewModelShell {
       const err = new VmsVersionSkewError(serverBuild, clientBuild);
       this.options.onError ? this.options.onError(err) : console.error("[ViewModelShell]", err);
     }
+  }
+
+  /** 9.0.0 (SKEW-04/05/06) — set the shell-level skew lock and fire the
+   *  adapter's modal, unless the consumer opted out. Called from BOTH
+   *  the checkVersionSkew mismatch branch (detection path) AND the
+   *  stale_client VmsActionError catch arm in processResponse (fail-closed
+   *  path). Extracted so those two call sites don't duplicate the
+   *  gate + stopPolling + verb sequence.
+   *
+   *  IDEMPOTENT: a second call while already locked is a no-op — the field
+   *  is already true, stopPolling() is safe to call twice, and
+   *  adapter.showSkewLock's shipped implementation is itself idempotent
+   *  (finds the existing DOM and returns early per Plan 29-06).
+   *
+   *  When onVersionSkew === "custom", ALL THREE effects are skipped:
+   *  no lock, no poll-stop, no modal — the consumer's onError handler is
+   *  the sole affordance, preserving pre-9.0.0 behavior byte-for-byte. */
+  private lockSkew(info?: { clientBuild?: string; serverBuild?: string }): void {
+    if (this.options.onVersionSkew === "custom") return;
+    this.skewLocked = true;
+    this.stopPolling();
+    this.options.adapter.showSkewLock?.(info);
   }
 
   /**
