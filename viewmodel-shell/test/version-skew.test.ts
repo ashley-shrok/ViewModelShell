@@ -9,7 +9,7 @@
 //   stale_client ok:false response calls adapter.reload() AND surfaces via
 //   onError as a VmsActionError.
 
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   ViewModelShell,
   VmsVersionSkewError,
@@ -406,5 +406,92 @@ describe("9.0.0 — createVersionGuard TS-server-subpath wrap (SKEW-01)", () => 
     const handler = async (_req: Request) => new Response("ok", { status: 200 });
     const guarded = createVersionGuard({})(handler);
     expect(guarded).toBe(handler);
+  });
+});
+
+describe("9.0.0 — BrowserAdapter.showSkewLock DOM (SKEW-05)", () => {
+  let container: HTMLElement;
+
+  beforeEach(() => {
+    // Fresh document body for each test — remove any leftover .vms-skew-lock
+    // from a previous test (idempotency test relies on knowing initial state).
+    document.body.innerHTML = "";
+    container = document.createElement("div");
+    container.id = "test-container";
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    // Clean up modal + container.
+    document.body.innerHTML = "";
+    vi.restoreAllMocks();
+  });
+
+  it("mounts .vms-skew-lock backdrop + dialog with correct ARIA + sets container inert", async () => {
+    const { BrowserAdapter } = await import("../src/browser.js");
+    const adapter = new BrowserAdapter(container);
+    adapter.showSkewLock();
+    const backdrop = document.querySelector(".vms-skew-lock");
+    expect(backdrop).not.toBeNull();
+    const dialog = backdrop!.querySelector(".vms-skew-lock__dialog");
+    expect(dialog).not.toBeNull();
+    expect(dialog!.getAttribute("role")).toBe("dialog");
+    expect(dialog!.getAttribute("aria-modal")).toBe("true");
+    expect(dialog!.getAttribute("aria-labelledby")).toBe("vms-skew-lock-title");
+    expect(container.getAttribute("inert")).toBe("");
+    // Title + body + button present with CONTEXT-locked copy.
+    expect(dialog!.querySelector(".vms-skew-lock__title")?.textContent).toBe("This app is out of date");
+    expect(dialog!.querySelector(".vms-skew-lock__body")?.textContent).toBe("Reload to continue. Any unsaved changes will be lost.");
+    const btn = dialog!.querySelector<HTMLButtonElement>(".vms-skew-lock__reload-btn");
+    expect(btn?.textContent).toBe("Reload");
+  });
+
+  it("clicking [Reload] button calls the adapter's reload() method", async () => {
+    const { BrowserAdapter } = await import("../src/browser.js");
+    const adapter = new BrowserAdapter(container);
+    // Spy on the adapter's reload method directly — decoupled from jsdom's
+    // fragile window.location.reload; matches the shipped indirection
+    // (button calls this.reload(), which the shipped body forwards to
+    // window.location.reload(); we assert the adapter-level call).
+    const reloadSpy = vi.spyOn(adapter, "reload").mockImplementation(() => {});
+    adapter.showSkewLock();
+    const btn = document.querySelector<HTMLButtonElement>(".vms-skew-lock__reload-btn");
+    expect(btn).not.toBeNull();
+    btn!.click();
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("is idempotent — second showSkewLock() call does NOT create a second backdrop", async () => {
+    const { BrowserAdapter } = await import("../src/browser.js");
+    const adapter = new BrowserAdapter(container);
+    adapter.showSkewLock();
+    adapter.showSkewLock();
+    const all = document.querySelectorAll(".vms-skew-lock");
+    expect(all.length).toBe(1);
+  });
+
+  it("does NOT dismiss on backdrop click", async () => {
+    const { BrowserAdapter } = await import("../src/browser.js");
+    const adapter = new BrowserAdapter(container);
+    adapter.showSkewLock();
+    const backdrop = document.querySelector<HTMLElement>(".vms-skew-lock");
+    backdrop!.click(); // simulated backdrop click
+    expect(document.querySelector(".vms-skew-lock")).not.toBeNull();
+  });
+
+  it("does NOT dismiss on Escape key", async () => {
+    const { BrowserAdapter } = await import("../src/browser.js");
+    const adapter = new BrowserAdapter(container);
+    adapter.showSkewLock();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(document.querySelector(".vms-skew-lock")).not.toBeNull();
+  });
+
+  it("auto-focuses the [Reload] button for keyboard/SR accessibility", async () => {
+    const { BrowserAdapter } = await import("../src/browser.js");
+    const adapter = new BrowserAdapter(container);
+    adapter.showSkewLock();
+    const btn = document.querySelector<HTMLButtonElement>(".vms-skew-lock__reload-btn");
+    expect(document.activeElement).toBe(btn);
   });
 });
