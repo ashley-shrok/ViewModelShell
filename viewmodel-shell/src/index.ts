@@ -3121,7 +3121,14 @@ export class ViewModelShell {
       onLoading?.(true);
       const url = params ? `${endpoint}?${new URLSearchParams(params)}` : endpoint;
       const extraHeaders = this.options.getRequestHeaders ? await this.options.getRequestHeaders() : {};
-      const res = await fetch(url, { headers: { Accept: "application/json", ...extraHeaders } });
+      // 9.0.0 (SKEW-03) — advertise the running bundle id on GETs too so the
+      // server-side global ShellVersionGuardFilter can fail-close a stale GET
+      // (v3.8.0 shipped POST-only, leaving the GET-refresh path unguarded).
+      // Merged AFTER getRequestHeaders() so app headers can't clobber it (same
+      // ordering as performRoundTrip()'s POST-side header block).
+      const headers: Record<string, string> = { Accept: "application/json", ...extraHeaders };
+      if (this.options.clientBuildId) headers["X-VMS-Client-Build"] = this.options.clientBuildId;
+      const res = await fetch(url, { headers });
       // 1.0.0 — parse-then-branch: always parse the body even on 4xx/5xx so the
       // structured envelope is available. The ok:false check throws BEFORE the
       // currentVm/currentState writes below — D-15 runtime hardening (throw-before-
