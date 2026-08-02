@@ -24,6 +24,7 @@ import {
   UnknownActionError,
   createAction,
   createAgentSkillHandler,
+  createVersionGuard,
   shellRejection,
   validateActionNames,
   type ButtonNode,
@@ -914,28 +915,44 @@ const skillHandler = createAgentSkillHandler({
   appPreamble: "This is a help-desk ticketing app. Two roles share one SQLite DB: requesters create tickets at `/api/requester`; agents act on them at `/api/agent`. State holds the current view (queue / detail), the active filter, and per-row selection — see each controller's bind paths in the rendered tree.",
 });
 
+// 9.0.0 (SKEW-01) — global version-skew guard. Wraps GET handlers so a request
+// carrying an X-VMS-Client-Build header mismatching CURRENT_BUILD is fail-closed
+// with a 400 stale_client envelope BEFORE the handler runs. Semantic twin of the
+// .NET ShellVersionGuardFilter (self-registered by AddVmsShellVersioning on the
+// .NET side). The shipped in-createAction guard block on the POST handlers stays
+// as SKEW-02 defense-in-depth — this wrap closes the pre-9.0.0 GET-side gap.
+const guard = createVersionGuard({ currentBuild: CURRENT_BUILD });
+
+const agentGetHandler = guard(async (_request: Request): Promise<Response> => {
+  const state = agentInitial();
+  const vm = agentBuildVm(state);
+  validateActionNames(vm);
+  // 3.8.0 — stamp serverBuild on the GET too (the .NET twin's result filter
+  // stamps every ShellResponse incl. GET; match it for parity).
+  return Response.json({ ok: true, vm, state, serverBuild: CURRENT_BUILD });
+});
+
+const requesterGetHandler = guard(async (_request: Request): Promise<Response> => {
+  const state = requesterInitial();
+  const vm = requesterBuildVm(state);
+  validateActionNames(vm);
+  // 3.8.0 — stamp serverBuild on the GET too (parity with the .NET twin's
+  // result filter, which stamps every ShellResponse incl. GET).
+  return Response.json({ ok: true, vm, state, serverBuild: CURRENT_BUILD });
+});
+
 Bun.serve({
   port,
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/api/agent" && request.method === "GET") {
-      const state = agentInitial();
-      const vm = agentBuildVm(state);
-      validateActionNames(vm);
-      // 3.8.0 — stamp serverBuild on the GET too (the .NET twin's result filter
-      // stamps every ShellResponse incl. GET; match it for parity).
-      return Response.json({ ok: true, vm, state, serverBuild: CURRENT_BUILD });
+      return agentGetHandler(request);
     }
     if (url.pathname === "/api/agent/action" && request.method === "POST") {
       return agentHandler(request);
     }
     if (url.pathname === "/api/requester" && request.method === "GET") {
-      const state = requesterInitial();
-      const vm = requesterBuildVm(state);
-      validateActionNames(vm);
-      // 3.8.0 — stamp serverBuild on the GET too (parity with the .NET twin's
-      // result filter, which stamps every ShellResponse incl. GET).
-      return Response.json({ ok: true, vm, state, serverBuild: CURRENT_BUILD });
+      return requesterGetHandler(request);
     }
     if (url.pathname === "/api/requester/action" && request.method === "POST") {
       return requesterHandler(request);
