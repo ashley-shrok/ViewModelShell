@@ -73,6 +73,7 @@ function buildVm(state: DemoState): ViewNode {
       {
         type: "field",
         name: "note",
+        inputType: "text",
         bind: "note",
         label: "Your note (typing here will be lost when the modal fires)",
         placeholder: "Type something…",
