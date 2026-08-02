@@ -1306,6 +1306,56 @@ function jsonResponse(body: string, status: number): Response {
 }
 
 /**
+ * 9.0.0 (SKEW-01) — Global version-skew guard. Wrap this around ANY route
+ * (GET or POST) that serves a VMS endpoint, and the request is fail-closed
+ * with a 400 stale_client envelope BEFORE the handler runs when the
+ * X-VMS-Client-Build header mismatches. Consumers pair it with createAction
+ * on POST routes and apply it to their GET route too (this is what closes
+ * the pre-9.0.0 gap where GETs bypassed the guard entirely — the shipped
+ * createAction guard was POST-only by construction).
+ *
+ * Semantic twin of the .NET ShellVersionGuardFilter (Versioning.cs) — same
+ * header check, same status code, same envelope shape. Cross-backend parity
+ * fixture in parity/fixtures/ diffs both backends' behavior over HTTP.
+ *
+ * The shipped in-createAction guard block STAYS as redundant defense-in-
+ * depth for consumers who don't wire this wrap yet — no consumer code
+ * MUST change to keep working; adding the wrap is a NEW step that closes
+ * the GET gap.
+ *
+ * @example
+ *   const guard = createVersionGuard({ currentBuild: BUILD_ID });
+ *   app.get("/api/tasks", guard(async (req) => { ... GET handler ... }));
+ *   app.post("/api/tasks/action", guard(createAction<TasksState>(async (p) => { ... })));
+ *
+ * When `currentBuild` is empty/undefined, the wrapper returns the handler
+ * unchanged (identity wrap; behavior byte-identical to versioning-off apps).
+ */
+export function createVersionGuard(
+  options: { currentBuild?: string },
+): <T extends (req: Request) => Promise<Response>>(handler: T) => T {
+  const currentBuild = options.currentBuild;
+  return ((handler: (req: Request) => Promise<Response>) => {
+    if (!currentBuild) return handler; // versioning off → identity wrap
+    return (async (request: Request): Promise<Response> => {
+      const clientBuild = request.headers.get("x-vms-client-build");
+      if (clientBuild !== null && clientBuild !== currentBuild) {
+        return jsonResponse(
+          errorEnvelope([{
+            message:
+              `Stale client: request build "${clientBuild}" does not match the ` +
+              `current deployed build "${currentBuild}". Reload to continue.`,
+            code: ERR_CODES.STALE_CLIENT,
+          }]),
+          400,
+        );
+      }
+      return handler(request);
+    });
+  }) as never;
+}
+
+/**
  * Web Fetch API–native request handler factory. Auto-detects content-type
  * (application/json vs multipart/form-data), parses the body, calls your
  * handler, and returns the JSON response.
