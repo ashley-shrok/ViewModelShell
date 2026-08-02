@@ -116,16 +116,17 @@ Optional success-path fields, which may appear alone or alongside `vm`/`state`:
 | `unknown_action` | The `name` in your action envelope does not match any handler in the current tree. |
 | `invalid_tree` | The server built a tree that violates a wire invariant (this is a server bug, not yours). |
 | `uncaught_exception` | The action handler threw. Treat as a 500-class failure. |
-| `stale_client` | Your request advertised an `X-VMS-Client-Build` header that no longer matches the server's current deployed build. The mutation was rejected **before your `_state` was read — nothing was applied.** The fix is to reload to the current app (re-`GET` the endpoint for a fresh `vm`/`state`), not to retry the same request. See *Client build / version skew*. |
+| `stale_client` | Your request advertised an `X-VMS-Client-Build` header that no longer matches the server's current deployed build. The request was rejected **before any controller runs — on a POST, your `_state` is never deserialized and nothing is applied.** As of v9.0.0 the guard enforces on **both GET and POST** (was POST-only in v3.8.0), so a GET refresh with a stale header also fails-closed. The fix is to reload to the current app (re-`GET` the endpoint for a fresh `vm`/`state`), not to retry the same request. See *Client build / version skew*. |
 
 Stop on `ok: false`. Surface the message to the user. Do not retry blindly — most of these are deterministic.
 
 ## Client build / version skew
 
-Optional, opt-in. When the app enables versioning, every response carries a `serverBuild` string (the client bundle the server currently deploys), and you may advertise the build you are running by sending an `X-VMS-Client-Build: <your-build-id>` header on every action POST.
+Optional, opt-in. When the app enables versioning, every response carries a `serverBuild` string (the client bundle the server currently deploys), and you may advertise the build you are running by sending an `X-VMS-Client-Build: <your-build-id>` header on **every** request — **GET + POST** alike (as of v9.0.0; v3.8.0 shipped POST-only).
 
 - **Detection.** On any successful response, if you sent a build and `serverBuild` differs from it, the server has rolled forward while you kept running an old bundle. Reload to the current app (re-`GET` the endpoint) so you are driving the current tree.
-- **Fail-closed guard.** If you send a mismatching `X-VMS-Client-Build`, a *mutating* action is rejected with `ok: false`, HTTP 400, `code: "stale_client"` — **before** your `_state` is deserialized, so nothing is applied. Do not retry the same request against the same build; reload first. If you do NOT send the header, no request is ever rejected on this basis (the guard only fires for a client that advertised a stale build).
+- **Fail-closed guard.** If you send a mismatching `X-VMS-Client-Build`, the request is rejected with `ok: false`, HTTP 400, `code: "stale_client"` — **before any controller runs** (so on a POST, your `_state` is never deserialized and nothing is applied). As of v9.0.0 the guard enforces on **GET + POST** (was POST-only in v3.8.0): a GET refresh with a stale header also fails-closed. Do not retry the same request against the same build; reload first. If you do NOT send the header, no request is ever rejected on this basis (the guard only fires for a client that advertised a stale build).
+- **Browser hard-lock.** The shipped `BrowserAdapter` renders a non-dismissible modal on skew (both signals — a `serverBuild` mismatch on any response AND a `stale_client` rejection on any request) with a single [Reload] button. Browser consumers with a pre-existing custom skew affordance can opt out via `ShellOptions.onVersionSkew: "custom"` (restores v3.8.0 behavior: signal via `onError`, no framework modal). This is a browser-only affordance — an agent driving the wire cold never sees the modal; the actionable behavior on `stale_client` is the same as v3.8.0 (reload, don't retry).
 
 ## Auth
 
