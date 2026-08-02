@@ -6,6 +6,63 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to v9.0.0
+
+v9.0.0 is a **BEHAVIOR-only major bump** — no wire shape change. The two behavior changes are (1) the server-side version-skew guard now enforces on both GET + POST (was per-controller opt-in POST-only), and (2) the browser's shipped adapter renders a non-dismissible hard-lock modal on skew instead of silently auto-reloading.
+
+### What consumers get for free
+
+- **Server-side:** consumers already calling `AddVmsShellVersioning(...)` (or wiring `createAction`) get the new global-guard behavior automatically. The per-controller `ActionPayload<T>.Parse(HttpRequest, currentBuild)` overload continues to compile + work as defense-in-depth; nothing to remove.
+- **Browser-side:** consumers who did NOT have a custom `onError` affordance for skew signals see the new hard-lock modal on skew — this is the DESIRED behavior; no code change required.
+
+### What consumers might need to do
+
+#### 1. Consumers with a custom skew affordance → opt-out one line
+
+If your app has custom handling for `VmsVersionSkewError` or `stale_client` in `onError` (e.g., Kitsune's status banner, PBMInvoices' toast), preserve that affordance by setting `onVersionSkew: "custom"` — the framework skips the modal and just surfaces the signals to your existing `onError`:
+
+```typescript
+new ViewModelShell({
+  // ... existing options ...
+  onVersionSkew: "custom",  // preserves v3.8.0 behavior: signal via onError, no framework modal
+});
+```
+
+#### 2. TS-server subpath consumers wanting GET-side enforcement → one line per route
+
+If you're on the TS server subpath (Bun/Hono/Deno/Cloudflare Workers) and want the guard to enforce on GET refreshes too, wire `createVersionGuard` around each GET handler:
+
+```typescript
+import { createAction, createVersionGuard } from "@ashley-shrok/viewmodel-shell/server";
+
+const guard = createVersionGuard({ currentBuild: BUILD_ID });
+
+app.get("/api/tasks", guard(async (req) => { /* GET handler */ }));
+app.post("/api/tasks/action", guard(createAction<TasksState>(async (p) => { /* action handler */ })));
+```
+
+Not required to keep working — the shipped in-`createAction` guard preserves POST-side v3.8.0 behavior automatically. The wrap closes the GET-refresh gap.
+
+#### 3. .NET consumers → nothing to do
+
+`AddVmsShellVersioning(...)` now co-registers BOTH filters (the shipped `ShellVersionResultFilter` for the `serverBuild` stamp + the new `ShellVersionGuardFilter` for the GET+POST guard) from a single call. Consumers who were manually adding `ShellVersionResultFilter` continue to work (dedup-guarded); the manual registration is now redundant.
+
+### Bumping both packages
+
+```bash
+# TS (from your app's dir)
+npm install @ashley-shrok/viewmodel-shell@^9.0.0
+
+# .NET (from your app's csproj dir)
+dotnet add package AshleyShrok.ViewModelShell --version 9.0.0
+```
+
+### Ceremony reference
+
+Design of record: `~/.claude/identities/vicky/bounties/version-skew-recovery-affordance/mechanism-sketch.md` + Ashley post-tasting sign-off 2026-08-02.
+
+---
+
 ## Upgrading to v8.2.0
 
 **NO CODE CHANGE required.** v8.2.0 is additive wire fields + bundled TipTap + a
