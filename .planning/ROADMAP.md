@@ -543,7 +543,7 @@ Plans:
 - [x] 29-04-PLAN.md — TS server-subpath createVersionGuard factory + vitest coverage (wave 3, depends on 29-03; sequential to avoid test-file collision)
 - [x] 29-05-PLAN.md — .NET ShellVersionGuardFilter + AddVersionFilters unit tests + dedup regression test (wave 2, depends on 29-02)
 - [x] 29-06-PLAN.md — BrowserAdapter.showSkewLock DOM + .vms-skew-lock* CSS + jsdom adapter test (wave 4, depends on 29-01 + 29-03 + 29-04; sequential to avoid test-file collision)
-- [ ] 29-07-PLAN.md — parity/run.ts GET-branch header hoist + helpdesk.json GET-stale fixture steps + expectBodyContains tripwires (wave 5, depends on 29-02 + 29-04)
+- [x] 29-07-PLAN.md — parity/run.ts GET-branch header hoist + helpdesk.json GET-stale fixture steps + expectBodyContains tripwires (wave 5, depends on 29-02 + 29-04)
 - [ ] 29-08-PLAN.md — agent-skill.md revised Client build / version skew section + byte-copy to .NET AgentSkill.md + parity check-skill green (wave 6, depends on 29-03 + 29-06)
 - [ ] 29-09-PLAN.md — demo/VersionSkewVerification-bun/ tailnet page + three-scenario walkthrough + Ashley release-gate sign-off (wave 7, depends on 29-03/06/07/08; autonomous: false)
 - [ ] 29-10-PLAN.md — Full green-tree gate: TS batch + .NET batch + parity (wave 8, depends on 29-05/07/08/09)
