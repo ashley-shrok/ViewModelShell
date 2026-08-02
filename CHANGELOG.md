@@ -6,7 +6,7 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
-## 8.2.0 — <YYYY-MM-DD> (npm + NuGet aligned)
+## 8.2.0 — 2026-08-02 (npm + NuGet aligned)
 
 Milestone: **rich text WYSIWYG input primitive**. New `RichTextFieldNode` leaf-input primitive with a markdown-string wire value (via TipTap + turndown, bundled + lazy-imported per Chart.js precedent); new `RichTextToolbarNode` Route B composite for the toolbar (typed slots + closed-enum variance axes per composite-nodes-layer.md §3). Display-side rendering flows through the existing `markdown.ts` → InlineRuns pipeline — zero new render code, zero HTML on the wire. See `.planning/design/composite-nodes-layer.md` §4 for the RichTextToolbarNode row; Phase 28 in `.planning/ROADMAP.md`.
 
