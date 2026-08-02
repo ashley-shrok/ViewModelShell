@@ -18,6 +18,7 @@ import {
   type ActionEvent,
   type ShellResponse,
 } from "../src/index.js";
+import { createVersionGuard } from "../src/server.js";
 
 afterEach(() => { vi.restoreAllMocks(); });
 
@@ -354,5 +355,56 @@ describe("9.0.0 — onVersionSkew:'custom' opt-out (SKEW-06)", () => {
     // Dispatch still succeeds (not locked)
     await shell.dispatch({ name: "go" } as ActionEvent);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("9.0.0 — createVersionGuard TS-server-subpath wrap (SKEW-01)", () => {
+  it("mismatched header → 400 stale_client envelope BEFORE handler runs", async () => {
+    let handlerRan = false;
+    const handler = async (_req: Request) => {
+      handlerRan = true;
+      return new Response("handler-ran", { status: 200 });
+    };
+    const guarded = createVersionGuard({ currentBuild: "server-x" })(handler);
+    const req = new Request("http://example.test/api/x", {
+      headers: { "x-vms-client-build": "client-old" },
+    });
+    const res = await guarded(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.errors[0].code).toBe("stale_client");
+    expect(handlerRan).toBe(false); // guard short-circuited BEFORE handler
+  });
+
+  it("matching header → handler runs; response passes through", async () => {
+    const handler = async (_req: Request) => new Response("ok", { status: 200 });
+    const guarded = createVersionGuard({ currentBuild: "server-x" })(handler);
+    const req = new Request("http://example.test/api/x", {
+      headers: { "x-vms-client-build": "server-x" },
+    });
+    const res = await guarded(req);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("ok");
+  });
+
+  it("absent header → handler runs (agent-driven curl still works)", async () => {
+    const handler = async (_req: Request) => new Response("ok", { status: 200 });
+    const guarded = createVersionGuard({ currentBuild: "server-x" })(handler);
+    const req = new Request("http://example.test/api/x");
+    const res = await guarded(req);
+    expect(res.status).toBe(200);
+  });
+
+  it("empty currentBuild → identity wrap (versioning off; behavior byte-identical)", async () => {
+    const handler = async (_req: Request) => new Response("ok", { status: 200 });
+    const guarded = createVersionGuard({ currentBuild: "" })(handler);
+    expect(guarded).toBe(handler); // identity — same function reference
+  });
+
+  it("undefined currentBuild → identity wrap", async () => {
+    const handler = async (_req: Request) => new Response("ok", { status: 200 });
+    const guarded = createVersionGuard({})(handler);
+    expect(guarded).toBe(handler);
   });
 });
