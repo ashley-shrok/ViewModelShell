@@ -334,6 +334,35 @@ describe("9.0.0 — hard-lock modal on stale_client VmsActionError (SKEW-04)", (
   });
 });
 
+describe("9.0.0 — hard-lock modal on stale_client from initial load() (SKEW-04)", () => {
+  // Post-verification fix (Ashley tasting 2026-08-02): the initial GET's catch
+  // arm ALSO needs to fire lockSkew on a stale_client 400 — otherwise a
+  // stale-bundle boot leaves an empty container with no shipped affordance and
+  // the modal never fires (no vm rendered → nothing to dispatch → the
+  // dispatch-side lockSkew arm never runs). Mirrors performRoundTrip's arm.
+  it("calls adapter.showSkewLock on initial load()'s 400 stale_client response", async () => {
+    const fetchSpy = stubFetch([
+      // Initial GET → 400 stale_client (server global filter now enforces on GET too)
+      {
+        body: { ok: false, errors: [{ message: "stale", code: "stale_client" }] } as unknown as ShellResponse,
+        status: 400,
+      },
+    ]);
+    vi.stubGlobal("fetch", fetchSpy);
+    const spy = makeAdapter();
+    const onError = vi.fn();
+    const shell = new ViewModelShell({
+      endpoint: "/api/x", actionEndpoint: "/api/x/action",
+      adapter: spy.adapter, clientBuildId: "build-1",
+      onError,
+    });
+    await shell.load();
+    expect(spy.skewLocks).toBe(1);
+    expect(spy.reloads).toBe(0); // no auto-reload; user's button click will call it
+    expect(onError).toHaveBeenCalledOnce();
+  });
+});
+
 describe("9.0.0 — onVersionSkew:'custom' opt-out (SKEW-06)", () => {
   it("preserves v3.8.0 behavior: no lock, no showSkewLock, dispatches still succeed, onError still fires", async () => {
     const fetchSpy = stubFetch([

@@ -3168,6 +3168,14 @@ export class ViewModelShell {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       onError ? onError(error) : console.error("[ViewModelShell]", error);
+      // 9.0.0 (SKEW-04) — hard-lock on stale_client returned from the initial
+      // GET too. Without this, a stale-bundle boot leaves an empty container
+      // with no shipped affordance; the modal only fires once the user tries
+      // to dispatch (which they typically can't, since no vm rendered). Mirror
+      // performRoundTrip's stale_client arm exactly.
+      if (error instanceof VmsActionError && error.code === "stale_client") {
+        this.lockSkew();
+      }
     } finally {
       onLoading?.(false);
     }
