@@ -497,18 +497,18 @@ Plans:
   8. Docs shipped: CHANGELOG.md section, MIGRATION.md upgrade note (additive; no breaking), AGENTS.md pattern entry.
   9. Aligned MINOR release (npm + NuGet — version TBD; likely 8.2.0), operator-gated auth precheck + publish, annotated tag, main advanced, announced on `#vms-announcements`.
 
-**Plans:** 12 plans
+**Plans:** 12/12 plans complete
 
 Plans:
-- [ ] 28-01-PLAN.md — TS wire types (RichTextFieldNode + RichTextToolbarNode + RichTextTool union) + server.ts walker leaf-arms (wave 1, no deps)
-- [ ] 28-02-PLAN.md — .NET twin records + JsonDerivedType discriminators + KebabEnum enums + walker arms + RichTextSerializationTests (wave 1, no deps; file-disjoint from 28-01)
-- [ ] 28-03-PLAN.md — package.json TipTap+turndown deps + browser.ts richTextField() lazy-loader (Chart.js precedent) + default.css state axis (STYLE-3) + adapter tests including D-04 symmetric lazy-load assertion (wave 2, depends on 28-01)
-- [ ] 28-04-PLAN.md — D-03 Route B tasting page (iframe-scoped before/after; primitives vs composite) served on tailnet + Ashley visual sign-off (wave 3, depends on 28-03; autonomous: false)
-- [ ] 28-05-PLAN.md — RichTextToolbarNode composite renderer body + CSS + tests (bakes in Ashley's tasting adjustments) (wave 4, depends on 28-04)
-- [ ] 28-06-PLAN.md — D-Q4 markdown sanitization audit (BOTH backends) + shipped whitelist sanitizer if gap found + adversarial tests (wave 4, depends on 28-03; file-disjoint from 28-05)
-- [ ] 28-07-PLAN.md — Parity: FeatureProbe emissions in bun/node/.NET + expectBodyContains tripwires (wave 5, depends on 28-01/02/03/05)
-- [ ] 28-08-PLAN.md — agent-skill.md Rich text fields section + byte-copy to .NET AgentSkill.md + parity check-skill green (wave 6, depends on 28-05)
-- [ ] 28-09-PLAN.md — Comprehensive tailnet verification page (8 scenarios × 12 themes) + Ashley release-gate sign-off (wave 7, depends on 28-05/06/07/08; autonomous: false)
-- [ ] 28-10-PLAN.md — Full green-tree gate: TS batch + .NET batch + parity (wave 8, depends on 28-06/07/08/09; machine-verifiable, no theatrical checkpoint per banked directive)
-- [ ] 28-11-PLAN.md — Docs staging: CHANGELOG.md v8.2.0 + MIGRATION.md upgrade section + AGENTS.md Phase 28 addendum + composite-nodes-layer.md §4 inventory row for RichTextToolbarNode (wave 9, depends on 28-10; date placeholder preserved for 28-12)
-- [ ] 28-12-PLAN.md — Operator-gated release: inline auth precheck + version bump + npm publish + NuGet publish + tag v8.2.0 + advance main + announce #vms-announcements + DM Angel/Molly + PID cleanup (wave 10, depends on 28-11; autonomous: false)
+- [x] 28-01-PLAN.md — TS wire types (RichTextFieldNode + RichTextToolbarNode + RichTextTool union) + server.ts walker leaf-arms (wave 1, no deps)
+- [x] 28-02-PLAN.md — .NET twin records + JsonDerivedType discriminators + KebabEnum enums + walker arms + RichTextSerializationTests (wave 1, no deps; file-disjoint from 28-01)
+- [x] 28-03-PLAN.md — package.json TipTap+turndown deps + browser.ts richTextField() lazy-loader (Chart.js precedent) + default.css state axis (STYLE-3) + adapter tests including D-04 symmetric lazy-load assertion (wave 2, depends on 28-01)
+- [x] 28-04-PLAN.md — D-03 Route B tasting page (iframe-scoped before/after; primitives vs composite) served on tailnet + Ashley visual sign-off (wave 3, depends on 28-03; autonomous: false)
+- [x] 28-05-PLAN.md — RichTextToolbarNode composite renderer body + CSS + tests (bakes in Ashley's tasting adjustments) (wave 4, depends on 28-04)
+- [x] 28-06-PLAN.md — D-Q4 markdown sanitization audit (BOTH backends) + shipped whitelist sanitizer if gap found + adversarial tests (wave 4, depends on 28-03; file-disjoint from 28-05)
+- [x] 28-07-PLAN.md — Parity: FeatureProbe emissions in bun/node/.NET + expectBodyContains tripwires (wave 5, depends on 28-01/02/03/05)
+- [x] 28-08-PLAN.md — agent-skill.md Rich text fields section + byte-copy to .NET AgentSkill.md + parity check-skill green (wave 6, depends on 28-05)
+- [x] 28-09-PLAN.md — Comprehensive tailnet verification page (8 scenarios × 12 themes) + Ashley release-gate sign-off (wave 7, depends on 28-05/06/07/08; autonomous: false)
+- [x] 28-10-PLAN.md — Full green-tree gate: TS batch + .NET batch + parity (wave 8, depends on 28-06/07/08/09; machine-verifiable, no theatrical checkpoint per banked directive)
+- [x] 28-11-PLAN.md — Docs staging: CHANGELOG.md v8.2.0 + MIGRATION.md upgrade section + AGENTS.md Phase 28 addendum + composite-nodes-layer.md §4 inventory row for RichTextToolbarNode (wave 9, depends on 28-10; date placeholder preserved for 28-12)
+- [x] 28-12-PLAN.md — Operator-gated release: inline auth precheck + version bump + npm publish + NuGet publish + tag v8.2.0 + advance main + announce #vms-announcements + DM Angel/Molly + PID cleanup (wave 10, depends on 28-11; autonomous: false)
