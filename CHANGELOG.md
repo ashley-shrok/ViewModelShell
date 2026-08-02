@@ -6,6 +6,36 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 9.0.0 — <YYYY-MM-DD> (npm + NuGet aligned) — BREAKING
+
+Version-skew hard-lock: close two fleet-foundational gaps in v3.8.0's version-skew primitive. **Wire is UNCHANGED (no new fields or codes); this is a BEHAVIOR-only major bump.**
+
+### Breaking behavior changes (both preserve opt-out)
+
+- **Server-side global filter (SKEW-01):** the `X-VMS-Client-Build` guard now enforces on BOTH GET + POST, self-registered by `AddVmsShellVersioning(...)`. The pre-9.0.0 per-controller `ActionPayload<T>.Parse(HttpRequest, currentBuild)` overload silently accepted stale-client requests when a controller used the plain `Parse(actionJson, stateJson)` overload — that path is closed. **Consumer defense-in-depth preserved:** the per-controller `Parse(HttpRequest, currentBuild)` overload continues to compile + work (SKEW-02); nothing to remove.
+- **Client-side hard-lock modal (SKEW-04/05):** the shipped `BrowserAdapter` now renders a non-dismissible framework-owned modal on any skew signal (`VmsVersionSkewError` from detection OR `VmsActionError code:"stale_client"` from dispatch). Silent `adapter.reload()` is retired — the user clicks [Reload] to consent (SKEW-06). **Consumer opt-out:** set `ShellOptions.onVersionSkew: "custom"` to preserve pre-9.0.0 behavior (signal via `onError`, no framework modal).
+
+### Additive additions
+
+- **`Adapter.showSkewLock?` capability verb (SKEW-05):** optional adapter method for a custom target's skew affordance. Fail-quiet by absence (modeled on `toast?`/`reload?`, NOT on `navigate?`/`storage?`/`saveFile?`) — a custom adapter without the verb still learns of the skew via `onError`.
+- **`ShellOptions.onVersionSkew?: "default" | "custom"` (SKEW-06):** closed-union opt-out flag.
+- **`createVersionGuard({ currentBuild })` TS-server factory (SKEW-01):** wraps ANY route handler (GET or POST) with the fail-closed guard. Consumer wiring: `app.get("/api/x", createVersionGuard({ currentBuild: BUILD_ID })(getHandler))`.
+- **`ShellVersionGuardFilter` .NET `IActionFilter` (SKEW-01):** self-registered by `AddVmsShellVersioning` alongside the shipped `ShellVersionResultFilter`. No consumer wiring change — the same one-line adoption now covers GET + POST fail-close.
+- **Client attaches `X-VMS-Client-Build` on GET requests (SKEW-03):** previously POST-only; now symmetric on `load()` and `performRoundTrip()`.
+
+### Notes for adopters
+
+- **The common case:** most consumers see the new default (modal fires instead of silent reload) — this is the DESIRED behavior; no code change required.
+- **Consumers with custom skew affordances** (Kitsune, PBMInvoices, any Pantheon app that handled `VmsVersionSkewError`/`stale_client` in a custom `onError`): set `onVersionSkew: "custom"` — one-line preservation of pre-9.0.0 behavior.
+- **TS-server subpath consumers wanting GET-side enforcement:** wire `createVersionGuard({ currentBuild })` around each GET handler (one line per route). Not required to keep working — the shipped in-`createAction` guard preserves POST-side v3.8.0 behavior automatically.
+- **Wire protocol token stays `viewmodel-shell/1.0`** — no wire fields added/removed.
+
+Design of record: `~/.claude/identities/vicky/bounties/version-skew-recovery-affordance/mechanism-sketch.md` + Ashley post-tasting sign-off 2026-08-02.
+
+Requirements: SKEW-01, SKEW-02, SKEW-03, SKEW-04, SKEW-05, SKEW-06, SKEW-07, SKEW-08, SKEW-09, SKEW-10 (see .planning/phases/29-.../29-CONTEXT.md §requirements_map for canonical definitions).
+
+---
+
 ## 8.2.0 — 2026-08-02 (npm + NuGet aligned)
 
 Milestone: **rich text WYSIWYG input primitive**. New `RichTextFieldNode` leaf-input primitive with a markdown-string wire value (via TipTap + turndown, bundled + lazy-imported per Chart.js precedent); new `RichTextToolbarNode` Route B composite for the toolbar (typed slots + closed-enum variance axes per composite-nodes-layer.md §3). Display-side rendering flows through the existing `markdown.ts` → InlineRuns pipeline — zero new render code, zero HTML on the wire. See `.planning/design/composite-nodes-layer.md` §4 for the RichTextToolbarNode row; Phase 28 in `.planning/ROADMAP.md`.
