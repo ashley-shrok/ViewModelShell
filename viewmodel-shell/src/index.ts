@@ -3297,6 +3297,16 @@ export class ViewModelShell {
   }
 
   async dispatch(action: ActionEvent, silent = false): Promise<void> {
+    // 9.0.0 (SKEW-04) — hard-lock: once skew is detected + the modal fires,
+    // drop ALL subsequent dispatches on both blocking and non-blocking lanes.
+    // MUST be placed BEFORE the `if (!nonBlocking) {` lane split below so
+    // polls (silent=true or blocking:false) are dropped by construction —
+    // the shipped `if (this.serverBusy) return;` lives INSIDE that block and
+    // only drops blocking-lane dispatches, which is why the skewLock guard
+    // cannot be placed adjacent to serverBusy. The lock is one-way; only a
+    // full reload (adapter.reload()) clears it, and reload navigates away,
+    // discarding the shell instance.
+    if (this.skewLocked) return;
     // Phase 14 (NBA-01) — unifies the existing poll-only `silent` flag with
     // the new `blocking:false` field under one "non-blocking lane" concept
     // (design doc: "Poll = a non-blocking action on a timer").
@@ -3501,6 +3511,13 @@ export class ViewModelShell {
       }
       return;
     }
+    // 9.0.0 (SKEW-04) — hard-lock: once skew is detected, no re-renders paint
+    // over the modal. Placed AFTER checkVersionSkew() has had opportunity to
+    // fire lockSkew on THIS response (see load() and the checkVersionSkew wire
+    // Plan 29-03 will add), but BEFORE adapter.render() so any subsequent
+    // in-flight response (e.g., a non-blocking poll that raced the modal fire)
+    // is silently dropped rather than repainting the underlying view.
+    if (this.skewLocked) return;
     // C2 (3.3.0) — a non-redirect response MAY legitimately omit `vm` (e.g. a
     // side-effects-only or poll-keepalive response: "persist to storage and
     // keep polling, but don't rebuild the view"). Do NOT blank the screen by
