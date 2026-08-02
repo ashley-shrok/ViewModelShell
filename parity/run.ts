@@ -70,9 +70,12 @@ interface FixtureStep {
    *  "non-json" sends _action with a syntactically-broken JSON string; "missing-action-field"
    *  omits the _action form field entirely. When set, the step's `action` field is ignored. */
   malformedBody?: "empty-action" | "non-json" | "missing-action-field";
-  /** 3.8.0 — when set, this POST step sends the given value as the `X-VMS-Client-Build`
+  /** 3.8.0 — when set, this step sends the given value as the `X-VMS-Client-Build`
    *  request header (the version-skew fail-closed guard). A value equal to the backend's
-   *  configured build id passes; a mismatching value triggers a 400 `stale_client`. */
+   *  configured build id passes; a mismatching value triggers a 400 `stale_client`.
+   *  9.0.0 (SKEW-07) — attached on GET too, symmetric with POST, so fixtures can
+   *  exercise the global-guard's GET branch (pre-9.0.0 the harness's GET branch
+   *  silently ignored this field, per AGENTS.md gotcha #9 class-3 defect). */
   clientBuild?: string;
   /** Phase 07 — dotted paths into the captured response that the cross-backend diff should
    *  IGNORE for this step. Used when backends legitimately differ on a field (e.g. parse-error
@@ -241,7 +244,13 @@ async function runFixtureAgainst(cfg: BackendConfig, fixture: Fixture): Promise<
     let init: RequestInit;
     if (step.method === "GET") {
       url = `${cfg.baseUrl}${step.endpoint ?? fixture.endpoint}`;
-      init = { method: "GET" };
+      // 9.0.0 (SKEW-07) — attach X-VMS-Client-Build on GET too, symmetric with the
+      // POST branch below. Without this hoist, a fixture step declaring clientBuild
+      // on a GET would silently vacuum the header away — a class-3 gotcha #9 defect
+      // where the harness has no path to exercise the branch the fixture requires.
+      const headers: Record<string, string> = {};
+      if (step.clientBuild != null) headers["X-VMS-Client-Build"] = step.clientBuild;
+      init = { method: "GET", headers };
     } else {
       url = `${cfg.baseUrl}${step.actionEndpoint ?? fixture.actionEndpoint}`;
       const form = new FormData();
