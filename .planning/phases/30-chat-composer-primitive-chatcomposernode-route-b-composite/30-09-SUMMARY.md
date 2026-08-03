@@ -192,3 +192,22 @@ See `key-decisions` in frontmatter. In short: **(1)** server-side validation ins
 ---
 *Phase: 30-chat-composer-primitive-chatcomposernode-route-b-composite*
 *Completed: 2026-08-02 (Task 4 awaiting)*
+
+## Ashley Sign-Off
+
+**2026-08-02, verbatim over the tailnet verification pass:**
+
+Initial review (panels 3 + 11 flagged):
+> "The only two things I noticed that seem off are 11, which, you know, I can see all five lines just without touching anything. And then for number three, it looks fine. I guess I was just confused what that, like, sparkly icon was... but the problem isn't how it like what icon is there so much is um it's pretty low like it starts maybe like halfway down on the attach button that's next to it so it's kind of just like offset weirdly"
+
+After fix 1 (leadingSlot wrapper + maxRows CSS override, commit `2dc0854` pt.1):
+> "Yeah, I would say that looks good, and so the only thing that's left is... the GPT-4 could be off in that it is very bottom aligned, whereas everything else next to it across the board seems to kind of be aligned and it's the odd one out"
+
+After fix 2 (trailingSlot wrapper for consistency, commit `2dc0854` pt.2):
+> "Ship it."
+
+**Sign-off recorded: `verify ok — with: two follow-up fixes shipped in 2dc0854 (leading/trailing slot 34px flex-center wrappers + inline maxRows CSS override to defeat shipped default 6-row cap on modern browsers)`.**
+
+Server killed post-sign-off; PID file removed. Server code + verification page HTMLs remain committed under `demo/ChatComposerVerification-bun/` as historical artifact + regression-check surface.
+
+Plans 30-10 (Angel adopter) + 30-11 (green-tree + phase close) unblocked.
