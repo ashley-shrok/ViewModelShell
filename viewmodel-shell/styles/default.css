@@ -3575,6 +3575,18 @@ button.vms-breadcrumb__link {
   gap: 0.5rem;
 }
 
+/* Leading + trailing slots — match the 34px icon-button rhythm so bare
+   IconNodes/captions in the slot vertically center relative to the buttons
+   (row is align-items:flex-end so bare content would otherwise sit at the
+   buttons' baseline — Ashley 2026-08-02). */
+.vms-chat-composer__leading,
+.vms-chat-composer__trailing {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 /* Textarea — growable center. `field-sizing: content` is the modern-CSS
    auto-resize path (Chrome 123+, Firefox 132+, Safari TP); the JS fallback
    in browser.ts covers older browsers with identical cap semantics. */

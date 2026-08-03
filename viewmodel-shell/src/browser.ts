@@ -1562,8 +1562,16 @@ export class BrowserAdapter implements Adapter {
     const row = document.createElement("div");
     row.className = "vms-chat-composer__row";
 
-    // Leading slot (rare — most consumers leave empty).
-    if (n.leadingSlot) this.node(n.leadingSlot, row, on);
+    // Leading slot (rare — most consumers leave empty). Wrap in a 34px min-height
+    // flex-centered container so bare icons align vertically with the buttons
+    // (row uses align-items:flex-end so buttons stick to bottom as textarea grows;
+    // without the wrapper a bare IconNode reads visually offset — Ashley 2026-08-02).
+    if (n.leadingSlot) {
+      const leading = document.createElement("div");
+      leading.className = "vms-chat-composer__leading";
+      row.appendChild(leading);
+      this.node(n.leadingSlot, leading, on);
+    }
 
     // Attach-button (Plan 30-05, CHAT-04). Renders the icon-only paperclip
     // button when attachAction is set; click triggers the hidden file input.
@@ -1720,6 +1728,10 @@ export class BrowserAdapter implements Adapter {
       // modern browsers via the shipped `.vms-chat-composer__textarea` rule
       // (max-height cap in CSS). JS fallback for older browsers.
       const maxRows = n.maxRows ?? 6;
+      // The shipped CSS max-height is a hard-coded 6-row cap; override inline
+      // so wire `maxRows` is respected on BOTH the modern-CSS path (field-sizing
+      // still honors this max-height) and the JS-fallback path — Ashley 2026-08-02.
+      ta.style.maxHeight = `calc(${maxRows} * 1.5em + 0.75rem)`;
       const supportsFieldSizing =
         typeof CSS !== "undefined" && CSS.supports?.("field-sizing", "content") === true;
       if (!supportsFieldSizing) {
@@ -1819,7 +1831,16 @@ export class BrowserAdapter implements Adapter {
     row.appendChild(sendBtn);
 
     // Trailing slot (common: model selector, emoji trigger, tool chips).
-    if (n.trailingSlot) this.node(n.trailingSlot, row, on);
+    // Mirrors leadingSlot's wrapper — 34px flex-centered so caption/text/icons
+    // in the trailing slot align with the buttons instead of bottom-aligning
+    // to the row's flex-end (Ashley 2026-08-02, same asymmetry she caught on
+    // leading — trailing exhibited it too, less obvious with text vs icon).
+    if (n.trailingSlot) {
+      const trailing = document.createElement("div");
+      trailing.className = "vms-chat-composer__trailing";
+      row.appendChild(trailing);
+      this.node(n.trailingSlot, trailing, on);
+    }
 
     root.appendChild(row);
 
