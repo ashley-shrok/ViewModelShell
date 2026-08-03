@@ -1773,6 +1773,39 @@ public record TextNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TextWeight? Weight = null
 ) : ViewNode
 {
+    // v9.2.0 (Phase 31 / MAXLINES-NET-WIRE) — closed-enum line-cap axis.
+    //
+    // 🚨 INIT-ONLY PROPERTY OUTSIDE PRIMARY CTOR — deliberately NOT a positional
+    // parameter. AGENTS.md is explicit: "Adding a positional parameter to a C#
+    // record's primary ctor is binary-breaking regardless of the default value."
+    // The companion binary-compat gate (parity/check-companion-binary-compat.sh)
+    // exists to catch this failure mode by packing core + Markdown and calling
+    // MarkdownConverter.ToViewNodes(md) against packed IL. Markdown 0.2.x's
+    // MarkdownConverter constructs `new TextNode(value, Level: level)` — the
+    // newobj opcode bakes in the 7-param ctor signature. Appending an 8th
+    // positional param on a MINOR bump would fire MissingMethodException at
+    // first-real-use of the Markdown package under core 9.2.0 in production.
+    // Init-only property placement leaves the primary ctor arity at 7 —
+    // Markdown 0.2.x's packed IL continues to resolve, the gate passes,
+    // and this remains a truly additive MINOR bump.
+    //
+    // Consumer construction: `new TextNode("...") { MaxLines = N }` or
+    // `existingNode with { MaxLines = N }`. NOT `new TextNode(..., MaxLines: N)`
+    // — MaxLines is not a ctor parameter.
+    //
+    // Wire posture: WhenWritingNull => "maxLines" ABSENT when null (gotcha #8).
+    // Range {1, 2, 3} per the TS-side closed union at src/index.ts (the closed
+    // spec — .NET does NOT emit an enum per "closed unions enforced on ONE
+    // side only" documented invariant). Emits .vms-text--max-lines-{N} class
+    // via BrowserAdapter; N=1 → single-line ellipsis; N=2|3 → line-clamp.
+    // Consumers needing an a11y-honest reveal on truncation compose a
+    // TooltipNode explicitly (framework does NOT auto-wire; container width
+    // isn't knowable server-side, so truncation detection is client-only —
+    // mirrors SectionNode.collapsible's "ship mechanism; consumer composes
+    // affordance" posture).
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MaxLines { get; init; }
+
     /// <summary>Build a TextNode from inline runs, DERIVING Value as the
     /// concatenation of the run texts so the plain reading and the rich reading
     /// cannot disagree. Prefer this over writing Value by hand whenever Runs is
