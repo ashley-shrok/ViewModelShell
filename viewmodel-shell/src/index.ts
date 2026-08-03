@@ -1089,6 +1089,29 @@ export interface TextNode {
    *  a `body`-styled TextNode can be `weight:"medium"` without stopping being
    *  body-typed — mirrors the `tone` orthogonal-axis pattern already shipped. */
   weight?: "regular" | "medium" | "bold";
+  /** Cap rendered line count via CSS line-clamp. Closed union — the framework
+   *  ships three values (single-line ellipsis, 2-line clamp, 3-line clamp)
+   *  matching the 90th-percentile use (1 → hug titles/labels, 2 → list previews,
+   *  3 → message summaries; flagship-surveyed against MUI noWrap, Ant
+   *  Typography.Text ellipsis, Chakra Text noOfLines, Bootstrap .text-truncate).
+   *  Emits `.vms-text--max-lines-{N}` on the rendered element. Omitted =
+   *  default wrap behavior unchanged (backwards-compatible).
+   *
+   *  Composes AFTER wrapping: existing `overflow-wrap: anywhere` on `.vms-text`
+   *  still applies; the axis caps line count, does not change wrapping behavior.
+   *  Composes with every other TextNode axis orthogonally (style, tone, weight,
+   *  level, runs, tooltip). The axis composes for FREE into every composite
+   *  carrying a TextNode slot (UserRowNode.name, ListRowNode.primary+secondary,
+   *  MessageNode.content, TimelineEntryNode.description, DetailRowNode.label+
+   *  value, ChipNode.label, standalone TextNode) — no composite renderer
+   *  change is needed because slots are typed by semantic name and accept any
+   *  ViewNode (typed-slots governance rule; composite-nodes-layer.md §3).
+   *
+   *  Truncation-aware tooltip is NOT auto-wired (container width isn't
+   *  knowable at wire time). Consumers needing an a11y-honest reveal on
+   *  truncation compose a `TooltipNode` explicitly around the `TextNode`.
+   *  Same posture as MUI + Ant. */
+  maxLines?: 1 | 2 | 3;
   /** Hover-only info tooltip (6.12.0, TOOL-01). See FieldNode.tooltip. */
   tooltip?: string;
 }

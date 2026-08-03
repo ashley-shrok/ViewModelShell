@@ -5268,7 +5268,16 @@ export class BrowserAdapter implements Adapter {
     // (all three classes carry the same specificity; source-order only matters
     // for conflicting declarations, which weight does not have). Omitted =
     // no class emitted, matching the style / tone posture.
-    el.className = `vms-text${n.style ? ` vms-text--${n.style}` : ""}${n.tone ? ` vms-text--${n.tone}` : ""}${n.weight ? ` vms-text--weight-${n.weight}` : ""}`;
+    //
+    // v9.2.0 (Phase 31) — maxLines axis is a fourth class-modifier (orthogonal
+    // to style + tone + weight). Appended LAST in the template. Emits
+    // `.vms-text--max-lines-{1|2|3}` when set; omitted = no class = default
+    // wrap behavior unchanged (backwards-compat). Line-clamp composes AFTER
+    // wrapping — existing `overflow-wrap:anywhere` still applies. The axis
+    // composes for free into every composite carrying a TextNode slot;
+    // no composite renderer change needed (composite-nodes-layer.md §3
+    // typed-slots pattern).
+    el.className = `vms-text${n.style ? ` vms-text--${n.style}` : ""}${n.tone ? ` vms-text--${n.tone}` : ""}${n.weight ? ` vms-text--weight-${n.weight}` : ""}${n.maxLines ? ` vms-text--max-lines-${n.maxLines}` : ""}`;
     // runs present => draw runs INSTEAD of value. Absent => byte-identical to the
     // pre-runs rendering (a single text node), so every existing consumer is
     // untouched. The rule is unconditional, so a value/runs mismatch is never
