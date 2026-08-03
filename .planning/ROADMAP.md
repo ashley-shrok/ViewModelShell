@@ -587,3 +587,16 @@ Plans:
 - [x] 30-09-PLAN.md — Framework-owned tailnet verification page + Ashley sign-off (CHAT-17)
 - [x] 30-10-PLAN.md — Angel `/ai` adopter DM sent (CHAT-19; async pending per Ashley "ship it")
 - [x] 30-11-PLAN.md — Full green-tree gate + Phase 30 closes on main (CHAT-18; release deferred to closeout phase per Phase 26 shape)
+
+### Phase 31: TextNode.maxLines axis — closed-enum line-cap primitive. Route A axis (`maxLines?: 1 | 2 | 3`) on TextNode; CSS emission in browser.ts + default.css (1 → nowrap+ellipsis, 2|3 → -webkit-line-clamp); byte-parallel .NET twin in ViewModels.cs with `[JsonIgnore(WhenWritingDefault)]` posture; parity fixture proving both backends emit identical wire; framework tests (both twins); no new colors so aa-contrast untouched; CHANGELOG + MIGRATION; released as npm 9.2.0 / NuGet 9.2.0 (additive optional field, MINOR bump on both). Design LOCKED via 2026-08-03 tasting — see bounty textnode-maxlines-axis.
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 30
+**Plans:** 4 plans
+
+Plans:
+- [ ] 31-01-PLAN.md — TypeScript wire: TextNode.maxLines field + browser.ts class emission + default.css rules + vitest suite (wave 1)
+- [ ] 31-02-PLAN.md — .NET wire: TextNode.MaxLines positional slot + xUnit serialization suite (wave 1, parallel to 31-01)
+- [ ] 31-03-PLAN.md — Parity fixture textnode-maxlines.json + FeatureProbe backends' state/action/BuildVm extensions (wave 2, depends 31-01 + 31-02)
+- [ ] 31-04-PLAN.md — Release ritual: green-tree gate + CHANGELOG/MIGRATION + npm+NuGet 9.2.0 publish + tag + advance main + announce (wave 3)
