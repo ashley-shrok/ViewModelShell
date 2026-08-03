@@ -3628,6 +3628,48 @@ button.vms-breadcrumb__link {
   cursor: not-allowed;
 }
 
+/* Send-button state machine (Plan 30-04, CHAT-09..10). Modifier classes are
+   emitted by browser.ts per node.status; base .vms-chat-composer__icon-btn
+   geometry above ships from Plan 30-03. Status axis vocab (closed enum on
+   the wire): "idle" | "sending" | "streaming". */
+.vms-chat-composer__send--idle {
+  color: var(--vms-text-muted);
+}
+.vms-chat-composer__send--ready {
+  /* Accent bg + white icon — the standard chat-app "send is armed" pair;
+     matches ChatGPT / Claude / Vercel AI Elements per RESEARCH.md §Q3.
+     `white` is used as the on-accent hard-code since --vms-on-accent is
+     not yet in the token vocabulary. */
+  background: var(--vms-accent);
+  color: white;
+}
+.vms-chat-composer__send--ready:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--vms-accent) 92%, black);
+}
+.vms-chat-composer__send--sending {
+  color: var(--vms-text-muted);
+  cursor: wait;
+}
+.vms-chat-composer__send--sending .vms-icon {
+  /* Spin the shipped `loader-2` icon (Phase 22 IconName closed union) via
+     CSS-only animation — no new icon, no JS animation library. */
+  animation: vms-chat-composer-spin 720ms linear infinite;
+  transform-origin: 50% 50%;
+}
+.vms-chat-composer__send--streaming {
+  /* Kept accent to preserve the primary-color affordance — matches
+     ChatGPT / Claude / Vercel AI Elements per RESEARCH.md §Q3. The button
+     is enabled during streaming and dispatches stopAction on click. */
+  background: var(--vms-accent);
+  color: white;
+}
+.vms-chat-composer__send--streaming:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--vms-accent) 92%, black);
+}
+@keyframes vms-chat-composer-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ── Skew-lock (9.0.0, SKEW-05) — framework-owned non-dismissible reload modal ──
    Fires from BrowserAdapter.showSkewLock() when the shell detects client/server
    version skew (see viewmodel-shell/src/browser.ts + src/index.ts lockSkew).

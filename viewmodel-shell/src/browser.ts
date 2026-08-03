@@ -26,7 +26,7 @@ import type {
   SettingRowNode, SettingListNode,
   ChipNode, ChipListNode,
   RichTextFieldNode, RichTextToolbarNode, RichTextTool,
-  ChatComposerNode,
+  ChatComposerNode, ChatComposerStatus, ChatComposerSubmitMode,
 } from "./index.js";
 import { ICONS } from "./icons-payload.js";
 
@@ -1482,6 +1482,87 @@ export class BrowserAdapter implements Adapter {
       row.appendChild(attachBtn);
     }
 
+    // Per-composer closure state. Plan 30-05 will populate `attachedFiles`
+    // via file-picker/drag-drop/paste and swap in a proper `removeAttachment`
+    // helper — this plan initializes empty + provides a fallback pop-last so
+    // the Backspace-on-empty keyboard trigger below (CHAT-08 keyboard side)
+    // does something coherent even before Plan 30-05 lands.
+    const composerState: {
+      attachedFiles: { id: string; file: File; previewUrl?: string }[];
+      removeAttachment?: (id: string) => void;
+    } = { attachedFiles: [] };
+
+    // ── Send-button (Plan 30-04, CHAT-09..10). Full state-machine wiring:
+    // icon swap per `n.status`, click routes to sendAction or stopAction,
+    // disabled derives from bind text length + attachedFiles count when idle.
+    // Runtime guard (fail-loud per capability-seam rule): status="streaming"
+    // MUST carry stopAction. The .NET/TS tree validators (CHAT-13) reject
+    // such trees at buildVm; this guard closes the wire-drift case at render.
+    const status: ChatComposerStatus = n.status ?? "idle";
+    const sendBtn = document.createElement("button");
+    sendBtn.type = "button";
+    sendBtn.className = "vms-chat-composer__send vms-chat-composer__icon-btn";
+    sendBtn.dataset.action = "send";
+    sendBtn.dataset.composerStatus = status;
+
+    if (status === "streaming" && !n.stopAction) {
+      console.error(
+        "[ViewModelShell] ChatComposerNode: status=\"streaming\" requires " +
+        "stopAction. Falling back to disabled send button.",
+      );
+      sendBtn.appendChild(this.renderIconSvg("send", "sm", undefined, undefined));
+      sendBtn.classList.add("vms-chat-composer__send--idle");
+      sendBtn.disabled = true;
+      sendBtn.setAttribute("aria-label", "Send (misconfigured)");
+    } else if (status === "sending") {
+      // Uses the shipped `loader-2` icon (Phase 22 IconName closed union)
+      // spun via the CSS-only `.vms-chat-composer__send--sending .vms-icon`
+      // animation shipped in default.css — no new icon, no JS animation lib.
+      sendBtn.appendChild(this.renderIconSvg("loader-2", "sm", undefined, undefined));
+      sendBtn.classList.add("vms-chat-composer__send--sending");
+      sendBtn.disabled = true;
+      sendBtn.setAttribute("aria-label", "Sending");
+    } else if (status === "streaming") {
+      sendBtn.appendChild(this.renderIconSvg("square", "sm", undefined, undefined));
+      sendBtn.classList.add("vms-chat-composer__send--streaming");
+      sendBtn.setAttribute("aria-label", "Stop generating");
+      if (n.disabled === true) sendBtn.disabled = true;
+      const stopAction = n.stopAction!;               // guarded above
+      sendBtn.addEventListener("click", () => {
+        if (sendBtn.disabled) return;
+        on(stopAction);
+      });
+    } else {
+      // status === "idle" — the natural case. Send icon + click dispatches
+      // sendAction; disabled derives from !canSend when composer isn't
+      // explicitly disabled.
+      sendBtn.appendChild(this.renderIconSvg("send", "sm", undefined, undefined));
+      sendBtn.classList.add("vms-chat-composer__send--idle");
+      const stateValue = this.readBind(n.bind);
+      const hasText = typeof stateValue === "string" && stateValue.trim().length > 0;
+      // TODO(Plan 30-05): once the attachedFiles registry persists across
+      // renders, canSend must OR-in composerState.attachedFiles.length > 0.
+      // The closure state here is per-render (rebuilt each pass), so at Plan
+      // 30-04 render-time the count is always 0 — the check is left in as a
+      // defensive seam Plan 30-05 will exercise.
+      const canSend = hasText || composerState.attachedFiles.length > 0;
+      const sendAction = n.sendAction;
+      if (n.disabled === true || !canSend) {
+        sendBtn.disabled = true;
+      } else {
+        sendBtn.classList.add("vms-chat-composer__send--ready");
+      }
+      sendBtn.setAttribute("aria-label", "Send");
+      sendBtn.addEventListener("click", () => {
+        if (sendBtn.disabled) return;
+        on(sendAction);
+      });
+    }
+    // Shared `triggerSend` closure for the textarea keyboard handler below.
+    // Routes through the button's own click so the state-machine's branch
+    // decision (send vs stop vs no-op-when-disabled) stays in one place.
+    const triggerSend = (): void => { sendBtn.click(); };
+
     // Textarea (or inputSlot if consumer provided — opt-in rich-text).
     if (n.inputSlot) {
       this.node(n.inputSlot, row, on);
@@ -1521,19 +1602,63 @@ export class BrowserAdapter implements Adapter {
         queueMicrotask(resize);
       }
 
+      // ── Keyboard (Plan 30-04, CHAT-11..12 + CHAT-08 keyboard side).
+      // ONE keydown handler; branches Backspace-vs-Enter-vs-other. Multiple
+      // handlers fight over preventDefault (RESEARCH.md §P2 note).
+      const submitMode: ChatComposerSubmitMode = n.submitMode ?? "enter";
+
+      // IME composition tracking — belt-and-braces per CHAT-12 correctness
+      // requirement. Different browsers commit `isComposing` at different
+      // points relative to keydown; the closure var + `e.isComposing` native
+      // property together cover the full browser matrix. Adversarial CJK
+      // jsdom test in Plan 30-06 proves the guard fires.
+      let isComposing = false;
+      ta.addEventListener("compositionstart", () => { isComposing = true; });
+      ta.addEventListener("compositionend", () => { isComposing = false; });
+
+      ta.addEventListener("keydown", (e: KeyboardEvent) => {
+        // Backspace-on-empty removes last attachment (CHAT-08 keyboard side).
+        // Plan 30-05 owns the attach registry proper + supplies
+        // `composerState.removeAttachment`; this plan wires the trigger and
+        // ships a fallback pop-last so the interaction is coherent standalone.
+        if (
+          e.key === "Backspace"
+          && ta.value === ""
+          && composerState.attachedFiles.length > 0
+        ) {
+          e.preventDefault();
+          const last = composerState.attachedFiles[composerState.attachedFiles.length - 1];
+          if (composerState.removeAttachment) {
+            composerState.removeAttachment(last.id);
+          } else {
+            // TEMPORARY shim — Plan 30-05 supersedes with the proper helper
+            // (re-render + blob-URL revocation). Local pop keeps the closure
+            // state coherent so a follow-up Backspace targets the new last.
+            composerState.attachedFiles = composerState.attachedFiles.slice(0, -1);
+          }
+          return;
+        }
+
+        // Enter handling — IME guard MUST run before any modifier check so
+        // CJK-composition Enter (candidate confirm) never fires send.
+        if (e.key !== "Enter") return;
+        if (isComposing || e.isComposing) return;
+
+        if (submitMode === "enter") {
+          if (e.shiftKey) return;                     // native newline
+          e.preventDefault();
+          triggerSend();
+        } else {
+          // submitMode === "ctrl-enter"
+          if (!(e.ctrlKey || e.metaKey)) return;     // native newline
+          e.preventDefault();
+          triggerSend();
+        }
+      });
+
       row.appendChild(ta);
     }
 
-    // Send-button PLACEHOLDER (Plan 30-04 wires state-machine: icon swap on
-    // status transition, click dispatch, disabled-derived from bind + attach
-    // count). Reuses the shared `.vms-chat-composer__icon-btn` geometry.
-    const sendBtn = document.createElement("button");
-    sendBtn.type = "button";
-    sendBtn.className = "vms-chat-composer__send vms-chat-composer__icon-btn";
-    sendBtn.dataset.action = "send";
-    sendBtn.setAttribute("aria-label", "Send");
-    if (n.disabled === true) sendBtn.disabled = true;
-    sendBtn.appendChild(this.renderIconSvg("send", "sm", undefined, undefined));
     row.appendChild(sendBtn);
 
     // Trailing slot (common: model selector, emoji trigger, tool chips).
