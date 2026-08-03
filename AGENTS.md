@@ -88,6 +88,36 @@ These are the bugs that take hours to find:
 
     See CHANGELOG v9.0.0 + MIGRATION v9.0.0 for wiring examples.
 
+11. **`ChatComposerNode.stopAction` is REQUIRED when `status` can reach `"streaming"` — both sides fail-loud.** New in v9.1.0 (staged in CHANGELOG `## Unreleased`; landing at Phase 30 closeout). The AI-elements send-button state machine (`status: "idle" | "sending" | "streaming"` — see composite-nodes-layer.md §4e) drives what happens on button click: `idle` → send-icon fires `sendAction`; `sending` → spinner disabled (no dispatch); `streaming` → square/stop-icon fires **`stopAction`**. A `ChatComposerNode` rendered with `status:"streaming"` but no `stopAction` is a broken tree — the stop button has nothing to fire.
+
+    **Both backends fail-loud on this misconfiguration (do NOT silently no-op):** the .NET tree validator rejects at render with `invalid_tree`; the browser adapter emits `console.error` + disables the send button (the user cannot interrupt a stream that has no stop path — surfacing the misconfig immediately is the correctness requirement). Non-AI consumers who never set `status` past `sending` never hit this — they get send-with-spinner at zero cost.
+
+    **The correct AI-chat pattern:** your action handler that starts a stream returns `{status:"streaming", stopAction:{name:"stop-generation"}}` in the SAME response — never `status:"streaming"` alone. A subsequent `poll` (or an out-of-band `shell.push()`) completes the stream and returns `{status:"idle"}` — omit `stopAction` at that point (or keep it; the idle path ignores it).
+
+    ```csharp
+    // .NET action handler that starts a stream
+    case "send-message":
+        var streamId = _ai.StartStream(state.Draft);
+        state = state with { Draft = "", StreamId = streamId, Status = ChatComposerStatus.Streaming };
+        return new ShellResponse<ChatState>(BuildVm(state), state) { NextPollIn = 500 };
+
+    // BuildVm — status:"streaming" MUST provide stopAction
+    private static ViewNode BuildVm(ChatState state) => new ChatComposerNode(
+        Bind: "draft",
+        SendAction: new ActionEvent("send-message"),
+        Status: state.Status,
+        // ✅ stopAction wired whenever status can reach streaming — do NOT omit
+        StopAction: state.Status == ChatComposerStatus.Streaming
+            ? new ActionEvent("stop-generation")
+            : null,
+    );
+    ```
+
+    **Two related invariants** (same shape; failure modes to know about but they don't need separate gotchas):
+
+    - `attachedFiles` blob-URL lifecycle. Attachments stage locally as `URL.createObjectURL` blob URLs in a per-composer registry keyed by the composite's `bind` path; the framework revokes them on X-remove and on successful send. If a composer disappears from the tree (server-side render drops it) while the bind path stays in state, the registry entry is not auto-GC'd — small leak, page-nav cleans up. Not a correctness bug; only relevant if you dynamically show/hide composers.
+    - `attachBind` + `dropScope` require `attachAction`. A composer with attach-related config but no attach button is a misconfig — the browser adapter emits `console.error` and no-ops the extra config at runtime (no user impact, but the console warning surfaces the misconfig).
+
 ---
 
 ## Architecture
@@ -784,6 +814,10 @@ Phase 28 (v8.2.0, rich text WYSIWYG):
 - **`RichTextToolbarNode` Route B composite (per D-02).** New composite with a typed `tools: RichTextTool[]` slot + closed-enum variance axes (`size`, `tone`, `state`). Framework owns TipTap chain wiring, button styling, keyboard shortcuts, focus management, and a11y (aria-labels + shortcut hints); the app declares WHICH tools appear. **When `RichTextFieldNode.toolbar` is OMITTED, the framework renders the DEFAULT toolbar (the full 11-tool D-08 floor) automatically** — an explicit `RichTextToolbarNode` is only needed to customize. Composite shape approved via before/after tasting served on the tailnet at `http://100.113.23.63:3021/`; Ashley signed off 2026-07-31 (`taste ok — with: fix code-block + quote editor-host rendering`, folded into Plan 28-05's CSS scope). Fifth composite adopting the Phase 27 `state?: string` axis uniformity rule — the axis is now a matter of course for row/list-shaped composites when they ship.
 - **TipTap 2.x + turndown bundled into main `@ashley-shrok/viewmodel-shell` package (per D-04), lazy-imported from `browser.ts` following the Chart.js precedent.** Consumers who never render a `RichTextFieldNode` ship ZERO TipTap/turndown bytes — verified by adapter test asserting the modules are not in the initial bundle graph and by Vite's chunk split (the TipTap chunk is `index-*.js` ≈ 273 KB and only produced on first rich-text render). No opt-in subpath, no companion package, no consumer install step required. **Fail-loud on load failure** per the capability-seam rule: if TipTap or turndown fails to load at runtime (offline, network-restricted, corrupted bundle), the framework surfaces a hard `Error` via `console.error("[ViewModelShell]", …)`. No silent no-op, no automatic fallback to a plain textarea.
 - **The shipped whitelist sanitizer (Plan 28-06; see gotcha #4a below).** v8.2.0 ships a WHITELIST URL-scheme sanitizer at every markdown → `InlineRun.href` emission site on BOTH backends. This closes the pre-8.2.0 stored-XSS gap where the opt-in `linkHrefRewrite` hook was the only sanitization surface. Not rich-text-specific — every consumer of the markdown → InlineRuns pipeline (including `TextNode(style:"markdown")`) inherits the protection on rebuild. See gotcha #4a for the shipped contract.
+
+Phase 30 (v9.1.0, chat composer — staged in CHANGELOG `## Unreleased`; landing at closeout):
+
+- **`ChatComposerNode` (CHAT-01..20)** — chat-app compose bar Route B composite: unified pill surface with growable-center textarea + fixed 34px circular leading (attach `+`/paperclip) / trailing (send / stop) icon buttons. Framework owns the intrinsic growable-center-fixed-ends layout that `Section(row)+heterogeneous-siblings` cannot reach even with a Route A `FieldNode(inputType:"file", variant:"icon-only")` addition — Ashley taste-locked Panel 3 at the 2026-08-02 3-panel tasting (`banging`); Panel 2 failed the visual bar for the substantive reason that the send button wraps under the attach button + textarea and there is no unified pill surface reachable from primitives. Design of record at `.planning/design/composite-nodes-layer.md §4e` + `RESEARCH.md` 825-line survey under `.planning/phases/30-.../`. **Send-button state machine** (Vercel AI Elements shape): `status: idle | sending | streaming` closed enum drives icon + click routing (`idle` → send-icon fires `sendAction`; `sending` → spinner disabled; `streaming` → square/stop-icon fires `stopAction`). Non-AI consumers never set past `sending` and pay ZERO cost. **IME `isComposing` guard baked-in NON-OPTIONAL** (CJK correctness per CHAT-12; adversarial jsdom test in Plan 30-06 is the regression gate — CJK Enter during composition never fires send). **Three converged attach ingress paths** (click / drag-drop / paste-image; universal industry mechanism per RESEARCH.md §Q1). Drag-drop `dropScope: "composer" | "global"` closed enum (Stream Chat `WithDragAndDropUpload` precedent; guarded by `dataTransfer.types.includes("Files")` so text drops don't fire). Framework-owned attachment preview chip strip renders in `headerSlot` position (consumer's own `headerSlot` content composes with it — both render). Per-item X-remove; blob-URL image thumbs + MIME-typed file icons. **Backspace-on-empty removes last attachment** (~5 adapter lines; AI-elements precedent; universal UX polish). Enter=send/Shift+Enter=newline default; `submitMode:"ctrl-enter"` (kebab per KebabEnum convention) opt-in flip for persistent-chat patterns. Attachments ride shipped multipart wire on `sendAction` dispatch under `attachBind` (default `"attachments"`) — VMS's server-side wire is a NET SIMPLIFICATION vs client-only SDKs (Stream Chat, AI Elements) that must invent presigned URLs + chunked uploads + per-attachment progress. Typed slots (`headerSlot`, `inputSlot`, `leadingSlot`, `trailingSlot`, `footerSlot`) accept ViewNode subtrees per Route B typed-slots rule; `attachAction` is NOT a slot — it's a first-class ActionEvent-that-triggers-an-attach-ingress (same pattern as `TableRow.action`, `ChipNode.dismissAction`). `ActionEvent.files` type widened from `Record<string, File>` to `Record<string, File | File[]>` for multi-file (backward-compat; single-file callers unchanged). **v1 EXPLICITLY DEFERS** (each a separate primitive/conversation, not a v1 gap to close inline): emoji picker, @mention / /command autocomplete, voice recording, dictation, screenshot capture, model selector, typing indicator, reply-preview / edit-mode indicators as first-class fields (consumer composes in `headerSlot`). Composer is the first Route B composite that is NOT row-shaped (single-instance compose bar, not a list); the `state?: string` axis uniformity precedent from Phase 27 is deferred here — `disabled` is already a first-class bool; `active`/`done` have no obvious compose-bar semantic. Ships one new shipped icon glyph (`square`, drives the streaming stop-icon).
 
 ---
 

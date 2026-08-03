@@ -285,6 +285,101 @@ The closed initial set of `tools[]` values, matching the Slack/GitHub feature-su
 4. Update `state[bindPath]` to the markdown string you want to submit (write your own markdown — headings, `**bold**`, `` `inline code` ``, lists, links, etc.).
 5. `POST <actionEndpoint>` with the action envelope (`{ "name": "<save-action>", "state": <updated state> }`, JSON or multipart per the *Action dispatch shape* rules above). Read `ok`/`rejected` per the usual response-envelope rules.
 
+## Chat composer (CHAT-01..20)
+
+A `chat-composer` node in the `vm` tree is the framework's Route B chat-app compose bar (added in v9.1.0). It bundles a draft-text field, an attach button, a send button with a small state machine, three attach ingress paths (click / drag-drop / paste-image), and five typed slots. As a wire-driving agent you interact with it exactly like any other bound input plus one or two dispatches — no chat-specific transport.
+
+### Wire shape
+
+Discriminator: `"type": "chat-composer"`.
+
+```json
+{ "type": "chat-composer",
+  "bind": "draft",
+  "sendAction": { "name": "send-message" },
+  "attachAction": { "name": "attach" },
+  "attachBind": "attachments",
+  "placeholder": "Type a message…",
+  "status": "idle",
+  "submitMode": "enter",
+  "maxRows": 6 }
+```
+
+| Field | Direction | Meaning |
+|---|---|---|
+| `bind` | **round-trips — STATE** | REQUIRED. Dotted path in `state` where the draft text (a `string`) lives. Read + write here — same rule as any bound input. |
+| `sendAction` | — | REQUIRED. Dispatched on Enter or click of the send button (per `submitMode`). |
+| `placeholder` | server→client — VIEW | Optional placeholder text shown when `state[bind]` is empty. |
+| `attachAction` | — | Optional. When present, the browser renders a leading `+`/paperclip button that opens the OS file picker. The action itself is dispatched name-only on click; the browser stages picked files locally until `sendAction` fires. **For a wire-driving agent that is not running a browser, `attachAction` is INFORMATIONAL** — you attach files by posting them directly on the `sendAction` multipart dispatch under `attachBind`; you never dispatch `attachAction` yourself. |
+| `attachBind` | — | Optional multipart form-field name attached files ride under on `sendAction`. Default: `"attachments"`. Server reads via `Request.Form.Files.GetFiles(attachBind)` (.NET) / `payload.files[attachBind]` (TS). |
+| `maxFiles` | — | Optional client-side attach cap (framework's inline validation banner fires on exceed). |
+| `maxFileSize` | — | Optional per-file byte cap (client-side). |
+| `accept` | — | Optional `string[]` of MIME types for the file-input `accept` attribute. |
+| `dropScope` | — | Optional closed union: `composer | global`. Default `composer` — drag-drop listeners live on the composer element only. `global` attaches to `document` (a wire-driving agent has no drag-drop; this is a browser-side hint). |
+| `status` | server→client — VIEW | Optional closed union: `idle | sending | streaming`. Default `idle`. Drives the send-button state machine (see below). |
+| `stopAction` | — | Optional. **REQUIRED when `status` can reach `"streaming"`** — both backends fail-loud otherwise (browser adapter disables the send button + `console.error`; .NET tree validator rejects with `invalid_tree`). Fired on stop-click during streaming. |
+| `submitMode` | — | Optional closed union: `enter | ctrl-enter` (wire values are kebab). Default `enter`. Keyboard flip: `enter` = Enter sends / Shift+Enter newline; `ctrl-enter` = Ctrl+Enter or Cmd+Enter sends / Enter newline. |
+| `maxRows` | — | Optional textarea auto-resize cap. Default 6. |
+| `disabled` | server→client — VIEW | Optional boolean. When true, all inputs + buttons are disabled. |
+| `headerSlot` | server→client — VIEW | Optional `ViewNode` slot — content above the textarea (reply-preview pill, "editing X" indicator, etc.). Composes WITH the framework's attachment-preview chip strip (both render — chip strip first, consumer content below). |
+| `inputSlot` | server→client — VIEW | Optional `ViewNode` slot — replaces default plain textarea. Drop a `rich-text-field` (v8.2.0) here for rich text. |
+| `leadingSlot` | server→client — VIEW | Optional `ViewNode` slot — prepends before the attach button (rare). |
+| `trailingSlot` | server→client — VIEW | Optional `ViewNode` slot — appends after the send button (voice, model select, emoji trigger, etc.). |
+| `footerSlot` | server→client — VIEW | Optional `ViewNode` slot — content below the textarea inside the pill (helper text, footer chips). |
+
+### Send-button state machine
+
+| `status` | Icon rendered | Click fires |
+|---|---|---|
+| `idle` (default) | send | `sendAction` |
+| `sending` | spinner (disabled — no dispatch) | (none) |
+| `streaming` | square (stop) | `stopAction` |
+
+Non-AI consumers never set `status` past `sending`; they get send-with-spinner at zero cost. AI-chat consumers that stream: return `{status:"streaming", stopAction:{name:"stop-generation"}}` in the same response that begins the stream; a subsequent `poll` (or `shell.push`) returns `{status:"idle"}` on completion.
+
+### The round-trip rule (unchanged)
+
+Draft text lives at `state[bind]` — read it, mutate it, dispatch. `sendAction` is name-only in the POST body:
+
+```json
+{ "name": "send-message", "state": { "draft": "hello world" } }
+```
+
+The server reads `state.draft` (its bind), acts, and returns a fresh `{vm, state}` with the draft typically cleared (`state.draft = ""`).
+
+### File attachments — multipart only
+
+Attach files by dispatching `sendAction` with a multipart body (JSON body cannot carry files). Each attached file is one entry keyed by `attachBind` (default `"attachments"`); multiple files use the SAME key (multi-value form):
+
+```
+Content-Type: multipart/form-data
+---
+_action: {"name":"send-message"}
+_state:  {"draft":"hello"}
+attachments: <file1 binary>
+attachments: <file2 binary>
+```
+
+Server reads via `Request.Form.Files.GetFiles("attachments")` (.NET) / `payload.files["attachments"]` (TS). The framework's rule from the *Files* section applies — a file rides only the action(s) its input declares, and for `ChatComposerNode` that action is `sendAction`. Non-attach messages omit the file fields entirely.
+
+### Keyboard (browser-side; informational for wire-driving agents)
+
+- **`submitMode:"enter"`** (default): Enter = send / Shift+Enter = newline.
+- **`submitMode:"ctrl-enter"`**: Ctrl+Enter (Cmd+Enter on Mac) = send / Enter = newline. Persistent-chat pattern (Slack/Discord/Teams).
+- **Backspace on empty textarea removes the last staged attachment** (AI-elements precedent).
+- **IME `isComposing` guard is baked-in NON-OPTIONAL** — CJK Enter during composition never fires send. This is a correctness requirement, not a preference.
+
+For a wire-driving agent none of this applies: dispatch `sendAction` (with or without files) whenever you decide to send.
+
+### Driving a chat composer cold — the four steps
+
+1. `GET <endpoint>` and receive `{ ok, vm, state }`. Locate the `chat-composer` node (walk the tree; match `type === "chat-composer"`). Note its `bind` path and its `sendAction.name`. Note `attachBind` (default `"attachments"`) if you plan to attach files.
+2. Write your draft text at `state[bindPath]`.
+3. Dispatch `sendAction`:
+   - **No attachments:** JSON body `{ "name": "<sendAction.name>", "state": <updated state> }` at `POST <actionEndpoint>` — or multipart, either works.
+   - **With attachments:** multipart body with `_action` = `{"name":"<sendAction.name>"}`, `_state` = updated state, plus one file entry per attachment keyed by `attachBind`.
+4. Read `ok`/`rejected` per the usual response-envelope rules. On streaming AI responses, the response typically carries `status:"streaming"` + `stopAction` + `nextPollIn` — schedule the poll per *Polling* above; if the user wants to interrupt, dispatch `stopAction` (name-only) instead of the next `poll`.
+
 ## Files
 
 File uploads use the multipart form above. One form entry per file input, keyed by the input's `name` attribute (from the corresponding node's `name` field in the tree). The file's binary content is the entry's value. JSON-body dispatch cannot carry files; use multipart.
