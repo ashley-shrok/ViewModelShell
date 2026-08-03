@@ -183,3 +183,42 @@ Ashley's verbatim verdict: **"I think they're fine as is."**
 She is the authoritative visual gate per the framework's shipped convention. No per-composer color token added; the composer ships as-is at `f19c3f3` with `color: white` on `--vms-accent`. The numeric AA finding is a documented v1 limitation — if a real consumer flags legibility on those specific dark themes in production, a follow-up patch (per-composer token pair, per Plan 30-11 M-3 remediation preference) can address it targetedly.
 
 Server killed post-eyeball; verification page committed under `demo/ChatComposerVerification-bun/` as historical artifact + regression-check surface.
+
+## Post-close: v9.1.0 release ritual (Ashley routed via Angel, 2026-08-02)
+
+Angel DM'd (event `$CblQbvsSYap6nsEXcT8u5jB5KCrXQYGoATLQM2LLO0w`): "Ashley wants to adopt off a published version the normal way (bump package.json + npm install) — not off HEAD. Can you publish v9.1.0 and I will adopt right after? If issues surface she is fine iterating via new versions."
+
+Vicky (this identity) executed the release ritual per AGENTS.md publishing runbook:
+
+**Credential precheck:** `.env` sourced ✓ · `npm whoami` → `ashley-shrok` ✓ · `NUGET_API_KEY` present (46 chars) ✓
+
+**Version bumps** (commit `300f83e` — aligned MINOR):
+- `viewmodel-shell/package.json`: 9.0.0 → **9.1.0**
+- `viewmodel-shell-dotnet/AshleyShrok.ViewModelShell.csproj`: 9.0.0 → **9.1.0**
+- Markdown companion: unchanged at 0.2.2 (per identity rule: rebuild required only on core-MAJOR bump; this is MINOR)
+- CHANGELOG heading: `## Unreleased` → `## 9.1.0 — 2026-08-02 (npm + NuGet aligned)`
+
+**Green-tree gate re-run** post version-bump: all TS + .NET + parity gates exit 0 (1380 vitest + 458 framework .NET + parity 17 backends).
+
+**Publish:**
+- `npm publish` → `+ @ashley-shrok/viewmodel-shell@9.1.0` (registry confirms `dist-tags.latest = 9.1.0`)
+- `dotnet nuget push` → `201 Created` + symbol package also pushed
+  - ⚠️ First attempt failed 401 because `$NUGET_API_KEY` didn't survive across Bash tool calls (each call spawns a fresh shell); re-sourced `.env` inline in the same command block and retried — succeeded
+  - NuGet flat-container indexer still shows 9.0.0 at close-out; per AGENTS.md convention this lags 5-15 min; expected
+
+**Tag + push:**
+- `git tag -a v9.1.0 300f83e -m "viewmodel-shell 9.1.0"` ✓
+- `git push origin v9.1.0` ✓
+- `git push origin main` — advanced from `5b4f41e` to `300f83e` (Phase 30's 15 commits + release commit)
+- `git merge-base --is-ancestor v9.1.0 main` → `on main` ✓ (banked lesson: v1.5.0/v1.6.0 were stranded on tags because main wasn't advanced — verified NOT stranded here)
+
+**Announce:**
+- `#vms-announcements` (`!QvlInhfVNZRUxQPtcR`, Vicky is OWNER): event `$Yhq-g9IlWgBRCpgtIYeZVfBqByitH0DFWE3VSVbbWvo`
+- Angel DM (`!cTFWdfBcWIXexJroXn`): event `$z9mAULYRL_8aQi918W0FA9G04HnZpdG4sf33Nj0Xr9Y` — confirmed published + wire-shape reminder + `ActionEvent.files` widening note
+- Molly DM (`!JecRElxNGAhCCLRWjg`): event `$Cxb4DNtxg99wgm8yj-zUUohm48omDjN0L_3WXZPJ76g` — NuGet heads-up for Metis fleet-lockstep cadence
+
+**Registry state at close-out:**
+- npm: `@ashley-shrok/viewmodel-shell@9.1.0` ✅ live
+- NuGet: `AshleyShrok.ViewModelShell 9.1.0` ✅ pushed (flat-container indexer catching up; API-level confirmed 201)
+
+**Phase 30 fully closed AND v9.1.0 released.** 16 commits total on `main`.
