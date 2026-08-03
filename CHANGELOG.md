@@ -6,6 +6,24 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 9.1.1 — 2026-08-03 (npm + NuGet aligned) — bug fix
+
+Patch release: fix a CSS-specificity regression in `AvatarNode` image mode. Angel-DM'd on the tailnet ~2 hours after the v9.1.0 release; unblocks /ai adoption.
+
+### Fixed
+
+- **`AvatarNode` image branch no longer drops its `size` constraint.** In v9.1.0, the renderer emits `<img class="vms-avatar vms-avatar--{size}">` directly (correct), but `default.css` combined the direct-case and hypothetical nested-img rules into one selector: `.vms-avatar img, img.vms-avatar { width: 100%; height: 100%; }`. `img.vms-avatar` has element+class specificity (0,1,1), which beat `.vms-avatar--{size}` (0,1,0) — so the image element always got 100%×100% of its parent, silently overriding the size class. In a wide container (sidebar list), the image rendered ~10× oversized while the initials branch of the same node rendered correctly at the requested size. Fix: split the selector so the direct case gets `object-fit + display` only (size flows from the `--{size}` class); the nested-img fallback keeps `100%/100%`. `viewmodel-shell/styles/default.css:2837-2854`. CSS-only fix; no wire, no renderer change.
+
+### Added (tests)
+
+- **`viewmodel-shell/test/avatar-image-size-css.test.ts`** — 6 new jsdom property-gate tests using `getComputedStyle` to assert the applied width/height (not just the className shape). Closes the "gates check the SHAPE of a thing, not the PROPERTY we care about" hole for this class — the existing `avatar-render.test.ts` was shape-only (className/src/alt) and could not have caught the regression. Mutation-proven against the pre-fix CSS: the 5 direct-case tests fail on old CSS, all 6 pass on the fix (the nested-fallback test correctly passes both, since that half was never broken).
+
+### Consumers
+
+**No action required.** Rebuild against 9.1.1 and image avatars in `AvatarNode`, `MessageNode`, `UserRowNode`, and any composite passing through `AvatarNode` render at their spec'd `size` again. No API change. Package moves: npm `@ashley-shrok/viewmodel-shell` PATCH bump (9.1.1); NuGet `AshleyShrok.ViewModelShell` PATCH bump byte-parallel (no .NET code change — the version alignment convention holds regardless of which side moved). Companion `AshleyShrok.ViewModelShell.Markdown` NOT affected.
+
+---
+
 ## 9.1.0 — 2026-08-02 (npm + NuGet aligned)
 
 Staged for the next MINOR release (target: **9.1.0** — additive wire; no breaking changes). Version bump + publish + tag = a separate closeout phase per the Phase 30 CONTEXT §Non-negotiables and the batch-then-ship convention in `.planning/design/composite-nodes-layer.md §6`. Consumers see zero effect on the current 9.0.0 npm/NuGet installs.

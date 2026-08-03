@@ -2834,12 +2834,19 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 /* Warning icon-mode polarity: dark stroke on bright fill (matches the
    initials warning override above). */
 .vms-avatar--warning.vms-avatar--icon .vms-icon { color: var(--vms-on-warning-fill); }
-/* Image mode — the <img> element inherits .vms-avatar--{size}'s width/height
-   directly (browser.ts sets the class on the <img> itself, not a wrapper).
-   The rules below cover both the direct case AND a nested-img fallback for
-   any future consumer that wraps their own <img> inside the avatar div. */
-.vms-avatar img,
+/* Image mode. Two separate cases — must NOT share a rule, because
+   `img.vms-avatar` (element+class, specificity 0,1,1) beats
+   `.vms-avatar--{size}` (0,1,0) and would silently drop the size.
+   Direct case:  <img class="vms-avatar vms-avatar--{size}"> — the <img>
+                 IS the avatar, sized by the size class; only needs
+                 object-fit + display here.
+   Nested case:  <div class="vms-avatar vms-avatar--{size}"><img></div> —
+                 the wrapper is sized, the inner <img> fills it 100%. */
 img.vms-avatar {
+  object-fit: cover;
+  display: block;
+}
+.vms-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
