@@ -269,6 +269,49 @@ public enum MessageRole { User, Assistant, System }
 [JsonConverter(typeof(KebabEnum<RichTextToolbarSize>))]
 public enum RichTextToolbarSize { Compact, Expanded }
 
+/// <summary>v9.x (CHAT-09) — ChatComposerNode send-button state machine axis.
+/// Closed 3-value enum controlling the send-button's icon + click behavior.
+/// Idle → send-icon dispatches <see cref="ChatComposerNode.SendAction"/>;
+/// Sending → spinner disabled (in-flight round-trip); Streaming → stop-icon
+/// dispatches <see cref="ChatComposerNode.StopAction"/>. Non-AI consumers
+/// never set past Idle/Sending and pay zero cost for the AI state shape.
+/// Borrowed from Vercel AI Elements' PromptInputSubmit.status axis (see
+/// .planning/phases/30-*/RESEARCH.md). Wire values (kebab-lowercase via
+/// KebabEnum): "idle" / "sending" / "streaming", byte-identical to the TS
+/// closed union.</summary>
+[JsonConverter(typeof(KebabEnum<ChatComposerStatus>))]
+public enum ChatComposerStatus { Idle, Sending, Streaming }
+
+/// <summary>v9.x (CHAT-05) — ChatComposerNode drag-drop attach handler scope.
+/// Closed 2-value enum. Composer (default when omitted) attaches drag-drop
+/// listeners to the composer element; Global attaches to <c>document</c> for a
+/// whole-page drop target (Stream Chat's <c>WithDragAndDropUpload</c> pattern).
+/// Both paths guard against non-file drags via
+/// <c>dataTransfer.types.includes("Files")</c>. Wire values (kebab-lowercase
+/// via KebabEnum): "composer" / "global", byte-identical to the TS closed
+/// union.</summary>
+[JsonConverter(typeof(KebabEnum<ChatComposerDropScope>))]
+public enum ChatComposerDropScope { Composer, Global }
+
+/// <summary>v9.x (CHAT-11) — ChatComposerNode keyboard submit-mode. Closed
+/// 2-value enum. Enter (default when omitted): Enter=send, Shift+Enter=newline
+/// — the AI-chat default (ChatGPT / Claude / Perplexity / Gemini). CtrlEnter:
+/// Enter=newline, Ctrl+Enter (Cmd+Enter on Mac)=send — the persistent-chat
+/// flip (Slack / assistant-ui). IME <c>isComposing</c> guard is baked-in and
+/// non-optional (short-circuits every Enter path — CJK correctness).
+///
+/// <para>WIRE VALUES (kebab-lowercase via KebabEnum): <c>"enter"</c> and
+/// <c>"ctrl-enter"</c>. NOTE — the CONTEXT.md draft spec listed
+/// <c>"ctrlEnter"</c> (camelCase); the framework-wide convention (established
+/// at v6.0.0, enforced by <see cref="KebabEnum{T}"/> and every other closed
+/// enum in this file — e.g. <c>SpaceBetween</c> → <c>"space-between"</c>) is
+/// kebab-lowercase, so the wire value is <c>"ctrl-enter"</c>. The TS twin
+/// (Plan 30-01) must land the union literal as <c>"ctrl-enter"</c> to stay
+/// byte-parallel; the parity fixture in Plan 30-07 will byte-diff to
+/// confirm.</para></summary>
+[JsonConverter(typeof(KebabEnum<ChatComposerSubmitMode>))]
+public enum ChatComposerSubmitMode { Enter, CtrlEnter }
+
 /// <summary>v8.2.0 (RICH-01/RICH-02) — JSON converter for RichTextTool that
 /// walks a static dictionary mapping each enum member to its exact literal wire
 /// string (kebab-case with digit-boundary awareness, e.g. Heading1 → "heading-1").
@@ -936,6 +979,7 @@ public record ShellResponse<TState>(
 [JsonDerivedType(typeof(ChipListNode),      "chip-list")]
 [JsonDerivedType(typeof(RichTextFieldNode),   "rich-text-field")]
 [JsonDerivedType(typeof(RichTextToolbarNode), "rich-text-toolbar")]
+[JsonDerivedType(typeof(ChatComposerNode),    "chat-composer")]
 public abstract record ViewNode;
 
 public record PageNode(
@@ -3032,6 +3076,191 @@ public record RichTextFieldNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? State = null
 ) : ViewNode;
 
+/// <summary>v9.x (CHAT-01..20) — ChatComposerNode. Route B composite for the
+/// chat-app compose bar. Unified pill container with growable-center textarea
+/// + fixed 34px circular leading/trailing icon buttons. Framework owns the
+/// intrinsic layout logic (growable-center + fixed-ends) that Section(row)
+/// with heterogeneous siblings cannot reach — per Ashley's 2026-08-02 3-panel
+/// tasting sign-off (<c>.planning/phases/30-*/CONTEXT.md</c> §Problem statement).
+///
+/// <para>SEND-BUTTON STATE MACHINE (CHAT-09): the <see cref="Status"/> axis
+/// drives icon + click behavior. Idle → send-icon dispatches
+/// <see cref="SendAction"/>; Sending → spinner disabled; Streaming → stop-icon
+/// dispatches <see cref="StopAction"/>. Non-AI consumers never set past
+/// Idle/Sending and pay zero cost for the AI state shape. <see cref="StopAction"/>
+/// is REQUIRED when Status can reach Streaming — the tree validator (Plan
+/// 30-04) will fail loudly on the invariant violation.</para>
+///
+/// <para>IME <c>isComposing</c> GUARD (CHAT-12) is BAKED-IN and NON-OPTIONAL
+/// — a correctness requirement for CJK users, not a preference. Belt-and-
+/// braces via <c>onCompositionStart</c>/<c>onCompositionEnd</c> state var +
+/// <c>e.nativeEvent.isComposing</c> check on keydown.</para>
+///
+/// <para>TYPED SLOTS (composite-nodes-layer.md §3): <see cref="HeaderSlot"/>,
+/// <see cref="InputSlot"/>, <see cref="LeadingSlot"/>,
+/// <see cref="TrailingSlot"/>, and <see cref="FooterSlot"/> accept ViewNode
+/// subtrees per Route B typed-slots governance rule. <see cref="AttachAction"/>
+/// is NOT a slot — it's an ActionDescriptor on the composite that renders the
+/// framework-owned leading `+`/paperclip button when set (icon-only, uses the
+/// shipped <c>Paperclip</c> IconName). <see cref="SendAction"/> is REQUIRED
+/// (not a slot) — a composer without a send target is meaningless.</para>
+///
+/// <para>ATTACHMENT PATHS (CHAT-04..08): when <see cref="AttachAction"/> is
+/// set, the framework wires click-to-picker, drag-drop-on-composer (guarded
+/// by <c>dataTransfer.types.includes("Files")</c>), paste-image handler, and
+/// the attachment preview chip strip (blob-URL thumbs, MIME icons, X-remove,
+/// <c>URL.revokeObjectURL</c> cleanup on remove/unmount). Files ride the
+/// existing multipart wire on the <see cref="SendAction"/> dispatch — the
+/// <see cref="AttachBind"/> field-name is the multipart entry key.
+/// Multi-file default (<c>multiple</c> attribute); <see cref="MaxFiles"/> /
+/// <see cref="MaxFileSize"/> / <see cref="Accept"/> configure the picker +
+/// validate the drops/pastes at the adapter layer. <see cref="DropScope"/>
+/// (default Composer) picks between listening on the composer element vs
+/// <c>document</c>.</para>
+///
+/// <para>KEYBOARD (CHAT-11..13): <see cref="SubmitMode"/> flips the
+/// Enter/Ctrl+Enter binding (default: Enter=send, Shift+Enter=newline;
+/// opt-in: Enter=newline, Ctrl+Enter=send — the persistent-chat convention).
+/// Backspace-on-empty-textarea removes the last staged attachment (AI-elements
+/// precedent; ~5 adapter lines). Auto-resize textarea capped at
+/// <see cref="MaxRows"/> (default 6).</para>
+///
+/// <para>Every optional field carries <c>[JsonIgnore(WhenWritingNull)]</c> so
+/// an unset field is ABSENT from the wire (never <c>"placeholder": null</c>)
+/// — the class-2 findNulls defect protection AGENTS.md gotcha #8 exists for.
+/// The optional bool <see cref="Disabled"/> carries <c>WhenWritingDefault</c>
+/// so <c>false</c> is ABSENT (matching the TS optional <c>disabled?: boolean</c>
+/// posture; same shape as FieldNode.Disabled / RichTextFieldNode.Disabled).
+/// </para>
+///
+/// <para>Design of record: <c>.planning/phases/30-*/RESEARCH.md</c> (825-line
+/// survey). Tasting artifact: <c>~/.claude/identities/vicky/bounties/</c>
+/// <c>chat-composer-primitive/tasting/</c> (Panel 3 taste-locked 2026-08-02).
+/// </para></summary>
+public record ChatComposerNode(
+    // Draft-text bind path — the JSONPath-ish key into `state` this composer
+    // reads from and writes back to on every keystroke. REQUIRED — a bindless
+    // composer has no value round-trip and is meaningless. Same contract as
+    // FieldNode.Bind / RichTextFieldNode.Bind.
+    string Bind,
+
+    // Send dispatch. REQUIRED — the composite's semantically-primary action
+    // slot per typed-slots §3 (a composer with no send target is not a
+    // composer). Fired when the send button is clicked in Status:Idle, or
+    // when Enter (SubmitMode:Enter) / Ctrl+Enter (SubmitMode:CtrlEnter)
+    // completes a send. Files (if any) ride the multipart body of the same
+    // dispatch, keyed by AttachBind. NOTE: field name matches the TS twin's
+    // ActionEvent alias (both are references to the same ActionDescriptor
+    // record on the .NET side; the TS type is called `ActionEvent`).
+    ActionDescriptor SendAction,
+
+    // Optional user-facing placeholder shown when the textarea is empty.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Placeholder = null,
+
+    // Attach dispatch. When set, the framework renders the leading paperclip/+
+    // icon button that opens the native file picker; the attachment preview
+    // chip strip appears in the HeaderSlot region on first pick. Fired when
+    // the user clicks the leading attach button (NOT when files are dropped/
+    // pasted — those flow directly to the local attachment registry and ride
+    // the eventual SendAction). Omit AttachAction to disable the attach path
+    // entirely (no attach button, no drop handler, no paste handler).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? AttachAction = null,
+
+    // Multipart form-field name for staged attachments — the key each File
+    // entry rides under on the SendAction's multipart body. Multi-file default
+    // (multiple attribute on the underlying <input type="file">). Consumers
+    // read via Request.Form.Files[AttachBind] on the .NET side.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AttachBind = null,
+
+    // Maximum number of files the user can stage at once. Enforced at the
+    // adapter layer (picker + drop + paste all consult this cap). Omitted =
+    // no cap.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? MaxFiles = null,
+
+    // Maximum per-file size in bytes. Enforced at the adapter layer with a
+    // user-facing rejection (staged with error state, not silently dropped).
+    // long? (not int?) because bytes exceed Int32.MaxValue on legitimate
+    // media files (>2 GiB uploads are rare but valid). Omitted = no cap.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? MaxFileSize = null,
+
+    // Accepted MIME types (or file extensions with leading dot per the
+    // native <input accept="..."> convention). Passed straight through to the
+    // picker's accept attribute; drop/paste handlers also filter by this list.
+    // IReadOnlyList<string> (not string[]) matches the shipped-record
+    // convention across the file (e.g. TableColumn.Sortable variants,
+    // FormNode.Buttons).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Accept = null,
+
+    // Drag-drop attach handler scope. Composer (default) attaches listeners
+    // to the composer element only; Global attaches to `document` for a
+    // whole-page drop target. Both guard against non-file drags via
+    // dataTransfer.types.includes("Files"). See ChatComposerDropScope XML doc.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ChatComposerDropScope? DropScope = null,
+
+    // Send-button state-machine axis. See ChatComposerStatus XML doc for the
+    // per-value semantics. Omitted = Idle (default). AI-chat consumers move
+    // this to Sending after dispatching SendAction and to Streaming while a
+    // stream is in-flight; StopAction MUST be set when Status can reach
+    // Streaming (tree validator invariant).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ChatComposerStatus? Status = null,
+
+    // Stop dispatch. REQUIRED when Status can reach Streaming (invariant
+    // enforced by the tree validator — Plan 30-04). Fired when the user
+    // clicks the stop-icon button during Streaming. Optional at the wire
+    // level (Status:Idle/Sending consumers don't need it) — the validator
+    // enforces the pairing.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? StopAction = null,
+
+    // Keyboard submit-mode. See ChatComposerSubmitMode XML doc for the
+    // per-value semantics. Omitted = Enter (default: Enter=send,
+    // Shift+Enter=newline).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ChatComposerSubmitMode? SubmitMode = null,
+
+    // Auto-resize textarea cap (max visible rows before the textarea starts
+    // scrolling instead of growing). Omitted = 6 (framework default).
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? MaxRows = null,
+
+    // Disable the composer entirely (grayed-out, keyboard-inert, send button
+    // disabled). WhenWritingDefault posture — false is ABSENT on the wire
+    // (byte-identical to the TS optional `disabled?: boolean` which is
+    // omitted when unset). Same shape as FieldNode.Disabled /
+    // RichTextFieldNode.Disabled.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Disabled = false,
+
+    // Header slot — reply-preview, edit-mode indicator, or the framework-owned
+    // attachment preview chip strip. Route B typed slot (composite-nodes-
+    // layer.md §3): accepts any ViewNode subtree; the framework owns layout /
+    // spacing / border. NOTE: when AttachAction is set AND files are staged,
+    // the framework's attachment preview chip strip renders in this region;
+    // consumer-provided HeaderSlot content STACKS ABOVE the strip (both
+    // visible) so reply-preview + attachments compose naturally.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? HeaderSlot = null,
+
+    // Input slot — opt-in override of the default textarea (e.g. embed a
+    // RichTextFieldNode for markdown compose). Route B typed slot: accepts
+    // any ViewNode subtree. When set, the framework's auto-resize / IME
+    // guard / Enter-binding wiring is BYPASSED for the input (the embedded
+    // node owns its own input semantics); the send-button state machine and
+    // attachment paths still work.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? InputSlot = null,
+
+    // Leading slot — rare: prepend content BEFORE the framework's leading
+    // attach button (typically a per-app affordance like a mode selector
+    // shortcut). Route B typed slot.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? LeadingSlot = null,
+
+    // Trailing slot — voice-message trigger, model selector, emoji picker
+    // trigger, or any other per-app affordance that composes into the
+    // composer's trailing edge. Renders BEFORE the framework-owned send
+    // button. Route B typed slot.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? TrailingSlot = null,
+
+    // Footer slot — helper text, keyboard-shortcut hint, footer chips (e.g.
+    // model badge, token counter). Route B typed slot. Renders BELOW the
+    // composer pill.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ViewNode? FooterSlot = null
+) : ViewNode;
+
 // ─── Action-name uniqueness check (Phase 06 / WIRE-05) ───────────────────────
 //
 // Mirrors viewmodel-shell/src/server.ts `validateActionNames` byte-for-byte:
@@ -3387,6 +3616,24 @@ public static class ViewTreeValidation
                 // (no SectionNode descendants; Tools[] are RichTextTool enum
                 // tokens resolved CLIENT-SIDE by the TipTap chain, not
                 // SectionNodes). Mirrors the TS twin arm.
+                break;
+
+            case ChatComposerNode chatComposer:
+                // v9.x (CHAT-01) — ChatComposerNode slots: HeaderSlot,
+                // InputSlot, LeadingSlot, TrailingSlot, FooterSlot (each
+                // ViewNode?). All five can hold arbitrary ViewNode subtrees
+                // (including SectionNodes with Action/Link — e.g. a header
+                // reply-preview panel or a footer helper-links section), so
+                // the nested-section-interaction rules must descend into
+                // every ViewNode slot. AttachAction / SendAction / StopAction
+                // are ActionDescriptors (leaf primitives, no SectionNode
+                // descendants). Mirrors the TS twin `case "chat-composer"`
+                // arm in server.ts (Plan 30-01).
+                if (chatComposer.HeaderSlot is { } ccHeader) WalkForSectionAction(ccHeader, outerInteractive);
+                if (chatComposer.InputSlot is { } ccInput) WalkForSectionAction(ccInput, outerInteractive);
+                if (chatComposer.LeadingSlot is { } ccLead) WalkForSectionAction(ccLead, outerInteractive);
+                if (chatComposer.TrailingSlot is { } ccTrail) WalkForSectionAction(ccTrail, outerInteractive);
+                if (chatComposer.FooterSlot is { } ccFooter) WalkForSectionAction(ccFooter, outerInteractive);
                 break;
 
             // Leaf-like nodes (FieldNode, CheckboxNode, ButtonNode, TextNode,
@@ -3792,6 +4039,42 @@ public static class ViewTreeValidation
                 // dispatches). Mirrors the TS twin arm.
                 break;
 
+            case ChatComposerNode chatComposer:
+                // v9.x (CHAT-01) — ChatComposerNode has THREE independent
+                // ActionDescriptor slots plus five ViewNode-typed slots.
+                //
+                // ACTION SLOTS — ALL participate in name uniqueness:
+                //   SendAction (REQUIRED)   — the primary send dispatch
+                //   AttachAction (optional) — the leading attach-button dispatch
+                //   StopAction (optional)   — the streaming stop-icon dispatch
+                //     (REQUIRED when Status can reach Streaming — that pairing
+                //     invariant is a separate validator, Plan 30-04)
+                // A ChatComposer alongside another dispatch-bearing node
+                // (e.g. two composers on the same page, or a composer next to
+                // a button that reuses "send" as its name) MUST fail the
+                // uniqueness check — otherwise the class-3 missed-walk
+                // failure silently exempts composer dispatches.
+                //
+                // SLOT DESCENT — every ViewNode-typed slot (HeaderSlot,
+                // InputSlot, LeadingSlot, TrailingSlot, FooterSlot) can hold
+                // dispatch-bearing subtrees (e.g. a footer helper button, a
+                // trailing model-picker button, an InputSlot that overrides
+                // to a RichTextFieldNode). All five descended into so their
+                // action names participate in the uniqueness check the same
+                // way SectionNode.Children or ListRowNode.Trailing do.
+                //
+                // Mirrors the TS twin `case "chat-composer"` arm in
+                // server.ts (Plan 30-01).
+                Record(chatComposer.SendAction, enclosingForm, sink);
+                if (chatComposer.AttachAction is { } ccAttach) Record(ccAttach, enclosingForm, sink);
+                if (chatComposer.StopAction is { } ccStop) Record(ccStop, enclosingForm, sink);
+                if (chatComposer.HeaderSlot is { } ccHeader) Collect(ccHeader, enclosingForm, sink);
+                if (chatComposer.InputSlot is { } ccInput) Collect(ccInput, enclosingForm, sink);
+                if (chatComposer.LeadingSlot is { } ccLead) Collect(ccLead, enclosingForm, sink);
+                if (chatComposer.TrailingSlot is { } ccTrail) Collect(ccTrail, enclosingForm, sink);
+                if (chatComposer.FooterSlot is { } ccFooter) Collect(ccFooter, enclosingForm, sink);
+                break;
+
             case TabsNode tabs:
                 foreach (var tab in tabs.Tabs) Record(tab.Action, enclosingForm, sink);
                 break;
@@ -3935,6 +4218,7 @@ public static class ViewTreeValidation
         DetailListNode => "detail-list",
         TimelineEntryNode => "timeline-entry",
         TimelineNode      => "timeline",
+        ChatComposerNode  => "chat-composer",
         _             => node.GetType().Name,
     };
 }
