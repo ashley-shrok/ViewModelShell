@@ -1897,6 +1897,29 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
 .vms-text--weight-regular { font-weight: 400; }
 .vms-text--weight-medium  { font-weight: 500; }
 .vms-text--weight-bold    { font-weight: 700; }
+/* Line-clamp axis (Phase 31 / v9.2.0) — caps rendered line count via
+   standard CSS line-clamp. Orthogonal to style/tone/weight; single-line
+   (N=1) via text-overflow:ellipsis; 2/3-line via -webkit-box clamp. The
+   -webkit-* form is universal cross-browser today (Chrome/Safari/Firefox
+   ship it) — WebKit-vendor-prefix name persists as the standard. Omitted
+   from the tree = no class emitted = default wrap behavior unchanged
+   (backwards-compatible additive). */
+.vms-text--max-lines-1 {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: top;
+}
+.vms-text--max-lines-2,
+.vms-text--max-lines-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.vms-text--max-lines-2 { -webkit-line-clamp: 2; }
+.vms-text--max-lines-3 { -webkit-line-clamp: 3; }
 /* tone — semantic color axis (was the old style:"error"/"warning"). Placed after
    the typography classes so a tone color wins over a style color (e.g. muted). */
 .vms-text--danger        { color: var(--vms-error); }
