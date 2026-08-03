@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="page" content="chat-composer-verification-panel-7">
+  <title>ChatComposer verification — panel 7</title>
+
+  <!-- REQUIRED per plan-checker M-2: each iframe carries its OWN shipped CSS
+       + own theme link. Parent's <link> does NOT cascade into iframe document
+       context. -->
+  <link rel="stylesheet" href="/vms/default.css" />
+  <link rel="stylesheet" id="theme-css" href="data:text/css,%2F*%20themeless%20default%20*%2F" />
+</head>
+<body style="margin:0;padding:.5rem;background:var(--vms-bg,#fff);color:var(--vms-text,#222);">
+  <div id="app"></div>
+  <script>
+    // Subscribe to parent's theme broadcasts (postMessage). Same-origin;
+    // origin guard against parent origin.
+    window.addEventListener("message", function (event) {
+      if (event.origin !== window.location.origin) return;
+      var msg = event.data;
+      if (!msg || msg.type !== "theme" || typeof msg.href !== "string") return;
+      var link = document.getElementById("theme-css");
+      if (link) link.setAttribute("href", msg.href);
+    });
+    // Expose panel index to the mount script.
+    window.__PANEL_INDEX__ = 7;
+  </script>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

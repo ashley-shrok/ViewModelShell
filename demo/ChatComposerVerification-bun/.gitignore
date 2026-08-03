@@ -1,0 +1,9 @@
+# Runtime PID file written by server.ts at startup for the auto-kill discipline.
+# Never commit — it's per-run process metadata, not source.
+server.pid
+
+# Vite build output.
+dist/
+
+# Bun / node artifacts.
+node_modules/

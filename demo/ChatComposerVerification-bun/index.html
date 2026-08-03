@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Agent discoverability — this is a ViewModel Shell app (rendering harness). -->
+  <meta name="viewmodel-shell" content='{"protocol":"viewmodel-shell/1.0","endpoint":"/api/probe/tree","actionEndpoint":"/api/probe/tree"}'>
+  <!-- Page marker — the smoke-test greps for this string to confirm a 200. -->
+  <meta name="page" content="chat-composer-verification">
+  <title>Phase 30 ChatComposerNode verification — Tailnet sign-off (v9.1.0)</title>
+
+  <!-- The REAL shipped default.css served verbatim by server.ts from
+       viewmodel-shell/styles/default.css. Always loaded at PARENT-CHROME
+       level so the theme switcher + grid text pick up VMS tokens. -->
+  <link rel="stylesheet" href="/vms/default.css" />
+
+  <!-- Dynamic theme layer for the PARENT chrome only — each iframe carries
+       its OWN #theme-css link, updated via postMessage on theme change. -->
+  <link rel="stylesheet" id="theme-css" href="data:text/css,%2F*%20themeless%20default%20*%2F" />
+</head>
+<body>
+  <!-- Theme switcher (host-chrome; NOT part of the view tree). Populated at
+       runtime from /api/themes so the option list matches
+       viewmodel-shell/styles/themes/ verbatim. Zero literal style-blocks
+       anywhere in this file per check:no-demo-style; inline style="" attrs
+       are the sanctioned exception (established by RichTextVerification-bun +
+       StateAxisVerification-bun).
+
+       Iframe-scoped per Vicky's tasting pattern
+       (~/.claude/identities/vicky/bounties/chat-composer-primitive/tasting/):
+       every panel is a separate iframe with its own shipped CSS + own theme
+       link + own ViewModelShell mount. Prevents CSS-cascade
+       cross-contamination between panels demonstrating different variants
+       side-by-side. -->
+  <div style="display:flex;gap:.75rem;align-items:center;padding:.75rem 1rem;border-bottom:1px solid #8884;font:14px system-ui,sans-serif;flex-wrap:wrap;">
+    <strong>Theme:</strong>
+    <select id="theme-select" style="font:inherit;padding:.25rem .5rem;">
+      <option value="__default__">Default (no theme override)</option>
+    </select>
+    <span id="theme-name" style="opacity:.7;">Default</span>
+    <span style="margin-left:auto;opacity:.6;font-size:12px;">
+      Phase 30 v9.1.0 ChatComposerNode · 12 iframe-scoped panels × 13 themes (default + 12)
+    </span>
+  </div>
+
+  <header style="max-width:1600px;margin:0 auto;padding:1rem 1.25rem 0;font:14px system-ui,sans-serif;">
+    <h1 style="margin:0 0 .5rem;font-size:20px;font-weight:600;">
+      ChatComposerNode verification — cycle themes; eyeball each panel
+    </h1>
+    <p style="margin:0;opacity:.75;">
+      12 iframe-scoped panels covering every wire field + slot combo + state
+      variant of the shipped ChatComposerNode primitive (v9.1.0). Real bundle
+      + real shipped CSS + real tree validator in the fetch-shim. Cycle
+      through every shipped theme via the switcher above; note broken /
+      poor-but-functional renders per panel per theme.
+    </p>
+  </header>
+
+  <main style="max-width:1600px;margin:0 auto;padding:1.25rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(28rem,100%),1fr));gap:1rem;">
+    <section style="border:1px solid #8884;border-radius:.5rem;overflow:hidden;background:var(--vms-surface-1,#fff);">
+      <div style="padding:.5rem .75rem;background:var(--vms-surface-2,#f5f5f5);border-bottom:1px solid #8884;font:14px system-ui,sans-serif;">
+        <h3 style="margin:0 0 .125rem;font-size:14px;font-weight:600;">1. DEFAULT — bare composer</h3>
+        <p style="margin:0;font-size:12px;opacity:.7;">
+          Correct pill shape, correct 34px send button, textarea grows on typing.
+        </p>
+      </div>
+      <iframe src="/panels/panel-1.html" title="Panel 1: default" style="width:100%;height:220px;border:0;display:block;"></iframe>
+    </section>
+
+    <section style="border:1px solid #8884;border-radius:.5rem;overflow:hidden;background:var(--vms-surface-1,#fff);">
+      <div style="padding:.5rem .75rem;background:var(--vms-surface-2,#f5f5f5);border-bottom:1px solid #8884;font:14px system-ui,sans-serif;">
+        <h3 style="margin:0 0 .125rem;font-size:14px;font-weight:600;">2. WITH ATTACH — leading paperclip</h3>
+        <p style="margin:0;font-size:12px;opacity:.7;">
+          Paperclip visible, 34px, clickable, opens file picker.
+        </p>
+      </div>
+      <iframe src="/panels/panel-2.html" title="Panel 2: with attach" style="width:100%;height:220px;border:0;display:block;"></iframe>
+    </section>
+
+    <section style="border:1px solid #8884;border-radius:.5rem;overflow:hidden;background:var(--vms-surface-1,#fff);">
+      <div style="padding:.5rem .75rem;background:var(--vms-surface-2,#f5f5f5);border-bottom:1px solid #8884;font:14px system-ui,sans-serif;">
+        <h3 style="margin:0 0 .125rem;font-size:14px;font-weight:600;">3. ALL SLOTS FILLED</h3>
+        <p style="margin:0;font-size:12px;opacity:.7;">
+          headerSlot + trailingSlot + footerSlot + leadingSlot all visible; layout intact.
+        </p>
+      </div>
+      <iframe src="/panels/panel-3.html" title="Panel 3: all slots" style="width:100%;height:340px;border:0;display:block;"></iframe>
+    </section>
+
+    <section style="border:1px solid #8884;border-radius:.5rem;overflow:hidden;background:var(--vms-surface-1,#fff);">
+      <div style="padding:.5rem .75rem;background:var(--vms-surface-2,#f5f5f5);border-bottom:1px solid #8884;font:14px system-ui,sans-serif;">
+        <h3 style="margin:0 0 .125rem;font-size:14px;font-weight:600;">4. STREAMING — send button = square stop</h3>
+        <p style="margin:0;font-size:12px;opacity:.7;">
+          Send button swapped to square icon; still 34px; still accent-colored; click fires stopAction (check console).
+        </p>
+      </div>
+      <iframe src="/panels/panel-4.html" title="Panel 4: streaming" style="width:100%;height:220px;border:0;display:block;"></iframe>
+    </section>
+
+    <section style="border:1px solid #8884;border-radius:.5rem;overflow:hidden;background:var(--vms-surface-1,#fff);">
+      <div style="padding:.5rem .75rem;background:var(--vms-surface-2,#f5f5f5);border-bottom:1px solid #8884;font:14px system-ui,sans-serif;">
+        <h3 style="margin:0 0 .125rem;font-size:14px;font-weight:600;">5. SENDING — spinner + disabled</h3>
+        <p style="margin:0;font-size:12px;opacity:.7;">
+          Spinner icon; button disabled visually; correct opacity.
+        </p>
+      </div>
+      <iframe src="/panels/panel-5.html" title="Panel 5: sending" style="width:100%;height:220px;border:0;display:block;"></iframe>
+    </section>
+
+    <section style="border:1px solid #8884;border-radius:.5rem;overflow:hidden;background:var(--vms-surface-1,#fff);">
+      <div style="padding:.5rem .75rem;background:var(--vms-surface-2,#f5f5f5);border-bottom:1px solid #8884;font:14px system-ui,sans-serif;">
+        <h3 style="margin:0 0 .125rem;font-size:14px;font-weight:600;">6. DISABLED — whole composer muted</h3>
+        <p style="margin:0;font-size:12px;opacity:.7;">
+          Cannot type, cannot click send/attach.
+        </p>
+      </div>
+      <iframe src="/panels/panel-6.html" title="Panel 6: disabled" style="width:100%;height:220px;border:0;display:block;"></iframe>
+    </section>
+
+    <section style="border:1px solid #8884;border-radius:.5rem;overflow:hidden;background:var(--vms-surface-1,#fff);">
+      <div style="padding:.5rem .75rem;background:var(--vms-surface-2,#f5f5f5);border-bottom:1px solid #8884;font:14px system-ui,sans-serif;">
+        <h3 style="margin:0 0 .125rem;font-size:14px;font-weight:600;">7. submitMode=ctrl-enter</h3>
+        <p style="margin:0;font-size:12px;opacity:.7;">
+          Type in the field. Plain Enter → newline. Ctrl+Enter → dispatch (check console).
+        </p>
+      </div>
+      <iframe src="/panels/panel-7.html" title="Panel 7: ctrl-enter" style="width:100%;height:240px;border:0;display:block;"></iframe>
+    </section>
+
+    <section style="border:1px solid #8884;border-radius:.5rem;overflow:hidden;background:var(--vms-surface-1,#fff);">
+      <div style="padding:.5rem .75rem;background:var(--vms-surface-2,#f5f5f5);border-bottom:1px solid #8884;font:14px system-ui,sans-serif;">
+        <h3 style="margin:0 0 .125rem;font-size:14px;font-weight:600;">8. dropScope=global</h3>
+        <p style="margin:0;font-size:12px;opacity:.7;">
+          Drag a file from your desktop into any area of this iframe body — the composer's dashed border affordance fires; drop lands (chip appears).
+        </p>
+      </div>
+      <iframe src="/panels/panel-8.html" title="Panel 8: dropScope global" style="width:100%;height:280px;border:0;display:block;"></iframe>
+    </section>
+
+    <section style="border:1px solid #8884;border-radius:.5rem;overflow:hidden;background:var(--vms-surface-1,#fff);">
+      <div style="padding:.5rem .75rem;background:var(--vms-surface-2,#f5f5f5);border-bottom:1px solid #8884;font:14px system-ui,sans-serif;">
+        <h3 style="margin:0 0 .125rem;font-size:14px;font-weight:600;">9. MAX-FILE VALIDATION</h3>
+        <p style="margin:0;font-size:12px;opacity:.7;">
+          maxFiles=2, maxFileSize=1024, accept=[image/*]. Attach 3 files → 3rd rejected; a &gt;1KB file → size error; a PDF → type error. Inline banner surfaces the message.
+        </p>
+      </div>
+      <iframe src="/panels/panel-9.html" title="Panel 9: max-file validation" style="width:100%;height:260px;border:0;display:block;"></iframe>
+    </section>
+
+    <section style="border:1px solid #8884;border-radius:.5rem;overflow:hidden;background:var(--vms-surface-1,#fff);">
+      <div style="padding:.5rem .75rem;background:var(--vms-surface-2,#f5f5f5);border-bottom:1px solid #8884;font:14px system-ui,sans-serif;">
+        <h3 style="margin:0 0 .125rem;font-size:14px;font-weight:600;">10. INPUT SLOT — RichTextFieldNode</h3>
+        <p style="margin:0;font-size:12px;opacity:.7;">
+          TipTap editor replaces default textarea. Format text; send-button + attach still work.
+        </p>
+      </div>
+      <iframe src="/panels/panel-10.html" title="Panel 10: rich text input slot" style="width:100%;height:340px;border:0;display:block;"></iframe>
+    </section>
+
+    <section style="border:1px solid #8884;border-radius:.5rem;overflow:hidden;background:var(--vms-surface-1,#fff);">
+      <div style="padding:.5rem .75rem;background:var(--vms-surface-2,#f5f5f5);border-bottom:1px solid #8884;font:14px system-ui,sans-serif;">
+        <h3 style="margin:0 0 .125rem;font-size:14px;font-weight:600;">11. maxRows=3 override</h3>
+        <p style="margin:0;font-size:12px;opacity:.7;">
+          Type many lines; textarea caps at 3 rows + scrolls internally.
+        </p>
+      </div>
+      <iframe src="/panels/panel-11.html" title="Panel 11: maxRows override" style="width:100%;height:260px;border:0;display:block;"></iframe>
+    </section>
+
+    <section style="border:1px solid #8884;border-radius:.5rem;overflow:hidden;background:var(--vms-surface-1,#fff);">
+      <div style="padding:.5rem .75rem;background:var(--vms-surface-2,#f5f5f5);border-bottom:1px solid #8884;font:14px system-ui,sans-serif;">
+        <h3 style="margin:0 0 .125rem;font-size:14px;font-weight:600;">12. HEADER SLOT + ATTACHED FILES — chip strip composes above</h3>
+        <p style="margin:0;font-size:12px;opacity:.7;">
+          Framework chip strip renders ABOVE the consumer's headerSlot "Editing message #42". Both visible together.
+        </p>
+      </div>
+      <iframe src="/panels/panel-12.html" title="Panel 12: headerSlot composition" style="width:100%;height:280px;border:0;display:block;"></iframe>
+    </section>
+  </main>
+
+  <script>
+    // Populate the theme switcher from /api/themes so the option list is
+    // never out of sync with viewmodel-shell/styles/themes/. Then wire the
+    // change handler to swap the #theme-css <link> href AT PARENT LEVEL and
+    // postMessage the change to every iframe (each iframe carries its own
+    // #theme-css link, per plan-checker M-2 requirement — CSS resolves per
+    // iframe document; parent's link does not cascade in).
+    (function () {
+      var themeLink = document.getElementById("theme-css");
+      var select = document.getElementById("theme-select");
+      var label = document.getElementById("theme-name");
+
+      // Fetch the enumerated theme list from the server (which reads the
+      // directory at startup — single source of truth).
+      fetch("/api/themes")
+        .then(function (r) { return r.json(); })
+        .then(function (payload) {
+          (payload.themes || []).forEach(function (name) {
+            var opt = document.createElement("option");
+            opt.value = name;
+            opt.textContent = name;
+            select.appendChild(opt);
+          });
+        })
+        .catch(function () {
+          // Non-fatal — the switcher just stays with only "Default".
+        });
+
+      function currentThemeHref() {
+        var picked = select.value;
+        if (picked === "__default__") {
+          return "data:text/css,%2F*%20themeless%20default%20*%2F";
+        }
+        return "/vms/themes/" + picked + ".css";
+      }
+
+      function broadcastTheme(href) {
+        // postMessage the new href to every iframe. Each iframe's inline
+        // <script> subscribes and swaps its own #theme-css link href.
+        // Same-origin, so origin guard on the iframe side is against
+        // window.location.origin (the parent's origin).
+        var frames = document.querySelectorAll("iframe");
+        for (var i = 0; i < frames.length; i++) {
+          try {
+            frames[i].contentWindow.postMessage(
+              { type: "theme", href: href },
+              window.location.origin
+            );
+          } catch (e) {
+            // iframe still loading — retry via the load event below.
+          }
+        }
+      }
+
+      // When an iframe finishes loading, immediately push the current theme
+      // to it so late-loading panels don't stay in the default while the
+      // switcher has moved on.
+      document.querySelectorAll("iframe").forEach(function (frame) {
+        frame.addEventListener("load", function () {
+          try {
+            frame.contentWindow.postMessage(
+              { type: "theme", href: currentThemeHref() },
+              window.location.origin
+            );
+          } catch (e) {}
+        });
+      });
+
+      select.addEventListener("change", function () {
+        var picked = select.value;
+        var href = currentThemeHref();
+        themeLink.setAttribute("href", href);
+        label.textContent = picked === "__default__" ? "Default" : picked;
+        broadcastTheme(href);
+      });
+    })();
+  </script>
+</body>
+</html>
