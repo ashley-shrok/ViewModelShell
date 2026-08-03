@@ -6,7 +6,7 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
-## Unreleased
+## 9.1.0 — 2026-08-02 (npm + NuGet aligned)
 
 Staged for the next MINOR release (target: **9.1.0** — additive wire; no breaking changes). Version bump + publish + tag = a separate closeout phase per the Phase 30 CONTEXT §Non-negotiables and the batch-then-ship convention in `.planning/design/composite-nodes-layer.md §6`. Consumers see zero effect on the current 9.0.0 npm/NuGet installs.
 
