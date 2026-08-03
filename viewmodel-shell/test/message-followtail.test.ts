@@ -186,19 +186,29 @@ describe("MessageListNode.followTail — REUSE-not-rebuild (code-search proof)",
   it("browser.ts total scrollHeight + scrollTop-assignment count is UNCHANGED from the shipped baseline", () => {
     // The banked count invariant: 24-02 must NOT increase the count of
     // `scrollHeight` reads or `scrollTop = ...` writes anywhere in browser.ts
-    // — they all belong to the shipped SectionNode.followTail machinery, and
-    // the MessageListNode piggyback should introduce ZERO. Baseline
-    // (JavaScript regex, per-occurrence — differs from `grep -c` which counts
-    // matching LINES) verified against the pre-Task-2 tree at commit 7c546b0
-    // (Task 1 landing time) = 6 occurrences.
+    // that belong to the SectionNode.followTail machinery — the MessageListNode
+    // piggyback introduces ZERO new follow-tail-related occurrences.
     //
-    // If a future edit tries to add a parallel implementation and this count
-    // grows, that's the exact class of bug the reuse mandate exists to catch.
+    // Baseline breakdown (JavaScript regex, per-occurrence — differs from
+    // `grep -c` which counts matching LINES):
+    //   • 6 follow-tail occurrences (shipped SectionNode.followTail machinery
+    //     at render() ~239-246 + ~362-372; verified at commit 7c546b0).
+    //   • 3 chat-composer textarea auto-resize occurrences (CHAT-03, Plan
+    //     30-03) — LEGITIMATELY DIFFERENT MECHANISM: this is textarea sizing
+    //     (JS fallback for browsers without CSS `field-sizing: content`),
+    //     NOT scroll-position preservation. All 3 occurrences live INSIDE the
+    //     `chatComposer()` private method body; they cannot reach the
+    //     `messageList()` renderer body (asserted above), so the reuse
+    //     mandate remains enforced.
+    //
+    // If a future edit tries to add a PARALLEL follow-tail implementation
+    // (i.e. scroll snapshot/restore logic) and this count grows beyond 9,
+    // that's the exact class of bug the reuse mandate exists to catch.
     const src = readFileSync(
       resolve(dirname(fileURLToPath(import.meta.url)), "../src/browser.ts"),
       "utf8",
     );
     const count = (src.match(/scrollHeight|scrollTop\s*=/g) ?? []).length;
-    expect(count).toBe(6);
+    expect(count).toBe(9);
   });
 });

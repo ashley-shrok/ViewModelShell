@@ -26,6 +26,7 @@ import type {
   SettingRowNode, SettingListNode,
   ChipNode, ChipListNode,
   RichTextFieldNode, RichTextToolbarNode, RichTextTool,
+  ChatComposerNode,
 } from "./index.js";
 import { ICONS } from "./icons-payload.js";
 
@@ -707,6 +708,7 @@ export class BrowserAdapter implements Adapter {
       case "chip-list":      return this.chipList(n, parent, on);
       case "rich-text-field":   return this.richTextField(n, parent, on);
       case "rich-text-toolbar": return this.richTextToolbar(n, parent, on);
+      case "chat-composer":     return this.chatComposer(n, parent, on);
       default: {
         // Fail loud, not silent (AGENTS.md: "Nothing important fails quietly").
         // Runtime trees are server-controlled JSON, so an unknown/forward-version
@@ -1399,6 +1401,154 @@ export class BrowserAdapter implements Adapter {
     const entry = this.editorInstances.get(key);
     if (!entry?.editor) return;
     this.applyRichTextTool(entry.editor, tool);
+  }
+
+  /** v9.1.0 (CHAT-02, CHAT-03) — ChatComposerNode DOM shell.
+   *
+   *  Emits the unified pill container: framework-owned rounded surface with
+   *  three vertical slots (header, main row, footer). The main row lays out
+   *  as `flex-align-items:flex-end` with a growable-center textarea flanked
+   *  by fixed 34px circular icon buttons — the layout logic Route A
+   *  primitives cannot compose (per CONTEXT.md §Problem statement; Panel-3
+   *  taste-locked by Ashley 2026-08-02).
+   *
+   *  This plan (30-03) lands the SHELL only:
+   *    - DOM tree with slot mount points for headerSlot / leadingSlot /
+   *      inputSlot / trailingSlot / footerSlot (each is a ViewNode subtree
+   *      rendered via `this.node(...)` per Route B typed-slots pattern).
+   *    - `data-composer-status` attribute (Plan 30-07 parity fixture asserts
+   *      on this substring per CHAT-15).
+   *    - `data-drop-scope` attribute (Plan 30-05 drag-drop handler reads).
+   *    - Framework-owned textarea (with bind read/write and auto-resize),
+   *      REPLACED by `inputSlot` content when the consumer provides one
+   *      (opt-in rich-text via RichTextFieldNode).
+   *    - Send-button + attach-button PLACEHOLDERS wearing the shared
+   *      `.vms-chat-composer__icon-btn` 34px circular geometry — behavior
+   *      wires in Plan 30-04 (send state-machine) + Plan 30-05 (attach
+   *      picker + registry).
+   *
+   *  Auto-resize (CHAT-03) uses CSS `field-sizing: content` on the shipped
+   *  `.vms-chat-composer__textarea` rule (single declaration; browser-native;
+   *  zero JS on Chrome 123+, Firefox 132+, Safari TP). Feature-detected via
+   *  `CSS.supports("field-sizing", "content")`; when unsupported, a compact
+   *  JS fallback resizes on `input` by computing scrollHeight capped at
+   *  `maxRows` (default 6). Both paths cap identically; overflow scrolls
+   *  internally once cap hit.
+   */
+  private chatComposer(
+    n: ChatComposerNode,
+    parent: HTMLElement,
+    on: (a: ActionEvent) => void,
+  ): void {
+    const root = document.createElement("div");
+    root.className = n.disabled === true
+      ? "vms-chat-composer vms-chat-composer--disabled"
+      : "vms-chat-composer";
+    // Wire → DOM: status axis (default "idle") drives Plan 30-04's send-button
+    // state machine + Plan 30-07's parity fixture expectBodyContains tripwires.
+    root.dataset.composerStatus = n.status ?? "idle";
+    // Wire → DOM: drop-scope (default "composer") — Plan 30-05's drag-drop
+    // handler reads this to decide document vs composer listener attachment.
+    root.dataset.dropScope = n.dropScope ?? "composer";
+
+    // ── Header slot (composer's header row) — attachment-preview chip strip
+    // (Plan 30-05) will prepend to this row when attachedFiles.length > 0.
+    // Consumer headerSlot content mounts here; the `:empty` CSS rule hides
+    // the row entirely when neither is present.
+    const headerRow = document.createElement("div");
+    headerRow.className = "vms-chat-composer__header";
+    if (n.headerSlot) this.node(n.headerSlot, headerRow, on);
+    root.appendChild(headerRow);
+
+    // ── Main row: leading slot → attach button → textarea/inputSlot →
+    // send button → trailing slot. `flex align-items:flex-end` in CSS
+    // keeps buttons aligned to the last line as textarea grows.
+    const row = document.createElement("div");
+    row.className = "vms-chat-composer__row";
+
+    // Leading slot (rare — most consumers leave empty).
+    if (n.leadingSlot) this.node(n.leadingSlot, row, on);
+
+    // Attach-button PLACEHOLDER (Plan 30-05 wires click-to-picker + registry).
+    // Reuses the shared `.vms-chat-composer__icon-btn` 34px circular geometry.
+    if (n.attachAction) {
+      const attachBtn = document.createElement("button");
+      attachBtn.type = "button";
+      attachBtn.className = "vms-chat-composer__attach vms-chat-composer__icon-btn";
+      attachBtn.dataset.action = "attach";
+      attachBtn.setAttribute("aria-label", "Attach file");
+      if (n.disabled === true) attachBtn.disabled = true;
+      attachBtn.appendChild(this.renderIconSvg("paperclip", "sm", undefined, undefined));
+      row.appendChild(attachBtn);
+    }
+
+    // Textarea (or inputSlot if consumer provided — opt-in rich-text).
+    if (n.inputSlot) {
+      this.node(n.inputSlot, row, on);
+    } else {
+      const stateValue = this.readBind(n.bind);
+      const ta = document.createElement("textarea");
+      ta.className = "vms-chat-composer__textarea";
+      ta.value = stateValue == null ? "" : String(stateValue);
+      if (n.placeholder != null) ta.placeholder = n.placeholder;
+      if (n.disabled === true) ta.disabled = true;
+      ta.rows = 1;
+      // Bind write-back on input — draft text IS state per bind model.
+      ta.addEventListener("input", () => { this.writeBind(n.bind, ta.value); });
+
+      // Auto-resize (CHAT-03). CSS `field-sizing: content` handles this on
+      // modern browsers via the shipped `.vms-chat-composer__textarea` rule
+      // (max-height cap in CSS). JS fallback for older browsers.
+      const maxRows = n.maxRows ?? 6;
+      const supportsFieldSizing =
+        typeof CSS !== "undefined" && CSS.supports?.("field-sizing", "content") === true;
+      if (!supportsFieldSizing) {
+        // Fallback: adjust height on input by measuring scrollHeight.
+        const resize = (): void => {
+          ta.style.height = "auto";
+          const cs = getComputedStyle(ta);
+          const lineHeight = parseFloat(cs.lineHeight) || 20;
+          const paddingY =
+            (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+          const maxHeight = lineHeight * maxRows + paddingY;
+          const desired = ta.scrollHeight;
+          ta.style.height = Math.min(desired, maxHeight) + "px";
+          ta.style.overflowY = desired > maxHeight ? "auto" : "hidden";
+        };
+        ta.addEventListener("input", resize);
+        // Initial sizing after mount (queueMicrotask so the element is
+        // measurable — layout properties are 0 until parented + laid out).
+        queueMicrotask(resize);
+      }
+
+      row.appendChild(ta);
+    }
+
+    // Send-button PLACEHOLDER (Plan 30-04 wires state-machine: icon swap on
+    // status transition, click dispatch, disabled-derived from bind + attach
+    // count). Reuses the shared `.vms-chat-composer__icon-btn` geometry.
+    const sendBtn = document.createElement("button");
+    sendBtn.type = "button";
+    sendBtn.className = "vms-chat-composer__send vms-chat-composer__icon-btn";
+    sendBtn.dataset.action = "send";
+    sendBtn.setAttribute("aria-label", "Send");
+    if (n.disabled === true) sendBtn.disabled = true;
+    sendBtn.appendChild(this.renderIconSvg("send", "sm", undefined, undefined));
+    row.appendChild(sendBtn);
+
+    // Trailing slot (common: model selector, emoji trigger, tool chips).
+    if (n.trailingSlot) this.node(n.trailingSlot, row, on);
+
+    root.appendChild(row);
+
+    // ── Footer slot (helper text, footer chips). `:empty` CSS rule hides
+    // the row when consumer provides no footerSlot.
+    const footerRow = document.createElement("div");
+    footerRow.className = "vms-chat-composer__footer";
+    if (n.footerSlot) this.node(n.footerSlot, footerRow, on);
+    root.appendChild(footerRow);
+
+    parent.appendChild(root);
   }
 
   private section(n: SectionNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {
