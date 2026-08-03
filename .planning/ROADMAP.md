@@ -596,7 +596,9 @@ Plans:
 **Plans:** 4 plans
 
 Plans:
-- [ ] 31-01-PLAN.md — TypeScript wire: TextNode.maxLines field + browser.ts class emission + default.css rules + vitest suite (wave 1)
-- [ ] 31-02-PLAN.md — .NET wire: TextNode.MaxLines positional slot + xUnit serialization suite (wave 1, parallel to 31-01)
-- [ ] 31-03-PLAN.md — Parity fixture textnode-maxlines.json + FeatureProbe backends' state/action/BuildVm extensions (wave 2, depends 31-01 + 31-02)
-- [ ] 31-04-PLAN.md — Release ritual: green-tree gate + CHANGELOG/MIGRATION + npm+NuGet 9.2.0 publish + tag + advance main + announce (wave 3)
+- [x] 31-01-PLAN.md — TypeScript wire: TextNode.maxLines field + browser.ts class emission + default.css rules + vitest suite (wave 1) — landed at `dc753ff` + `b5a90c2` (10 vitest tests)
+- [x] 31-02-PLAN.md — .NET wire: TextNode.MaxLines **init-only property outside primary ctor** + xUnit serialization suite (wave 1, parallel to 31-01) — landed at `3cc3b67` + `f8da329` (7 xUnit tests; binary-compat gate PASSED)
+- [x] 31-03-PLAN.md — Parity fixture textnode-maxlines.json + FeatureProbe backends' state/action/BuildVm extensions (wave 2, depends 31-01 + 31-02) — landed at `a8492cb` + `22df6f4`
+- [x] 31-04-PLAN.md — Release ritual: green-tree gate + CHANGELOG/MIGRATION + npm+NuGet 9.2.0 publish + tag + advance main + announce (wave 3) — landed at `858fd20` (release commit) + `1b00571` (SUMMARY); npm 9.2.0 LIVE; NuGet push receipt authoritative; tag v9.2.0 pushed; main advanced; announce sent
+
+**Status:** COMPLETE (v9.2.0 released 2026-08-03)
