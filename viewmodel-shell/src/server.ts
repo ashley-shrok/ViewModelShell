@@ -34,6 +34,7 @@ import type {
   SettingListNode,
   ChipNode,
   ChipListNode,
+  ChatComposerNode,
   FitsNode,
   EmptyStateNode,
   BlockquoteNode,
@@ -448,6 +449,47 @@ function collectActions(
         }
       }
       for (const child of cl.children) collectActions(child, enclosingForm, out);
+      return;
+    }
+    case "chat-composer": {
+      // v9.1.0 (CHAT-01) — ChatComposerNode has THREE independent ActionEvent
+      // slots (all dispatch-bearing; all must participate in name uniqueness)
+      // + FIVE typed ViewNode slots (all must be descended into so nested
+      // buttons/actions inside a header/input/leading/trailing/footer subtree
+      // participate in the one-name-one-operation rule).
+      //
+      // ActionEvent slots:
+      //   - `sendAction` — REQUIRED. Fires when the send button dispatches
+      //     (Enter, click) during `status === "idle" | "sending"`.
+      //   - `stopAction?` — Fires when the stop button dispatches during
+      //     `status === "streaming"`. Required-when-status-can-be-streaming
+      //     runtime invariant is enforced by the renderer (Plan 30-04); the
+      //     uniqueness walk here does not re-enforce that (a static tree
+      //     walker can't know the status axis is dynamic).
+      //   - `attachAction?` — Fires when the leading attach button opens the
+      //     OS file-picker. Present iff the app opts into attach.
+      //
+      // ViewNode slots (each descended if present — the same posture as
+      // ListRowNode / UserRowNode / MessageNode above):
+      //   - `headerSlot`, `inputSlot`, `leadingSlot`, `trailingSlot`,
+      //     `footerSlot` — arbitrary consumer subtrees; any dispatch-bearing
+      //     descendant (a button, a checkbox in the trailing slot, a
+      //     RichTextFieldNode in inputSlot with its own action-bearing
+      //     toolbar in a future rev) must participate in uniqueness.
+      //
+      // Missing this arm would silently exempt the composer's send/stop/attach
+      // actions AND every action inside any slot from uniqueness — the exact
+      // "missed-walk" failure class banked in server.ts's design (see the
+      // "fits-style blind spot" note near the default arm).
+      const cc = node as ChatComposerNode;
+      recordAction(cc.sendAction, enclosingForm, out);
+      if (cc.stopAction) recordAction(cc.stopAction, enclosingForm, out);
+      if (cc.attachAction) recordAction(cc.attachAction, enclosingForm, out);
+      if (cc.headerSlot) collectActions(cc.headerSlot, enclosingForm, out);
+      if (cc.inputSlot) collectActions(cc.inputSlot, enclosingForm, out);
+      if (cc.leadingSlot) collectActions(cc.leadingSlot, enclosingForm, out);
+      if (cc.trailingSlot) collectActions(cc.trailingSlot, enclosingForm, out);
+      if (cc.footerSlot) collectActions(cc.footerSlot, enclosingForm, out);
       return;
     }
     case "form": {

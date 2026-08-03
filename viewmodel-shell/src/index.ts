@@ -193,7 +193,12 @@ export type IconName =
   | "cloud" | "wifi" | "bar-chart" | "line-chart" | "pie-chart" | "gauge"
   | "layers" | "settings" | "cpu" | "terminal"
   // Magic / accents (4)
-  | "sparkles" | "zap" | "wand-2" | "flame";
+  | "sparkles" | "zap" | "wand-2" | "flame"
+  // Media / playback (1) — v9.1.0 (CHAT-14), the streaming-state stop-icon
+  // for ChatComposerNode's send-button state machine (mirrors Vercel AI
+  // Elements' `SquareIcon` + ChatGPT/Claude's filled-square stop glyph;
+  // see .planning/phases/30-.../RESEARCH.md §Q3).
+  | "square";
 
 export type ViewNode =
   | PageNode
@@ -240,7 +245,8 @@ export type ViewNode =
   | SettingRowNode
   | SettingListNode
   | ChipNode
-  | ChipListNode;
+  | ChipListNode
+  | ChatComposerNode;
 
 export interface PageNode {
   type: "page";
@@ -2527,6 +2533,193 @@ export interface ChipListNode {
    *  non-Chip children with `invalid_tree` (byte-identical error message
    *  across TS + .NET). */
   children: ChipNode[];
+}
+
+// ─── Phase 30 (v9.1.0) — Chat composer primitive ─────────────────────────────
+//
+// ChatComposerNode (CHAT-01..20, Route B composite) + three closed-enum axes
+// (ChatComposerStatus, ChatComposerDropScope, ChatComposerSubmitMode). Route B
+// per the governance rule in `.planning/design/composite-nodes-layer.md` §4:
+// a 3-panel tasting (2026-08-02) showed `Section(layout:"row") +
+// heterogeneous-siblings` cannot reach the chat-composer shape (growable
+// center textarea + fixed leading/trailing icon buttons + unified pill
+// surface) — the composite bakes in what primitives can't compose. Panel 3
+// (composite) taste-locked by Ashley 2026-08-02.
+
+/** v9.1.0 (CHAT-09) — Send-button state machine. "idle" → send-icon fires
+ *  `sendAction`; "sending" → spinner disabled; "streaming" → stop-icon fires
+ *  `stopAction`. Non-AI consumers never set past "idle"/"sending" — they get
+ *  send-with-spinner at zero cost. Borrowed from Vercel AI Elements'
+ *  PromptInputSubmit.status axis (RESEARCH.md §Q3). Closed union — the .NET
+ *  twin encodes as a C# enum with `[JsonConverter(typeof(JsonStringEnumConverter))]`
+ *  per closed-union-must-be-enum maintainer rule (AGENTS.md gotcha #9). */
+export type ChatComposerStatus = "idle" | "sending" | "streaming";
+
+/** v9.1.0 (CHAT-05) — Drag-drop attach handler scope. "composer" (default)
+ *  attaches listeners to the composer element; "global" attaches to
+ *  `document` (Stream Chat's WithDragAndDropUpload precedent). Guarded by
+ *  `dataTransfer.types.includes("Files")` to avoid stealing non-file drags.
+ *  Closed union — .NET twin encodes as C# enum per closed-union-must-be-enum. */
+export type ChatComposerDropScope = "composer" | "global";
+
+/** v9.1.0 (CHAT-11) — Keyboard submit-mode. "enter" (default): Enter=send,
+ *  Shift+Enter=newline. "ctrlEnter": Enter=newline, Ctrl+Enter (Cmd+Enter on
+ *  Mac)=send. Persistent-chat flip borrowed from Slack + assistant-ui + Ant
+ *  Design X. Closed union — .NET twin encodes as C# enum per
+ *  closed-union-must-be-enum. */
+export type ChatComposerSubmitMode = "enter" | "ctrlEnter";
+
+/**
+ * v9.1.0 (CHAT-01..20) — ChatComposerNode. Route B composite for the
+ * chat-app compose bar. Unified pill container with:
+ *   - growable-center textarea (auto-resize capped at `maxRows`)
+ *   - fixed 34px circular leading/trailing icon buttons
+ *   - framework-owned drop-shadow + border-radius surface
+ *
+ * See CONTEXT.md §Problem statement + RESEARCH.md §1 for the intrinsic
+ * layout logic this composite exists to bake in — `Section(layout:"row")`
+ * with heterogeneous siblings genuinely cannot reach this shape (send button
+ * wraps to a second line the moment attach is added; no shipped path hides
+ * the native file input while keeping it functional). Ashley taste-locked
+ * Panel 3 (composite) at the 3-panel tasting 2026-08-02.
+ *
+ * ## Send-button state machine (CHAT-09)
+ *
+ * `status` axis drives icon + click behavior:
+ *   - `"idle"` → send-icon dispatches `sendAction`.
+ *   - `"sending"` → spinner disabled (bind + attachments locked).
+ *   - `"streaming"` → stop-icon dispatches `stopAction`. `stopAction`
+ *     is REQUIRED when `status` can reach `"streaming"` — the tree
+ *     validator fails `invalid_tree` at render if the invariant is
+ *     violated (Plan 30-04 wires the runtime check; this JSDoc
+ *     documents the contract).
+ *
+ * Non-AI consumers (persistent-message-style apps) never set `status` past
+ * `"idle"`/`"sending"` and pay zero cost for the AI state shape.
+ *
+ * ## IME `isComposing` guard baked-in and NON-OPTIONAL (CHAT-12)
+ *
+ * Correctness requirement for CJK users, NOT a preference. The adapter
+ * tracks `onCompositionStart`/`End` + belt-and-braces on
+ * `e.nativeEvent.isComposing` at keydown time so a mid-composition Enter
+ * (Kana/Hangul commit) NEVER fires `sendAction`. There is no wire field to
+ * disable this — the framework owns correctness here.
+ *
+ * ## Typed slots (Route B pattern)
+ *
+ * `headerSlot`, `inputSlot`, `leadingSlot`, `trailingSlot`, `footerSlot`
+ * accept ViewNode subtrees per Route B typed-slots rule (composite-nodes-
+ * layer.md §3). Each slot names a semantic position; the app hands whatever
+ * ViewNode subtree the shape needs.
+ *
+ * `attachAction` is NOT a slot — it's an `ActionEvent` on the composite that
+ * renders a framework-owned leading `+`/paperclip button when set.
+ * `sendAction` is REQUIRED (composite has no valid render without it).
+ *
+ * ## Attach path (CHAT-04..08)
+ *
+ * `attachAction` renders the leading `+`/paperclip button; `attachBind`
+ * names the multipart form-field; multi-file default via `multiple`
+ * attribute when `maxFiles > 1` (default: unlimited). Files stage locally
+ * as blob-URLs in the adapter's attachment registry until `sendAction`
+ * fires. The framework revokes on remove/unmount.
+ *
+ * Design of record: `.planning/phases/30-.../RESEARCH.md` (825-line
+ * landscape survey across 20+ frameworks). Ashley taste-lock 2026-08-02.
+ */
+export interface ChatComposerNode {
+  type: "chat-composer";
+
+  /** Draft-text bind path — round-trips via state per bind model. */
+  bind: string;
+
+  /** REQUIRED. Dispatched when the send button fires (Enter, click, etc.).
+   *  Files staged in the local attachment registry ride along on this
+   *  dispatch as multipart form entries under `attachBind`. */
+  sendAction: ActionEvent;
+
+  /** Placeholder text shown when `state[bind]` is empty. */
+  placeholder?: string;
+
+  // ---- Attach (CHAT-04..08) ----
+
+  /** When set, renders a leading `+`/paperclip icon-only button that
+   *  opens the OS file-picker on click. Files stage locally as blob-URLs
+   *  in the attachment registry until `sendAction` fires. */
+  attachAction?: ActionEvent;
+
+  /** Multipart form-field name attached files ride under on `sendAction`
+   *  dispatch. Default: `"attachments"` (framework picks if omitted).
+   *  Server reads via `Request.Form.Files.GetFiles(attachBind)` (.NET)
+   *  or `payload.files[attachBind]` (TS). */
+  attachBind?: string;
+
+  /** Max attached files. Default: unlimited (single `<input multiple>`).
+   *  Exceeding fires the framework's inline validation banner (Plan 30-05). */
+  maxFiles?: number;
+
+  /** Max size per file in bytes. Exceeding fires the framework's inline
+   *  validation banner. */
+  maxFileSize?: number;
+
+  /** MIME types passed to the file-input `accept` attribute.
+   *  E.g. `["image/*", "application/pdf"]`. */
+  accept?: string[];
+
+  /** Drag-drop scope. Default "composer" — listeners on the composer
+   *  element. "global" attaches to `document` (Stream Chat precedent).
+   *  Guarded by `dataTransfer.types.includes("Files")`. */
+  dropScope?: ChatComposerDropScope;
+
+  // ---- Send-button state machine (CHAT-09..10) ----
+
+  /** Lifecycle-status axis (default "idle"). Drives send-button icon +
+   *  click behavior. See {@link ChatComposerStatus}. */
+  status?: ChatComposerStatus;
+
+  /** REQUIRED when `status` can reach "streaming". Fired on stop-click
+   *  during streaming instead of `sendAction`. Tree validator fails
+   *  `invalid_tree` at render if `status === "streaming"` and stopAction
+   *  is absent (Plan 30-04 wires the runtime check). */
+  stopAction?: ActionEvent;
+
+  // ---- Keyboard (CHAT-11..12) ----
+
+  /** Submit-mode (default "enter"). See {@link ChatComposerSubmitMode}. */
+  submitMode?: ChatComposerSubmitMode;
+
+  /** Auto-resize textarea max rows before internal scroll. Default 6. */
+  maxRows?: number;
+
+  /** Composer-level disable. When true, all inputs + buttons are
+   *  disabled and the composer takes a muted surface tint. Orthogonal
+   *  to per-button auto-disable via `!hasSendableData`. */
+  disabled?: boolean;
+
+  // ---- Typed slots (Route B pattern; each accepts a ViewNode subtree) ----
+
+  /** Content above the textarea. Framework's attachment-preview chip
+   *  strip (Plan 30-05) COMPOSES with consumer-provided content here
+   *  (both render — chip strip first, consumer content below). Common
+   *  consumer content: reply-preview pill, "editing X" indicator. */
+  headerSlot?: ViewNode;
+
+  /** Opt-in rich-text input. Drop a `RichTextFieldNode` (v8.2.0) here
+   *  to replace the default plain textarea. Persistent-message-style
+   *  consumers only — every AI-chat surface ships plain (RESEARCH.md §Q4). */
+  inputSlot?: ViewNode;
+
+  /** Prepend before the leading attach button. Rare — most consumers
+   *  leave this empty. */
+  leadingSlot?: ViewNode;
+
+  /** Append after the trailing send button. Common consumer content:
+   *  voice-record button, model selector, emoji trigger, tool chips. */
+  trailingSlot?: ViewNode;
+
+  /** Content below the textarea (inside the pill). Common: helper
+   *  text, footer chips, "AI can make mistakes" caption. */
+  footerSlot?: ViewNode;
 }
 
 /**
