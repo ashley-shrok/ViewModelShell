@@ -1,0 +1,56 @@
+{
+  "name": "chat-composer",
+  "endpoint": "/api/probe",
+  "actionEndpoint": "/api/probe/action",
+  "$comment": "CHAT-15 parity fixture for the v9.1.0 ChatComposerNode composite (Plan 30-07). EVERY branch documented in .planning/phases/30-*/CONTEXT.md §Wire shape has a distinctive expectBodyContains tripwire per AGENTS.md gotcha #9 class-3 lesson (branches the fixture never runs are invisible to the byte-diff). Additionally, the parity harness's ALWAYS-ON findNulls invariant (run.ts) catches the class-2 defect from AGENTS.md gotcha #8 (an unset nullable emitted as `\"field\": null` instead of ABSENT would be filtered by normalize.ts BEFORE the diff, hiding the drift — findNulls runs on the raw parsed body per response, so it CAN see what the normalized diff cannot). The 5 branches: (a) IDLE — the default composer shape; asserts \"type\":\"chat-composer\" + \"bind\":\"chatComposerDraft\" + \"sendAction\":{\"name\":\"chat-composer-send\"} + \"attachAction\":{\"name\":\"chat-composer-attach\"} cross (status/dropScope/submitMode/stopAction/headerSlot all ABSENT per gotcha #8 — the findNulls invariant is the tripwire for their absence). (b) STREAMING — asserts \"status\":\"streaming\" + \"stopAction\":{\"name\":\"chat-composer-stop\"} cross (the send-button state machine's Streaming arm from Plan 30-01/30-02 CHAT-09). (c) ATTACH-CLICKED — asserts the server-emitted headerSlot TextNode's UNIQUE substring `ChatComposerAttached=true tripwire` (branded to no other emission anywhere in the FeatureProbe wire — a mutation-proof tripwire; a backend that silently dropped the branch would fail LOUDLY because no other code path can produce that substring). Chip strip rendering is CLIENT-SIDE only (attachments live in the local File registry not state), so the branch-C wire tripwire is a server-emitted marker. (d) DROPSCOPE-GLOBAL — asserts \"dropScope\":\"global\" (the closed-enum wire value, more diff-robust than the DOM attribute; the client-side scope-of-drop-listener attach is browser-only). (e) SUBMITMODE-CTRL-ENTER — asserts \"submitMode\":\"ctrl-enter\" (the kebab wire value confirmed by grep of viewmodel-shell/src/index.ts:2581 + viewmodel-shell-dotnet/ViewModels.cs:313 KebabEnum<ChatComposerSubmitMode>). If a future refactor stops rendering the chat-composer type OR drops the kebab in submitMode OR breaks the streaming/stopAction pairing OR emits `null` for a nullable that should be absent, the corresponding step fails LOUDLY. Do NOT weaken these tripwires without a plan-authored rationale — they are the class-3 tripwire that stops the SEEDED-helpdesk-style pattern from recurring. Steps run sequentially and mutate state cumulatively (streaming carries into attach carries into dropscope carries into submitmode) — each step's assertion is a UNIQUE substring for its own branch that carry-over from prior branches does NOT satisfy (streaming's \"status\":\"streaming\" is not emitted by the idle default; attach's tripwire text is not emitted anywhere else; dropscope's kebab enum is closed; submitmode's kebab enum is closed).",
+  "steps": [
+    {
+      "id": "idle-initial",
+      "method": "GET",
+      "expectBodyContains": [
+        "\"type\":\"chat-composer\"",
+        "\"bind\":\"chatComposerDraft\"",
+        "\"sendAction\":{\"name\":\"chat-composer-send\"}",
+        "\"attachAction\":{\"name\":\"chat-composer-attach\"}"
+      ],
+      "$comment": "Branch (a) IDLE. All optional axes ABSENT — status/stopAction/dropScope/submitMode/headerSlot omitted. The always-on findNulls invariant proves the absent-not-null contract per gotcha #8."
+    },
+    {
+      "id": "streaming-swap",
+      "method": "POST",
+      "action": { "name": "chat-composer-set-streaming" },
+      "expectBodyContains": [
+        "\"status\":\"streaming\"",
+        "\"stopAction\":{\"name\":\"chat-composer-stop\"}"
+      ],
+      "$comment": "Branch (b) STREAMING. Server sets state.ChatComposerStatus=streaming + state.ChatComposerHasStopAction=true; buildVm emits the pair. Neither substring is emitted anywhere else in FeatureProbe — the tripwire is mutation-proof against 'silent branch drop'."
+    },
+    {
+      "id": "attach-toggled",
+      "method": "POST",
+      "action": { "name": "chat-composer-toggle-attached" },
+      "expectBodyContains": [
+        "ChatComposerAttached=true tripwire"
+      ],
+      "$comment": "Branch (c) ATTACH-CLICKED. Server toggles state.ChatComposerAttached; buildVm emits a headerSlot TextNode carrying this UNIQUE substring. The client-side chip strip render is browser-only (attachments live in the local File registry not state) — the wire tripwire is a server-emitted marker. This substring appears NOWHERE else in the FeatureProbe wire; a backend that silently dropped the branch would fail LOUDLY."
+    },
+    {
+      "id": "dropscope-global",
+      "method": "POST",
+      "action": { "name": "chat-composer-set-dropscope-global" },
+      "expectBodyContains": [
+        "\"dropScope\":\"global\""
+      ],
+      "$comment": "Branch (d) DROPSCOPE-GLOBAL. Server sets state.ChatComposerDropScope=global; buildVm emits dropScope on the wire. The closed-enum kebab \"global\" is more diff-robust than a DOM attribute (the wire is what parity diffs). The client-side drop-listener attach scope is browser-only."
+    },
+    {
+      "id": "submitmode-ctrlenter",
+      "method": "POST",
+      "action": { "name": "chat-composer-set-submitmode-ctrlenter" },
+      "expectBodyContains": [
+        "\"submitMode\":\"ctrl-enter\""
+      ],
+      "$comment": "Branch (e) SUBMITMODE-CTRLENTER. Server sets state.ChatComposerSubmitMode=ctrl-enter; buildVm emits the kebab-wire value. The kebab \"ctrl-enter\" is confirmed by viewmodel-shell/src/index.ts:2581 (TS union literal) + viewmodel-shell-dotnet/ViewModels.cs:313 (KebabEnum<ChatComposerSubmitMode>). A drift to \"ctrlEnter\" or \"CtrlEnter\" would fail this step LOUDLY (a real class of drift the byte-diff also catches, but the tripwire binds it INDEPENDENTLY on each backend per gotcha #9's class-2 lesson)."
+    }
+  ]
+}

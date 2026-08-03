@@ -55,7 +55,24 @@ public record FeatureProbeState(
     // CONTEXT §7. Trailing-append per gotcha #8 companion-safe rule
     // (FeatureProbe uses ProjectReference, so source-rebuild — safe; the
     // discipline is kept regardless).
-    string DraftMarkdown
+    string DraftMarkdown,
+    // 9.1.0 (CHAT-15) — ChatComposerNode state slots for the parity fixture
+    // `chat-composer` (Plan 30-07). Each field drives ONE of the 5 wire branches
+    // exercised by the fixture; the buildVm arm below reads them to render a
+    // ChatComposerNode whose emission carries a UNIQUE substring for the
+    // corresponding branch, per AGENTS.md gotcha #9 class-3 lesson (branches
+    // the fixture never runs are invisible to a diff — every documented branch
+    // MUST have a distinctive expectBodyContains substring). All non-nullable
+    // string/bool with empty/false defaults so no JsonIgnore needed on the
+    // state record itself per gotcha #8 (the state record isn't covered by the
+    // intrinsic JsonIgnore on ViewNode types; explicit attributes would be
+    // needed only if a field could be null). Byte-parallel with bun/node twin.
+    string ChatComposerDraft,        // draft-text bind slot (send/attach dispatch would round-trip via this)
+    string ChatComposerStatus,       // "" (default → idle absent on wire) | "sending" | "streaming"
+    bool ChatComposerHasStopAction,  // true when status can reach "streaming" so stopAction is set (validator hint)
+    bool ChatComposerAttached,       // true renders a HeaderSlot tripwire TextNode (attach-clicked branch)
+    string ChatComposerDropScope,    // "" (default → composer absent) | "global"
+    string ChatComposerSubmitMode    // "" (default → enter absent) | "ctrl-enter"
 )
 {
     public static FeatureProbeState Initial() => new(
@@ -78,7 +95,18 @@ public record FeatureProbeState(
         LookupTag: "urgent",
         LookupWatchers: ["u-2", "t-7"],
         LookupQuery: "",
-        DraftMarkdown: "# Rich text probe\n\n**bold** _italic_ `code`"
+        DraftMarkdown: "# Rich text probe\n\n**bold** _italic_ `code`",
+        // 9.1.0 (CHAT-15) — ChatComposerNode probe state defaults. All-empty +
+        // false-boolean initial state so a fresh GET renders the IDLE branch
+        // (status absent → default idle; no stopAction; no attach chip; no
+        // dropScope set → default composer absent; no submitMode set →
+        // default enter absent). Byte-parallel with bun/node twin.
+        ChatComposerDraft: "",
+        ChatComposerStatus: "",
+        ChatComposerHasStopAction: false,
+        ChatComposerAttached: false,
+        ChatComposerDropScope: "",
+        ChatComposerSubmitMode: ""
     );
 }
 
@@ -279,6 +307,38 @@ public class FeatureProbeController : ControllerBase
                         Icon: IconName.Trash2),
                 });
             return new ShellResponse<FeatureProbeState>(iconOnlyInvalidTree, state).Validate();
+        }
+        // 9.1.0 (CHAT-15) — ChatComposerNode fixture branches (Plan 30-07).
+        // Each of these actions mutates ONE state slot the buildVm arm reads to
+        // render the ChatComposerNode with the target branch's tripwire on the
+        // wire. Byte-parallel with bun/node twin.
+        else if (name == "chat-composer-set-streaming")
+        {
+            // Branch (b) STREAMING: emit "status":"streaming" + "stopAction" on the wire.
+            state = state with { ChatComposerStatus = "streaming", ChatComposerHasStopAction = true };
+        }
+        else if (name == "chat-composer-toggle-attached")
+        {
+            // Branch (c) ATTACH-CLICKED: emit the HeaderSlot tripwire TextNode.
+            state = state with { ChatComposerAttached = !state.ChatComposerAttached };
+        }
+        else if (name == "chat-composer-set-dropscope-global")
+        {
+            // Branch (d) DROPSCOPE-GLOBAL: emit "dropScope":"global" on the wire.
+            state = state with { ChatComposerDropScope = "global" };
+        }
+        else if (name == "chat-composer-set-submitmode-ctrlenter")
+        {
+            // Branch (e) SUBMITMODE-CTRLENTER: emit "submitMode":"ctrl-enter" on the wire.
+            state = state with { ChatComposerSubmitMode = "ctrl-enter" };
+        }
+        // No-op passthroughs for the 3 ChatComposerNode ActionEvent slots. They
+        // exist so the action-name uniqueness walker + potential future adopter
+        // dispatch don't hit UnknownActionException; the fixture does NOT
+        // exercise them (state passthrough, buildVm re-renders).
+        else if (name == "chat-composer-send" || name == "chat-composer-stop" || name == "chat-composer-attach")
+        {
+            // state unchanged.
         }
         else
         {
@@ -1592,6 +1652,76 @@ public class FeatureProbeController : ControllerBase
                     SearchBind: "lookupQuery",
                     SearchAction: new ActionDescriptor("lookup-search-probe")),
             }));
+        // ── v9.1.0 ChatComposerNode probe (CHAT-15) ─────────────────────
+        // Byte-identical to the bun/node twin chatComposerProbeSection.
+        // State-driven emission of the Route B ChatComposerNode with each of
+        // the 5 wire branches exercised by parity/fixtures/chat-composer.json
+        // (Plan 30-07). Each branch is state-driven so a fixture step's
+        // stateMutation-free POST (the handler mutates state) reaches EXACTLY
+        // one branch. Per AGENTS.md gotcha #9 class-3 lesson: branches the
+        // fixture never runs are invisible to a diff — the fixture asserts a
+        // UNIQUE expectBodyContains substring per branch to prove it fired.
+        //
+        // Slots read from state:
+        //   - ChatComposerDraft         → wire "bind":"chatComposerDraft" (always emitted)
+        //   - ChatComposerStatus        → "streaming" → wire "status":"streaming"
+        //   - ChatComposerHasStopAction → true → wire "stopAction":{"name":"chat-composer-stop"}
+        //   - ChatComposerAttached      → true → HeaderSlot TextNode carrying tripwire text
+        //   - ChatComposerDropScope     → "global" → wire "dropScope":"global"
+        //   - ChatComposerSubmitMode    → "ctrl-enter" → wire "submitMode":"ctrl-enter"
+        //
+        // Design of record: .planning/phases/30-*/CONTEXT.md §Wire shape;
+        // Plan 30-07 tasks 1-4. The CLIENT-SIDE render (unified pill container,
+        // send-button state machine icon swap, IME guard, auto-resize
+        // textarea, drag/drop/paste-image handlers) is browser-only and NOT
+        // part of parity — parity proves only that the ChatComposerNode wire
+        // serializes identically across backends.
+        pageChildren.Add(new SectionNode(
+            Heading: "v9.1.0 ChatComposer probe",
+            Variant: SectionVariant.Card,
+            Children: new ViewNode[]
+            {
+                new ChatComposerNode(
+                    Bind: "chatComposerDraft",
+                    SendAction: new ActionDescriptor("chat-composer-send"),
+                    Placeholder: "Ask anything…",
+                    // AttachAction ALWAYS present so branch (c)'s attach-related
+                    // fields are emitted regardless of the fixture's toggle
+                    // action — the toggle affects HeaderSlot, not AttachAction.
+                    AttachAction: new ActionDescriptor("chat-composer-attach"),
+                    DropScope: state.ChatComposerDropScope switch
+                    {
+                        "global" => ChatComposerDropScope.Global,
+                        _ => null, // absent → composer default
+                    },
+                    Status: state.ChatComposerStatus switch
+                    {
+                        "sending" => ChatComposerStatus.Sending,
+                        "streaming" => ChatComposerStatus.Streaming,
+                        _ => null, // absent → idle default
+                    },
+                    StopAction: state.ChatComposerHasStopAction
+                        ? new ActionDescriptor("chat-composer-stop")
+                        : null,
+                    SubmitMode: state.ChatComposerSubmitMode switch
+                    {
+                        "ctrl-enter" => ChatComposerSubmitMode.CtrlEnter,
+                        _ => null, // absent → enter default
+                    },
+                    // HeaderSlot carries the branch (c) tripwire when the toggle
+                    // action has flipped ChatComposerAttached true. The wire's
+                    // attachment-preview chip strip is a CLIENT-SIDE render from
+                    // the local File registry (not part of state), so the
+                    // fixture's tripwire is a server-emitted TextNode carrying a
+                    // UNIQUE substring that no other branch can produce. See
+                    // AGENTS.md gotcha #9 class-3: "when a fixture step exists
+                    // to cover a specific branch, name a substring only that
+                    // branch emits."
+                    HeaderSlot: state.ChatComposerAttached
+                        ? new TextNode("ChatComposerAttached=true tripwire")
+                        : null),
+            }));
+
         pageChildren.Add(new ModalNode(
             Title: "Probe modal",
             Children: new ViewNode[] { new TextNode("Modal body for parity coverage.", null) },

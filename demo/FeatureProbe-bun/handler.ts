@@ -17,6 +17,7 @@ import {
   shellRedirect,
   shellSideEffect,
   validateActionNames,
+  type ChatComposerNode,
   type RichTextToolbarNode,
   type TableColumn,
   type TableNode,
@@ -66,6 +67,20 @@ interface FeatureProbeState {
   // byte-identically to the .NET twin — a divergent seed fails the parity
   // diff for a reason unrelated to the wire, banked lesson from CONTEXT §7.
   draftMarkdown: string;
+  // 9.1.0 (CHAT-15) — ChatComposerNode state slots for the parity fixture
+  // `chat-composer` (Plan 30-07). Each field drives ONE of the 5 wire branches
+  // exercised by the fixture; the buildVm arm below reads them to render a
+  // ChatComposerNode whose emission carries a UNIQUE substring for the
+  // corresponding branch, per AGENTS.md gotcha #9 class-3 lesson (branches
+  // the fixture never runs are invisible to a diff — every documented branch
+  // MUST have a distinctive expectBodyContains substring). Byte-parallel with
+  // the .NET twin FeatureProbeState fields ChatComposer*.
+  chatComposerDraft: string;
+  chatComposerStatus: string;         // "" (default → idle absent on wire) | "sending" | "streaming"
+  chatComposerHasStopAction: boolean; // true when status can reach "streaming"
+  chatComposerAttached: boolean;      // true renders a headerSlot tripwire TextNode
+  chatComposerDropScope: string;      // "" (default → composer absent) | "global"
+  chatComposerSubmitMode: string;     // "" (default → enter absent) | "ctrl-enter"
 }
 
 function initialState(): FeatureProbeState {
@@ -89,6 +104,17 @@ function initialState(): FeatureProbeState {
     lookupWatchers: ["u-2", "t-7"],
     lookupQuery: "",
     draftMarkdown: "# Rich text probe\n\n**bold** _italic_ `code`",
+    // 9.1.0 (CHAT-15) — ChatComposerNode probe state defaults. All-empty +
+    // false-boolean initial state so a fresh GET renders the IDLE branch
+    // (status absent → default idle; no stopAction; no attach chip; no
+    // dropScope set → default composer absent; no submitMode set → default
+    // enter absent). Byte-parallel with the .NET twin.
+    chatComposerDraft: "",
+    chatComposerStatus: "",
+    chatComposerHasStopAction: false,
+    chatComposerAttached: false,
+    chatComposerDropScope: "",
+    chatComposerSubmitMode: "",
   };
 }
 
@@ -1612,6 +1638,69 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // ── v9.1.0 ChatComposerNode probe (CHAT-15) ─────────────────────
+  // Byte-identical to the .NET twin chatComposerProbeSection. State-driven
+  // emission of the Route B ChatComposerNode with each of the 5 wire branches
+  // exercised by parity/fixtures/chat-composer.json (Plan 30-07). Each branch
+  // is state-driven so a fixture step's stateMutation-free POST (the handler
+  // mutates state) reaches EXACTLY one branch. Per AGENTS.md gotcha #9
+  // class-3 lesson: branches the fixture never runs are invisible to a diff —
+  // the fixture asserts a UNIQUE expectBodyContains substring per branch to
+  // prove it fired.
+  //
+  // Slots read from state:
+  //   - chatComposerDraft         → wire "bind":"chatComposerDraft" (always emitted)
+  //   - chatComposerStatus        → "streaming" → wire "status":"streaming"
+  //   - chatComposerHasStopAction → true → wire "stopAction":{"name":"chat-composer-stop"}
+  //   - chatComposerAttached      → true → headerSlot TextNode carrying tripwire text
+  //   - chatComposerDropScope     → "global" → wire "dropScope":"global"
+  //   - chatComposerSubmitMode    → "ctrl-enter" → wire "submitMode":"ctrl-enter"
+  //
+  // Design of record: .planning/phases/30-*/CONTEXT.md §Wire shape;
+  // Plan 30-07 tasks 1-4. The CLIENT-SIDE render (unified pill container,
+  // send-button state machine icon swap, IME guard, auto-resize textarea,
+  // drag/drop/paste-image handlers) is browser-only and NOT part of parity —
+  // parity proves only that the ChatComposerNode wire serializes identically
+  // across backends.
+  //
+  // Optional fields are populated via conditional spreads — the "an unset
+  // optional is ABSENT, never null" contract from AGENTS.md gotcha #8. An
+  // inline `undefined` assignment would leak `null` onto the wire on some
+  // serializers; the spread pattern is the standing precedent (see
+  // tableWindow's `nameCol` spread higher in this file).
+  const chatComposerNode: ChatComposerNode = {
+    type: "chat-composer",
+    bind: "chatComposerDraft",
+    sendAction: { name: "chat-composer-send" },
+    placeholder: "Ask anything…",
+    // AttachAction ALWAYS present so branch (c)'s attach-related fields are
+    // emitted regardless of the fixture's toggle action — the toggle affects
+    // headerSlot, not attachAction.
+    attachAction: { name: "chat-composer-attach" },
+    ...(state.chatComposerDropScope === "global" ? { dropScope: "global" as const } : {}),
+    ...(state.chatComposerStatus === "sending" ? { status: "sending" as const }
+      : state.chatComposerStatus === "streaming" ? { status: "streaming" as const }
+      : {}),
+    ...(state.chatComposerHasStopAction ? { stopAction: { name: "chat-composer-stop" } } : {}),
+    ...(state.chatComposerSubmitMode === "ctrl-enter" ? { submitMode: "ctrl-enter" as const } : {}),
+    // headerSlot carries the branch (c) tripwire when the toggle action has
+    // flipped chatComposerAttached true. The wire's attachment-preview chip
+    // strip is a CLIENT-SIDE render from the local File registry (not part
+    // of state), so the fixture's tripwire is a server-emitted TextNode
+    // carrying a UNIQUE substring that no other branch can produce. See
+    // AGENTS.md gotcha #9 class-3: "when a fixture step exists to cover a
+    // specific branch, name a substring only that branch emits."
+    ...(state.chatComposerAttached
+      ? { headerSlot: { type: "text" as const, value: "ChatComposerAttached=true tripwire" } }
+      : {}),
+  };
+  const chatComposerProbeSection: ViewNode = {
+    type: "section",
+    heading: "v9.1.0 ChatComposer probe",
+    variant: "card",
+    children: [chatComposerNode],
+  };
+
   return {
     type: "page",
     title: "Feature Probe",
@@ -1642,6 +1731,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       richTextProbesSection,
       richTextSection,
       lookupSection,
+      chatComposerProbeSection,
       probeModal,
     ],
   };
@@ -1785,6 +1875,30 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
       },
       state,
     };
+  }
+  // 9.1.0 (CHAT-15) — ChatComposerNode fixture branches (Plan 30-07). Each of
+  // these actions mutates ONE state slot the buildVm arm reads to render the
+  // ChatComposerNode with the target branch's tripwire on the wire.
+  // Byte-parallel with the .NET twin.
+  else if (name === "chat-composer-set-streaming") {
+    // Branch (b) STREAMING: emit "status":"streaming" + "stopAction" on the wire.
+    state = { ...state, chatComposerStatus: "streaming", chatComposerHasStopAction: true };
+  } else if (name === "chat-composer-toggle-attached") {
+    // Branch (c) ATTACH-CLICKED: emit the headerSlot tripwire TextNode.
+    state = { ...state, chatComposerAttached: !state.chatComposerAttached };
+  } else if (name === "chat-composer-set-dropscope-global") {
+    // Branch (d) DROPSCOPE-GLOBAL: emit "dropScope":"global" on the wire.
+    state = { ...state, chatComposerDropScope: "global" };
+  } else if (name === "chat-composer-set-submitmode-ctrlenter") {
+    // Branch (e) SUBMITMODE-CTRLENTER: emit "submitMode":"ctrl-enter" on the wire.
+    state = { ...state, chatComposerSubmitMode: "ctrl-enter" };
+  }
+  // No-op passthroughs for the 3 ChatComposerNode ActionEvent slots. They
+  // exist so the action-name uniqueness walker + potential future adopter
+  // dispatch don't hit UnknownActionError; the fixture does NOT exercise
+  // them (state passthrough, buildVm re-renders).
+  else if (name === "chat-composer-send" || name === "chat-composer-stop" || name === "chat-composer-attach") {
+    // state unchanged.
   } else {
     throw new UnknownActionError(name);
   }
