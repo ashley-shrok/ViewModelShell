@@ -242,3 +242,63 @@ The 5 remaining composite recipes from the approved tasting. Each consumes Phase
 
 *Milestone: v8.0.0 Composite-Nodes Layer*
 *Requirements defined: 2026-07-26*
+
+## Milestone v9.x — Chat Composer Primitive (Phase 30)
+
+**Defined:** 2026-08-02
+**Design of record:** `~/.claude/identities/vicky/bounties/chat-composer-primitive/tasting/framework-survey.md` (825-line landscape survey, 20+ frameworks) + `~/.claude/identities/vicky/bounties/chat-composer-primitive/tasting/` (3-panel tasting served on tailnet, Ashley taste-locked Panel 3 = Route B composite on 2026-08-02)
+
+Ship the **`ChatComposerNode` Route B composite** — the chat-app compose bar (growable textarea + attach + send + stop-generating) as a first-class VMS composite. Angel's `/ai` hand-rolled compose bar surfaced the gap (the 40/40/10 native-file-input layout); the tasting proved primitives+Route-A additions can't reach the visual bar (the chat-composer shape has intrinsic layout — growable center + fixed leading/trailing + unified pill surface — that `Section(layout:"row")` with heterogeneous siblings cannot produce). Composite fits the v8.0.0 Route B typed-slots pattern (typed slot values are `ViewNode` subtrees; variance is closed-enum axes). Adopts precedents (with mechanism, per "borrow the property that makes it safe"): Vercel AI Elements `PromptInputSubmit.status` state machine for send button; universal Enter/Shift+Enter + IME `isComposing` guard (non-optional for CJK correctness); Backspace-on-empty removes last attachment; multi-file default with drag-drop-on-composer + paste-image; attachment preview chip strip above textarea with per-item X-remove + blob-URL image thumbs.
+
+**v1 scope EXPLICITLY DEFERS** (each is a separate primitive/conversation, not this phase): emoji picker, @mention autocomplete, /command autocomplete, voice message recording, dictation, screenshot capture, model selector, typing indicator (outbound). Consumers compose these via `trailingSlot`/`headerSlot` for v1.
+
+### Phase 30 — Chat Composer Primitive (CHAT-01..20)
+
+- [ ] **CHAT-01**: `ChatComposerNode` new node type. Wire shape (all fields per taste-locked design): `type:"chat-composer"`, `bind: string` (draft text), `sendAction: ActionEvent` (REQUIRED), `placeholder?: string`, `attachAction?: ActionEvent` (renders leading `+`/paperclip button when set), `attachBind?: string` (multipart form-field name), `maxFiles?: number`, `maxFileSize?: number`, `accept?: string[]` (MIME types), `dropScope?: "composer" | "global"` (default "composer"), `status?: "idle" | "sending" | "streaming"` (default "idle"), `stopAction?: ActionEvent` (required when `status` can reach "streaming"), `submitMode?: "enter" | "ctrl-enter"` (default "enter"), `maxRows?: number` (auto-resize cap, default 6), `disabled?: boolean`, `headerSlot?: ViewNode`, `inputSlot?: ViewNode`, `leadingSlot?: ViewNode`, `trailingSlot?: ViewNode`, `footerSlot?: ViewNode`. Byte-identical TS/.NET; both tree-validators descend into slots.
+- [ ] **CHAT-02**: Adapter renderer emits `.vms-chat-composer` unified pill container + child slots. Framework owns: bordered rounded surface, `flex align-items:flex-end gap`, growable center textarea, fixed leading + trailing 34px circular icon buttons, subtle drop-shadow. Both twin backends' derived-type registration in `[JsonPolymorphic]` catalog updated. TUI adapter renders a text-only fallback (no icon-buttons; treat as `PageNode(children: [textarea Section, submit button])` degrading gracefully).
+- [ ] **CHAT-03**: Auto-resize textarea via `field-sizing: content` CSS + JS fallback (feature-detect); capped at `maxRows` (default 6, so ~140px max-height). Scroll internally once cap hit.
+- [ ] **CHAT-04**: Icon-only file trigger inside composer when `attachAction` is set. Renders hidden `<input type="file">` + framework-styled circular icon button (paperclip icon default from shipped `paperclip` in icons-payload). Multi-file when `maxFiles > 1` (default: `multiple`). Click routes through the standard file-picker path; picked files land in composer's local `attachedFiles` list (blob-URL preview until send-action fires and multipart form uploads them under `attachBind` name).
+- [ ] **CHAT-05**: Drag-drop attach handler. `dropScope:"composer"` (default) attaches drag/drop listeners to the composer element; `dropScope:"global"` attaches to `document` (per Stream Chat's `WithDragAndDropUpload` precedent, guarded by `dataTransfer.types.includes("Files")` to avoid stealing non-file drags). Fail-loud on missing `attachAction` if `dropScope` is set.
+- [ ] **CHAT-06**: Paste-image handler on the textarea. `paste` event → iterate `clipboardData.items` → `item.kind === "file"` extracted via `item.getAsFile()` → push to `attachedFiles` list. Universal implementation across AI Elements + Stream Chat (byte-parallel handler across frameworks — the "converged mechanism" for this).
+- [ ] **CHAT-07**: Attachment preview chip strip inside `headerSlot` when `attachedFiles.length > 0` (or consumer-provided `headerSlot` content). Framework-owned: horizontal chip strip above textarea, per-chip `[image thumbnail | file icon | filename | size | X-remove button]`. Image thumbnails via `URL.createObjectURL(file)`; cleanup with `URL.revokeObjectURL(url)` on remove/unmount. MIME-typed icons for non-images (paperclip default; `file-text` for text/*; `image` for image/*; etc.). Per-item X-remove drops the file from the list + revokes its blob URL.
+- [ ] **CHAT-08**: Backspace-on-empty removes last attachment. `keydown` on textarea: if `e.key === "Backspace"` AND `textarea.value === ""` AND `attachedFiles.length > 0`, `e.preventDefault()` + remove the last file. ~5 adapter lines. AI-elements precedent; universal UX polish nobody explicitly asks for but everyone notices when missing.
+- [ ] **CHAT-09**: Send button state machine. `status?: "idle" | "sending" | "streaming"` drives the trailing button: `"idle"` → send-icon default, click dispatches `sendAction`; `"sending"` → spinner icon, disabled; `"streaming"` → stop-icon (`square` — need to add to icons-payload if not there; else `x`), click dispatches `stopAction` NOT `sendAction`. Non-AI consumers never set status past `"idle"`/`"sending"`, so they get send-with-spinner and pay zero cost for the AI state shape.
+- [ ] **CHAT-10**: Send button auto-disabled derived state. Framework computes `canSend = state[bind]?.trim().length > 0 || attachedFiles.length > 0` and disables the send button when false (and status is "idle"). No consumer wire field for this; purely derived.
+- [ ] **CHAT-11**: Keyboard: Enter=send / Shift+Enter=newline default. `submitMode:"ctrl-enter"` inverts: Enter=newline / Ctrl+Enter (or Cmd+Enter on Mac) = send. Closed-enum axis per adopted precedent (assistant-ui `submitMode`, Ant Design X `submitType`).
+- [ ] **CHAT-12**: IME composition guard — NON-OPTIONAL correctness bake-in for CJK users. Track `isComposing` state via `onCompositionStart` / `onCompositionEnd` handlers; on keydown, short-circuit if `isComposing` OR `e.nativeEvent.isComposing` (belt-and-braces, because browsers differ on when the state event has committed by the time keydown fires). Vercel AI Elements is the canonical implementation. Adversarial test with jsdom-simulated CJK composition events.
+- [ ] **CHAT-13**: .NET `ChatComposerNode` record byte-parallel to TS. Every nullable carries `[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]` per gotcha #8; every optional non-nullable bool (`Disabled`) carries `[JsonIgnore(Condition = WhenWritingDefault)]`. `[JsonDerivedType(typeof(ChatComposerNode), "chat-composer")]` added to the polymorphic ViewNode catalog. Closed enum for `status` uses `[JsonConverter(typeof(JsonStringEnumConverter))]` per closed-union-must-be-enum maintainer rule.
+- [ ] **CHAT-14**: Tree validator descends into every slot (`headerSlot`, `inputSlot`, `leadingSlot`, `trailingSlot`, `footerSlot`) on BOTH backends; action-name uniqueness enforced across the whole tree (`sendAction.name`, `stopAction.name`, `attachAction.name` all distinct and distinct from any descendant action names).
+- [ ] **CHAT-15**: Parity fixture `chat-composer` with `expectBodyContains` tripwires per branch: (a) idle-state send button (`data-composer-status="idle"`), (b) streaming-state stop-button swap (`data-composer-status="streaming"`), (c) `attachAction`-clicked variant, (d) `dropScope:"global"` variant, (e) `submitMode:"ctrl-enter"` variant. Per AGENTS.md gotcha #9 class-3 lesson (branches the fixture never runs are invisible to the diff — every step exercising a documented branch MUST have a distinctive substring assertion).
+- [ ] **CHAT-16**: Adapter tests (jsdom) — Enter=send fires `sendAction`; Shift+Enter inserts newline; Ctrl+Enter in `submitMode:"ctrl-enter"` fires `sendAction`; IME composition guard short-circuits Enter during CJK composition (adversarial test); Backspace-on-empty removes last attachment; drag-drop file lands in `attachedFiles` list; paste-image handler extracts image and pushes to `attachedFiles`; status "idle"→"sending"→"streaming" transitions correctly swap icon + click handler; `stopAction` dispatches on streaming click.
+- [ ] **CHAT-17**: Framework-owned tailnet verification page (`demo/ChatComposerVerification/` or similar). Real shipped bundle + real DOM emission. Panels: every wire-field combo, every slot filled/empty combo, all 12 themes + light default. Interactive: real click paths for send, attach, drop, paste, stop-swap, keyboard behavior. Per AGENTS.md standing directive "every finished feature ships with a human-runnable verification page." Ashley visual sign-off recorded.
+- [ ] **CHAT-18**: AA-contrast hand-check for every new fg/bg pair: send button accent bg × icon fg (light + all 12 themes); stop-icon during streaming (accent kept, tone shift TBD); disabled state icon × surface bg; per-item chip preview (X-remove icon × chip bg).
+- [ ] **CHAT-19**: Angel `/ai` adopter — Angel replaces his hand-rolled compose bar with `ChatComposerNode`. Vicky pings Angel post-plan with the wire shape + verification page + how to consume; Angel confirms the visual lands + no wire regressions. This is the natural verification: the framework claim "one node instead of 40/40/10 assembly" is proved when a real consumer adopts.
+- [ ] **CHAT-20**: Docs shipped: `composite-nodes-layer.md` new §4 inventory row for `ChatComposerNode` (v9.x note); AGENTS.md "Route B composite-nodes layer" section grown (add to shipped recipe inventory + typed-slots pattern reference); CHANGELOG.md staged under "Unreleased" section (v9.x TBD at closeout phase); MIGRATION.md N/A (additive; no consumer breaking changes); agent-skill.md verified unchanged (additive optional wire field — protocol stays `viewmodel-shell/1.0`). NO release ship in this phase — release ritual (verification page + version bump + publish + tag + advance-main + announce) is a separate closeout phase per Phase 26's shape.
+
+| Requirement | Phase |
+|---|---|
+| CHAT-01 | 30 |
+| CHAT-02 | 30 |
+| CHAT-03 | 30 |
+| CHAT-04 | 30 |
+| CHAT-05 | 30 |
+| CHAT-06 | 30 |
+| CHAT-07 | 30 |
+| CHAT-08 | 30 |
+| CHAT-09 | 30 |
+| CHAT-10 | 30 |
+| CHAT-11 | 30 |
+| CHAT-12 | 30 |
+| CHAT-13 | 30 |
+| CHAT-14 | 30 |
+| CHAT-15 | 30 |
+| CHAT-16 | 30 |
+| CHAT-17 | 30 |
+| CHAT-18 | 30 |
+| CHAT-19 | 30 |
+| CHAT-20 | 30 |
+
+---
+
+*Milestone: v9.x Chat Composer Primitive*
+*Requirements defined: 2026-08-02*

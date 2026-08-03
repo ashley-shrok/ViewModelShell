@@ -2563,11 +2563,11 @@ export type ChatComposerStatus = "idle" | "sending" | "streaming";
 export type ChatComposerDropScope = "composer" | "global";
 
 /** v9.1.0 (CHAT-11) — Keyboard submit-mode. "enter" (default): Enter=send,
- *  Shift+Enter=newline. "ctrlEnter": Enter=newline, Ctrl+Enter (Cmd+Enter on
+ *  Shift+Enter=newline. "ctrl-enter": Enter=newline, Ctrl+Enter (Cmd+Enter on
  *  Mac)=send. Persistent-chat flip borrowed from Slack + assistant-ui + Ant
  *  Design X. Closed union — .NET twin encodes as C# enum per
  *  closed-union-must-be-enum. */
-export type ChatComposerSubmitMode = "enter" | "ctrlEnter";
+export type ChatComposerSubmitMode = "enter" | "ctrl-enter";
 
 /**
  * v9.1.0 (CHAT-01..20) — ChatComposerNode. Route B composite for the
