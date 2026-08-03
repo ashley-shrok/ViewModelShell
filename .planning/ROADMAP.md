@@ -574,4 +574,16 @@ Plans:
   13. Docs shipped: `composite-nodes-layer.md` §4 inventory row for `ChatComposerNode`; AGENTS.md Route B section grown; CHANGELOG staged under "Unreleased" (release deferred to closeout phase); MIGRATION.md N/A (additive); agent-skill.md verified unchanged (additive optional; protocol stays `viewmodel-shell/1.0`). Byte-parallel .NET AgentSkill.md verified via parity gate.
   14. NO release ship in this phase — accumulate CHANGELOG under "Unreleased"; separate release closeout phase after this lands (matches Phase 26's shape).
 
-**Plans:** 0/N plans executed (to be defined in `/gsd:plan-phase 30`)
+**Plans:** 11/11 plans executed
+
+- [x] 30-01-PLAN.md — ChatComposerNode wire types + tree validator descent + `square` icon (CHAT-01, CHAT-14)
+- [x] 30-02-PLAN.md — .NET `ChatComposerNode` record + `JsonDerivedType` + tree validator descent (CHAT-13)
+- [x] 30-03-PLAN.md — Adapter DOM shell + shipped `.vms-chat-composer` CSS + textarea auto-resize (CHAT-02, CHAT-03)
+- [x] 30-04-PLAN.md — Send-button state machine + keyboard (Enter/Shift+Enter/Ctrl+Enter) + IME `isComposing` guard + Backspace-on-empty trigger (CHAT-08, CHAT-09, CHAT-10, CHAT-11, CHAT-12)
+- [x] 30-05-PLAN.md — Attach paths (click/drag/paste) + chip strip + WeakMap composer registry + blob-URL cleanup + sendAction bundling (CHAT-04, CHAT-05, CHAT-06, CHAT-07)
+- [x] 30-06-PLAN.md — jsdom adapter tests (CHAT-16; 15 tests, mutation-proofed adversarial CJK IME + anti-collision)
+- [x] 30-07-PLAN.md — Parity fixture `chat-composer` + `FeatureProbe` extension (CHAT-15; 5-branch `expectBodyContains` tripwires, `findNulls` per step)
+- [x] 30-08-PLAN.md — Docs staging: composite-nodes-layer §4 + AGENTS.md Route B + CHANGELOG Unreleased + agent-skill.md byte-parallel (CHAT-20)
+- [x] 30-09-PLAN.md — Framework-owned tailnet verification page + Ashley sign-off (CHAT-17)
+- [x] 30-10-PLAN.md — Angel `/ai` adopter DM sent (CHAT-19; async pending per Ashley "ship it")
+- [x] 30-11-PLAN.md — Full green-tree gate + Phase 30 closes on main (CHAT-18; release deferred to closeout phase per Phase 26 shape)
