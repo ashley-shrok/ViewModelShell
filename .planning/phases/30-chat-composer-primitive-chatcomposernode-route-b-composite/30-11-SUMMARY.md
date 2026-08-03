@@ -173,3 +173,13 @@ A separate downstream v9.1.0 closeout phase (matching Phase 26's shape) promotes
 - Demo .NET test counts (39+30+61+33+28=191) match per-project tallies.
 - Parity fixture count 10 matches `parity/fixtures/` directory (`ls | wc -l = 10`).
 - Backend registration count 17 matches `parity/backends.json` (`grep -c '"name":' = 17`).
+
+## Ashley's judgment on the AA-contrast finding (2026-08-02)
+
+Vicky served the verification page a second time post-phase-close to let Ashley eyeball the send-button `--ready` state (accent bg × white icon) on the 4 flagged dark themes (dark-amber 2.03:1 / dark-blue 2.75:1 / dark-green 1.96:1 / dark-teal 1.85:1). Panel 1 with any typed content enables the ready state; theme selector cycles.
+
+Ashley's verbatim verdict: **"I think they're fine as is."**
+
+She is the authoritative visual gate per the framework's shipped convention. No per-composer color token added; the composer ships as-is at `f19c3f3` with `color: white` on `--vms-accent`. The numeric AA finding is a documented v1 limitation — if a real consumer flags legibility on those specific dark themes in production, a follow-up patch (per-composer token pair, per Plan 30-11 M-3 remediation preference) can address it targetedly.
+
+Server killed post-eyeball; verification page committed under `demo/ChatComposerVerification-bun/` as historical artifact + regression-check surface.
