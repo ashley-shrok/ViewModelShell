@@ -81,6 +81,12 @@ interface FeatureProbeState {
   chatComposerAttached: boolean;      // true renders a headerSlot tripwire TextNode
   chatComposerDropScope: string;      // "" (default → composer absent) | "global"
   chatComposerSubmitMode: string;     // "" (default → enter absent) | "ctrl-enter"
+  // v9.2.0 (Phase 31 / MAXLINES-PARITY) — "" (unset) | "1" | "2" | "3", drives
+  // buildVm's TextNode.maxLines emission. Non-nullable string with "" default
+  // matching the ChatComposer* posture (gotcha #8 sidestepped by using empty
+  // sentinel instead of null). Byte-parallel with the .NET twin
+  // FeatureProbeState.TextNodeMaxLinesProbe.
+  textNodeMaxLinesProbe: string;
 }
 
 function initialState(): FeatureProbeState {
@@ -115,6 +121,9 @@ function initialState(): FeatureProbeState {
     chatComposerAttached: false,
     chatComposerDropScope: "",
     chatComposerSubmitMode: "",
+    // v9.2.0 (Phase 31) — initial UNSET branch. buildVm renders
+    // "TextNodeMaxLinesProbe=unset" marker with maxLines ABSENT on the wire.
+    textNodeMaxLinesProbe: "",
   };
 }
 
@@ -1701,6 +1710,35 @@ function buildVm(state: FeatureProbeState): ViewNode {
     children: [chatComposerNode],
   };
 
+  // ── v9.2.0 TextNode.maxLines probe (Phase 31 / MAXLINES-PARITY) ───
+  // Byte-identical to the .NET twin (see FeatureProbeController.cs BuildVm).
+  // Renders a single TextNode whose value carries a UNIQUE marker per state
+  // slot value (unset/1/2/3) AND whose maxLines emits the exact wire literal
+  // ("maxLines":N when N∈{1,2,3}, ABSENT when unset). The two-axis assertion
+  // defeats gotcha #9 class-3 (branches invisible to the diff) plus rides on
+  // the always-on findNulls invariant that catches gotcha #8 class-2 defects
+  // (a "maxLines":null drift the normalize scrubs before diffing).
+  //
+  // Optional maxLines is populated via conditional spread — the "an unset
+  // optional is ABSENT, never null" contract from AGENTS.md gotcha #8. A
+  // direct `undefined` assignment would leak `null` onto the wire on some
+  // JSON serializers; the spread pattern is the standing precedent (see the
+  // ChatComposerNode above, or tableWindow's nameCol spread earlier in file).
+  const textNodeMaxLinesProbeSection: ViewNode = {
+    type: "section",
+    heading: "Phase 31 TextNode.maxLines probe",
+    variant: "card",
+    children: [
+      {
+        type: "text",
+        value: `TextNodeMaxLinesProbe=${state.textNodeMaxLinesProbe === "" ? "unset" : state.textNodeMaxLinesProbe}`,
+        ...(state.textNodeMaxLinesProbe === "1" ? { maxLines: 1 as const } :
+            state.textNodeMaxLinesProbe === "2" ? { maxLines: 2 as const } :
+            state.textNodeMaxLinesProbe === "3" ? { maxLines: 3 as const } : {}),
+      },
+    ],
+  };
+
   return {
     type: "page",
     title: "Feature Probe",
@@ -1732,6 +1770,7 @@ function buildVm(state: FeatureProbeState): ViewNode {
       richTextSection,
       lookupSection,
       chatComposerProbeSection,
+      textNodeMaxLinesProbeSection,
       probeModal,
     ],
   };
@@ -1899,7 +1938,16 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
   // them (state passthrough, buildVm re-renders).
   else if (name === "chat-composer-send" || name === "chat-composer-stop" || name === "chat-composer-attach") {
     // state unchanged.
-  } else {
+  }
+  // v9.2.0 (Phase 31 / MAXLINES-PARITY) — TextNode.maxLines axis fixture
+  // branches (Plan 31-03). Each of these actions mutates the state slot the
+  // buildVm arm reads to render the probe TextNode with the target branch's
+  // tripwire on the wire. Byte-parallel with the .NET twin.
+  else if (name === "textnode-maxlines-unset") { state = { ...state, textNodeMaxLinesProbe: "" }; }
+  else if (name === "textnode-maxlines-1")     { state = { ...state, textNodeMaxLinesProbe: "1" }; }
+  else if (name === "textnode-maxlines-2")     { state = { ...state, textNodeMaxLinesProbe: "2" }; }
+  else if (name === "textnode-maxlines-3")     { state = { ...state, textNodeMaxLinesProbe: "3" }; }
+  else {
     throw new UnknownActionError(name);
   }
 
