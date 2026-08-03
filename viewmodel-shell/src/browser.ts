@@ -234,6 +234,24 @@ export class BrowserAdapter implements Adapter {
   private editorKeyCounter = new Map<string, number>();
   private editorKeysSeen = new Set<string>();
 
+  // v9.1.0 (Plan 30-05, CHAT-04..08) — persistent per-composer attachment
+  // registry. Keyed by a stable composer key (bind + per-render ordinal — same
+  // disambiguation shape as sectionKeyCounter, so two ChatComposerNodes with
+  // the same bind on one page get distinct entries; plan-checker M-1).
+  // DELIBERATELY PERSISTENT across renders (NOT reset like the per-render
+  // counters below): the attachedFiles list must survive server-driven
+  // re-renders that redraw the composer's DOM subtree (a user drops a file,
+  // types text, server re-renders on-input via poll — attachments MUST stay).
+  // Mark-swept in render() against composerKeysSeen, exactly as chartInstances
+  // is: a ChatComposerNode removed from the new tree drops its registry entry
+  // AND revokes every pending blob URL (browser does NOT revoke via GC).
+  private composerRegistry = new Map<string, {
+    attachedFiles: { id: string; file: File; previewUrl?: string; kind: "image" | "file"; sizeBytes: number }[];
+    removeAttachment?: (id: string) => void;
+  }>();
+  private composerKeyCounter = new Map<string, number>();
+  private composerKeysSeen = new Set<string>();
+
   constructor(private container: HTMLElement) {}
 
   render(
@@ -356,6 +374,12 @@ export class BrowserAdapter implements Adapter {
     this.editorKeyCounter = new Map();
     this.editorKeysSeen = new Set();
 
+    // v9.1.0 (Plan 30-05) — reset the per-render chat-composer bookkeeping
+    // (NOT composerRegistry, which is deliberately persistent so attachments
+    // survive re-renders). Same posture as the chart/editor bookkeeping above.
+    this.composerKeyCounter = new Map();
+    this.composerKeysSeen = new Set();
+
     this.container.innerHTML = "";
     this.node(vm, this.container, onAction);
 
@@ -382,6 +406,23 @@ export class BrowserAdapter implements Adapter {
       if (!this.editorKeysSeen.has(key)) {
         entry.editor?.destroy();
         this.editorInstances.delete(key);
+      }
+    }
+
+    // v9.1.0 (Plan 30-05, CHAT-04..08) — mark-sweep the composerRegistry
+    // against the keys rendered this pass, exact same shape as the chart /
+    // editor sweeps above. A ChatComposerNode removed from the new tree
+    // drops its registry entry AND revokes every pending blob URL — the
+    // browser does NOT revoke blob URLs via GC, so an unattended composer
+    // unmount would leak the createObjectURL() slots for the life of the
+    // document. Revocation is idempotent; images pointing at the revoked
+    // URL are already detached (part of the innerHTML wipe).
+    for (const [key, entry] of this.composerRegistry) {
+      if (!this.composerKeysSeen.has(key)) {
+        for (const f of entry.attachedFiles) {
+          if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+        }
+        this.composerRegistry.delete(key);
       }
     }
 
@@ -1403,7 +1444,7 @@ export class BrowserAdapter implements Adapter {
     this.applyRichTextTool(entry.editor, tool);
   }
 
-  /** v9.1.0 (CHAT-02, CHAT-03) — ChatComposerNode DOM shell.
+  /** v9.1.0 (CHAT-02..08) — ChatComposerNode adapter.
    *
    *  Emits the unified pill container: framework-owned rounded surface with
    *  three vertical slots (header, main row, footer). The main row lays out
@@ -1412,20 +1453,16 @@ export class BrowserAdapter implements Adapter {
    *  primitives cannot compose (per CONTEXT.md §Problem statement; Panel-3
    *  taste-locked by Ashley 2026-08-02).
    *
-   *  This plan (30-03) lands the SHELL only:
-   *    - DOM tree with slot mount points for headerSlot / leadingSlot /
-   *      inputSlot / trailingSlot / footerSlot (each is a ViewNode subtree
-   *      rendered via `this.node(...)` per Route B typed-slots pattern).
-   *    - `data-composer-status` attribute (Plan 30-07 parity fixture asserts
-   *      on this substring per CHAT-15).
-   *    - `data-drop-scope` attribute (Plan 30-05 drag-drop handler reads).
-   *    - Framework-owned textarea (with bind read/write and auto-resize),
-   *      REPLACED by `inputSlot` content when the consumer provides one
-   *      (opt-in rich-text via RichTextFieldNode).
-   *    - Send-button + attach-button PLACEHOLDERS wearing the shared
-   *      `.vms-chat-composer__icon-btn` 34px circular geometry — behavior
-   *      wires in Plan 30-04 (send state-machine) + Plan 30-05 (attach
-   *      picker + registry).
+   *  Coverage across the CHAT-* requirement set:
+   *    - CHAT-02/03: DOM shell + slots + textarea auto-resize (Plan 30-03).
+   *    - CHAT-09..12: send-button state machine + keyboard + IME guard
+   *      + Backspace-on-empty (Plan 30-04).
+   *    - CHAT-04: click-to-picker attach (Plan 30-05).
+   *    - CHAT-05: drag-drop-on-composer with dropScope closed union.
+   *    - CHAT-06: paste-image handler.
+   *    - CHAT-07: attachment preview chip strip + X-remove per chip.
+   *    - CHAT-08: sendAction dispatch bundles the attachment registry as
+   *      multipart form entries under attachBind.
    *
    *  Auto-resize (CHAT-03) uses CSS `field-sizing: content` on the shipped
    *  `.vms-chat-composer__textarea` rule (single declaration; browser-native;
@@ -1434,12 +1471,64 @@ export class BrowserAdapter implements Adapter {
    *  JS fallback resizes on `input` by computing scrollHeight capped at
    *  `maxRows` (default 6). Both paths cap identically; overflow scrolls
    *  internally once cap hit.
+   *
+   *  Attachment registry persistence (Plan 30-05, plan-checker M-1): keyed
+   *  by `${bind}:${ordinal}` on `composerRegistry` (persistent Map), NOT
+   *  by `bind` alone — two ChatComposerNodes with the same bind on one page
+   *  (a threaded chat with per-thread reply composers all bound to "draft",
+   *  or two panes each mounting `bind:"draft"`) get distinct entries. Same
+   *  disambiguation as sectionKeyCounter. Mark-swept in render(); a
+   *  composer removed from the new tree revokes every pending blob URL.
    */
   private chatComposer(
     n: ChatComposerNode,
     parent: HTMLElement,
     on: (a: ActionEvent) => void,
   ): void {
+    // Capture `this` for helper closures below (function declarations lose
+    // instance-method binding). Declared FIRST so any downstream closure
+    // that runs during setup (updateSendButtonDisabled from the initial
+    // send-button paint) can safely dereference it — TDZ otherwise fires.
+    const chatComposerAdapter = this;
+
+    // ── Persistent per-composer registry key (M-1 hardening: bind + ordinal
+    // so two ChatComposerNodes with the same bind don't cross-pollinate).
+    const baseKey = n.bind;
+    const ordinal = this.composerKeyCounter.get(baseKey) ?? 0;
+    this.composerKeyCounter.set(baseKey, ordinal + 1);
+    const composerKey = `${baseKey}:${ordinal}`;
+    this.composerKeysSeen.add(composerKey);
+
+    let composerState = this.composerRegistry.get(composerKey);
+    if (!composerState) {
+      composerState = { attachedFiles: [] };
+      this.composerRegistry.set(composerKey, composerState);
+    }
+    // Alias to a local const for closure capture below. Reassigning the
+    // shared reference (e.g. splice-in-place) keeps the persisted registry
+    // in sync automatically; the closures below MUST NOT rebind this to a
+    // new array (`composerState.attachedFiles = [...]`) or the persisted
+    // entry decouples. Follow the mutating-only convention.
+    const cs = composerState;
+
+    // Fail-loud tree-configuration guards per AGENTS.md capability-seam
+    // rule — a misconfigured tree gets a hard, debuggable failure, never a
+    // silent no-op. The TS + .NET tree validators (Plan 30-01/02) will
+    // eventually reject these at buildVm; the runtime guard closes the
+    // wire-drift case for a caller that skipped validation.
+    if (n.dropScope !== undefined && !n.attachAction) {
+      console.error(
+        "[ViewModelShell] ChatComposerNode: dropScope requires attachAction " +
+        "(nowhere for a dropped file to go).",
+      );
+    }
+    if (n.attachBind !== undefined && !n.attachAction) {
+      console.error(
+        "[ViewModelShell] ChatComposerNode: attachBind requires attachAction " +
+        "(no picker means no attachments to ride the bind).",
+      );
+    }
+
     const root = document.createElement("div");
     root.className = n.disabled === true
       ? "vms-chat-composer vms-chat-composer--disabled"
@@ -1451,12 +1540,19 @@ export class BrowserAdapter implements Adapter {
     // handler reads this to decide document vs composer listener attachment.
     root.dataset.dropScope = n.dropScope ?? "composer";
 
-    // ── Header slot (composer's header row) — attachment-preview chip strip
-    // (Plan 30-05) will prepend to this row when attachedFiles.length > 0.
-    // Consumer headerSlot content mounts here; the `:empty` CSS rule hides
-    // the row entirely when neither is present.
+    // ── Header slot (composer's header row) — the attachment-preview chip
+    // strip prepends here when attachedFiles.length > 0. Consumer headerSlot
+    // content mounts after; both render together (chip strip first). The
+    // `:empty` CSS rule hides the row entirely when neither is present.
     const headerRow = document.createElement("div");
     headerRow.className = "vms-chat-composer__header";
+    // Chip strip container mounted FIRST (framework-owned surface); consumer
+    // headerSlot content mounts AFTER (below the chips) — per Plan 30-05
+    // spec "chip strip FIRST (framework-owned), then the consumer's content
+    // BELOW".
+    const chipStripEl = document.createElement("div");
+    chipStripEl.className = "vms-chat-composer__attachments";
+    headerRow.appendChild(chipStripEl);
     if (n.headerSlot) this.node(n.headerSlot, headerRow, on);
     root.appendChild(headerRow);
 
@@ -1469,8 +1565,12 @@ export class BrowserAdapter implements Adapter {
     // Leading slot (rare — most consumers leave empty).
     if (n.leadingSlot) this.node(n.leadingSlot, row, on);
 
-    // Attach-button PLACEHOLDER (Plan 30-05 wires click-to-picker + registry).
+    // Attach-button (Plan 30-05, CHAT-04). Renders the icon-only paperclip
+    // button when attachAction is set; click triggers the hidden file input.
     // Reuses the shared `.vms-chat-composer__icon-btn` 34px circular geometry.
+    // The hidden <input type="file"> is appended INSIDE the row so it lives
+    // in the same subtree — cleaned up naturally by the innerHTML wipe.
+    let fileInput: HTMLInputElement | null = null;
     if (n.attachAction) {
       const attachBtn = document.createElement("button");
       attachBtn.type = "button";
@@ -1480,17 +1580,35 @@ export class BrowserAdapter implements Adapter {
       if (n.disabled === true) attachBtn.disabled = true;
       attachBtn.appendChild(this.renderIconSvg("paperclip", "sm", undefined, undefined));
       row.appendChild(attachBtn);
-    }
 
-    // Per-composer closure state. Plan 30-05 will populate `attachedFiles`
-    // via file-picker/drag-drop/paste and swap in a proper `removeAttachment`
-    // helper — this plan initializes empty + provides a fallback pop-last so
-    // the Backspace-on-empty keyboard trigger below (CHAT-08 keyboard side)
-    // does something coherent even before Plan 30-05 lands.
-    const composerState: {
-      attachedFiles: { id: string; file: File; previewUrl?: string }[];
-      removeAttachment?: (id: string) => void;
-    } = { attachedFiles: [] };
+      // Hidden file input (display:none so no visual chrome). `multiple` when
+      // maxFiles is unset or > 1 (the default: unlimited multi-file); accept
+      // MIME filter passed straight through when provided.
+      fileInput = document.createElement("input");
+      fileInput.type = "file";
+      fileInput.style.display = "none";
+      fileInput.className = "vms-chat-composer__file-input";
+      const multi = n.maxFiles === undefined || n.maxFiles > 1;
+      if (multi) fileInput.multiple = true;
+      if (n.accept?.length) fileInput.accept = n.accept.join(",");
+      row.appendChild(fileInput);
+
+      // Wire click-to-picker. attachAction fires AFTER files are selected —
+      // some apps use it for logging/telemetry; the picker OPEN itself is
+      // NOT a dispatchable event (per CONTEXT §L-5 ambiguity, resolved:
+      // fire on files-selected so the app sees the actual attach event).
+      attachBtn.addEventListener("click", () => {
+        if (attachBtn.disabled) return;
+        fileInput!.click();
+      });
+
+      fileInput.addEventListener("change", () => {
+        const files = Array.from(fileInput!.files ?? []);
+        const added = addFiles(files);
+        fileInput!.value = "";  // reset so re-picking the same file re-fires change
+        if (added > 0 && n.attachAction) on(n.attachAction);
+      });
+    }
 
     // ── Send-button (Plan 30-04, CHAT-09..10). Full state-machine wiring:
     // icon swap per `n.status`, click routes to sendAction or stopAction,
@@ -1535,27 +1653,38 @@ export class BrowserAdapter implements Adapter {
     } else {
       // status === "idle" — the natural case. Send icon + click dispatches
       // sendAction; disabled derives from !canSend when composer isn't
-      // explicitly disabled.
+      // explicitly disabled. attachedFiles ride the dispatch as multipart
+      // entries under attachBind (Plan 30-05, CHAT-08).
       sendBtn.appendChild(this.renderIconSvg("send", "sm", undefined, undefined));
       sendBtn.classList.add("vms-chat-composer__send--idle");
-      const stateValue = this.readBind(n.bind);
-      const hasText = typeof stateValue === "string" && stateValue.trim().length > 0;
-      // TODO(Plan 30-05): once the attachedFiles registry persists across
-      // renders, canSend must OR-in composerState.attachedFiles.length > 0.
-      // The closure state here is per-render (rebuilt each pass), so at Plan
-      // 30-04 render-time the count is always 0 — the check is left in as a
-      // defensive seam Plan 30-05 will exercise.
-      const canSend = hasText || composerState.attachedFiles.length > 0;
       const sendAction = n.sendAction;
-      if (n.disabled === true || !canSend) {
-        sendBtn.disabled = true;
-      } else {
-        sendBtn.classList.add("vms-chat-composer__send--ready");
-      }
       sendBtn.setAttribute("aria-label", "Send");
+      // Initial disabled + --ready state derived immediately; the shared
+      // updateSendButtonDisabled() below re-derives after any attach/remove.
+      updateSendButtonDisabled();
       sendBtn.addEventListener("click", () => {
         if (sendBtn.disabled) return;
-        on(sendAction);
+        // Bundle attached files as multipart entries under attachBind
+        // (default "attachments"). Server reads via
+        // Request.Form.Files.GetFiles(attachBind) (.NET) / formData
+        // multi-value getAll(name) (TS server).
+        const attachBind = n.attachBind ?? "attachments";
+        const files: File[] = cs.attachedFiles.map(a => a.file);
+        const dispatchAction: ActionEvent = files.length > 0
+          ? { ...sendAction, files: { ...(sendAction.files ?? {}), [attachBind]: files } }
+          : sendAction;
+        on(dispatchAction);
+        // Clear registry immediately on dispatch (fire-and-forget: the
+        // shipped onAction API returns void so we cannot await success).
+        // v1 limitation: files are LOST on dispatch failure — an app that
+        // needs retain-on-failure must add a shell-level completion
+        // callback in a follow-up plan. Documented in Plan 30-05 SUMMARY.
+        for (const item of cs.attachedFiles) {
+          if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+        }
+        cs.attachedFiles.length = 0;
+        renderChipStrip();
+        updateSendButtonDisabled();
       });
     }
     // Shared `triggerSend` closure for the textarea keyboard handler below.
@@ -1563,19 +1692,29 @@ export class BrowserAdapter implements Adapter {
     // decision (send vs stop vs no-op-when-disabled) stays in one place.
     const triggerSend = (): void => { sendBtn.click(); };
 
-    // Textarea (or inputSlot if consumer provided — opt-in rich-text).
+    // ── Textarea (or inputSlot if consumer provided — opt-in rich-text).
+    // The textarea reference is captured in `ta` so the paste-image handler
+    // below can attach to it. When inputSlot is set, paste-image is NOT
+    // wired (the consumer's RichTextFieldNode has its own paste handling).
+    let ta: HTMLTextAreaElement | null = null;
     if (n.inputSlot) {
       this.node(n.inputSlot, row, on);
     } else {
       const stateValue = this.readBind(n.bind);
-      const ta = document.createElement("textarea");
+      ta = document.createElement("textarea");
       ta.className = "vms-chat-composer__textarea";
       ta.value = stateValue == null ? "" : String(stateValue);
       if (n.placeholder != null) ta.placeholder = n.placeholder;
       if (n.disabled === true) ta.disabled = true;
       ta.rows = 1;
       // Bind write-back on input — draft text IS state per bind model.
-      ta.addEventListener("input", () => { this.writeBind(n.bind, ta.value); });
+      // Also re-derive canSend so the send button's disabled state stays
+      // in sync with typed text (bind writes are immediate; canSend depends
+      // on trim().length + attachedFiles.length).
+      ta.addEventListener("input", () => {
+        this.writeBind(n.bind, ta!.value);
+        updateSendButtonDisabled();
+      });
 
       // Auto-resize (CHAT-03). CSS `field-sizing: content` handles this on
       // modern browsers via the shipped `.vms-chat-composer__textarea` rule
@@ -1586,15 +1725,15 @@ export class BrowserAdapter implements Adapter {
       if (!supportsFieldSizing) {
         // Fallback: adjust height on input by measuring scrollHeight.
         const resize = (): void => {
-          ta.style.height = "auto";
-          const cs = getComputedStyle(ta);
+          ta!.style.height = "auto";
+          const cs = getComputedStyle(ta!);
           const lineHeight = parseFloat(cs.lineHeight) || 20;
           const paddingY =
             (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
           const maxHeight = lineHeight * maxRows + paddingY;
-          const desired = ta.scrollHeight;
-          ta.style.height = Math.min(desired, maxHeight) + "px";
-          ta.style.overflowY = desired > maxHeight ? "auto" : "hidden";
+          const desired = ta!.scrollHeight;
+          ta!.style.height = Math.min(desired, maxHeight) + "px";
+          ta!.style.overflowY = desired > maxHeight ? "auto" : "hidden";
         };
         ta.addEventListener("input", resize);
         // Initial sizing after mount (queueMicrotask so the element is
@@ -1618,23 +1757,17 @@ export class BrowserAdapter implements Adapter {
 
       ta.addEventListener("keydown", (e: KeyboardEvent) => {
         // Backspace-on-empty removes last attachment (CHAT-08 keyboard side).
-        // Plan 30-05 owns the attach registry proper + supplies
-        // `composerState.removeAttachment`; this plan wires the trigger and
-        // ships a fallback pop-last so the interaction is coherent standalone.
+        // Now backed by the real removeAttachment helper below, which handles
+        // splice + blob-URL revocation + re-render.
         if (
           e.key === "Backspace"
-          && ta.value === ""
-          && composerState.attachedFiles.length > 0
+          && ta!.value === ""
+          && cs.attachedFiles.length > 0
         ) {
           e.preventDefault();
-          const last = composerState.attachedFiles[composerState.attachedFiles.length - 1];
-          if (composerState.removeAttachment) {
-            composerState.removeAttachment(last.id);
-          } else {
-            // TEMPORARY shim — Plan 30-05 supersedes with the proper helper
-            // (re-render + blob-URL revocation). Local pop keeps the closure
-            // state coherent so a follow-up Backspace targets the new last.
-            composerState.attachedFiles = composerState.attachedFiles.slice(0, -1);
+          const last = cs.attachedFiles[cs.attachedFiles.length - 1];
+          if (cs.removeAttachment) {
+            cs.removeAttachment(last.id);
           }
           return;
         }
@@ -1656,6 +1789,30 @@ export class BrowserAdapter implements Adapter {
         }
       });
 
+      // ── Paste-image handler (Plan 30-05, CHAT-06). Iterates
+      // clipboardData.items; every item.kind === "file" extracted via
+      // getAsFile() rides addFiles() (same validation path as click/drop).
+      // Text pastes fall through to native textarea behavior (no preventDefault
+      // unless we actually consumed files). Only wired when attachAction is
+      // set — no picker means paste has nowhere to attach.
+      if (n.attachAction) {
+        ta.addEventListener("paste", (e: ClipboardEvent) => {
+          const items = e.clipboardData?.items;
+          if (!items) return;
+          const pastedFiles: File[] = [];
+          for (const item of Array.from(items)) {
+            if (item.kind === "file") {
+              const f = item.getAsFile();
+              if (f) pastedFiles.push(f);
+            }
+          }
+          if (pastedFiles.length > 0) {
+            e.preventDefault();  // prevent fallback data-URL text paste
+            addFiles(pastedFiles);
+          }
+        });
+      }
+
       row.appendChild(ta);
     }
 
@@ -1673,7 +1830,266 @@ export class BrowserAdapter implements Adapter {
     if (n.footerSlot) this.node(n.footerSlot, footerRow, on);
     root.appendChild(footerRow);
 
+    // ── Drag-drop (Plan 30-05, CHAT-05). Only wired when attachAction is set.
+    // Composer-local by default; global opt-in via dropScope:"global" attaches
+    // listeners to document instead. Both scopes guard on
+    // dataTransfer.types.includes("Files") per RESEARCH.md §Q1 — this avoids
+    // stealing text/DOM drags. The dragging visual class always lands on the
+    // composer root regardless of scope.
+    if (n.attachAction) {
+      const dropTarget: HTMLElement | Document =
+        n.dropScope === "global" ? document : root;
+
+      const dragOverHandler = (e: Event): void => {
+        const dt = (e as DragEvent).dataTransfer;
+        if (!dt || !dt.types.includes("Files")) return;
+        e.preventDefault();
+        root.classList.add("vms-chat-composer--dragging");
+      };
+      const dragLeaveHandler = (e: Event): void => {
+        // Only remove the class when the drag actually leaves the composer
+        // (not when it moves between children). `e.target === root` is the
+        // pattern that survives child re-entrances.
+        if ((e as DragEvent).target === root) {
+          root.classList.remove("vms-chat-composer--dragging");
+        }
+      };
+      const dropHandler = (e: Event): void => {
+        const dt = (e as DragEvent).dataTransfer;
+        if (!dt || !dt.types.includes("Files")) return;
+        e.preventDefault();
+        root.classList.remove("vms-chat-composer--dragging");
+        const files = Array.from(dt.files ?? []);
+        addFiles(files);
+      };
+
+      dropTarget.addEventListener("dragover", dragOverHandler);
+      dropTarget.addEventListener("dragleave", dragLeaveHandler);
+      dropTarget.addEventListener("drop", dropHandler);
+
+      // Cleanup posture: for dropScope:"composer" the listeners live on
+      // `root`, which is discarded by the next render()'s innerHTML wipe —
+      // handlers point at detached elements and no-op naturally. For
+      // dropScope:"global" the document-level handlers WOULD leak across
+      // renders; the composer's persistent registry entry means the
+      // handlers stay reachable via `cs` but a re-render's fresh `root`
+      // means the CLASS-add targets the OLD root (a detached element).
+      // Accepted small leak per Plan 30-05 §Task 2 — the fresh render also
+      // registers fresh handlers, so a global-scope composer that renders
+      // N times accumulates N sets of listeners on document. For v1 this
+      // is bounded (a chat composer typically renders on the order of
+      // seconds/user-actions, not thousands of times), and every handler
+      // closes over the same persistent cs so behavior stays consistent.
+      // Follow-up plan can add a document-level cleanup via the mark-sweep
+      // in render() if the leak matters in practice.
+    }
+
     parent.appendChild(root);
+
+    // ── Attachment helpers (Plan 30-05, CHAT-04..08). Declared AFTER the
+    // DOM is built so they can capture `sendBtn`, `chipStripEl`, etc. — the
+    // click/drop/paste handlers above call these forward-referenced names,
+    // which JS resolves at call time (not declaration time) via the closure.
+
+    // Validation-error banner element (nullable — created on demand). Mounts
+    // inside headerRow ABOVE the chip strip on validation failure; auto-clears
+    // on next successful add. Uses tone-danger surface (see CSS).
+    let errorBannerEl: HTMLElement | null = null;
+    function showValidationErrors(errors: string[]): void {
+      if (errorBannerEl) {
+        errorBannerEl.remove();
+        errorBannerEl = null;
+      }
+      if (errors.length === 0) return;
+      errorBannerEl = document.createElement("div");
+      errorBannerEl.className = "vms-chat-composer__error";
+      errorBannerEl.setAttribute("role", "alert");
+      errorBannerEl.textContent = errors.join(" · ");
+      headerRow.insertBefore(errorBannerEl, headerRow.firstChild);
+    }
+
+    // MIME → shipped icon-name mapping. Ordered check (first match wins).
+    // Images use their previewUrl thumbnail so the icon path is a fallback
+    // only; kept in the map for completeness (used if a thumbnail load
+    // fails, though we don't currently hook onerror). Every icon name
+    // referenced here MUST exist in icons-payload.ts.
+    const MIME_ICON_MAP: Array<[string, IconName]> = [
+      ["image/", "image"],
+      ["text/", "file-text"],
+      ["application/pdf", "file-text"],
+      ["application/", "file"],
+    ];
+    function iconForFile(mime: string): IconName {
+      for (const [prefix, iconName] of MIME_ICON_MAP) {
+        if (mime.startsWith(prefix)) return iconName;
+      }
+      return "paperclip";
+    }
+    function humanFileSize(bytes: number): string {
+      const units = ["B", "KB", "MB", "GB"];
+      let i = 0;
+      let val = bytes;
+      while (val >= 1024 && i < units.length - 1) {
+        val /= 1024;
+        i++;
+      }
+      return `${val.toFixed(val < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
+    }
+
+    // MIME-accept matcher — pattern per HTML spec: entries can be a bare
+    // MIME (`image/png`), a prefix wildcard (`image/*`), a `.` extension
+    // (`.pdf`), or the special tokens `audio/*`/`video/*`/`image/*`. We
+    // support MIME + wildcard (the two forms the attachBind accept covers);
+    // extension-only entries pass through as no-match against a MIME-typed
+    // file, which is the correct falsy result.
+    function matchesAccept(fileType: string, accept: string[]): boolean {
+      if (accept.length === 0) return true;
+      for (const entry of accept) {
+        const trimmed = entry.trim();
+        if (trimmed === "") continue;
+        if (trimmed.endsWith("/*")) {
+          const prefix = trimmed.slice(0, -1);  // "image/"
+          if (fileType.startsWith(prefix)) return true;
+        } else if (trimmed === fileType) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Send-button disabled derivation, called from initial render + every
+    // attach/remove/input. Reads bind text length + registry count; sets
+    // disabled + --ready class. Only runs on "idle" status — sending /
+    // streaming manage their own disabled state. Uses the chatComposerAdapter
+    // captured at method-entry (see the top of chatComposer) so we can read
+    // this.readBind safely from a function-declaration closure.
+    function updateSendButtonDisabled(): void {
+      if ((n.status ?? "idle") !== "idle") return;
+      const stateValue = chatComposerAdapter.readBind(n.bind);
+      const hasText = typeof stateValue === "string" && stateValue.trim().length > 0;
+      const canSend = hasText || cs.attachedFiles.length > 0;
+      if (n.disabled === true || !canSend) {
+        sendBtn.disabled = true;
+        sendBtn.classList.remove("vms-chat-composer__send--ready");
+      } else {
+        sendBtn.disabled = false;
+        sendBtn.classList.add("vms-chat-composer__send--ready");
+      }
+    }
+
+    // Chip-strip renderer. Called on every registry mutation. Full innerHTML
+    // reset per render — N is small (attachment count), and rebuilding is
+    // simpler than diffing. Empty registry produces empty innerHTML; the
+    // CSS `:empty` rule on `.vms-chat-composer__attachments` hides the row.
+    const chatComposerRenderIcon = (name: IconName): SVGElement =>
+      this.renderIconSvg(name, "sm", undefined, undefined);
+    function renderChipStrip(): void {
+      chipStripEl.innerHTML = "";
+      for (const item of cs.attachedFiles) {
+        const chip = document.createElement("div");
+        chip.className = "vms-chat-composer__chip";
+        chip.dataset.attachmentId = item.id;
+
+        if (item.kind === "image" && item.previewUrl) {
+          const thumb = document.createElement("img");
+          thumb.className = "vms-chat-composer__chip-thumb";
+          thumb.src = item.previewUrl;
+          thumb.alt = item.file.name;
+          chip.appendChild(thumb);
+        } else {
+          const iconEl = chatComposerRenderIcon(iconForFile(item.file.type));
+          iconEl.classList.add("vms-chat-composer__chip-icon");
+          chip.appendChild(iconEl);
+        }
+
+        const name = document.createElement("span");
+        name.className = "vms-chat-composer__chip-name";
+        name.textContent = item.file.name;
+        chip.appendChild(name);
+
+        const size = document.createElement("span");
+        size.className = "vms-chat-composer__chip-size";
+        size.textContent = humanFileSize(item.sizeBytes);
+        chip.appendChild(size);
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "vms-chat-composer__chip-remove";
+        removeBtn.setAttribute("aria-label", `Remove ${item.file.name}`);
+        removeBtn.appendChild(chatComposerRenderIcon("x"));
+        const capturedId = item.id;
+        removeBtn.addEventListener("click", () => {
+          if (cs.removeAttachment) cs.removeAttachment(capturedId);
+        });
+        chip.appendChild(removeBtn);
+
+        chipStripEl.appendChild(chip);
+      }
+    }
+
+    // Register the removeAttachment helper on the persistent registry entry.
+    // The Backspace-on-empty keyboard handler above dereferences this
+    // (`cs.removeAttachment(last.id)`); the chip X-remove button does the
+    // same. Splices in-place so the persisted array reference stays stable.
+    cs.removeAttachment = (id: string): void => {
+      const idx = cs.attachedFiles.findIndex(f => f.id === id);
+      if (idx < 0) return;
+      const [removed] = cs.attachedFiles.splice(idx, 1);
+      if (removed.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      renderChipStrip();
+      updateSendButtonDisabled();
+    };
+
+    // Client-side file ingestion — the ONE convergence point for click/drop/
+    // paste. Returns the count of successfully added files (used by the
+    // click-picker's change handler to decide whether to dispatch
+    // attachAction). Validates per file against maxFiles / maxFileSize /
+    // accept; rejected files surface as inline error banner text. Per
+    // AGENTS.md class-A note: client validation is UX; server MUST
+    // re-validate on the sendAction handler.
+    function addFiles(files: File[]): number {
+      const errors: string[] = [];
+      let addedCount = 0;
+      for (const file of files) {
+        // Max-files cap (client-side; server re-checks per class-A note).
+        if (
+          n.maxFiles !== undefined
+          && cs.attachedFiles.length + addedCount >= n.maxFiles
+        ) {
+          errors.push(`Max files (${n.maxFiles}) reached`);
+          break;
+        }
+        // Max-file-size cap. maxFileSize is in bytes.
+        if (n.maxFileSize !== undefined && file.size > n.maxFileSize) {
+          errors.push(`${file.name}: exceeds ${humanFileSize(n.maxFileSize)}`);
+          continue;
+        }
+        // MIME accept filter.
+        if (n.accept?.length && !matchesAccept(file.type, n.accept)) {
+          errors.push(`${file.name}: type ${file.type} not accepted`);
+          continue;
+        }
+        const isImage = file.type.startsWith("image/");
+        cs.attachedFiles.push({
+          id: crypto.randomUUID(),
+          file,
+          previewUrl: isImage ? URL.createObjectURL(file) : undefined,
+          kind: isImage ? "image" : "file",
+          sizeBytes: file.size,
+        });
+        addedCount++;
+      }
+      renderChipStrip();
+      showValidationErrors(errors);
+      updateSendButtonDisabled();
+      return addedCount;
+    }
+
+    // Initial paint of the chip strip — the persisted registry may already
+    // hold attachments from a prior render pass (a re-render triggered by
+    // typing or a poll while attachments are pending). renderChipStrip is
+    // idempotent; the empty case produces an empty strip that CSS hides.
+    renderChipStrip();
   }
 
   private section(n: SectionNode, parent: HTMLElement, on: (a: ActionEvent) => void): void {

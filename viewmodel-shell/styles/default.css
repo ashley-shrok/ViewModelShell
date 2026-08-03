@@ -3670,6 +3670,97 @@ button.vms-breadcrumb__link {
   to { transform: rotate(360deg); }
 }
 
+/* ── Attachment chip strip (v9.1.0, Plan 30-05, CHAT-07). Wraps horizontally
+   above the textarea in the composer's header row. Each chip surfaces one
+   attached file: image thumbnail (via blob URL) OR MIME icon + filename +
+   human-readable size + X-remove. The `:empty` display:none is deliberate
+   — an empty registry produces empty innerHTML that CSS collapses, so the
+   header row stays hidden until there IS content to show. */
+.vms-chat-composer__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+.vms-chat-composer__attachments:empty { display: none; }
+
+.vms-chat-composer__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  background: color-mix(in srgb, var(--vms-accent) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vms-accent) 20%, transparent);
+  border-radius: 0.5rem;
+  font-size: 0.875em;
+  max-width: 20rem;
+}
+.vms-chat-composer__chip-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 0.25rem;
+  flex-shrink: 0;
+}
+.vms-chat-composer__chip-icon {
+  flex-shrink: 0;
+  color: var(--vms-text-muted);
+}
+.vms-chat-composer__chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.vms-chat-composer__chip-size {
+  color: var(--vms-text-muted);
+  font-size: 0.8em;
+  flex-shrink: 0;
+}
+.vms-chat-composer__chip-remove {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--vms-text-muted);
+  cursor: pointer;
+  border-radius: 50%;
+  padding: 0;
+}
+.vms-chat-composer__chip-remove:hover {
+  background: color-mix(in srgb, var(--vms-error) 15%, transparent);
+  color: var(--vms-error);
+}
+.vms-chat-composer__chip-remove:focus-visible {
+  outline: 2px solid var(--vms-accent);
+  outline-offset: 1px;
+}
+
+/* Drag-drop visual affordance (CHAT-05). Fires while a file drag is over the
+   composer regardless of dropScope. Border is drawn with outline (not border)
+   so it doesn't shift the layout. */
+.vms-chat-composer--dragging {
+  outline: 2px dashed var(--vms-accent);
+  outline-offset: 4px;
+}
+
+/* Inline validation error banner (CHAT-04..06). Mounts above the chip strip
+   when a client-side check fails (maxFiles / maxFileSize / accept). Uses the
+   shipped --vms-error token — no new theme pair; the AA-contrast gate covers
+   the error-fg-on-error-tinted-bg pair via the existing --vms-error surface
+   rules. Clears on next successful add. */
+.vms-chat-composer__error {
+  padding: 0.375rem 0.5rem;
+  background: color-mix(in srgb, var(--vms-error) 8%, transparent);
+  color: var(--vms-error);
+  border-left: 3px solid var(--vms-error);
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+}
+
 /* ── Skew-lock (9.0.0, SKEW-05) — framework-owned non-dismissible reload modal ──
    Fires from BrowserAdapter.showSkewLock() when the shell detects client/server
    version skew (see viewmodel-shell/src/browser.ts + src/index.ts lockSkew).

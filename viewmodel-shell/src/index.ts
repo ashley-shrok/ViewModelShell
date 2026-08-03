@@ -2,7 +2,18 @@
 
 export interface ActionEvent {
   name: string;
-  files?: Record<string, File>;
+  /**
+   * Optional multipart-side-channel binary payload. Keys are form-field names,
+   * values are either a single `File` (the original Phase-6 shape used by
+   * `FieldNode(inputType:"file")`) OR `File[]` for multi-file entries under a
+   * single field name (v9.1.0, Plan 30-05: `ChatComposerNode.attachBind` may
+   * ride multiple attachments per send). The shell's `performRoundTrip` walks
+   * arrays and appends each file under the same name — server reads via
+   * `Request.Form.Files.GetFiles("attachments")` (.NET) or by iterating all
+   * multipart entries with that name (TS). Backward-compat: single-`File`
+   * values behave byte-identically to pre-9.1.0.
+   */
+  files?: Record<string, File | File[]>;
   /**
    * Phase 14 (NBA-01..04) — optional dispatch-scheduling hint, read PURELY
    * client-side to pick a dispatch lane. Omitted = `true`, the framework's
@@ -3402,8 +3413,19 @@ export class ViewModelShell {
       form.append("_action", JSON.stringify({ name: action.name }));
       form.append("_state", JSON.stringify(this.currentState));
       if (action.files) {
-        for (const [name, file] of Object.entries(action.files)) {
-          form.append(name, file);
+        // v9.1.0 (Plan 30-05, CHAT-04..08): file values may be a single `File`
+        // (the original single-file-per-name shape used by FieldNode file inputs)
+        // OR `File[]` for multi-file entries under one field name (chat-composer
+        // attachments). Both shapes coexist on the wire via multipart's native
+        // support for repeated field names — server-side reads via
+        // `Request.Form.Files.GetFiles(name)` (.NET) or by iterating multipart
+        // entries (TS). Pre-9.1.0 single-file callers are byte-identical.
+        for (const [name, val] of Object.entries(action.files)) {
+          if (Array.isArray(val)) {
+            for (const f of val) form.append(name, f);
+          } else {
+            form.append(name, val);
+          }
         }
       }
       const extraHeaders = this.options.getRequestHeaders ? await this.options.getRequestHeaders() : {};
