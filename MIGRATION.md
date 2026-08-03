@@ -6,6 +6,70 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Upgrading to v9.2.0
+
+Additive optional axis on `TextNode` — **no consumer action required.** Existing apps continue to work unchanged. Skip the rest of this section unless you want to adopt the new axis.
+
+### Adopting `TextNode.maxLines`
+
+The axis is a closed enum: `1 | 2 | 3` (single-line ellipsis, 2-line clamp, 3-line clamp). Absent = current wrap behavior, unchanged.
+
+**TypeScript / npm:**
+
+```typescript
+{ type: "text", value: "very long text that would wrap many lines", maxLines: 1 }  // single-line ellipsis
+{ type: "text", value: "message preview", maxLines: 2 }                            // 2-line clamp
+```
+
+**C# / NuGet:**
+
+```csharp
+new TextNode("very long text") { MaxLines = 1 }        // single-line ellipsis
+new TextNode("message preview") { MaxLines = 2 }       // 2-line clamp
+existingNode with { MaxLines = 3 }                     // with-expression works too
+```
+
+Note the `{ MaxLines = ... }` object-initializer syntax on the .NET side — `MaxLines` is an **init-only property outside `TextNode`'s primary constructor**, deliberately NOT a ctor parameter. This placement preserves binary compatibility with pre-9.2.0 companion NuGet assemblies (`AshleyShrok.ViewModelShell.Markdown` 0.2.x); the primary ctor arity stays at 7 unchanged, so packed companion IL continues to bind at runtime. The `parity/check-companion-binary-compat.sh` gate proved this before publish.
+
+### Composes into every composite carrying a TextNode slot — for free
+
+Pass a `TextNode(..., maxLines: N)` instead of a bare string into any composite's text slot:
+
+```typescript
+// UserRowNode: hug a long session title on one line
+{ type: "user-row", name: { type: "text", value: "Very long session title", maxLines: 1 } }
+
+// ListRowNode: 2-line clamp on the primary, 1-line on the secondary
+{ type: "list-row",
+  primary:   { type: "text", value: "Long title...",     maxLines: 2 },
+  secondary: { type: "text", value: "Long subtitle...", maxLines: 1 } }
+
+// MessageNode: preview clamp
+{ type: "message", author: "Angel", content: { type: "text", value: "Long body...", maxLines: 3 } }
+```
+
+Composite renderers do NOT change in v9.2.0 — the axis flows through because slots are typed by semantic name and accept any `ViewNode` (per the composite-nodes-layer typed-slots governance rule). Composites covered: `UserRowNode.name`, `ListRowNode.primary + secondary`, `MessageNode.content`, `TimelineEntryNode.description`, `DetailRowNode.label + value`, `ChipNode.label`, standalone `TextNode`.
+
+### What is NOT part of this release
+
+- **`TableColumn.maxLines`** — `TableRow.cells` is `Record<string, string>` (strings, not ViewNodes), so `TextNode.maxLines` can't flow into a table cell. Separate follow-on conversation if you hit the need.
+- **Middle-truncate** (`abcdef…xyz` for long paths) — no pure-CSS mechanism; universally out-of-scope in every flagship framework's line-cap axis. Separate future primitive if surfaced.
+- **Auto-wire `TooltipNode` on truncation** — the framework does NOT auto-emit a tooltip when a clamped node overflows. Client-side truncation-detection would walk past "server tree is truth" (container width is client-only). If you need an a11y-honest reveal on truncation, compose a `TooltipNode` explicitly around the `TextNode`.
+
+### Bumping both packages
+
+```bash
+# TypeScript / npm
+npm install @ashley-shrok/viewmodel-shell@9.2.0
+
+# .NET / NuGet
+dotnet add package AshleyShrok.ViewModelShell --version 9.2.0
+```
+
+The companion `AshleyShrok.ViewModelShell.Markdown` is **not** rebuilt for this release — its 0.2.x packed IL continues to work against core 9.2.0 unchanged (that's the whole point of the init-only-property placement).
+
+---
+
 ## Upgrading to v9.0.0
 
 v9.0.0 is a **BEHAVIOR-only major bump** — no wire shape change. The two behavior changes are (1) the server-side version-skew guard now enforces on both GET + POST (was per-controller opt-in POST-only), and (2) the browser's shipped adapter renders a non-dismissible hard-lock modal on skew instead of silently auto-reloading.

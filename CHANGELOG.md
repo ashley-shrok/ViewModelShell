@@ -6,6 +6,46 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 9.2.0 — 2026-08-03 (npm + NuGet aligned)
+
+Minor release: adds the `TextNode.maxLines` axis — a Route A closed-enum line-cap primitive that composes into every composite carrying a TextNode slot. Additive optional field on both backends; wire is unchanged for consumers who don't opt in.
+
+Angel /ai surfaced the framework gap on the tailnet earlier today — her Kitsune sidebar app needed a way to hug long session titles and had no wire knob, so she was doing server-side `.Substring(0, 16) + "…"` in `BuildSessionLabel`. AGENTS.md's design philosophy says gaps get closed properly, not worked around — this closes it.
+
+### Added
+
+- **`TextNode.maxLines` axis** — closed enum `1 | 2 | 3` on the TS side; `int?` init-only property on the .NET side (see "Binary compat" below for why placement matters). Emits `.vms-text--max-lines-{N}` class via the BrowserAdapter TextNode render path when set; absent = current wrap behavior unchanged.
+  - `maxLines: 1` → single-line ellipsis (`overflow: hidden; text-overflow: ellipsis; white-space: nowrap`)
+  - `maxLines: 2 | 3` → CSS `-webkit-line-clamp` (multi-line clamp on `display: -webkit-box`)
+  - Composes into every composite carrying a TextNode slot for FREE — `UserRowNode.name`, `ListRowNode.primary + secondary`, `MessageNode.content`, `TimelineEntryNode.description`, `DetailRowNode.label + value`, `ChipNode.label`, standalone `TextNode`. Consumer passes a `TextNode(..., maxLines: N)` (TS) / `new TextNode(...) { MaxLines = N }` (C#) into any composite slot; the axis flows without a single composite renderer change.
+  - Design LOCKED at the 2026-08-03 served tasting on the tailnet (real shipped bundle + all 4 values × 4 composite contexts across 13 themes and 3 container widths — Ashley visual sign-off).
+  - Flagship precedent survey (validated the closed-enum choice): MUI `Typography noWrap` + `Typography.Text ellipsis={rows:N}` (Ant), Chakra `Text noOfLines={N}`, Bootstrap `.text-truncate`. Middle-truncate and tooltip auto-wire are universally out-of-scope in the axis (both are separate concerns in every flagship); VMS follows suit.
+
+- **Framework tests, both backends:**
+  - TS: 10 new vitest tests in `viewmodel-shell/test/text-max-lines.test.ts` — cover class emission per value + class absence when unset + composition into `UserRowNode.name` (Angel's motivating case verbatim).
+  - .NET: 7 new xUnit tests in `viewmodel-shell-dotnet/Tests/TextMaxLinesSerializationTests.cs` — cover JSON emission per value + direct `Assert.DoesNotContain("\"maxLines\"", json)` for the class-2 gotcha #8 defect that `parity/normalize.ts` scrubs before diff + composition with Style/Tone/Weight + round-trip preservation.
+
+- **Parity coverage:** new fixture `parity/fixtures/textnode-maxlines.json` runs against all 3 FeatureProbe backends (dotnet-probe, bun-probe, node-probe) with 4 sequential steps (unset → 1 → 2 → 3), each carrying unique `expectBodyContains` tripwires per branch (gotcha #9 class-3 discipline — a fixture step that stops firing its branch fails loudly, not silently). The FeatureProbe backends grow a `TextNodeMaxLinesProbe` state slot + 4 action arms + a probe section rendering the TextNode with the current value. Wire is byte-parallel across all 3 backends; the always-on `findNulls` invariant catches any `"maxLines": null` drift the diff cannot see.
+
+### Binary compat
+
+- **`TextNode.MaxLines` is declared as an INIT-ONLY PROPERTY OUTSIDE the primary constructor** on the .NET side, NOT as an appended positional ctor param. This placement is load-bearing: AGENTS.md is explicit that appending a positional param to a C# record's primary ctor is binary-breaking regardless of the default value, and `parity/check-companion-binary-compat.sh` exists specifically to catch that failure mode. Markdown 0.2.x's packed IL contains `newobj TextNode(...)` opcodes referencing the 7-param primary ctor; the init-only-property placement leaves the primary ctor arity unchanged at 7, so the packed IL continues to resolve. **Gate proved this locally before publish** — `companion-binary-compat: OK — 7 distinct node types constructed, all required ctors resolved.` Companion `AshleyShrok.ViewModelShell.Markdown` is NOT rebuilt for this release.
+- **Consumer construction on .NET** uses object-initializer syntax: `new TextNode("...") { MaxLines = 1 }` or `existingNode with { MaxLines = 2 }`. NOT `new TextNode("...", MaxLines: 1)` — MaxLines is not a ctor parameter.
+
+### Explicitly deferred (not in this release)
+
+- **`TableColumn.maxLines`** — `TableRow.cells` is `Record<string, string>` (strings, not ViewNodes), so `TextNode.maxLines` can't flow into a table cell. Separate follow-on conversation if a consumer surfaces the need.
+- **Middle-truncate** (`abcdef…xyz` for long paths) — universally out-of-scope for the maxLines axis in every flagship framework. There is no pure-CSS mechanism; separate future primitive if surfaced.
+- **Auto-wire `TooltipNode` on truncation** — the framework does NOT auto-emit a tooltip when a maxLines-clamped node overflows. Rationale: truncation-detection at wire time isn't knowable (container width is client-only); auto-wire would need client-side detection + client-side node injection, which walks past "server tree is truth." Consumers who need a11y-honest reveal on truncation compose `TooltipNode` explicitly around the `TextNode`.
+
+### Consumers
+
+**No action required** — additive optional field on both backends. Existing apps continue to work byte-identically to v9.1.1. Consumers who want the new axis pass `maxLines: N` on `TextNode` (or set `MaxLines` via object-initializer / `with`-expression on C#). See MIGRATION.md for the copy-pasteable examples.
+
+Package moves: npm `@ashley-shrok/viewmodel-shell` MINOR bump (9.2.0); NuGet `AshleyShrok.ViewModelShell` MINOR bump byte-parallel. Companion `AshleyShrok.ViewModelShell.Markdown` NOT affected (no rebuild — MINOR core bump, not MAJOR; and this release deliberately avoided the positional-append that would have forced a rebuild regardless of semver).
+
+---
+
 ## 9.1.1 — 2026-08-03 (npm + NuGet aligned) — bug fix
 
 Patch release: fix a CSS-specificity regression in `AvatarNode` image mode. Angel-DM'd on the tailnet ~2 hours after the v9.1.0 release; unblocks /ai adoption.
