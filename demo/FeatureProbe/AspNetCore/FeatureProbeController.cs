@@ -72,7 +72,17 @@ public record FeatureProbeState(
     bool ChatComposerHasStopAction,  // true when status can reach "streaming" so stopAction is set (validator hint)
     bool ChatComposerAttached,       // true renders a HeaderSlot tripwire TextNode (attach-clicked branch)
     string ChatComposerDropScope,    // "" (default → composer absent) | "global"
-    string ChatComposerSubmitMode    // "" (default → enter absent) | "ctrl-enter"
+    string ChatComposerSubmitMode,   // "" (default → enter absent) | "ctrl-enter"
+    // v9.2.0 (Phase 31 / MAXLINES-PARITY) — "" (unset) | "1" | "2" | "3",
+    // drives BuildVm's TextNode.MaxLines emission. Non-nullable string with ""
+    // default (matches ChatComposerStatus/DropScope/SubmitMode posture per
+    // gotcha #8 — state record is app-owned so nullables would need explicit
+    // JsonIgnore; empty-string default sidesteps that entirely). Each fixture
+    // step (unset / 1 / 2 / 3) mutates this slot to its target string; the
+    // BuildVm arm maps to TextNode.MaxLines int? and to a marker text string
+    // giving each branch a UNIQUE positive tripwire per AGENTS.md gotcha #9
+    // class-3 lesson. Byte-parallel with bun/node twin (textNodeMaxLinesProbe).
+    string TextNodeMaxLinesProbe
 )
 {
     public static FeatureProbeState Initial() => new(
@@ -106,7 +116,10 @@ public record FeatureProbeState(
         ChatComposerHasStopAction: false,
         ChatComposerAttached: false,
         ChatComposerDropScope: "",
-        ChatComposerSubmitMode: ""
+        ChatComposerSubmitMode: "",
+        // v9.2.0 (Phase 31) — initial UNSET branch. buildVm renders
+        // "TextNodeMaxLinesProbe=unset" marker with MaxLines ABSENT on the wire.
+        TextNodeMaxLinesProbe: ""
     );
 }
 
@@ -340,6 +353,14 @@ public class FeatureProbeController : ControllerBase
         {
             // state unchanged.
         }
+        // v9.2.0 (Phase 31 / MAXLINES-PARITY) — TextNode.maxLines axis fixture
+        // branches (Plan 31-03). Each of these actions mutates the state slot
+        // the buildVm arm reads to render the probe TextNode with the target
+        // branch's tripwire on the wire. Byte-parallel with bun/node twin.
+        else if (name == "textnode-maxlines-unset") { state = state with { TextNodeMaxLinesProbe = "" }; }
+        else if (name == "textnode-maxlines-1")     { state = state with { TextNodeMaxLinesProbe = "1" }; }
+        else if (name == "textnode-maxlines-2")     { state = state with { TextNodeMaxLinesProbe = "2" }; }
+        else if (name == "textnode-maxlines-3")     { state = state with { TextNodeMaxLinesProbe = "3" }; }
         else
         {
             throw new UnknownActionException(name);
@@ -1720,6 +1741,44 @@ public class FeatureProbeController : ControllerBase
                     HeaderSlot: state.ChatComposerAttached
                         ? new TextNode("ChatComposerAttached=true tripwire")
                         : null),
+            }));
+
+        // ── v9.2.0 TextNode.maxLines probe (Phase 31 / MAXLINES-PARITY) ───
+        // Renders a single TextNode whose Value carries a UNIQUE marker text
+        // per state slot value (unset/1/2/3) AND whose MaxLines emits the
+        // exact wire literal ("maxLines":N when N∈{1,2,3}, ABSENT when unset).
+        // The marker text gives the fixture's expectBodyContains a POSITIVE
+        // branch-ran assertion; the "maxLines":N wire literal gives it a
+        // second axis-value assertion. Both together defeat gotcha #9 class-3
+        // ("branches the fixture never runs are invisible to the diff") AND
+        // ride on the always-on findNulls invariant (parity/run.ts) that
+        // catches gotcha #8 class-2 defects ("maxLines":null drift the diff's
+        // normalize scrubs before comparing).
+        //
+        // MaxLines is an INIT-ONLY property OUTSIDE the primary ctor (see
+        // Plan 31-02 rationale: preserves binary compat with pre-9.2.0
+        // companion NuGets like Markdown 0.2.x whose packed IL references
+        // the 7-param TextNode ctor). Construction MUST use
+        // object-initializer syntax `{ MaxLines = ... }` — NOT the named-arg
+        // syntax `new TextNode(..., MaxLines: N)`, which does not compile.
+        //
+        // Byte-parallel with the bun/node twin textNodeMaxLinesProbeSection.
+        pageChildren.Add(new SectionNode(
+            Heading: "Phase 31 TextNode.maxLines probe",
+            Variant: SectionVariant.Card,
+            Children: new ViewNode[]
+            {
+                new TextNode(
+                    Value: $"TextNodeMaxLinesProbe={(string.IsNullOrEmpty(state.TextNodeMaxLinesProbe) ? "unset" : state.TextNodeMaxLinesProbe)}")
+                {
+                    MaxLines = state.TextNodeMaxLinesProbe switch
+                    {
+                        "1" => 1,
+                        "2" => 2,
+                        "3" => 3,
+                        _ => null,
+                    },
+                },
             }));
 
         pageChildren.Add(new ModalNode(

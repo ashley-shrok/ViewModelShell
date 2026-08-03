@@ -1,0 +1,46 @@
+{
+  "name": "textnode-maxlines",
+  "endpoint": "/api/probe",
+  "actionEndpoint": "/api/probe/action",
+  "$comment": "Phase 31 (v9.2.0) TextNode.maxLines axis parity fixture. Byte-parallel with chat-composer.json posture: 4 sequential steps exercise ALL FOUR wire states of TextNode.maxLines (unset / 1 / 2 / 3), each carrying a UNIQUE `expectBodyContains` tripwire that only the target branch can emit per AGENTS.md gotcha #9 class-3 lesson ('branches the fixture never runs are invisible to the byte-diff'). The unset step's marker text `TextNodeMaxLinesProbe=unset` is emitted by the buildVm arm ONLY when the state slot is empty (the wire-absent case); a mutation that stopped emitting the marker OR started emitting `\"maxLines\":null` when unset would fail LOUDLY — the always-on findNulls invariant (parity/run.ts) catches the second (class-2 gotcha-#8 defect: normalize scrubs `\"field\":null` BEFORE the diff so parity structurally can't see it; findNulls sees the raw parsed body). The 3 numbered steps assert the exact `\"maxLines\":N` wire literal for N∈{1,2,3} — closed-enum wire values, more diff-robust than the DOM class emission (which is browser-only). Steps run sequentially and mutate the FeatureProbeState slot cumulatively; each step's marker text uniquely identifies its state (`TextNodeMaxLinesProbe=1|2|3`) so carry-over from a prior step's marker never satisfies the current step's assertion. Byte-parallel with chat-composer.json — same $comment discipline, same class-2/class-3 defense structure. Do NOT weaken these tripwires without a plan-authored rationale — they are what stops a maxLines regression from being invisible to the diff.",
+  "steps": [
+    {
+      "id": "unset-initial",
+      "method": "GET",
+      "expectBodyContains": [
+        "TextNodeMaxLinesProbe=unset"
+      ],
+      "$comment": "Branch UNSET. State slot defaults to \"\" → buildVm renders TextNode(value:\"TextNodeMaxLinesProbe=unset\") with MaxLines omitted. The positive substring proves the branch ran. The always-on findNulls invariant separately catches a `\"maxLines\":null` regression (class-2 gotcha-#8 defect the normalize scrubs before diff)."
+    },
+    {
+      "id": "maxlines-1",
+      "method": "POST",
+      "action": { "name": "textnode-maxlines-1" },
+      "expectBodyContains": [
+        "TextNodeMaxLinesProbe=1",
+        "\"maxLines\":1"
+      ],
+      "$comment": "Branch MAXLINES=1. State slot flipped to \"1\"; buildVm renders TextNode(value:\"TextNodeMaxLinesProbe=1\", maxLines:1). BOTH assertions must pass: the marker text confirms the branch ran; the `\"maxLines\":1` wire literal confirms the axis emitted correctly."
+    },
+    {
+      "id": "maxlines-2",
+      "method": "POST",
+      "action": { "name": "textnode-maxlines-2" },
+      "expectBodyContains": [
+        "TextNodeMaxLinesProbe=2",
+        "\"maxLines\":2"
+      ],
+      "$comment": "Branch MAXLINES=2. Same shape as step 2; carry-over test: the prior step's `\"maxLines\":1` and `TextNodeMaxLinesProbe=1` MUST NOT satisfy this step's assertions (the state slot flipped)."
+    },
+    {
+      "id": "maxlines-3",
+      "method": "POST",
+      "action": { "name": "textnode-maxlines-3" },
+      "expectBodyContains": [
+        "TextNodeMaxLinesProbe=3",
+        "\"maxLines\":3"
+      ],
+      "$comment": "Branch MAXLINES=3. Closes the closed-enum coverage; anything above 3 is out-of-scope per CONTEXT §deferred 'Values 4+'."
+    }
+  ]
+}

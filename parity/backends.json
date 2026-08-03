@@ -137,7 +137,7 @@
       "args": ["run", "--no-build", "--no-launch-profile", "--urls", "http://localhost:5011"],
       "baseUrl": "http://localhost:5011",
       "ready": "/api/probe",
-      "fixtures": ["feature-probe", "feature-probe-envelope", "chat-composer"]
+      "fixtures": ["feature-probe", "feature-probe-envelope", "chat-composer", "textnode-maxlines"]
     },
     {
       "name": "bun-probe",
@@ -147,7 +147,7 @@
       "env": { "PORT": "5012" },
       "baseUrl": "http://localhost:5012",
       "ready": "/api/probe",
-      "fixtures": ["feature-probe", "feature-probe-envelope", "chat-composer"]
+      "fixtures": ["feature-probe", "feature-probe-envelope", "chat-composer", "textnode-maxlines"]
     },
     {
       "name": "node-probe",
@@ -157,7 +157,7 @@
       "env": { "PORT": "5013" },
       "baseUrl": "http://localhost:5013",
       "ready": "/api/probe",
-      "fixtures": ["feature-probe", "feature-probe-envelope", "chat-composer"]
+      "fixtures": ["feature-probe", "feature-probe-envelope", "chat-composer", "textnode-maxlines"]
     },
     {
       "name": "dotnet-reorder",
