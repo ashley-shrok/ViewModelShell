@@ -4989,6 +4989,12 @@ export class BrowserAdapter implements Adapter {
       inp.className = "vms-field__input";
       inp.id = `vms-${n.name}`;
       inp.type = n.inputType;
+      // On a focused `<input type="number">`, mouse wheel silently steps the
+      // value. Blur so the value doesn't move; wheel bubbles unimpeded so the
+      // page still scrolls. Never preventDefault (traps operator scroll).
+      if (inp.type === "number") {
+        inp.addEventListener("wheel", () => inp.blur());
+      }
       inp.name = n.name;
       if (n.placeholder) inp.placeholder = n.placeholder;
       inp.value = stateValue == null ? "" : String(stateValue);
@@ -5896,6 +5902,9 @@ export class BrowserAdapter implements Adapter {
 
         const input = document.createElement("input");
         input.type = "number";
+        // See field() — wheel on a focused number input silently steps the
+        // value; blur so the value doesn't move while the page still scrolls.
+        input.addEventListener("wheel", () => input.blur());
         input.className = "vms-table__pagination-jump-input";
         input.min = "1";
         input.max = String(totalPages);

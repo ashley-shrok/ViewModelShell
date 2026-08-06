@@ -6,6 +6,24 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## 9.2.1 — 2026-08-06 (npm only) — bug fix
+
+Patch release: fix a silent-data-corruption footgun on `<input type="number">`. Poppy-DM'd on the tailnet this morning after Kara (Aither finance operator on PBMInvoices) added an invoice line, scrolled the page over the Charge field, and the charge amount silently decremented instead of the page scrolling. Root cause is the well-known HTML default — mouse wheel on a focused number input silently steps the value — inherited from the browser through VMS's `FieldNode(inputType:"number")` render path.
+
+### Fixed
+
+- **`FieldNode(inputType:"number")` and the `TableNode` pagination-jump input no longer silently step their value on mouse wheel.** The `BrowserAdapter` now attaches a `wheel` listener at both `<input type="number">` creation sites that calls `input.blur()`. The blur happens synchronously in the handler, so the browser's number-adjust default no longer applies (its precondition — the input being focused when the wheel event resolves — is gone). The wheel event still bubbles unimpeded (no `preventDefault`), so the page continues scrolling normally — the operator's expected behavior. This is the canonical MUI / Chakra / React Aria pattern. `viewmodel-shell/src/browser.ts:4991-4999 + 5900-5903`. Adapter-only fix; no wire change; no per-field opt-in — the wheel-step behavior is a universally-agreed browser footgun with no legitimate consumer use case (the "quick nudge" pattern is `SliderNode`).
+
+### Added (tests)
+
+- **`viewmodel-shell/test/field-number-wheel-blur.test.ts`** — 3 new jsdom tests: (a) `FieldNode(inputType:"number")` blurs on wheel, (b) `TableNode` pagination-jump input blurs on wheel, (c) negative — `FieldNode(inputType:"text")` does NOT blur on wheel (proves the guard is scoped). Mutation-proven: reverting the two `addEventListener("wheel", ...)` lines fails both positive tests red; the negative correctly passes both.
+
+### Consumers
+
+**No action required.** Rebuild against 9.2.1 — every existing `FieldNode(inputType:"number")` and every `TableNode` using pagination-jump inherits the guard automatically. No API change; no opt-in. **NuGet unaffected** — this is an adapter-only client-side change, so `AshleyShrok.ViewModelShell` does NOT need to bump. Consumers pinning both packages can bump just `@ashley-shrok/viewmodel-shell` to 9.2.1 and leave NuGet at 9.2.0. Companion `AshleyShrok.ViewModelShell.Markdown` NOT affected. Package moves: npm `@ashley-shrok/viewmodel-shell` PATCH bump (9.2.1); NuGet unchanged.
+
+---
+
 ## 9.2.0 — 2026-08-03 (npm + NuGet aligned)
 
 Minor release: adds the `TextNode.maxLines` axis — a Route A closed-enum line-cap primitive that composes into every composite carrying a TextNode slot. Additive optional field on both backends; wire is unchanged for consumers who don't opt in.
