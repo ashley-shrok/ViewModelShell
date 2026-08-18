@@ -503,6 +503,103 @@ Draft text, focus, caret position, and scroll positions are all preserved across
 
 **Worked example:** `demo/HelpDesk/AspNetCore/AgentController.cs` (+ bun twin at `demo/HelpDesk-bun/server.ts`) is the canonical reference. It seeds ~80 tickets so the cap actually fires; tabs narrow by status; the Title column has a free-text filter input; matches ≤ cap render with `selection.buttons[]` for bulk close/start/reopen; matches > cap render a "narrow further" message with the filter input still accessible. The three zero-row paths each carry a distinct, unambiguous signal so the user can never confuse one with a broken render: **over cap** → the "narrow further" warning above an empty table; **filter matches 0 against a non-empty DB** → muted `"No tickets match your filter."` above an empty table (filter input still reachable to edit/clear); **DB itself empty** → `"No tickets in queue."` with no table.
 
+### Typed column-filter primitive (v10.0.0)
+
+Typed per-column filters ship as two orthogonal wire additions — a column declaration and a table-level bind map — plus a reference truth function consumers call in their action handlers. The browser adapter owns all UI (always-visible inline input + escalation popover + icon state grammar); apps never hand-roll filter HTML.
+
+**Authoritative sources (don't copy here — they drift):**
+- Wire types (`FilterSpec`, `FilterDescriptor`, `FilterRule`, `ValueKind`, operator aliases): `viewmodel-shell/src/index.ts` and `viewmodel-shell-dotnet/ViewModels.cs`
+- Browser adapter UI rendering (inline input, popover DOM, icon state grammar): `viewmodel-shell/src/browser.ts`
+- Reference truth function (`matchesFilter` / `FilterHelper.MatchesFilter`): `viewmodel-shell/src/server.ts` / `viewmodel-shell-dotnet/ViewModels.cs`
+- Migration guide (before/after diff, 8 removed fields): `MIGRATION.md` § Migrating to v10.0.0
+
+**Wire shape (concept map):**
+
+| Field | Where | Meaning |
+|-------|-------|---------|
+| `filter?: FilterSpec` | `TableColumn` | Declares this column is filterable; specifies `kind` (text/number/date/fixed-set/yes-no), optional `options[]` (fixed-set list), optional `matchingHints[]` |
+| `filterDescriptorBinds?: Record<string,string>` | `TableNode` | Maps each filterable column key to the state bind path holding its `FilterDescriptor` |
+| `FilterDescriptor` | in state at bind path | `{ rules: FilterRule[], joiner: "all-of" \| "any-of" }` |
+| `FilterRule` | inside `FilterDescriptor.rules[]` | `{ operator: string, value?: unknown }` — operator is a closed TS union per kind; `value` absent for no-value operators (is-empty, is-true, etc.) |
+
+**Reference truth function:**
+
+```typescript
+// TypeScript server subpath — call in your action handler
+import { matchesFilter } from "@ashley-shrok/viewmodel-shell/server";
+
+// Returns true if the row cell satisfies the descriptor; false otherwise
+const passes = matchesFilter(descriptor, rawValue, displayString, kind, matchingHints?);
+```
+
+```csharp
+// .NET — call in your action handler
+using ViewModelShell;
+bool passes = FilterHelper.MatchesFilter(descriptor, rawValue, displayString, kind, matchingHints?);
+```
+
+The truth function covers every operator × kind combination: `contains` (case-insensitive, against `displayString`, honors `ignore-punctuation`); `equals`/`starts-with`/`ends-with` (text); numeric comparisons including `between`; ISO-8601 date comparisons including `in-range`; `is`/`is-not` (fixed-set); `is-true`/`is-false` (yes-no); `is-empty`/`is-not-empty` (all kinds — `null`/`undefined`/`""` = empty; whitespace-only = non-empty). Multi-rule with `all-of`/`any-of`. **Consumers call it; the framework never calls it implicitly.**
+
+**C# wiring example:**
+
+```csharp
+// State record: one FilterDescriptor? per filterable column
+public record AgentState(
+    // ...
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    FilterDescriptor? TitleFilterDescriptor,
+    // ...
+)
+
+// BuildVm: declare filter kind + bind path
+new TableColumn("title", "Title", Filter: new FilterSpec("text")),
+// ...
+FilterDescriptorBinds: new Dictionary<string, string> { ["title"] = "titleFilterDescriptor" },
+
+// Action handler: apply in-memory via FilterHelper
+var descriptor = state.TitleFilterDescriptor;
+var rows = allRows.Where(r =>
+    FilterHelper.MatchesFilter(descriptor, r.Title, r.Title, "text")).ToList();
+```
+
+**TypeScript wiring example:**
+
+```typescript
+// Column declaration
+{ key: "title", header: "Title", filter: { kind: "text" } }
+
+// Table declaration
+{ filterDescriptorBinds: { title: "filterDescriptors.title" } }
+
+// Row evaluation (server subpath — not in browser pages, see Gotcha #13)
+import { matchesFilter } from "@ashley-shrok/viewmodel-shell/server";
+const visible = rows.filter(r =>
+  matchesFilter(state.filterDescriptors?.title, r.title, r.title, "text"));
+```
+
+**UI grammar (adapter-owned — not on the wire):**
+
+The browser adapter renders a filter row in the table header for every table with `filterDescriptorBinds` + at least one `filter`-bearing column. Per filterable column:
+
+- **Always-visible inline `<input type="text">`** — the user types a plain contains value. Enter (or blur) commits: the adapter writes a single `{operator:"contains", value:"..."}` rule descriptor to the bind path via `sa.write`. No named action is dispatched; the descriptor arrives at the server on the next regular action (any button click, form submit, poll).
+- **Filter-icon button** — opens the escalation popover. Icon state: `filter-slash` (empty descriptor), `filter` (exactly one "contains" rule = "simple"), `filter` + dot (any other configuration = "escalated").
+- **Escalation popover** — mounted in a portal div (sibling of the table wrapper, escaping `overflow-x` clip). Contains: operator picker (closed enum for the column's kind), typed value input (text input / number / date / fixed-set select / yes-no select), "Add rule" button, all-of/any-of joiner toggle, Apply / Clear / Remove-rule affordances. **Apply** commits the draft descriptor to state. **Outside-click / Escape** discards the draft without committing — the filter state is unchanged.
+- **Inline read-only summary** — for nontrivial descriptors (more than one rule or a non-contains operator), the inline `<input>` is replaced by a compact read-only text summary ("contains 'foo' AND > 100", max 40 chars).
+
+**The key non-obvious behaviors:**
+
+1. **Filter commits are state-writes, not named actions.** The adapter writes `FilterDescriptor` to state via the bind path directly — no `filterAction`-style named dispatch. The server picks up the updated descriptor on the next regular user action. This means a filter change followed immediately by clicking a row (select-ticket-42) is ONE round trip that carries both the new filter descriptor AND the row action — there's no intermediate filter-only round trip.
+
+2. **Contains works on every kind.** A user typing "2026" into a date-column filter applies a contains rule against the display string (what they see in the cell). Numeric and date operators via the popover are in addition to, not instead of, contains. `matchesFilter` evaluates against `displayString` for contains and against `rawValue` for typed operators.
+
+3. **"Is empty" treats null, undefined, and `""` as empty; whitespace-only is NOT empty.** A cell containing `"   "` (spaces) is not empty by this rule. Consistent with the framework's "an option not set is absent" posture — `null`/`undefined`/`""` are the three representations of "nothing".
+
+4. **`filterDescriptorBinds` keys are column keys, not column headers.** The map key is the `TableColumn.key` value (e.g. `"title"`, `"status"`), not the display header string. The bind-path value must point to a `FilterDescriptor?` field in the state record — the adapter reads and writes to that path on every filter interaction.
+
+5. **Browser-only pages cannot import `matchesFilter` from the server subpath (Gotcha #13).** The server subpath carries Node built-ins (`node:fs`, `node:url`, `node:path`) and a browser page that imports it will have a blank page with no error. Browser-only front-ends must apply filter logic inline against `FilterDescriptor.rules` directly — see `demo/Showcase/frontend/src/main.ts` for the reference pattern.
+
+**Worked examples:** `demo/HelpDesk/AspNetCore/AgentController.cs` + `demo/HelpDesk-bun/server.ts` (typed text filter on the Title column); `demo/FeatureProbe/AspNetCore/FeatureProbeController.cs` + `demo/FeatureProbe-bun/handler.ts` (typed text filter on the Name column).
+
 ### In-modal success feedback (modal-swap-to-success)
 
 The idiomatic way to confirm a completed action that happened *inside a modal* (a file import, a bulk add, a multi-field create) is **not a toast** — it's to keep the **same `ModalNode` open and swap its body** from the entry form to a success card (a `tone:"success"` `TextNode` + a single `[Done]` button that dismisses). Only `title` + `children` change across the render; there is no "close + reopen".

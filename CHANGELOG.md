@@ -6,13 +6,35 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
-## Unreleased
+## 10.0.0 — 2026-08-18 (npm + NuGet aligned) — BREAKING
 
 ### Added
 
-- **Typed column filter wire vocabulary** (Phase 32 — additive, no version bump yet): `TableColumn.filter?: FilterSpec` declares a filterable column's value-kind (`"text" | "number" | "date" | "fixed-set" | "yes-no"`), optional fixed-set option list, and optional matching hints (`"ignore-punctuation"`). `TableNode.filterDescriptorBinds?: Record<string, string>` maps column keys to state paths holding each column's current `FilterDescriptor` (an ordered list of rules + `"all-of" | "any-of"` joiner). Types on both backends: `FilterSpec`, `FilterDescriptor`, `FilterRule`, `ValueKind`, `MatchingHint`, and per-type closed operator aliases (`TextOperator`, `NumberOperator`, `DateOperator`, `FixedSetOperator`, `YesNoOperator`). The existing `filterable`/`filterValue`/`filterBinds`/`filterAction` fields remain valid and untouched — removal happens in Phase 33 alongside the adapter UI and major-version release.
+- **Typed column filter wire vocabulary** (Phase 32 — additive wire additions first staged in `## Unreleased`): `TableColumn.filter?: FilterSpec` declares a filterable column's value-kind (`"text" | "number" | "date" | "fixed-set" | "yes-no"`), optional fixed-set option list, and optional matching hints (`"ignore-punctuation"`). `TableNode.filterDescriptorBinds?: Record<string, string>` maps column keys to state paths holding each column's current `FilterDescriptor` (an ordered list of rules + `"all-of" | "any-of"` joiner). Types on both backends: `FilterSpec`, `FilterDescriptor`, `FilterRule`, `ValueKind`, `MatchingHint`, and per-type closed operator aliases (`TextOperator`, `NumberOperator`, `DateOperator`, `FixedSetOperator`, `YesNoOperator`).
 - **Reference truth function** — `matchesFilter(descriptor, rawValue, displayString, kind, matchingHints?)` exported from `@ashley-shrok/viewmodel-shell/server` (TypeScript); `FilterHelper.MatchesFilter(descriptor, rawValue, displayString, kind, matchingHints?)` in `AshleyShrok.ViewModelShell` (C#). Given a `FilterDescriptor` from state and a row's cell data, returns `true`/`false`. Every operator × applicable value-kind is implemented: `contains` (case-insensitive, display-string match, honors `ignore-punctuation` hint); `equals`, `starts-with`, `ends-with` (text); `equals`, `does-not-equal`, `greater-than`, `greater-than-or-equal`, `less-than`, `less-than-or-equal`, `between` (number); `is`, `before`, `after`, `in-range` (date — ISO-8601 string comparison, format-agnostic per D-03); `is`, `is-not` (fixed-set); `is-true`, `is-false` (yes-no); `is-empty`, `is-not-empty` (all kinds — `null`/`undefined`/`""` = empty; whitespace-only = non-empty). Multi-rule combination via `all-of`/`any-of`, no short-circuit. Both backends proven byte-identical by parity fixture. Consumer action: import and call in your action handler — no middleware or DI.
 - **Parity coverage**: `column-filter-wire-shape` fixture proves the new wire types serialize byte-identically across all FeatureProbe backends (the four `FilterDescriptor` combinations from SPEC Req 3, including the `is-empty` rule's absent `value` field); `column-filter-helper` fixture runs ~100 representative truth-function cases through both backends via HTTP and diffs byte-identically. NASA-level in-process suites (vitest + xUnit) cover the full operator × kind × value-shape Cartesian on each backend independently.
+- **Column-filter UI (browser adapter).** Every filterable column (carrying `filter: FilterSpec`) now renders an always-visible inline text input + filter-icon button in the table header row. The filter-icon button opens an escalation popover with an operator picker (closed enum per value kind), typed value inputs (text, number, date, fixed-set select, yes-no select), add-rule button, all-of/any-of joiner toggle, Apply/Clear affordances. **Icon state grammar:** slash-through funnel (`filter-slash`) = empty descriptor; plain funnel (`filter`) = simple single-contains rule; plain funnel + dot = escalated (any other configuration). Inline read-only summary for nontrivial descriptors (more than one rule or non-contains operator), max 40 chars. Popover portals out of the table wrapper's `overflow-x` clip via a sibling portal div. Filter commits (inline Enter + Apply) write `FilterDescriptor` to state via the bind path — no named action dispatched; the server sees the updated descriptor on the next regular action.
+- **New icon glyph: `filter-slash`.** Slash-through funnel added to the framework's Lucide icon inventory. Use as `icon: "filter-slash"` on any `IconNode` or icon-bearing composite.
+- **Demo migration.** HelpDesk (`.NET` + `bun`), Showcase, and FeatureProbe (`.NET` + `bun`) demos fully migrated to the new filter wire shape as reference implementations for consumer migration. See `MIGRATION.md` § Migrating to v10.0.0 for the before/after guide.
+
+### Breaking changes
+
+- **Typed column-filter wire — old fields removed.** `TableColumn.filterable`, `TableColumn.filterValue`, `TableNode.filterBinds`, `TableNode.filterAction` removed from both backends (4 TS fields + 4 .NET fields). Apps using these must migrate to the new `filter: FilterSpec` per column + `filterDescriptorBinds` per table shape. There is no compatibility shim. See `MIGRATION.md` § Migrating to v10.0.0 for the step-by-step before/after guide and copy-paste snippets.
+
+### Deferred
+
+- **TUI filter-row refresh** — the terminal adapter's filter row rendering is out of scope for v10.0.0. The old filter-row block is commented out in `viewmodel-shell/src/tui.tsx` with a pointer to the `tui-filter-refresh` follow-up bounty. TUI remains `@experimental`.
+
+### Consumers
+
+**All apps using old filter wire fields must migrate** — see `MIGRATION.md` § Migrating to v10.0.0. Apps not using column filters are unaffected; bump version and continue.
+
+**Companion `AshleyShrok.ViewModelShell.Markdown` bumped to `0.2.3`** — mandatory rebuild per AGENTS.md core-major-bump rule. Consumers using this companion must upgrade both packages together:
+
+```bash
+dotnet add package AshleyShrok.ViewModelShell --version 10.0.0
+dotnet add package AshleyShrok.ViewModelShell.Markdown --version 0.2.3
+```
 
 ---
 
