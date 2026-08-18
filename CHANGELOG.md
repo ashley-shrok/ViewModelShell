@@ -6,6 +6,16 @@ This repo ships two version-aligned packages: **npm** `@ashley-shrok/viewmodel-s
 
 ---
 
+## Unreleased
+
+### Added
+
+- **Typed column filter wire vocabulary** (Phase 32 — additive, no version bump yet): `TableColumn.filter?: FilterSpec` declares a filterable column's value-kind (`"text" | "number" | "date" | "fixed-set" | "yes-no"`), optional fixed-set option list, and optional matching hints (`"ignore-punctuation"`). `TableNode.filterDescriptorBinds?: Record<string, string>` maps column keys to state paths holding each column's current `FilterDescriptor` (an ordered list of rules + `"all-of" | "any-of"` joiner). Types on both backends: `FilterSpec`, `FilterDescriptor`, `FilterRule`, `ValueKind`, `MatchingHint`, and per-type closed operator aliases (`TextOperator`, `NumberOperator`, `DateOperator`, `FixedSetOperator`, `YesNoOperator`). The existing `filterable`/`filterValue`/`filterBinds`/`filterAction` fields remain valid and untouched — removal happens in Phase 33 alongside the adapter UI and major-version release.
+- **Reference truth function** — `matchesFilter(descriptor, rawValue, displayString, kind, matchingHints?)` exported from `@ashley-shrok/viewmodel-shell/server` (TypeScript); `FilterHelper.MatchesFilter(descriptor, rawValue, displayString, kind, matchingHints?)` in `AshleyShrok.ViewModelShell` (C#). Given a `FilterDescriptor` from state and a row's cell data, returns `true`/`false`. Every operator × applicable value-kind is implemented: `contains` (case-insensitive, display-string match, honors `ignore-punctuation` hint); `equals`, `starts-with`, `ends-with` (text); `equals`, `does-not-equal`, `greater-than`, `greater-than-or-equal`, `less-than`, `less-than-or-equal`, `between` (number); `is`, `before`, `after`, `in-range` (date — ISO-8601 string comparison, format-agnostic per D-03); `is`, `is-not` (fixed-set); `is-true`, `is-false` (yes-no); `is-empty`, `is-not-empty` (all kinds — `null`/`undefined`/`""` = empty; whitespace-only = non-empty). Multi-rule combination via `all-of`/`any-of`, no short-circuit. Both backends proven byte-identical by parity fixture. Consumer action: import and call in your action handler — no middleware or DI.
+- **Parity coverage**: `column-filter-wire-shape` fixture proves the new wire types serialize byte-identically across all FeatureProbe backends (the four `FilterDescriptor` combinations from SPEC Req 3, including the `is-empty` rule's absent `value` field); `column-filter-helper` fixture runs ~100 representative truth-function cases through both backends via HTTP and diffs byte-identically. NASA-level in-process suites (vitest + xUnit) cover the full operator × kind × value-shape Cartesian on each backend independently.
+
+---
+
 ## 9.2.1 — 2026-08-06 (npm only) — bug fix
 
 Patch release: fix a silent-data-corruption footgun on `<input type="number">`. Poppy-DM'd on the tailnet this morning after Kara (Aither finance operator on PBMInvoices) added an invoice line, scrolled the page over the Charge field, and the charge amount silently decremented instead of the page scrolling. Root cause is the well-known HTML default — mouse wheel on a focused number input silently steps the value — inherited from the browser through VMS's `FieldNode(inputType:"number")` render path.
