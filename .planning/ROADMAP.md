@@ -16,6 +16,7 @@
 ## Phases
 
 **Phase Numbering:**
+
 - Integer phases: Planned milestone work (numbering continues sequentially — v1.12 starts at Phase 8, the prior milestone ended at Phase 7)
 - Decimal phases (e.g. 8.1): Urgent insertions (marked INSERTED)
 
@@ -77,83 +78,109 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
 ## Phase Details
 
 ### Phase 12: ChartNode Primitive
+
 **Goal**: A `ChartNode` renders a single-series bar chart (labelled categories × numeric values, `title` + `tone`) from structured wire data — declared and agent-legible, drawn by Chart.js as a private browser-adapter detail (lazy/optional dependency; core + .NET/bun backends stay dependency-free), redrawing in place on new server data, byte-identical across TS/.NET with BOTH tree-validators descending into it and parity/FeatureProbe green, plus a legible TUI degradation. Appearance is `title` + `tone` only — no raw CSS/config on the wire.
 **Depends on**: Phase 11 (v1.12 baseline — parity green; current release 4.0.0)
 **Requirements**: CHART-01, CHART-02, CHART-03, CHART-04, CHART-05
 **Success Criteria** (what must be TRUE):
+
   1. A `ChartNode` carrying labelled categories + a numeric series renders a single-series bar chart in the browser, colored by its `tone` axis value, with an optional title (CHART-01, CHART-02).
   2. Returning a new view tree with changed chart data redraws the chart in place — no full-page reload (CHART-03).
   3. An app that renders no `ChartNode` ships zero Chart.js bytes; the core (`src/index.ts`) and the .NET/bun backends gain no dependency (CHART-04).
   4. The `ChartNode` round-trips byte-identically across TS + .NET, both tree-validators descend into it, and `bun run parity/run.ts` is green with a FeatureProbe fixture exercising it (CHART-05).
   5. The TUI adapter renders a defined legible fallback for a `ChartNode` (printed series / ASCII bars) instead of crashing (CHART-05).
+
 **Plans**: 2 plans
+
 - [x] 12-01-PLAN.md — ChartNode + ChartPoint wire type (both backends) + browser.ts bar renderer (lazy/optional Chart.js) + validators + adapter tests (wave 1) — completed 2026-07-04
 - [x] 12-02-PLAN.md — TUI degradation + FeatureProbe/parity + Showcase demo + CHANGELOG (wave 2) — completed 2026-07-04
+
 **UI hint**: yes
 
 ### Phase 13: Data-Viz Verification + Release Closeout
+
 **Goal**: The rendered chart is human-verified in a browser and the milestone ships as an aligned additive minor (npm + NuGet `4.1.0`) with docs, git tag, `main` advanced, `#vms-changelog` announcement, and GitHub issue #6 closed — full green-tree gate at release time.
 **Depends on**: Phase 12 (the `ChartNode` must exist to review and release)
 **Requirements**: CHART-06, CHART-07
 **Success Criteria** (what must be TRUE):
+
   1. The operator reviews the rendered `ChartNode` in a real browser (served over the tailnet) and signs off (CHART-06).
   2. `agent-skill.md` documents the `ChartNode` and is byte-identical to the .NET `AgentSkill.md` (parity gate green) (CHART-06).
   3. npm + NuGet `4.1.0` are published, tagged `v4.1.0`, with `main` advanced (verified `git merge-base --is-ancestor`) and `#vms-changelog` announced (CHART-07).
   4. GitHub issue #6 is closed with a comment citing the `4.1.0` release (CHART-07).
+
 **Plans**: TBD (set by `/gsd:plan-phase 13`)
 **UI hint**: no
 
 ### Phase 14: Non-blocking dispatch core
+
 **Goal**: A dispatch can carry `blocking: false` (optional, default `true` → existing apps byte-unchanged). A non-blocking (silent) round-trip no longer occupies the single global dispatch mutex — it coexists with user actions instead of silently dropping them (or being dropped). Rapid non-blocking triggers debounce/coalesce to one in-flight request. A client-side epoch/sequence counter discards stale, out-of-order responses (last-writer-wins) with no wire epoch and no server change. Correctness comes from server re-validation + the `rejected` envelope; NO admission barrier this phase. Both backends stay byte-aligned (the optional bool follows the F2 `WhenWritingDefault` rule → absent-when-default on both), and new parity fixtures exercise a non-blocking dispatch, coalesced rapid fire, and out-of-order discard.
 **Depends on**: Phase 13 (v4.1 released — clean baseline; parity green) — design of record `.planning/design/non-blocking-actions.md`
 **Requirements**: NBA-01, NBA-02, NBA-03, NBA-04
 **Success Criteria** (what must be TRUE):
+
   1. A dispatch with `blocking:false` runs a silent round-trip that does NOT trip the dispatch mutex or busy-lock; a user action fired while it is in flight is honored, not dropped (and vice versa) (NBA-01).
   2. Rapid `blocking:false` triggers coalesce to a single in-flight request (latest wins) (NBA-02).
   3. An out-of-order / late non-blocking response is discarded rather than clobbering a newer render, via a client-side sequence counter — no wire field, no server change (NBA-03).
   4. `blocking` is absent-when-default on BOTH backends (F2), the wire token stays `viewmodel-shell/1.0`, and `bun run parity/run.ts` is green with fixtures for non-blocking dispatch + coalesced rapid fire + out-of-order discard (NBA-04).
+
 **Plans**: 3 plans
+
 - [x] 14-01-PLAN.md — `ActionEvent.blocking` + two-lane dispatch loop (mutex replacement, coalescing, epoch) in `index.ts` + full `browser.ts` propagation fix + vitest coverage for NBA-01/02/03 (wave 1)
 - [x] 14-02-PLAN.md — .NET `ActionDescriptor.Blocking` (`bool?` + `WhenWritingNull`) + serialization tests (wave 1, independent of 14-01)
 - [x] 14-03-PLAN.md — FeatureProbe parity fixture proving `blocking` is byte-identical/absent-when-default across backends (NBA-04) + full Phase 14 green-tree gate (wave 2, depends on 14-01 + 14-02)
+
 **UI hint**: no
 
 ### Phase 15: Poll-fold + `selection.action` resurrection
+
 **Goal**: `pollInterval` becomes sugar over the non-blocking dispatch path, so the today-observed single-mutex contention (a poll in flight silently dropping a user click) is gone. Per-checkbox / table-selection server-refresh returns as a first-class pattern, correctly this time: the checkbox checks immediately (optimistic local `bind` write) AND fires a `blocking:false` action whose returned tree echoes the selection back, so a stale response can never revert a rapid toggle (the exact 0.15.0 failure that got `selection.action` removed). `agent-skill.md` gains a note on `blocking:false` semantics, byte-copied to `.NET AgentSkill.md` (parity gate diffs both).
 **Depends on**: Phase 14 (the non-blocking primitive + epoch must exist)
 **Requirements**: NBA-05, NBA-06, NBA-07
 **Success Criteria** (what must be TRUE):
+
   1. An app configuring `pollInterval` runs its polls over the non-blocking path; a user action clicked during a poll round-trip is honored, not dropped (NBA-05).
   2. Rapid checkbox/selection toggling with a `blocking:false` refresh never visually reverts a checked box, and the server-computed fragment (e.g. an action bar) reflects the latest coalesced selection (NBA-06).
   3. `agent-skill.md` documents `blocking:false` and is byte-identical to `.NET AgentSkill.md` (parity gate green) (NBA-07).
+
 **Plans**: 3 plans
+
 - [x] 15-01-PLAN.md — TS dispatch-loop: NBA-06 coalesce-pending discard fix + NBA-05 real-pollInterval-timer docs/tests + adapter-level rapid-toggle proof (wave 1)
 - [x] 15-02-PLAN.md — agent-skill.md `blocking:false` section + byte-copy to .NET AgentSkill.md + skill parity check (wave 1)
 - [x] 15-03-PLAN.md — full green-tree gate re-run + NBA-05/06/07 requirement-to-artifact cross-check (wave 2, depends on 15-01 + 15-02)
+
 **UI hint**: yes
 
 ### Phase 16: Test apps + human verification + release
+
 **Goal**: Three purpose-built demo apps — each shipped with a step-by-step "trigger X, then Y, expect Z" script so coverage is explicit — let the operator verify the concurrency behavior in a real browser: (1) selection → live server-computed action bar (the PBMInvoices shape); (2) poll + user-action coexistence (today-vs-fixed contrast); (3) out-of-order/staleness (a delayed background response discarded). Served over the tailnet for sign-off. Then the milestone ships as an aligned additive minor (npm + NuGet) with CHANGELOG/MIGRATION, git tag, `main` advanced (verified `git merge-base --is-ancestor`), and `#vms-changelog` announced — full green-tree gate at release time.
 **Depends on**: Phase 15 (the full Stage-1 behavior must exist to demo + release)
 **Requirements**: NBA-08, NBA-09 — PLUS the **batched** deferred chart requirements **CHART-06, CHART-07** (the v4.1 release closeout was folded into this session per Ashley's "don't run the release ceremony twice"; see Phase 13). The release plans (16-05/16-06) close all four.
 **Success Criteria** (what must be TRUE):
+
   1. The 3 demo apps + their trigger scripts exist, are served over the tailnet, and the operator signs off that rapid-toggle, poll-coexistence, and staleness all behave as specified (NBA-08).
   2. The release session ships BOTH `4.1.0` (chart: ChartNode `agent-skill.md` doc [CHART-06], CHANGELOG extracted out of the mis-nested `## 1.12.0` draft, tag, close issue #6 [CHART-07]) AND `4.2.0` (non-blocking) on npm + NuGet, tagged, `main` advanced (`git merge-base --is-ancestor`), full green-tree gate, `#vms-changelog` announced (NBA-09).
+
 **Plans**: 6 plans
+
 - [x] 16-01-PLAN.md — Demo: selection -> live server-computed action bar (NonBlockingActionBar-bun, port 3008)
 - [x] 16-02-PLAN.md — Demo: poll + user-action coexistence (NonBlockingPoll-bun, port 3009)
 - [x] 16-03-PLAN.md — Demo: out-of-order staleness discard (NonBlockingStaleness-bun, port 3010)
 - [x] 16-04-PLAN.md — Combined verification script + operator sign-off checkpoint (NBA-08 gate)
 - [x] 16-05-PLAN.md — Release prep: ChartNode agent-skill.md doc (CHART-06) + CHANGELOG/MIGRATION for 4.1.0+4.2.0 + green-tree gate
 - [ ] 16-06-PLAN.md — Release execution: version bump, npm+NuGet publish, tag, advance main, announce, close issue #6 (CHART-07, NBA-09)
+
 **UI hint**: yes
 
 ### Phase 17: Admission barrier (Stage 2) — CONDITIONAL
+
 **Goal**: (Built ONLY if transient intent-drift actually bites in PBMInvoices UX after Stage 1 ships.) When a blocking action is triggered while any non-blocking round-trip is in flight, hold it until that round-trip resolves and the tree reaches the new epoch, then compare the clicked node's click-time snapshot against the current-epoch tree; if the node is missing or differs in any part, drop the action rather than dispatch a different action than the user believed they triggered. Global barrier (not scoped to affected nodes — scoping would require app-ish client reasoning). The dropped-action UX (silent vs surfaced) is decided as part of this phase, not left silent.
 **Depends on**: Phase 16 (Stage 1 shipped + observed); GATED on a real intent-drift report
 **Requirements**: NBA-10 (conditional)
 **Success Criteria** (what must be TRUE):
+
   1. A blocking action whose target node changed under an in-flight non-blocking round-trip is not dispatched with stale intent; the outcome is surfaced to the user, not silently swallowed (NBA-10).
+
 **Plans**: TBD — do NOT plan until a concrete intent-drift case is reported
 **UI hint**: yes
 
@@ -167,11 +194,14 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
 **Requirements**: CHARTBASE-01, CHARTBASE-02, CHARTBASE-03, CHARTBASE-04, CHARTBASE-05, CHARTBASE-06
 **Depends on:** Phase 16 (v4.2 baseline — parity green; current release 4.2.0). NOT Phase 17 (conditional/unbuilt).
 **Success Criteria** (what must be TRUE):
+
   1. A `ChartNode` with `kind` `bar`/`line`/`area`/`pie`/`donut` and one-or-more `series` over shared `labels` renders correctly in the browser; multi-series bar groups (or stacks when `stacked`), multi-line overlays, pie/donut draw `series[0]` as slices.
   2. Series colors come from the `--vms-chart-1..8` theme palette by default; a series with `tone` uses the theme tone token; **no raw color crosses the wire**; the palette tokens exist in `default.css` + every theme and each slot's contrast is hand-checked.
   3. `ChartPoint` is retired for category charts; `ChartNode`/`ChartSeries` round-trip byte-identically across TS + .NET (optional-field rules honored: `WhenWritingNull` / `stacked` `WhenWritingDefault`), both tree-validators descend into the leaf, and `bun run parity/run.ts` is green with a multi-series + tone + stacked fixture.
   4. An app that renders no `ChartNode` ships zero Chart.js bytes; core (`src/index.ts`) + the .NET/bun backends gain no dependency. TUI degrades legibly.
+
 **Plans:** 6/6 plans complete
+
 - [x] 18-01-PLAN.md — Reshape ChartNode + ChartSeries wire type (both backends) + .NET serialization test; retire ChartPoint (wave 1)
 - [x] 18-02-PLAN.md — --vms-chart-1..8 categorical palette in default.css + all 12 themes + contrast hand-check (wave 1)
 - [x] 18-03-PLAN.md — Browser adapter: widen chart()/loadChart() to bar/line/area/pie/donut + multi-series + stacked + palette/tone; update chart tests + Showcase (wave 2)
@@ -185,11 +215,14 @@ Shipped as one consolidated additive release (npm `1.12.0` / NuGet `1.10.0`): al
 **Requirements**: TBD (set in plan-phase)
 **Depends on:** Phase 18
 **Success Criteria** (what must be TRUE):
+
   1. The verification page exercises every base-set kind and the multi-series/tone/stacked cases, served over the tailnet; Ashley runs through it and confirms before any publish.
   2. `5.0.0` is published to npm + NuGet (aligned), tagged `v5.0.0`, `main` advanced to the release commit (`git merge-base --is-ancestor v5.0.0 main`), CI green, and a release line posted to `#vms-changelog`; MIGRATION documents the reshape (only break = the unused 4.1 single-series ChartNode).
+
 **Plans:** 0 plans
 
 Plans:
+
 - [x] Release closeout done manually 2026-07-09 — combined tailnet verification (Ashley sign-off) + legend contrast fix; CHANGELOG/MIGRATION; npm+NuGet 5.0.0 published; tag v5.0.0; main advanced; CI green; announced #vms-changelog.
 
 ## ✅ v5.1 Navigation Primitives (Phase 20) — SHIPPED 2026-07-11 (npm + NuGet `5.1.0`, tag `v5.1.0`)
@@ -202,13 +235,16 @@ Plans:
 **Requirements**: NAV-01, NAV-02, NAV-03, NAV-04
 **Depends on:** Phase 19 (v5.0 baseline — parity green; current release npm `5.0.1` / NuGet `5.0.0`). Design of record: [design/nav-primitives.md](./design/nav-primitives.md).
 **Success Criteria** (what must be TRUE):
+
   1. A BreadcrumbNode (`items:[{label, href? / action?}]`) renders a nav trail with the last item as the current page (`aria-current="page"`), a framework-drawn fixed separator inside a `<nav>` landmark + `<ol>`; byte-identical across TS/.NET, both tree-validators descend, parity green with a new FeatureProbe fixture.
   2. A StepsNode (`steps:[{label, description?}]` + `current`) renders done/current/upcoming purely from the current index in BOTH orientations — responsive-horizontal (auto-collapses to vertical intrinsically, no breakpoint) and the deliberate-vertical wizard — with correct a11y (`aria-current="step"`, non-interactive not focusable, NOT `role=progressbar`); byte-identical across backends; parity green with a new fixture.
   3. Clickable table rows (`TableRow.action`) show `cursor:pointer` on hover; CSS-only, no wire/type change.
   4. Aligned npm + NuGet `5.1.0` published (batched), tagged `v5.1.0`, `main` advanced to the release commit (`git merge-base --is-ancestor v5.1.0 main`), CI green, a release line posted to `#vms-changelog` — after a tailnet verification page (both nodes, both step orientations, a clickable-row cursor check, light + dark) Ashley confirms.
+
 **Plans:** 7 plans
 
 Plans:
+
 - [x] 20-01-PLAN.md — TS wire types (BreadcrumbNode + StepsNode) + both TS tree-validators (wave 1) ✅ 2026-07-11
 - [x] 20-02-PLAN.md — .NET byte-identical twin records + discriminators + validators + serialization test (wave 1) ✅ 2026-07-11
 - [x] 20-03-PLAN.md — browser.ts renderers + default.css (tokens only, intrinsic collapse, a11y) + jsdom tests + white-on-accent aa-contrast hand-check (wave 2) ✅ 2026-07-11
@@ -231,6 +267,7 @@ Surveyed three ways before designing (borrow-before-inventing): mature component
 **Requirements**: LOOK-01, LOOK-02, LOOK-03, LOOK-04, LOOK-05, LOOK-06, LOOK-07
 **Depends on:** Phase 20 (v5.1 baseline — parity green; current release npm `5.1.2` / NuGet `5.1.0`) and the **v4.2 non-blocking dispatch lane** (Phases 14/15), whose lane-aware epoch this is the first real consumer of. Design of record: [design/lookup-field.md](./design/lookup-field.md).
 **Success Criteria** (what must be TRUE):
+
   1. **The preselected-value case works with no search having occurred**: a form loads with a reference already set and renders its label, because the label came from the node — not from a candidate list that is empty. Label ABSENT when it equals the value (principle 7); `type` tag present only for polymorphic refs.
   2. **The live-query lane is correct under adversarial interleaving**, not merely green: user-action-races-background, background-resolves-first, rapid-fire-supersede, and stale-arrives-late each have a FAIL-before/PASS-after test. (Banked lesson: the first implementation of concurrency is almost never right, and a suite that doesn't script the interleaving proves nothing about the race.) Debounce ~250-300ms; NO min-chars gate.
   3. **`lookup-multiple` chips meet the a11y baseline** (design §7): item-specific `aria-label="Remove {item}"`, roving tabindex, add/remove announced with the running count, focus after removal next→previous→input and never `<body>`, chips as `role=list`/`listitem` with real buttons. `select-multiple` REMAINS the enumerable-set control — that split is an a11y requirement (the APG combobox has "tested poorly with users for more than two decades"; GOV.UK's own chips multiselect was RETIRED as inaccessible).
@@ -238,9 +275,11 @@ Surveyed three ways before designing (borrow-before-inventing): mature component
   5. Both inputTypes byte-identical across TS/.NET (`allowCustom` ⇒ `WhenWritingDefault`; nullables ⇒ `WhenWritingNull`), both tree-validators descend, `bun run parity/run.ts` green with FeatureProbe coverage extended per inputType (⚠️ CORRECTED: the actual shipped v5.1 pattern is to EXTEND `buildVm` in the 3 FeatureProbe backends + append to the `$comment` — NOT a new fixture file, NOT a `backends.json` change), TUI degrades legibly, chip fill hand-checked for AA contrast across the default + all 12 themes (the fixed 13-pair gate does NOT auto-cover a new fg/bg pair).
   6. `agent-skill.md` documents the picker as a public first-class protocol (no surveyed platform publishes its picker's transport — we'd be the first), byte-identical .NET twin, `parity/check-skill.ts` green.
   7. Aligned npm + NuGet `5.2.0` published, tagged `v5.2.0`, `main` advanced (`git merge-base --is-ancestor v5.2.0 main`), CI green, `#vms-changelog` announced — after a tailnet verification page (single + multi, preselected-value, custom entries, light + dark) Ashley confirms. **The page's fetch-shim MUST run `buildVm` output through the REAL tree validator** (banked lesson: the shim otherwise accepts trees the real server rejects).
+
 **Plans:** 10 plans
 
 Plans:
+
 - [ ] 21-01-PLAN.md — TS wire surface (lookup/lookup-multiple inputTypes, LookupItem, selected/candidates/searchBind/searchAction/allowCustom, D1/D7/D8/D12 stated at the type) + collectActions descends into searchAction; settles OPEN-1/OPEN-3/OPEN-6 (wave 1)
 - [ ] 21-02-PLAN.md — .NET twin: LookupItem + five appended FieldNode members (WhenWritingNull/WhenWritingDefault), the .NET walker's SearchAction descent, LookupSerializationTests (wave 2)
 - [ ] 21-03-PLAN.md — single-select renderer: label-from-the-node, order-preserving popup (D12), combobox ARIA, and the §7 keyboard contract; settles OPEN-2/OPEN-5 (wave 2)
@@ -270,6 +309,7 @@ Design of record: [design/icons-primitive.md](./design/icons-primitive.md) — r
 **Requirements**: ICON-01, ICON-02, ICON-03, ICON-04, ICON-05, ICON-06, ICON-07, ICON-08, ICON-09, ICON-10, ICON-11
 **Depends on:** Phase 21 (v5.2 baseline — parity green) + the shipped v6.12.0/6.12.1 TOOL-01 styled-tooltip infrastructure (which ICON-05's icon-only rule and ICON-06's TrackerCell rename both build on). Design of record: [design/icons-primitive.md](./design/icons-primitive.md).
 **Success Criteria** (what must be TRUE):
+
   1. `IconNode` renders across both backends as a closed-union `name` + optional `size`/`tone`/`label`; framework emits `<svg class="vms-icon vms-icon--{size} vms-icon--{tone}" ...>` with the payload from the bundled Lucide subset, `stroke="currentColor"` (so tone or the parent's text color drives visual color), correct `role`/`aria-label`/`aria-hidden` per §8 of the design doc; byte-identical across TS/.NET (`name` a closed union on TS, an enum with converter on .NET); both tree-validators descend; unknown-name fails `invalid_tree`.
   2. The five host nodes (`ButtonNode`, `LinkNode`, `SectionNode`, `Badge`, `ListItem`) each accept `icon?: IconName` and render the icon at host-appropriate size per §4's table (Button/Link/Badge/ListItem = `sm`/`xs`, Section = `xl`); tone inherits from the host's own `tone` axis, never a separate wire slot.
   3. Icon-only ButtonNode validator rule is enforced on both backends: `icon != null && !label && !tooltip` → `invalid_tree` at buildVm/action-response time; test coverage on both backends verifies the rule fires FAIL-before/PASS-after (banked lesson: verify by mutation, not by assertion).
@@ -278,6 +318,7 @@ Design of record: [design/icons-primitive.md](./design/icons-primitive.md) — r
   6. AA-contrast hand-check for the icon-on-tone / icon-on-fill pairs the primitive introduces (the fixed 13-pair `check:aa-contrast` gate does NOT auto-cover new fg/bg pairs — banked lesson); default + all 12 themes; deepen only the failing tones via `color-mix` per the shipped v3.5.0 pattern.
   7. TUI drops icons entirely for v1 (`@experimental` scope, not-invested-in per standing directive); no unicode-fallback mapping.
   8. Aligned npm + NuGet **v7.0.0** major published (batched), tagged `v7.0.0`, `main` advanced to the release commit (`git merge-base --is-ancestor v7.0.0 main`), CI green, `#vms-changelog` release line — after a tailnet verification page Ashley signs off (Hestia-style card grid with all 8 Pixie concept anchors + icon-in-Button/Badge/ListItem/Link examples + all 5 sizes + tone matrix + a live TrackerCell strip showing the new styled-tooltip render, light + dark, real bundle + shipped CSS + REAL tree-validator in the fetch-shim per banked lesson).
+
 **Plans:** 0 plans (to be created by `/gsd:plan-phase 22`)
 
 ## 🚧 v8.0.0 Composite-Nodes Layer (Phases 23–26) — IN PLANNING
@@ -287,6 +328,7 @@ Design of record: [design/icons-primitive.md](./design/icons-primitive.md) — r
 Ashley's **governance rule** (2026-07-29, canonicalized): a shape earns a composite node when the best-effort with today's primitives is a "pretty bad approximation" of the common shape. Bar is **visual** — the after has to look right; the before has to look wrong enough to justify the primitive earning a promotion. Judgment per shape, eyeball each in a served tasting before it earns the composite.
 
 **Approved via before/after tasting** (2026-07-29, tasting served at `bounties/composite-nodes-layer/tasting-page/index.html`):
+
 - **10 new composites:** `ListRowNode`, `MessageNode`, `AlertNode`, `EmptyStateNode`, `UserRowNode`, `DetailRowNode`, `TimelineEntryNode`, `AvatarNode` (standalone primitive), `SettingRowNode`, `ChipListNode` + `ChipNode`.
 - **3 adjacent wire tweaks** (foundations everything else consumes): `TextNode.style: "caption"` (the 3rd typographic tier), `TextNode` weight axis (semi-bold body-size weight), `CheckboxNode.variant: "switch"` (visual-only render mode).
 - **Governance rule** added to AGENTS.md as a maintainer policy so the "when does a shape earn a composite?" call stays consistent going forward.
@@ -296,6 +338,7 @@ Ashley's **governance rule** (2026-07-29, canonicalized): a shape earns a compos
 **Everything technically ADDITIVE** — no wire breaks. Old renderers gracefully degrade on unknown enum values (a `.vms-text--caption` class with no CSS falls back to unstyled `.vms-text`). Semver-wise a minor bump would suffice, but this earns **v8.0.0** for comms — largest capability expansion since 3.0.0's axes unification, warrants "consumers should read the release notes."
 
 **Milestone-wide success criteria:**
+
 1. All 10 composites + 3 wire tweaks land byte-identical across TS/.NET, both tree-validators descend where applicable, parity green with `expectBodyContains` per branch (banked lesson: a diff can only prove things about code it actually RUNS).
 2. Every composite shipped WITH real demo adoption (banked lesson from `UseVmsShellStaticFiles`: helpers don't ship without demo adoption or the wiring reference teaches the wrong thing). Showcase gains a `Composites` tab exercising every new node.
 3. AA-contrast hand-check for every new fg/bg pair the composites introduce (Alert toned surfaces, Chip toned pills, SettingRow switch states) across default + all 12 themes.
@@ -311,6 +354,7 @@ Design of record: `bounties/composite-nodes-layer/tasting-page/index.html` (the 
 **Requirements**: COMP-01, COMP-02, COMP-03, COMP-04
 **Depends on:** Phase 22 (v7.0 icons — `AvatarNode` reuses the icon rendering + `IconName` closed union for the fallback-icon slot). Design of record: `.planning/design/composite-nodes-layer.md` (to be written in this phase; approved tasting at `bounties/composite-nodes-layer/tasting-page/`).
 **Success Criteria** (what must be TRUE):
+
   1. `TextNode.style` gains `"caption"` on both backends — closed union extension (`"heading" | "subheading" | "body" | "muted" | "strikethrough" | "pre" | "caption"`). Renders `.vms-text--caption` with `font-size: var(--vms-text-xs)`, muted color, 0.85 opacity. Existing consumers unaffected (they never emit `caption`; old renderer gracefully degrades on the new value if a new backend sends it).
   2. `TextNode` gains an optional weight axis for the semi-bold body-size variant. Shape TBD in planning (either `weight?: "regular" | "medium" | "bold"` closed enum OR `style: "strong"` as an additional value). Whichever shape wins is byte-identical across backends and closed-enum on .NET per the closed-union-must-be-enum maintainer rule.
   3. `CheckboxNode.variant: "switch"` renders as a switch slider (visual only — wire and semantics unchanged; the value on the wire is still boolean, dispatch shape is still standard checkbox `bind`/change semantics). Emits `.vms-field--switch` modifier; falls back to the standard checkbox on renderers that don't know the variant.
@@ -322,9 +366,11 @@ Design of record: `bounties/composite-nodes-layer/tasting-page/index.html` (the 
   9. Vitest + .NET test coverage for each addition (rendering, tree-validation, wire round-trip).
  10. AGENTS.md gains an **initial** "Route B composite-nodes layer" governance section — the earn-a-composite rule + the typed-slots pattern + the multi-phase milestone plan. The section grows as Phases 24-26 land; Phase 23's version establishes the frame.
  11. NO release ship yet — Phase 23 lands the foundations to a green tree with full test/parity/gate coverage, but v8.0.0 publishes only at Phase 26 closeout (batch-then-ship discipline). CHANGELOG entries accumulate under an "Unreleased" section.
+
 **Plans:** 9 plans
 
 Plans:
+
 - [x] 23-01-PLAN.md — COMP-01: TextNode.style: "caption" end-to-end (wire type + CSS + .NET twin + vitest + .NET test + AA hand-check) (wave 1)
 - [x] 23-02-PLAN.md — COMP-02: TextNode weight axis end-to-end (Option A chosen — new orthogonal `weight?` field; TS + browser + CSS + .NET twin + tests + WhenWritingNull proof) (wave 2, depends on 23-01)
 - [x] 23-03-PLAN.md — COMP-03: CheckboxNode.variant: "switch" end-to-end (wire type + role=switch + slider CSS + .NET twin + tests + wire-semantics-unchanged proof + AA hand-check) (wave 3, depends on 23-02)
@@ -335,7 +381,6 @@ Plans:
 - [x] 23-08-PLAN.md — CHANGELOG.md Unreleased — v8.0.0 (in progress) heading + 4 foundation entries + batch-then-ship reminder (wave 5, depends on 23-01..04)
 - [x] 23-09-PLAN.md — Full green-tree gate re-run + AA-contrast hand-check re-verify + Showcase visual smoke on tailnet (Ashley sign-off) + requirement-to-artifact cross-check (wave 6, depends on 23-01..08)
 
-
 ### Phase 24: v8.0 Primary composites — ListRowNode + MessageNode + AlertNode + EmptyStateNode
 
 **Goal:** Land the 4 primary composite recipes that the v8.0.0 tasting approved with the strongest evidence + live consumer pressure. Each is a **Route B recipe** — typed semantic slots with unconstrained ViewNode content, closed-enum variance axes, framework owns layout/typography/spacing. Every composite consumes Phase 23 foundations (`TextNode.style: "caption"` for tertiary meta; `TextNode.weight` for row primaries; `AvatarNode` for user identity). Both backends byte-identical, tree-validators descend where applicable, parity green with `expectBodyContains` per branch, AA hand-check per new fg/bg pair, tests per composite (vitest + .NET), Showcase adoption. **NO release ship** — accumulate CHANGELOG under "Unreleased"; v8.0.0 publishes at Phase 26 closeout.
@@ -345,6 +390,7 @@ Plans:
 **Depends on:** Phase 23 (foundations landed on main via commits 97163e1..133967d). Design of record: `.planning/design/composite-nodes-layer.md`. Approved tasting: `~/.claude/identities/vicky/bounties/composite-nodes-layer/tasting-page/index.html`.
 
 **Success Criteria** (what must be TRUE):
+
   1. **`ListRowNode`** ships with slots `{ leading?, primary, secondary?, meta?, trailing?, tone?, state?, action? }`. `primary` rendered with trained `TextNode` typography (body + weight:"medium"); `secondary` = muted; `meta[]` = caption tier. `tone` (closed 4-way) sets left-accent border; `state` freeform (matches ListItem — active/done/disabled/high framework-styled); `action` enables whole-row `role="button" tabindex=0`. Byte-identical TS/.NET.
   2. **`ListNode` gains `variant?: "items" | "rows"`** — omitted/`"items"` = today's ListItem behavior (byte-identical); `"rows"` = ListRowNode-only container rendering as a single bordered surface with per-row dividers. Old renderers gracefully degrade on unknown variant.
   3. **`MessageNode`** ships with slots `{ avatar?, author, timestamp?, content, role?, actions? }`. `role:"assistant"` gets tinted-info surface; `role:"user"`/`"system"`/omitted gets neutral. `author` weight:600; `timestamp` caption tier; `actions[]` right-aligned. Byte-identical TS/.NET.
@@ -364,6 +410,7 @@ Plans:
 **Plans:** 6/9 plans executed
 
 Plans:
+
 - [x] 24-01-PLAN.md — ListRowNode (COMP-05) + ListNode.variant:"rows" (COMP-05a) end-to-end (wave 1)
 - [x] 24-02-PLAN.md — MessageNode (COMP-06) + MessageListNode (COMP-06a) end-to-end; followTail REUSES SectionNode.followTail (wave 2, depends on 24-01)
 - [x] 24-03-PLAN.md — AlertNode (COMP-07) end-to-end with tone→icon default map (wave 3, depends on 24-02)
@@ -383,6 +430,7 @@ Plans:
 **Depends on:** Phase 24 (primary composites landed on main). Design of record: `.planning/design/composite-nodes-layer.md`. Approved tasting: `~/.claude/identities/vicky/bounties/composite-nodes-layer/tasting-page/index.html` (sections 5, 6, 7, 9, 10).
 
 **Success Criteria** (what must be TRUE):
+
   1. **`UserRowNode`** ships with slots `{avatar?, name, meta?, status?, trailing?, action?}`. `avatar` typically an `AvatarNode` (COMP-04) but slot accepts any ViewNode. `name` = trained TextNode body + weight:"medium"; `meta` = TextNode muted. `status` a small `{label, kind}` object where `kind: "online"|"away"|"offline"|"busy"` closed enum. `action` = whole-row click (member-picker pattern). Byte-identical TS/.NET.
   2. **`DetailRowNode` + `DetailListNode`** ship as a pair. DetailRow slots `{label, value, tone?, icon?}` where `label` trained text-xs uppercase weight:500 muted and `value` trained TextNode body. DetailListNode renders as a `<dl>` with fixed label column (`labelWidth?: "sm"|"md"|"lg"` closed enum) and consistent alignment across all rows. Byte-identical TS/.NET; tree-validator rejects non-DetailRow children in a DetailListNode.
   3. **`TimelineEntryNode` + `TimelineNode`** ship as a pair. TimelineEntry slots `{time, description, tone?, icon?}` where `time` = trained caption tier (COMP-01) and `description` = TextNode body accepting rich content. TimelineNode renders the vertical rail + dot markers (a decorative `::before` line + per-entry `::before` dots), tone-encoded borders on dots. Byte-identical TS/.NET.
@@ -401,6 +449,7 @@ Plans:
 **Plans:** 10/10 plans executed
 
 Plans:
+
 - [x] 25-01-PLAN.md — UserRowNode (COMP-09) end-to-end
 - [x] 25-02-PLAN.md — DetailRowNode + DetailListNode (COMP-10 + 10a) end-to-end
 - [x] 25-03-PLAN.md — TimelineEntryNode + TimelineNode (COMP-11 + 11a) end-to-end with NEW ::before rail+dot CSS
@@ -421,6 +470,7 @@ Plans:
 **Depends on:** Phase 25 (all 10 composites landed on main + CHANGELOG + MIGRATION accumulated; commit `358e6f0`). Design of record: `.planning/design/composite-nodes-layer.md`. AGENTS.md publishing runbook + operator auth precheck.
 
 **Success Criteria** (what must be TRUE):
+
   1. **Comprehensive tailnet verification page** served on `100.113.23.63:<port>` demonstrates all 10 shipped composites + 4 foundations + 3 wire tweaks + 1 new primitive in one page, driven by the real bundle (built `dist/browser.js` + shipped `default.css` + all theme files), with theme switcher; smoke-tested `curl` 200 before hand-off; Ashley signs off visually.
   2. **`agent-skill.md` verified accurate for v8.0** — either unchanged (if Phase 25 additions don't require operator-manual updates) or updated + byte-copied to `viewmodel-shell-dotnet/AgentSkill.md` per AGENTS.md maintainer rule; parity gate proves both sources + both served HTTP twins byte-identical.
   3. **CHANGELOG.md heading finalized** `Unreleased — v8.0.0 (in progress)` → `v8.0.0 — <publish-date>`; MIGRATION.md `## Upgrading to v8.0.0 (in progress)` heading finalized similarly. Batch-then-ship reminder removed from finalized section.
@@ -434,6 +484,7 @@ Plans:
 **Plans:** 6 plans complete
 
 Plans:
+
 - [x] 26-01-PLAN.md — Comprehensive tailnet verification page (wave 1, Showcase served on 100.113.23.63:8186)
 - [x] 26-02-PLAN.md — agent-skill.md audit + byte-copy verify (wave 1, file-disjoint from 26-01)
 - [x] 26-03-PLAN.md — Full green-tree gate + Ashley visual sign-off (wave 2, depends on 26-01 + 26-02)
@@ -450,6 +501,7 @@ Plans:
 **Depends on:** Phase 26 (v8.0.0 shipped; 8.0.x baseline)
 
 **Success Criteria** (what must be TRUE):
+
   1. `state?: string` field present on all 6 target composite interfaces in `viewmodel-shell/src/index.ts` with mirrored TSDoc.
   2. Matching `State` trailing-append parameters on all 6 .NET records in `viewmodel-shell-dotnet/ViewModels.cs` with `[JsonIgnore(WhenWritingNull)]` per gotcha #8.
   3. 6 new BEM class emission sites in `viewmodel-shell/src/browser.ts`, one per composite (`.vms-{composite}--{state}`).
@@ -466,6 +518,7 @@ Plans:
 **Plans:** 11/11 plans complete
 
 Plans:
+
 - [x] 27-01-PLAN.md — TS wire additions: state?: string on 6 composite interfaces in index.ts (wave 1)
 - [x] 27-02-PLAN.md — .NET twin: State trailing-append on 6 records in ViewModels.cs with WhenWritingNull (wave 1, file-disjoint from 27-01)
 - [x] 27-03-PLAN.md — browser.ts renderer emission: 6 new BEM state-class push sites (wave 2, depends on 27-01)
@@ -487,6 +540,7 @@ Plans:
 **Depends on:** Phase 27 (v8.1.0 baseline)
 
 **Success Criteria** (what must be TRUE — refined during discuss-phase + plan-phase):
+
   1. A `FieldNode` with the rich inputType renders a WYSIWYG editor with the floor toolbar; the bound value is a valid markdown string on submit.
   2. Round-trip is clean: an existing markdown-string bind pre-loads into the editor cleanly for the floor content; user edits produce well-formed markdown on submit.
   3. Consumers who don't use rich text ship zero TipTap/turndown bytes (bundling strategy TBD; the containment invariant is not).
@@ -500,6 +554,7 @@ Plans:
 **Plans:** 12/12 plans complete
 
 Plans:
+
 - [x] 28-01-PLAN.md — TS wire types (RichTextFieldNode + RichTextToolbarNode + RichTextTool union) + server.ts walker leaf-arms (wave 1, no deps)
 - [x] 28-02-PLAN.md — .NET twin records + JsonDerivedType discriminators + KebabEnum enums + walker arms + RichTextSerializationTests (wave 1, no deps; file-disjoint from 28-01)
 - [x] 28-03-PLAN.md — package.json TipTap+turndown deps + browser.ts richTextField() lazy-loader (Chart.js precedent) + default.css state axis (STYLE-3) + adapter tests including D-04 symmetric lazy-load assertion (wave 2, depends on 28-01)
@@ -522,6 +577,7 @@ Plans:
 **Depends on:** Phase 28 (v8.2.0 baseline)
 
 **Success Criteria** (what must be TRUE — refined during plan-phase):
+
   1. Server-side global filter rejects any request (GET + POST) with a mismatched `X-VMS-Client-Build` header, returning 400 `stale_client`, BEFORE any controller runs. Both backends (`.NET` global filter alongside `ShellVersionResultFilter`; TS equivalent in `createAction` / server helpers).
   2. Client sends `X-VMS-Client-Build` on every request (GET + POST), not just POSTs.
   3. `BrowserAdapter` ships a hard-lock modal (framework-owned DOM structure, framework-owned styling matching VMS `tone:"warning"` visual language, non-dismissible, single `[Reload]` button that fires `adapter.reload()`). Fires on BOTH `VmsVersionSkewError` (detection path) AND `VmsActionError code:"stale_client"` (fail-closed path). Silent auto-reload on `stale_client` is retired — user must click Reload to consent.
@@ -537,6 +593,7 @@ Plans:
 **Plans:** 10/12 plans executed
 
 Plans:
+
 - [x] 29-01-PLAN.md — TS Adapter.showSkewLock verb + ShellOptions.onVersionSkew opt-out + skewLocked shell state + lockSkew helper + dispatch/processResponse guards (wave 1, no deps)
 - [x] 29-02-PLAN.md — .NET ShellVersionGuardFilter + AddVersionFilters co-registration (wave 1, no deps; file-disjoint from 29-01)
 - [x] 29-03-PLAN.md — Client X-VMS-Client-Build header on GET + retire silent auto-reload + wire lockSkew from checkVersionSkew + stale_client arm + vitest coverage (wave 2, depends on 29-01)
@@ -559,6 +616,7 @@ Plans:
 **Depends on:** Phase 29 (v9.0.0 baseline — version-skew hard-lock shipped). Design of record: `~/.claude/identities/vicky/bounties/chat-composer-primitive/tasting/framework-survey.md`. Ashley taste-locked via 2026-08-02 3-panel tasting.
 
 **Success Criteria** (what must be TRUE — refined during plan-phase):
+
   1. `ChatComposerNode` wire shape ships byte-parallel across both backends (all 18 fields defined per CHAT-01), tree validators descend into every slot, action-name uniqueness enforced across the tree.
   2. Adapter renders the unified pill container with framework-owned layout (growable center textarea + fixed 34px circular leading/trailing icon buttons); auto-resize textarea capped at `maxRows` (default 6); shipped `.vms-chat-composer` CSS carries the whole visual — apps describe never decorate.
   3. All 3 attachment ingress paths work: click-to-picker (via `attachAction`), drag-drop-on-composer (default `dropScope:"composer"`) or globally (`dropScope:"global"`), and paste-image (converged mechanism). Attached files stage locally as blob-URLs until `sendAction` fires (multipart form uploads them under `attachBind` name).
@@ -596,6 +654,7 @@ Plans:
 **Plans:** 4 plans
 
 Plans:
+
 - [x] 31-01-PLAN.md — TypeScript wire: TextNode.maxLines field + browser.ts class emission + default.css rules + vitest suite (wave 1) — landed at `dc753ff` + `b5a90c2` (10 vitest tests)
 - [x] 31-02-PLAN.md — .NET wire: TextNode.MaxLines **init-only property outside primary ctor** + xUnit serialization suite (wave 1, parallel to 31-01) — landed at `3cc3b67` + `f8da329` (7 xUnit tests; binary-compat gate PASSED)
 - [x] 31-03-PLAN.md — Parity fixture textnode-maxlines.json + FeatureProbe backends' state/action/BuildVm extensions (wave 2, depends 31-01 + 31-02) — landed at `a8492cb` + `22df6f4`
@@ -605,10 +664,21 @@ Plans:
 
 ### Phase 32: column-filter expansion Phase 1 — wire types + reference truth function ('filter helper') + NASA-level tests both backends byte-parallel
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Ship the framework-internal foundation for typed column filtering — additive wire vocabulary (column value-kinds, per-type operator vocabularies, multi-rule FilterDescriptors with all-of/any-of joiners) and a byte-identical reference truth function on both backends, proven by exhaustive tests. No adapter changes, no demo changes, no publish.
+**Requirements**: REQ-CF1-01, REQ-CF1-02, REQ-CF1-03, REQ-CF1-04, REQ-CF1-05, REQ-CF1-06, REQ-CF1-07, REQ-CF1-08
 **Depends on:** Phase 31
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 32 to break down)
+**Wave 1**
+
+- [ ] 32-01-PLAN.md — TS wire types (FilterSpec/FilterDescriptor/ValueKind/operators on index.ts) + matchesFilter reference truth function on server.ts + NASA vitest suite (wave 1, parallel to 32-02)
+- [ ] 32-02-PLAN.md — .NET wire types (ViewModels.cs byte-parallel) + FilterHelper.MatchesFilter in new FilterHelper.cs + xUnit NASA suite (wave 1, parallel to 32-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 32-03-PLAN.md — Parity fixtures (column-filter-wire-shape.json + column-filter-helper.json) + FeatureProbe probe endpoints on both twins + backends.json registration (wave 2, depends 32-01 + 32-02)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 32-04-PLAN.md — Full green-tree gate (11 commands) + stage CHANGELOG.md Unreleased entry (wave 3, no publish/tag/announce — Phase 33 owns the release)
