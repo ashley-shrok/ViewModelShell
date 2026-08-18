@@ -1276,12 +1276,179 @@ export interface ModalNode {
   size?: "narrow" | "medium" | "wide" | "fullscreen";
 }
 
+// ─── Phase 32: Typed column filter wire vocabulary ────────────────────────────
+// Additive additions that coexist with the existing filterable?/filterValue?/
+// filterBinds?/filterAction? shape. Old fields remain valid and unmodified.
+// Phase 33 removes the old shape as part of the adapter migration.
+
+/**
+ * Declares what kind of value a filterable column holds. Drives the available
+ * operator vocabulary and the typed value inputs in the filter popover.
+ *
+ * Phase 32 additive wire addition — coexists with the existing
+ * `filterable?`/`filterValue?` shape which remains valid and unmodified.
+ * Phase 33 removes the old shape as part of the adapter migration.
+ */
+export type ValueKind = "text" | "number" | "date" | "fixed-set" | "yes-no";
+
+/**
+ * Closed operator vocabulary for text columns.
+ * The TS closed union is the source of truth; the .NET twin is typed as
+ * `string` per the AGENTS.md closed-unions-enforced-on-one-side-only invariant.
+ */
+export type TextOperator =
+  | "contains"
+  | "equals"
+  | "starts-with"
+  | "ends-with"
+  | "is-empty"
+  | "is-not-empty";
+
+/**
+ * Closed operator vocabulary for number columns.
+ * The TS closed union is the source of truth; the .NET twin is typed as
+ * `string` per the AGENTS.md closed-unions-enforced-on-one-side-only invariant.
+ * `between`: `FilterRule.value` is a 2-element `[low, high]` array (inclusive).
+ */
+export type NumberOperator =
+  | "contains"
+  | "equals"
+  | "does-not-equal"
+  | "greater-than"
+  | "greater-than-or-equal"
+  | "less-than"
+  | "less-than-or-equal"
+  | "between"
+  | "is-empty"
+  | "is-not-empty";
+
+/**
+ * Closed operator vocabulary for date columns.
+ * The TS closed union is the source of truth; the .NET twin is typed as
+ * `string` per the AGENTS.md closed-unions-enforced-on-one-side-only invariant.
+ * Date operators compare against raw ISO-8601 string values using string
+ * comparison (format-agnostic; supports date-only AND datetime — see D-03).
+ * `in-range`: `FilterRule.value` is a 2-element `[from, to]` array (inclusive).
+ */
+export type DateOperator =
+  | "contains"
+  | "is"
+  | "before"
+  | "after"
+  | "in-range"
+  | "is-empty"
+  | "is-not-empty";
+
+/**
+ * Closed operator vocabulary for fixed-set columns.
+ * The TS closed union is the source of truth; the .NET twin is typed as
+ * `string` per the AGENTS.md closed-unions-enforced-on-one-side-only invariant.
+ */
+export type FixedSetOperator = "contains" | "is" | "is-not" | "is-empty" | "is-not-empty";
+
+/**
+ * Closed operator vocabulary for yes-no (boolean) columns.
+ * The TS closed union is the source of truth; the .NET twin is typed as
+ * `string` per the AGENTS.md closed-unions-enforced-on-one-side-only invariant.
+ */
+export type YesNoOperator = "contains" | "is-true" | "is-false" | "is-empty" | "is-not-empty";
+
+/**
+ * Opt-in per-column matching hint that modifies the `contains` comparison.
+ *
+ * `"ignore-punctuation"`: strips currency symbols ($, £, €), commas, and
+ * periods from both the display string and the rule value before the
+ * case-insensitive contains comparison. Useful for currency and
+ * number-formatted columns (e.g. "$1,500.00" contains-matches "1500").
+ *
+ * Phase 32 ships a single-member enum; additional hints are additive.
+ */
+export type MatchingHint = "ignore-punctuation";
+
+/**
+ * A single filter rule: one operator applied to (optionally) one value.
+ * Combined with other rules via `FilterDescriptor.joiner`.
+ *
+ * The `value` field is ABSENT (not `null`) when the operator carries no value
+ * (e.g. `is-empty`, `is-not-empty`, `is-true`, `is-false`). This follows the
+ * VMS null-omission contract — absent = unset, per AGENTS.md gotcha #8.
+ *
+ * For multi-value operators the value shape is an array:
+ * - `between` (number): `value` = `[low: number, high: number]`
+ * - `in-range` (date): `value` = `[from: string, to: string]`
+ */
+export interface FilterRule {
+  operator: TextOperator | NumberOperator | DateOperator | FixedSetOperator | YesNoOperator;
+  /**
+   * The rule's operand value. Absent (not null) when the operator is a
+   * no-value operator such as `is-empty`, `is-not-empty`, `is-true`, `is-false`.
+   * For range operators (`between`, `in-range`), a 2-element array.
+   */
+  value?: unknown;
+}
+
+/**
+ * The current filter instance for a column: an ordered list of rules plus a
+ * combination strategy. Lives in state at the path declared by
+ * `TableNode.filterDescriptorBinds[columnKey]`.
+ *
+ * No short-circuit: every rule is evaluated regardless of intermediate results
+ * (simpler semantics, easier to test — per SPEC Requirement 6 / CONTEXT D-03).
+ */
+export interface FilterDescriptor {
+  /** Ordered filter rules. Each is evaluated by `matchesFilter`; results
+   *  combined per `joiner`. */
+  rules: FilterRule[];
+  /**
+   * Combination strategy for multiple rules.
+   * - `"all-of"` — every rule must match (logical AND).
+   * - `"any-of"` — at least one rule must match (logical OR).
+   */
+  joiner: "all-of" | "any-of";
+}
+
+/**
+ * A column's filter schema declaration (NOT the current filter instance).
+ * Declares the value-kind, optional fixed-set option list, and optional
+ * matching hints. Travels on the column in the view tree.
+ *
+ * The CURRENT filter instance (the ordered rules + joiner) lives in state at
+ * the path declared by `TableNode.filterDescriptorBinds[columnKey]`.
+ *
+ * Phase 32 additive wire addition — see `TableColumn.filter?`.
+ */
+export interface FilterSpec {
+  /** Declares what kind of value this column holds. Drives operator vocabulary. */
+  kind: ValueKind;
+  /**
+   * For `kind: "fixed-set"` columns: the closed list of options the user can
+   * select from. Absent on all other kinds.
+   */
+  options?: string[];
+  /**
+   * Opt-in matching behavior modifiers. Currently one member:
+   * `"ignore-punctuation"` strips currency symbols, commas, and periods
+   * before the `contains` comparison.
+   */
+  matchingHints?: MatchingHint[];
+}
+
 export interface TableColumn {
   key: string;
   label: string;
   sortable?: boolean;
   filterable?: boolean;
   filterValue?: string;
+  /**
+   * Phase 32 typed-filter schema for this column. Declares the value-kind,
+   * optional fixed-set options, and optional matching hints. The current filter
+   * instance (the ordered rules + joiner) lives in state at the path declared
+   * by `TableNode.filterDescriptorBinds[columnKey]`.
+   *
+   * Coexists with the legacy `filterable?`/`filterValue?` shape — both remain
+   * valid at Phase 32 close. Phase 33 removes the old fields.
+   */
+  filter?: FilterSpec;
   /** If set, cell values render as <a href={value}>{linkLabel}</a> */
   linkLabel?: string;
   /** true = open outside current app context (browser: new tab + noopener) */
@@ -1349,6 +1516,13 @@ export interface TableNode {
   /** Per-column filter input bind paths. The renderer reads/writes filter
    *  values at these paths; the values then travel with the next dispatch. */
   filterBinds?: Record<string, string>;
+  /**
+   * Phase 32 typed-filter bind paths, keyed by column key. Each value is a
+   * state path where the column's current `FilterDescriptor` lives.
+   * Parallel to `filterBinds` for the legacy shape — both fields remain
+   * valid at Phase 32 close. Phase 33 removes `filterBinds`.
+   */
+  filterDescriptorBinds?: Record<string, string>;
   /** Path into state where the renderer writes the target page number before
    *  firing `pagination.prevAction` / `pagination.nextAction`. */
   paginationBind?: string;
