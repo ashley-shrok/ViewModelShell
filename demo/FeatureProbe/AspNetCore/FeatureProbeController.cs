@@ -317,9 +317,19 @@ public class FeatureProbeController : ControllerBase
             // SortIntent has been written to state by the renderer; reset page.
             state = state with { TablePage = 1 };
         }
-        else if (name.StartsWith("filter-"))
+        else if (name.StartsWith("filter-")
+                 && !name.StartsWith("filter-wire-shape-")
+                 && name != "filter-helper-probe")
         {
-            // FilterDescriptor written to state.TableFilters.Name by renderer; reset page.
+            // Phase 33 catch-all for per-column filter apply actions
+            // (e.g., filter-name, filter-status). FilterDescriptor already
+            // written to state.TableFilters.<col> by the renderer's popover
+            // Apply; server just resets to page 1 so filter changes don't
+            // strand the viewer on a page that no longer exists.
+            // ⚠️ Explicit exclusions: filter-wire-shape-* + filter-helper-probe
+            // are Phase 32 parity probe action names (handled by dedicated arms
+            // further below). Without these exclusions the catch-all shadows
+            // the Phase 32 arms and the wire-shape probe never sets its state.
             state = state with { TablePage = 1 };
         }
         else if (name == "table-page-prev" || name == "table-page-next")

@@ -412,12 +412,16 @@
       "id": "tbl-filter-e",
       "method": "POST",
       "action": {
-        "name": "table-filter"
+        "name": "filter-name"
       },
+      "$comment": "Phase 33: tableFilters.name is now a FilterDescriptor object (was a bare string in the pre-Phase-33 wire).",
       "stateMutations": [
         {
           "path": "tableFilters.name",
-          "value": "e"
+          "value": {
+            "rules": [{ "operator": "contains", "value": "e" }],
+            "joiner": "all-of"
+          }
         }
       ]
     },
@@ -438,12 +442,16 @@
       "id": "tbl-filter-clear",
       "method": "POST",
       "action": {
-        "name": "table-filter"
+        "name": "filter-name"
       },
+      "$comment": "Phase 33: clearing the descriptor = empty rules[] (renders no filter effect); joiner still required for the wire-shape.",
       "stateMutations": [
         {
           "path": "tableFilters.name",
-          "value": ""
+          "value": {
+            "rules": [],
+            "joiner": "all-of"
+          }
         }
       ]
     },

@@ -30,8 +30,8 @@
     { "id": "agt-resolve-1",        "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "resolve-ticket" } },
     { "id": "agt-back",             "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "back-to-queue" } },
 
-    { "id": "agt-filter-title",     "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "filter-text" }, "stateMutations": [{ "path": "titleFilter", "value": "outlook" }] },
-    { "id": "agt-filter-title-clear","method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "filter-text" }, "stateMutations": [{ "path": "titleFilter", "value": "" }] },
+    { "id": "agt-filter-title",     "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "filter-text" }, "stateMutations": [{ "path": "titleFilterDescriptor", "value": { "rules": [{ "operator": "contains", "value": "outlook" }], "joiner": "all-of" } }], "$comment": "Phase 33: titleFilter (string) → titleFilterDescriptor (FilterDescriptor object). Wire migration." },
+    { "id": "agt-filter-title-clear","method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "filter-text" }, "stateMutations": [{ "path": "titleFilterDescriptor", "value": { "rules": [], "joiner": "all-of" } }], "$comment": "Phase 33: clear = empty rules[]; joiner still present for wire-shape." },
     { "id": "agt-bulk-reopen-1-2",  "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "bulk-reopen" },  "stateMutations": [{ "path": "bulkSelection", "value": ["1", "2"] }] },
     { "id": "agt-bulk-start-1",     "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "bulk-start" },   "stateMutations": [{ "path": "bulkSelection", "value": ["1"] }] },
     { "id": "agt-bulk-resolve-2",   "method": "POST", "actionEndpoint": "/api/agent/action", "action": { "name": "bulk-resolve" }, "stateMutations": [{ "path": "bulkSelection", "value": ["2"] }] },

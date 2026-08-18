@@ -38,7 +38,7 @@ interface FeatureProbeState {
   lastSubmit?: string | null;
   // Table feature-matrix state — bind targets for sort/filter/pagination.
   sortIntent: SortIntent;
-  tableFilters: { name: FilterDescriptor | null };
+  tableFilters: { name?: FilterDescriptor };
   tablePage: number;
   longActionPolls: number;
   // Phase 6 bind slots:
@@ -120,7 +120,7 @@ function initialState(): FeatureProbeState {
     lastUploadName: undefined,
     lastUploadSize: 0,
     sortIntent: { column: undefined, direction: undefined },
-    tableFilters: { name: null },
+    tableFilters: {},
     tablePage: 1,
     longActionPolls: 0,
     note: "",
@@ -1941,6 +1941,21 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
     };
   } else if (name === "table-sort-name" || name === "table-sort-status") {
     // sortIntent has been written to state by the renderer; reset to page 1.
+    state = { ...state, tablePage: 1 };
+  } else if (
+    name.startsWith("filter-")
+    && !name.startsWith("filter-wire-shape-")
+    && name !== "filter-helper-probe"
+  ) {
+    // Phase 33 (byte-parallel with .NET FeatureProbeController): a per-column
+    // filter action name (e.g., filter-name) fires when the popover Applies.
+    // FilterDescriptor has already been written to state.tableFilters.<col>
+    // by the renderer; server just resets to page 1 so filter changes don't
+    // strand the viewer on a page that no longer exists.
+    // ⚠️ Explicit exclusions: filter-wire-shape-* + filter-helper-probe are
+    // Phase 32 parity probe action names (handled by dedicated arms further
+    // below). Without these exclusions the catch-all shadows the Phase 32 arms
+    // and the wire-shape probe never sets its state.
     state = { ...state, tablePage: 1 };
   } else if (name === "table-page-prev") {
     // The renderer writes the target page to tablePage before dispatch.

@@ -72,7 +72,7 @@ interface AgentState {
   // 0.15.1 — canonical workflow pattern: filter narrows under the cap, no
   // pagination. titleFilterDescriptor holds the typed FilterDescriptor for the
   // Title column (Phase 33 migration from plain string titleFilter).
-  titleFilterDescriptor: FilterDescriptor | null;
+  titleFilterDescriptor?: FilterDescriptor;
   // Phase 6 — bind slots:
   //   selectedIds: keyed by ticket id, value true = selected — this is just the
   //     checkbox CHECK STATE (per-row CheckboxNode binds to `selectedIds.${id}`).
@@ -91,7 +91,6 @@ function agentInitial(): AgentState {
     selectedTicketId: undefined,
     filter: "all",
     notesSaved: false,
-    titleFilterDescriptor: null,
     selectedIds: {},
     bulkSelection: [],
     agentNotes: "",
