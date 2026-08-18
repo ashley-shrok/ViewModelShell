@@ -130,6 +130,20 @@ The test `"(g) discard-on-outside-click: clicking outside discards the draft; st
 
 **Conclusion:** The outside-click discard path is genuinely tested. The test would catch a developer accidentally changing `closeFilterPopover(true)` to `closeFilterPopover(false)` or adding a `sa.write` call after the close.
 
+### Addendum (2026-08-18, Plan 33-06): dispatch-assertion mutation-verify session
+
+After Ashley's Plan 33-06 checkpoint proved Inline Enter / Popover Apply / Popover Clear must dispatch `{name: "filter-<colKey>"}` (SPEC REQ-CF2-01 — not "state-write only" as Wave 1 had shipped), three new test cases were added and the existing Apply/Clear tests were tightened to assert dispatch:
+
+**Mutations applied (one at a time, per action):**
+
+1. **Enter dispatch removed** (line 5844 in browser.ts) — replaced `on({ name: "filter-${col.key}" })` with `// MUTATION: dispatch removed`. Result: **3 failures** — "Enter DISPATCHES {name: 'filter-<colKey>'}", "Enter on a different column key…", "Enter with empty input writes null AND still dispatches (reset signal)".
+2. **Apply dispatch removed** (line 7128 in browser.ts). Result: **2 failures** — "(g) apply-on-Apply: Apply button commits draft to state, dispatches, and closes popover", "Apply DISPATCHES {name: 'filter-<colKey>'} so the server re-renders".
+3. **Clear dispatch removed** (line 7104 in browser.ts). Result: **1 failure** — "(g) clear-commits-empty: Clear button writes null, dispatches, and closes popover".
+
+All mutations reverted; all 52 tests pass. The dispatch-assertion tests are genuine — they catch removal of every commit dispatch site.
+
+**Test count updated:** 49 → 52 (three new Enter-dispatch tests; four existing Apply/Clear/discard tests tightened to assert dispatch presence/absence but kept as one it-block each).
+
 ## Self-Check
 
 Files confirmed to exist:

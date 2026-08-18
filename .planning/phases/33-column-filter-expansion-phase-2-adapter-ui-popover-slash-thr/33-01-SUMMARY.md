@@ -29,7 +29,7 @@ tech_stack:
     - "Portal-based popover: popoverPortal div appended to container, sibling of table wrapper"
     - "position:fixed + getBoundingClientRect + viewport edge clamping (right-clamp then bottom-flip-above fallback)"
     - "render() preamble cleanup: popover close + handler removal before replaceChildren"
-    - "State-only filter commit (write via sa.write, no named action dispatch)"
+    - "Filter commit writes state via sa.write AND dispatches {name: 'filter-<colKey>'} (corrected in Plan 33-06 after Ashley checkpoint)"
     - "else-if Wave 2 bridge: legacy filterAction path survives until Plan 02"
 key_files:
   created: []
@@ -40,7 +40,7 @@ key_files:
     - viewmodel-shell/src/browser.ts
     - viewmodel-shell/styles/default.css
 decisions:
-  - "Inline Enter and Apply commit filter state via sa.write only — no named action dispatch. Server picks up the updated descriptor on the next regular action. This departs from the legacy filterAction dispatch pattern; documented below."
+  - "Inline Enter, Popover Apply, Popover Clear all write state via sa.write AND dispatch {name: 'filter-<colKey>'} so the server sees the update and re-renders. The `input` (keystroke) event stays write-only for draft preservation. This decision was corrected in Plan 33-06 after Ashley's real-browser exercise caught the original 'state-write only' shape as visibly broken for paginated consumers; see Behavioral Decisions section below."
   - "popover z-index set to 1050 (not 1200 as plan suggested) to sit between modal-backdrop (1000) and toast (1100) and avoid conflicting with skew-lock (1200)"
   - "Pre-existing .NET parity gap for Square (Phase 30 CHAT-14) fixed in same commit as FilterSlash addition — both were missing from .NET IconName enum"
   - "popoverScrollResizeCleanup single closure owns all document listener cleanup (outside-click, Escape, resize, scroll) to prevent accumulation"
@@ -129,13 +129,20 @@ else if (hasLegacyFilters) { /* Wave 2 bridge — survives until Plan 02 removes
 
 ### Behavioral Decisions Documented
 
-**Inline Enter + Apply = state-write only, no named action dispatch**
+**Inline Enter + Popover Apply + Popover Clear ALL write to state AND dispatch `{name: "filter-<colKey>"}`**
 
-The plan's `must_haves.truths[2]` says "dispatches an action that writes a single `{operator:'contains', value:'...'}` FilterDescriptor." The action dispatch mechanism used by the legacy `filterAction` path was a named `on({ name: filterAction.name })` call. The new `filterDescriptorBinds` shape provides no equivalent named action for filter commits.
+**Note (2026-08-18, correction from Plan 33-06 checkpoint):** This section originally documented a "state-write only, no named dispatch" decision. Ashley's real-browser exercise of the Plan 33-06 verification page proved that decision was wrong — a paginated consumer's typing had zero visible effect because the server never saw the state update (no round trip fired until an unrelated action). SPEC REQ-CF2-01 explicitly says "typing text + Enter dispatches an action that writes a single `{operator:'contains', value:'...'}` rule at that column's bind path." Plan-checker W-2 flagged the SPEC/Wave-1 tension; it was let slide and caught by real-browser exercise instead.
 
-Decision: `sa.write(bindPath, descriptor)` is the commit. The server reads the updated descriptor on the next regular action (any button click, form submit, poll). No named action is dispatched from the inline Enter or the popover Apply button. This matches the Phase 32 design intent ("state-only path") and was the planned resolution documented in the plan's own `<action>` note ("inline Enter ONLY writes the state; no action dispatch").
+**Corrected shipped behavior** (fixed in Plan 33-06 fix commit, browser.ts):
+- **Inline Enter** — writes descriptor to state via `sa.write(bindPath, ...)`, then dispatches `{name: "filter-<colKey>"}` (column key drives the action name — mirrors the parity fixture `filter-*` catch-all convention on both backends' reset-page arms).
+- **Popover Apply** — same shape: writes cleaned draft to state, then dispatches `{name: "filter-<colKey>"}`.
+- **Popover Clear** — same shape: writes `null` to state, then dispatches `{name: "filter-<colKey>"}` (user expects Clear to visibly reset the table).
+- **Inline `input` event (keystroke, NOT Enter)** — write-only, no dispatch. This preserves VMS's bind-on-keystroke pattern for text preservation across re-renders.
+- **Outside-click / Escape** — remain discard: no state write, no dispatch. Draft is dropped; state and view are unchanged.
 
-**Clear button** similarly writes `{ rules: [], joiner: "all-of" }` to state via `sa.write` and closes the popover — no named clear action dispatched.
+Mutation-verify session updated in 33-04-SUMMARY confirms the dispatch assertions are genuine (3 tests catch Enter dispatch removal; 2 tests catch Apply dispatch removal; 1 test catches Clear dispatch removal).
+
+**Companion doc update:** AGENTS.md's "Typed column-filter primitive" section (added in Plan 33-05) originally described commits as "state-writes, not named actions"; that wording is corrected in Plan 33-06's docs pass to describe the actual shipped shape (dispatch on Enter/Apply/Clear, state-only on keystroke).
 
 **z-index set to 1050 (plan suggested 1200)**
 
