@@ -28,19 +28,13 @@ public class AgentController(HelpDeskDb db) : ControllerBase
 
         // Phase 6 (WIRE-07) — every input value flows through state at the
         // bound path; per-row identity is encoded in the action name itself.
-        if (name.StartsWith("filter-") && name != "filter-text")
+        if (name.StartsWith("filter-"))
         {
             // Filter is already in state via the TabsNode bind. RESET-ON-NAV:
             // a view change clears selection so no checks linger from rows the
             // operator has navigated away from (the safe default for a server-
             // driven app; the harvest already keeps bulk actions visible-scoped
             // regardless — this just keeps the VISIBLE check-state honest too).
-            state = state with { SelectedIds = new Dictionary<string, bool>(), BulkSelection = [] };
-        }
-        else if (name == "filter-text")
-        {
-            // TitleFilter is already in state via the column filterBind. Same
-            // reset-on-nav as the status tabs above.
             state = state with { SelectedIds = new Dictionary<string, bool>(), BulkSelection = [] };
         }
         else if (name == "bulk-start" || name == "bulk-resolve" || name == "bulk-reopen")
@@ -131,7 +125,15 @@ public class AgentController(HelpDeskDb db) : ControllerBase
     {
         var (open, inProgress, resolved) = db.GetCounts();
         var status = state.Filter == "all" ? null : state.Filter;
-        var matching = db.CountMatching(status, state.TitleFilter);
+        // Extract a plain-string filter from the first contains rule for SQL performance.
+        // Non-contains operators are handled by FilterHelper.MatchesFilter below.
+        var titleDescriptor = state.TitleFilterDescriptor;
+        var sqlTitleFilter = (
+            titleDescriptor?.Rules.Count == 1 &&
+            titleDescriptor.Rules[0].Operator == "contains" &&
+            titleDescriptor.Rules[0].Value is string sv
+        ) ? sv : "";
+        var matching = db.CountMatching(status, sqlTitleFilter);
         var withinCap = matching <= Cap;
 
         var children = new List<ViewNode>
@@ -149,7 +151,12 @@ public class AgentController(HelpDeskDb db) : ControllerBase
                 ]),
         };
 
-        var tickets = withinCap ? db.GetMatching(status, state.TitleFilter, Cap) : new List<Ticket>();
+        var allMatchingTickets = withinCap ? db.GetMatching(status, sqlTitleFilter, Cap) : new List<Ticket>();
+        // Apply matchesFilter in memory for non-contains descriptors.
+        var tickets = (titleDescriptor == null || titleDescriptor.Rules.Count == 0)
+            ? allMatchingTickets
+            : allMatchingTickets.Where(t =>
+                FilterHelper.MatchesFilter(titleDescriptor, t.Title, t.Title, "text")).ToList();
 
         // Bulk-action toolbar now lives on TableNode.Selection (below) so it's
         // VISIBLE-SCOPED: each button harvests the currently-checked, currently-
@@ -224,16 +231,14 @@ public class AgentController(HelpDeskDb db) : ControllerBase
             children.Add(new TableNode(
                 Columns:
                 [
-                    new TableColumn("title",    "Title", Filterable: true,
-                        FilterValue: state.TitleFilter.Length > 0 ? state.TitleFilter : null),
+                    new TableColumn("title",    "Title", Filter: new FilterSpec("text")),
                     new TableColumn("type",     "Type"),
                     new TableColumn("priority", "Priority"),
                     new TableColumn("status",   "Status"),
                     new TableColumn("due",      "Due"),
                 ],
                 Rows: rows,
-                FilterBinds: new Dictionary<string, string> { ["title"] = "titleFilter" },
-                FilterAction: new ActionDescriptor("filter-text"),
+                FilterDescriptorBinds: new Dictionary<string, string> { ["title"] = "titleFilterDescriptor" },
                 Selection: bulkSelection));
         }
 

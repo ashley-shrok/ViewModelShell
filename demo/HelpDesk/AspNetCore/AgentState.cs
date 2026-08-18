@@ -1,11 +1,15 @@
 namespace HelpDesk;
 
+using ViewModelShell;
+
 public record AgentState(
     string View,                   // "queue" | "detail"
     long? SelectedTicketId,
     string Filter,                 // "all" | "open" | "in-progress" | "resolved"
     bool NotesSaved,
-    string TitleFilter,            // 0.15.1: free-text title filter
+    // Phase 33 — typed FilterDescriptor for the Title column (migrated from
+    // plain string TitleFilter). Null when no filter is active.
+    FilterDescriptor? TitleFilterDescriptor,
     // Phase 6 (WIRE-07) — bind slots:
     //   SelectedIds: per-row CheckboxNodes bind to selectedIds.{id} — this is
     //   just the checkbox CHECK STATE (draft-preserved across re-renders).
@@ -26,7 +30,7 @@ public record AgentState(
         SelectedTicketId: null,
         Filter: "all",
         NotesSaved: false,
-        TitleFilter: "",
+        TitleFilterDescriptor: null,
         SelectedIds: new Dictionary<string, bool>(),
         BulkSelection: [],
         AgentNotes: ""

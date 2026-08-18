@@ -110,14 +110,19 @@ public class AgentControllerTests : IDisposable
         // stays reachable to edit/clear.
         SeedTicket("Printer broken");
         var ctrl  = CreateAgent();
-        var state = AgentState.Initial() with { TitleFilter = "xyzzy" };
-        var page  = Page(Ok(Act(ctrl, state, "filter-text")).Vm);
+        var descriptor = new FilterDescriptor(
+            Rules: [new FilterRule("contains", "xyzzy")],
+            Joiner: "all-of");
+        var state = AgentState.Initial() with { TitleFilterDescriptor = descriptor };
+        // Dispatch any filter-* action so the handler resets selection and re-renders.
+        var page  = Page(Ok(Act(ctrl, state, "filter-open")).Vm);
 
         Assert.Contains(page.Children.OfType<TextNode>(), t => t.Value == "No tickets match your filter.");
         Assert.DoesNotContain(page.Children.OfType<TextNode>(), t => t.Value == "No tickets in queue.");
         var table = QueueTable(page);
         Assert.Empty(table.Rows);
-        Assert.Equal("xyzzy", table.Columns.Single(c => c.Key == "title").FilterValue);
+        // The title column carries a FilterSpec (kind="text") so the filter UI renders.
+        Assert.Equal("text", table.Columns.Single(c => c.Key == "title").Filter?.Kind);
     }
 
     [Fact]

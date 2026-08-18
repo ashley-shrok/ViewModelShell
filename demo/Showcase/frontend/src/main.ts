@@ -14,7 +14,7 @@ import lightRoseCss   from "@ashley-shrok/viewmodel-shell/themes/light-rose.css?
 import lightAmberCss  from "@ashley-shrok/viewmodel-shell/themes/light-amber.css?inline";
 import lightTealCss   from "@ashley-shrok/viewmodel-shell/themes/light-teal.css?inline";
 import { BrowserAdapter } from "@ashley-shrok/viewmodel-shell/browser";
-import type { ViewNode, ActionEvent, StateAccess } from "@ashley-shrok/viewmodel-shell";
+import type { ViewNode, ActionEvent, StateAccess, FilterDescriptor } from "@ashley-shrok/viewmodel-shell";
 
 // Phase 6 (WIRE-07): the Showcase has no backend; it drives the BrowserAdapter
 // directly without a ViewModelShell. To honor the new renderer contract
@@ -39,7 +39,7 @@ interface State {
   agreeChecked:  boolean;
   selectedTab:   string;
   sortIntent:    SortIntent;
-  filters:       Record<string, string>;
+  filterDescriptors: Record<string, FilterDescriptor | null>;
   mode:          Mode;
   accent:        Accent;
   selectedItemId: string;
@@ -53,7 +53,7 @@ let state: State = {
   agreeChecked:  false,
   selectedTab:   "active",
   sortIntent:    { column: "name", direction: "asc" },
-  filters:       { name: "", status: "" },
+  filterDescriptors: {},
   mode:          "light",
   accent:        "purple",
   selectedItemId: "lp-01",
@@ -170,12 +170,36 @@ const allRows: Array<{
   { id: "4", name: "Delta",   status: "blocked",     url: "https://example.com/4", tone: "danger" },
 ];
 
+// Column filter specs for the demo table (used by visibleRows to know which kind to apply).
+const tableColSpecs: Record<string, { kind: "text" | "fixed-set" }> = {
+  name:   { kind: "text" },
+  status: { kind: "fixed-set" },
+};
+
 function visibleRows() {
-  const f = state.filters;
-  const filtered = allRows.filter(r =>
-    (!f.name   || r.name.toLowerCase().includes(f.name.toLowerCase())) &&
-    (!f.status || r.status.toLowerCase().includes(f.status.toLowerCase()))
-  );
+  const descriptors = state.filterDescriptors;
+  const filtered = allRows.filter(r => {
+    for (const [colKey, descriptor] of Object.entries(descriptors)) {
+      if (!descriptor || descriptor.rules.length === 0) continue;
+      const spec = tableColSpecs[colKey];
+      const cellVal = (r as Record<string, string>)[colKey] ?? "";
+      // Apply rules with the configured joiner (all-of = AND, any-of = OR).
+      const results = descriptor.rules.map(rule => {
+        const rv = rule.value != null ? String(rule.value) : "";
+        if (rule.operator === "contains") return cellVal.toLowerCase().includes(rv.toLowerCase());
+        if (rule.operator === "is") return spec?.kind === "fixed-set" ? cellVal === rv : cellVal.toLowerCase() === rv.toLowerCase();
+        if (rule.operator === "is-not") return spec?.kind === "fixed-set" ? cellVal !== rv : cellVal.toLowerCase() !== rv.toLowerCase();
+        if (rule.operator === "is-empty") return cellVal === "";
+        if (rule.operator === "is-not-empty") return cellVal !== "";
+        if (rule.operator === "starts-with") return cellVal.toLowerCase().startsWith(rv.toLowerCase());
+        if (rule.operator === "ends-with") return cellVal.toLowerCase().endsWith(rv.toLowerCase());
+        return true; // unknown operators pass through
+      });
+      const pass = descriptor.joiner === "any-of" ? results.some(Boolean) : results.every(Boolean);
+      if (!pass) return false;
+    }
+    return true;
+  });
   const dir = state.sortIntent.direction === "asc" ? 1 : -1;
   return [...filtered].sort((a, b) => {
     const av = (a as any)[state.sortIntent.column] ?? "";
@@ -840,8 +864,8 @@ function componentsView(): ViewNode[] {
       { type: "table",
         columns: [
           { key: "id",     label: "ID",     sortable: true },
-          { key: "name",   label: "Name",   sortable: true,  filterable: true, filterValue: state.filters.name },
-          { key: "status", label: "Status", filterable: true, filterValue: state.filters.status },
+          { key: "name",   label: "Name",   sortable: true,  filter: { kind: "text" } },
+          { key: "status", label: "Status", filter: { kind: "fixed-set", options: ["active", "pending", "closed", "blocked"] } },
           { key: "url",    label: "Link",   linkLabel: "open", linkExternal: true },
         ],
         rows: visibleRows().map(r => ({
@@ -851,13 +875,12 @@ function componentsView(): ViewNode[] {
           tone: r.tone,
         })),
         sortBind: "sortIntent",
-        filterBinds: { name: "filters.name", status: "filters.status" },
+        filterDescriptorBinds: { name: "filterDescriptors.name", status: "filterDescriptors.status" },
         sortActions: {
           id:     { name: "table:sort:id" },
           name:   { name: "table:sort:name" },
           status: { name: "table:sort:status" },
         },
-        filterAction: { name: "table:filter" },
       },
     ]},
 

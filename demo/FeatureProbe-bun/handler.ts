@@ -38,7 +38,7 @@ interface FeatureProbeState {
   lastSubmit?: string | null;
   // Table feature-matrix state — bind targets for sort/filter/pagination.
   sortIntent: SortIntent;
-  tableFilters: { name: string };
+  tableFilters: { name: FilterDescriptor | null };
   tablePage: number;
   longActionPolls: number;
   // Phase 6 bind slots:
@@ -120,7 +120,7 @@ function initialState(): FeatureProbeState {
     lastUploadName: undefined,
     lastUploadSize: 0,
     sortIntent: { column: undefined, direction: undefined },
-    tableFilters: { name: "" },
+    tableFilters: { name: null },
     tablePage: 1,
     longActionPolls: 0,
     note: "",
@@ -174,9 +174,11 @@ const ITEMS: TableItem[] = [
 
 function tableWindow(s: FeatureProbeState): { page: TableItem[]; total: number; clampedPage: number } {
   let rows = ITEMS.slice();
-  if (s.tableFilters.name) {
-    const f = s.tableFilters.name.toLowerCase();
-    rows = rows.filter((i) => i.name.toLowerCase().includes(f));
+  const nameDescriptor = s.tableFilters.name;
+  if (nameDescriptor && nameDescriptor.rules.length > 0) {
+    rows = rows.filter((i) =>
+      matchesFilter(nameDescriptor, i.name, i.name, "text")
+    );
   }
   if (s.sortIntent.column) {
     const col = s.sortIntent.column;
@@ -199,10 +201,7 @@ function tableWindow(s: FeatureProbeState): { page: TableItem[]; total: number; 
 function buildTableSection(state: FeatureProbeState): ViewNode {
   const { page, total, clampedPage } = tableWindow(state);
   const nameCol: TableColumn = {
-    key: "name", label: "Name", sortable: true, filterable: true,
-    // Spread, not a post-hoc assignment: filterValue stays ABSENT when unset
-    // (an unset optional is never `null` on the wire — AGENTS.md gotcha #8).
-    ...(state.tableFilters.name.length > 0 ? { filterValue: state.tableFilters.name } : {}),
+    key: "name", label: "Name", sortable: true, filter: { kind: "text" },
   };
 
   const table: TableNode = {
@@ -213,13 +212,12 @@ function buildTableSection(state: FeatureProbeState): ViewNode {
     ],
     rows: page.map((i) => ({ cells: { name: i.name, status: i.status }, id: i.id })),
     sortBind: "sortIntent",
-    filterBinds: { name: "tableFilters.name" },
+    filterDescriptorBinds: { name: "tableFilters.name" },
     paginationBind: "tablePage",
     sortActions: {
       name:   { name: "table-sort-name" },
       status: { name: "table-sort-status" },
     },
-    filterAction: { name: "table-filter" },
     pagination: {
       page: clampedPage,
       pageSize: PAGE_SIZE,
@@ -1943,9 +1941,6 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
     };
   } else if (name === "table-sort-name" || name === "table-sort-status") {
     // sortIntent has been written to state by the renderer; reset to page 1.
-    state = { ...state, tablePage: 1 };
-  } else if (name === "table-filter") {
-    // tableFilters.name has been written to state by the renderer; reset page.
     state = { ...state, tablePage: 1 };
   } else if (name === "table-page-prev") {
     // The renderer writes the target page to tablePage before dispatch.

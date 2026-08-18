@@ -25,11 +25,13 @@ import {
   createAction,
   createAgentSkillHandler,
   createVersionGuard,
+  matchesFilter,
   shellRejection,
   validateActionNames,
   type ButtonNode,
   type CheckboxNode,
   type ErrorEntry,
+  type FilterDescriptor,
   type TableColumn,
   type TableNode,
   type TableRow,
@@ -68,8 +70,9 @@ interface AgentState {
   filter: string;
   notesSaved: boolean;
   // 0.15.1 — canonical workflow pattern: filter narrows under the cap, no
-  // pagination. titleFilter is the free-text Title column input.
-  titleFilter: string;
+  // pagination. titleFilterDescriptor holds the typed FilterDescriptor for the
+  // Title column (Phase 33 migration from plain string titleFilter).
+  titleFilterDescriptor: FilterDescriptor | null;
   // Phase 6 — bind slots:
   //   selectedIds: keyed by ticket id, value true = selected — this is just the
   //     checkbox CHECK STATE (per-row CheckboxNode binds to `selectedIds.${id}`).
@@ -88,7 +91,7 @@ function agentInitial(): AgentState {
     selectedTicketId: undefined,
     filter: "all",
     notesSaved: false,
-    titleFilter: "",
+    titleFilterDescriptor: null,
     selectedIds: {},
     bulkSelection: [],
     agentNotes: "",
@@ -372,9 +375,24 @@ const AGENT_CAP = 25;
 function agentBuildQueuePage(state: AgentState): ViewNode {
   const counts = dbGetCounts();
   const status = state.filter === "all" ? null : state.filter;
-  const matching = dbCountMatching(status, state.titleFilter);
+  // Derive a plain-text filter string for the SQL query from the first
+  // contains rule in the descriptor (for DB-side performance). Non-contains
+  // operators fall through to in-memory matchesFilter below.
+  const titleDescriptor = state.titleFilterDescriptor;
+  const sqlTitleFilter = (
+    titleDescriptor?.rules.length === 1 &&
+    titleDescriptor.rules[0]!.operator === "contains" &&
+    typeof titleDescriptor.rules[0]!.value === "string"
+  ) ? titleDescriptor.rules[0]!.value as string : "";
+  const matching = dbCountMatching(status, sqlTitleFilter);
   const withinCap = matching <= AGENT_CAP;
-  const tickets = withinCap ? dbGetMatching(status, state.titleFilter, AGENT_CAP) : [];
+  const allMatchingTickets = withinCap ? dbGetMatching(status, sqlTitleFilter, AGENT_CAP) : [];
+  // Apply matchesFilter in-memory for descriptors with non-contains operators.
+  const tickets = (!titleDescriptor || titleDescriptor.rules.length === 0)
+    ? allMatchingTickets
+    : allMatchingTickets.filter(t =>
+        matchesFilter(titleDescriptor, t.title, t.title, "text")
+      );
 
   const rows = tickets.map(t => {
     const status = ticketStatus(t);
@@ -455,10 +473,7 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
     children.push({ type: "text", value: "No tickets in queue.", style: "muted" });
   } else {
     const titleCol: TableColumn = {
-      key: "title", label: "Title", filterable: true,
-      // Spread, not a post-hoc assignment: filterValue stays ABSENT when unset
-      // (an unset optional is never `null` on the wire — AGENTS.md gotcha #8).
-      ...(state.titleFilter.length > 0 ? { filterValue: state.titleFilter } : {}),
+      key: "title", label: "Title", filter: { kind: "text" },
     };
 
     const table: TableNode = {
@@ -471,8 +486,7 @@ function agentBuildQueuePage(state: AgentState): ViewNode {
         { key: "due",      label: "Due" },
       ],
       rows,
-      filterBinds: { title: "titleFilter" },
-      filterAction: { name: "filter-text" },
+      filterDescriptorBinds: { title: "titleFilterDescriptor" },
       // Spread, not assignment: selection stays ABSENT (never null) when there
       // are no matches within the cap — gotcha #8 / matches the .NET twin.
       ...(withinCap && rows.length > 0
@@ -593,13 +607,10 @@ const agentHandler = createAction<AgentState>(async (payload) => {
   let state: AgentState = { ...payload.state, notesSaved: false };
   const name = payload.name;
 
-  if (name.startsWith("filter-") && name !== "filter-text") {
+  if (name.startsWith("filter-")) {
     // filter is already in state via the TabsNode bind. RESET-ON-NAV: a view
     // change clears selection so no checks linger from rows navigated away from
     // (the safe default; the harvest already keeps bulk actions visible-scoped).
-    state = { ...state, selectedIds: {}, bulkSelection: [] };
-  } else if (name === "filter-text") {
-    // titleFilter is already in state via the column filterBind. Same reset-on-nav.
     state = { ...state, selectedIds: {}, bulkSelection: [] };
   } else if (name === "bulk-start" || name === "bulk-resolve" || name === "bulk-reopen") {
     const bulkStatus = name === "bulk-start" ? "in-progress"

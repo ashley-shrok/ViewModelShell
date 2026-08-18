@@ -14,7 +14,9 @@ public record SortIntent(
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Direction
 );
 
-public record TableFilters(string Name);
+public record TableFilters(
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    FilterDescriptor? Name);
 
 public record FeatureProbeState(
     int PollCount,
@@ -120,7 +122,7 @@ public record FeatureProbeState(
         LastUploadSize: 0,
         LastSubmit: null,
         SortIntent: new SortIntent(null, null),
-        TableFilters: new TableFilters(""),
+        TableFilters: new TableFilters(Name: null),
         TablePage: 1,
         LongActionPolls: 0,
         Note: "",
@@ -315,9 +317,9 @@ public class FeatureProbeController : ControllerBase
             // SortIntent has been written to state by the renderer; reset page.
             state = state with { TablePage = 1 };
         }
-        else if (name == "table-filter")
+        else if (name.StartsWith("filter-"))
         {
-            // TableFilters.Name has been written to state by the renderer; reset page.
+            // FilterDescriptor written to state.TableFilters.Name by renderer; reset page.
             state = state with { TablePage = 1 };
         }
         else if (name == "table-page-prev" || name == "table-page-next")
@@ -1989,8 +1991,8 @@ public class FeatureProbeController : ControllerBase
     private static (List<TableItem> Page, int Total, int ClampedPage) Window(FeatureProbeState s)
     {
         IEnumerable<TableItem> q = Items;
-        if (!string.IsNullOrEmpty(s.TableFilters.Name))
-            q = q.Where(i => i.Name.Contains(s.TableFilters.Name, StringComparison.OrdinalIgnoreCase));
+        if (s.TableFilters.Name is { } nameDesc)
+            q = q.Where(i => FilterHelper.MatchesFilter(nameDesc, i.Name, i.Name, "text"));
         var rows = q.ToList();
 
         if (s.SortIntent.Column is { } col)
@@ -2027,20 +2029,18 @@ public class FeatureProbeController : ControllerBase
         var table = new TableNode(
             Columns:
             [
-                new TableColumn("name", "Name", Sortable: true, Filterable: true,
-                    FilterValue: state.TableFilters.Name.Length > 0 ? state.TableFilters.Name : null),
+                new TableColumn("name", "Name", Sortable: true, Filter: new FilterSpec("text")),
                 new TableColumn("status", "Status", Sortable: true)
             ],
             Rows: rows,
             SortBind: "sortIntent",
-            FilterBinds: new Dictionary<string, string> { ["name"] = "tableFilters.name" },
+            FilterDescriptorBinds: new Dictionary<string, string> { ["name"] = "tableFilters.name" },
             PaginationBind: "tablePage",
             SortActions: new Dictionary<string, ActionDescriptor>
             {
                 ["name"]   = new ActionDescriptor("table-sort-name"),
                 ["status"] = new ActionDescriptor("table-sort-status"),
             },
-            FilterAction: new ActionDescriptor("table-filter"),
             Pagination: new TablePagination(
                 clampedPage, PageSize, total,
                 PrevAction: new ActionDescriptor("table-page-prev"),

@@ -164,7 +164,6 @@ public class ViewTreeValidationTests
                 ["title"] = new("sort-by-title"),
                 ["date"] = new("sort-by-date"),
             },
-            FilterAction: new ActionDescriptor("apply-filter"),
             PaginationBind: "page",
             Pagination: new TablePagination(
                 Page: 1,

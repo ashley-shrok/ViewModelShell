@@ -195,7 +195,7 @@ public class ExpensesControllerTests
         Assert.All(table.Columns, c =>
         {
             Assert.False(c.Sortable);
-            Assert.False(c.Filterable);
+            Assert.Null(c.Filter);
             Assert.False(c.LinkExternal);
         });
     }
