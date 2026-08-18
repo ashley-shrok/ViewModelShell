@@ -178,7 +178,7 @@ export type IconName =
   // Actions (24)
   | "check" | "x" | "plus" | "minus" | "edit" | "edit-3" | "trash" | "trash-2"
   | "save" | "download" | "upload" | "copy" | "clipboard" | "clipboard-copy"
-  | "share" | "share-2" | "refresh-cw" | "rotate-ccw" | "search" | "filter"
+  | "share" | "share-2" | "refresh-cw" | "rotate-ccw" | "search" | "filter" | "filter-slash"
   | "send" | "printer" | "pencil" | "eye"
   // Status (10)
   | "check-circle" | "check-circle-2" | "x-circle" | "alert-circle"

@@ -434,6 +434,7 @@ public sealed class IconNameConverter : JsonConverter<IconName>
         [IconName.Share] = "share", [IconName.Share2] = "share-2",
         [IconName.RefreshCw] = "refresh-cw", [IconName.RotateCcw] = "rotate-ccw",
         [IconName.Search] = "search", [IconName.Filter] = "filter",
+        [IconName.FilterSlash] = "filter-slash",
         [IconName.Send] = "send", [IconName.Printer] = "printer",
         [IconName.Pencil] = "pencil", [IconName.Eye] = "eye",
         // Status (10)
@@ -484,6 +485,8 @@ public sealed class IconNameConverter : JsonConverter<IconName>
         // Magic / accents (4)
         [IconName.Sparkles] = "sparkles", [IconName.Zap] = "zap",
         [IconName.Wand2] = "wand-2", [IconName.Flame] = "flame",
+        // Media / playback (1) — v9.1.0 (CHAT-14)
+        [IconName.Square] = "square",
     };
 
     private static readonly IReadOnlyDictionary<string, IconName> _fromWire
@@ -554,7 +557,7 @@ public enum IconName
     // Actions (24)
     Check, X, Plus, Minus, Edit, Edit3, Trash, Trash2,
     Save, Download, Upload, Copy, Clipboard, ClipboardCopy,
-    Share, Share2, RefreshCw, RotateCcw, Search, Filter,
+    Share, Share2, RefreshCw, RotateCcw, Search, Filter, FilterSlash,
     Send, Printer, Pencil, Eye,
     // Status (10)
     CheckCircle, CheckCircle2, XCircle, AlertCircle,
@@ -580,7 +583,9 @@ public enum IconName
     Cloud, Wifi, BarChart, LineChart, PieChart, Gauge,
     Layers, Settings, Cpu, Terminal,
     // Magic / accents (4)
-    Sparkles, Zap, Wand2, Flame
+    Sparkles, Zap, Wand2, Flame,
+    // Media / playback (1) — v9.1.0 (CHAT-14), byte-parallel to TS twin
+    Square
 }
 
 // ─── Action types ─────────────────────────────────────────────────────────────
