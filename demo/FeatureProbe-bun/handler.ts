@@ -14,10 +14,12 @@ import {
   BadRequestError,
   UnknownActionError,
   createAction,
+  matchesFilter,
   shellRedirect,
   shellSideEffect,
   validateActionNames,
   type ChatComposerNode,
+  type FilterDescriptor,
   type RichTextToolbarNode,
   type TableColumn,
   type TableNode,
@@ -87,6 +89,23 @@ interface FeatureProbeState {
   // sentinel instead of null). Byte-parallel with the .NET twin
   // FeatureProbeState.TextNodeMaxLinesProbe.
   textNodeMaxLinesProbe: string;
+  // Phase 32 (column-filter parity) — wire-shape probe slot. "" (unset) |
+  // "one-rule-with-value" | "one-rule-no-value" | "two-rules-any-of" |
+  // "three-rules-all-of". Drives buildVm's filter wire-shape probe section.
+  // Non-nullable string with "" default. Byte-parallel with .NET twin
+  // FeatureProbeState.FilterWireShapeProbe.
+  filterWireShapeProbe: string;
+  // Phase 32 (column-filter parity) — helper probe input. JSON-encoded probe
+  // payload string: {"kind":"text","operator":"contains","rawValue":"hello",
+  // "displayString":"hello world","ruleValue":"world"}. The action arm
+  // filter-helper-probe deserializes this and calls matchesFilter. Byte-parallel
+  // with .NET twin FeatureProbeState.FilterHelperProbe.
+  filterHelperProbe: string;
+  // Phase 32 (column-filter parity) — helper probe result. "true" or "false"
+  // after filter-helper-probe action runs. BuildVm renders a TextNode
+  // "FilterHelperProbeResult={result}" the fixture asserts on. Byte-parallel
+  // with .NET twin FeatureProbeState.FilterHelperProbeResult.
+  filterHelperProbeResult: string;
 }
 
 function initialState(): FeatureProbeState {
@@ -124,6 +143,14 @@ function initialState(): FeatureProbeState {
     // v9.2.0 (Phase 31) — initial UNSET branch. buildVm renders
     // "TextNodeMaxLinesProbe=unset" marker with maxLines ABSENT on the wire.
     textNodeMaxLinesProbe: "",
+    // Phase 32 (column-filter parity) — initial unset/empty defaults.
+    // filterWireShapeProbe="" → buildVm renders the base (no probe section active).
+    // filterHelperProbe="" → no probe input yet.
+    // filterHelperProbeResult="" → "FilterHelperProbeResult=" (empty before first run).
+    // Byte-parallel with .NET twin FeatureProbeState Initial().
+    filterWireShapeProbe: "",
+    filterHelperProbe: "",
+    filterHelperProbeResult: "",
   };
 }
 
@@ -1739,6 +1766,77 @@ function buildVm(state: FeatureProbeState): ViewNode {
     ],
   };
 
+  // ── Phase 32 filter wire-shape probe (column-filter parity) ───────────────
+  // Byte-parallel with the .NET twin filterWireShapeProbeSection.
+  // State-driven emission of a TableNode whose first column carries
+  // filter:FilterSpec and filterDescriptorBinds set to a probe path.
+  // A TextNode marker "FilterWireShapeProbe={value}" provides the unique
+  // expectBodyContains tripwire per fixture step (gotcha #9 class-3 discipline).
+  // The always-on findNulls invariant (parity/run.ts) catches any null leakage
+  // (gotcha #8 class-2 defect) — the is-empty rule's value field must be ABSENT.
+  const wireShapeDescriptor: FilterDescriptor | null = (() => {
+    switch (state.filterWireShapeProbe) {
+      case "one-rule-with-value":
+        return { rules: [{ operator: "contains", value: "hello" }], joiner: "all-of" as const };
+      case "one-rule-no-value":
+        return { rules: [{ operator: "is-empty" }], joiner: "all-of" as const };
+      case "two-rules-any-of":
+        return {
+          rules: [{ operator: "contains", value: "error" }, { operator: "contains", value: "warn" }],
+          joiner: "any-of" as const,
+        };
+      case "three-rules-all-of":
+        return {
+          rules: [
+            { operator: "contains", value: "open" },
+            { operator: "is-not-empty" },
+            { operator: "starts-with", value: "ticket" },
+          ],
+          joiner: "all-of" as const,
+        };
+      default:
+        return null; // unset / base — no descriptor
+    }
+  })();
+
+  const filterWireShapeProbeChildren: ViewNode[] = [
+    { type: "text", value: `FilterWireShapeProbe=${state.filterWireShapeProbe}` },
+  ];
+  if (wireShapeDescriptor !== null) {
+    const wireShapeTable: TableNode = {
+      type: "table",
+      columns: [
+        {
+          key: "title",
+          label: "Title",
+          filter: { kind: "text" },
+        } as TableColumn,
+      ],
+      rows: [{ cells: { title: "example row" } }],
+      filterDescriptorBinds: { title: "wireShapeDescriptor" },
+    };
+    filterWireShapeProbeChildren.push(wireShapeTable as ViewNode);
+  }
+  const filterWireShapeProbeSection: ViewNode = {
+    type: "section",
+    heading: "Phase 32 filter wire-shape probe",
+    variant: "card",
+    children: filterWireShapeProbeChildren,
+  };
+
+  // ── Phase 32 filter helper probe (column-filter parity) ───────────────────
+  // Byte-parallel with the .NET twin filterHelperProbeSection.
+  // Renders a TextNode("FilterHelperProbeResult={result}") for the fixture's
+  // expectBodyContains assertion. Result is set by filter-helper-probe action.
+  const filterHelperProbeSection: ViewNode = {
+    type: "section",
+    heading: "Phase 32 filter helper probe",
+    variant: "card",
+    children: [
+      { type: "text", value: `FilterHelperProbeResult=${state.filterHelperProbeResult}` },
+    ],
+  };
+
   return {
     type: "page",
     title: "Feature Probe",
@@ -1771,6 +1869,8 @@ function buildVm(state: FeatureProbeState): ViewNode {
       lookupSection,
       chatComposerProbeSection,
       textNodeMaxLinesProbeSection,
+      filterWireShapeProbeSection,
+      filterHelperProbeSection,
       probeModal,
     ],
   };
@@ -1947,6 +2047,42 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
   else if (name === "textnode-maxlines-1")     { state = { ...state, textNodeMaxLinesProbe: "1" }; }
   else if (name === "textnode-maxlines-2")     { state = { ...state, textNodeMaxLinesProbe: "2" }; }
   else if (name === "textnode-maxlines-3")     { state = { ...state, textNodeMaxLinesProbe: "3" }; }
+  // Phase 32 (column-filter parity) — wire-shape probe action arms.
+  // Each flips filterWireShapeProbe to the target branch; buildVm renders the
+  // corresponding FilterDescriptor in the filter wire-shape probe section.
+  // Byte-parallel with the .NET twin.
+  else if (name === "filter-wire-shape-one-rule-with-value")
+    { state = { ...state, filterWireShapeProbe: "one-rule-with-value" }; }
+  else if (name === "filter-wire-shape-one-rule-no-value")
+    { state = { ...state, filterWireShapeProbe: "one-rule-no-value" }; }
+  else if (name === "filter-wire-shape-two-rules-any-of")
+    { state = { ...state, filterWireShapeProbe: "two-rules-any-of" }; }
+  else if (name === "filter-wire-shape-three-rules-all-of")
+    { state = { ...state, filterWireShapeProbe: "three-rules-all-of" }; }
+  // Phase 32 (column-filter parity) — helper probe action arm.
+  // Deserializes state.filterHelperProbe JSON, calls matchesFilter, writes
+  // "true"/"false" to state.filterHelperProbeResult. Byte-parallel with
+  // the .NET twin's FilterHelper.MatchesFilter call.
+  else if (name === "filter-helper-probe") {
+    if (state.filterHelperProbe) {
+      const probe = JSON.parse(state.filterHelperProbe) as {
+        kind: string;
+        operator: string;
+        rawValue: unknown;
+        displayString: string;
+        ruleValue?: unknown;
+        joiner?: string;
+        matchingHints?: string[];
+      };
+      const descriptor: FilterDescriptor = {
+        rules: [{ operator: probe.operator, ...(probe.ruleValue !== undefined ? { value: probe.ruleValue } : {}) }],
+        joiner: (probe.joiner ?? "all-of") as "all-of" | "any-of",
+      };
+      // @ts-ignore — kind is a string from the probe payload; matchesFilter accepts ValueKind
+      const result = matchesFilter(descriptor, probe.rawValue, probe.displayString ?? "", probe.kind, probe.matchingHints);
+      state = { ...state, filterHelperProbeResult: result ? "true" : "false" };
+    }
+  }
   else {
     throw new UnknownActionError(name);
   }

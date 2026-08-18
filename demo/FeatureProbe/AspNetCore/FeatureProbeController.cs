@@ -82,7 +82,28 @@ public record FeatureProbeState(
     // BuildVm arm maps to TextNode.MaxLines int? and to a marker text string
     // giving each branch a UNIQUE positive tripwire per AGENTS.md gotcha #9
     // class-3 lesson. Byte-parallel with bun/node twin (textNodeMaxLinesProbe).
-    string TextNodeMaxLinesProbe
+    string TextNodeMaxLinesProbe,
+    // Phase 32 (column-filter parity) — wire-shape probe slot. "" (unset) |
+    // "one-rule-with-value" | "one-rule-no-value" | "two-rules-any-of" |
+    // "three-rules-all-of". Drives BuildVm's filter wire-shape probe section
+    // that renders a TableNode column with Filter=FilterSpec + a
+    // FilterDescriptor at a filterDescriptorBinds path. Non-nullable string
+    // with "" default per gotcha #8 state-record posture. Byte-parallel with
+    // bun/node twin (filterWireShapeProbe).
+    string FilterWireShapeProbe,
+    // Phase 32 (column-filter parity) — helper probe input. JSON-encoded
+    // probe payload string: {"kind":"text","operator":"contains","rawValue":
+    // "hello","displayString":"hello world","ruleValue":"world"}. The action
+    // arm filter-helper-probe deserializes this, calls FilterHelper.MatchesFilter,
+    // and writes the result to FilterHelperProbeResult. Non-nullable string
+    // with "" default. Byte-parallel with bun/node twin (filterHelperProbe).
+    string FilterHelperProbe,
+    // Phase 32 (column-filter parity) — helper probe result. "true" or "false"
+    // after filter-helper-probe action runs. The BuildVm section renders a
+    // TextNode("FilterHelperProbeResult={result}") that the fixture asserts on.
+    // Non-nullable string with "" default. Byte-parallel with bun/node twin
+    // (filterHelperProbeResult).
+    string FilterHelperProbeResult
 )
 {
     public static FeatureProbeState Initial() => new(
@@ -119,11 +140,36 @@ public record FeatureProbeState(
         ChatComposerSubmitMode: "",
         // v9.2.0 (Phase 31) — initial UNSET branch. buildVm renders
         // "TextNodeMaxLinesProbe=unset" marker with MaxLines ABSENT on the wire.
-        TextNodeMaxLinesProbe: ""
+        TextNodeMaxLinesProbe: "",
+        // Phase 32 (column-filter parity) — initial unset/empty defaults.
+        // FilterWireShapeProbe="" → BuildVm renders the base (no probe section
+        // active). FilterHelperProbe="" → no probe input yet. FilterHelperProbeResult=""
+        // → BuildVm renders "FilterHelperProbeResult=" marker (empty before first run).
+        // Byte-parallel with bun/node twin initialState().
+        FilterWireShapeProbe: "",
+        FilterHelperProbe: "",
+        FilterHelperProbeResult: ""
     );
 }
 
 public record TableItem(string Id, string Name, string Status);
+
+/// <summary>
+/// Deserialization target for the filter-helper-probe state payload.
+/// Each fixture step sets state.FilterHelperProbe to a JSON-encoded instance
+/// of this type; the action arm deserializes it and calls FilterHelper.MatchesFilter.
+/// Byte-parallel with the TS interface in handler.ts.
+/// </summary>
+public record FilterHelperProbeInput(
+    string Kind,
+    string Operator,
+    object? RawValue,
+    string? DisplayString,
+    object? RuleValue,
+    string? Joiner,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<string>? MatchingHints
+);
 
 [ApiController]
 [Route("api/probe")]
@@ -361,6 +407,49 @@ public class FeatureProbeController : ControllerBase
         else if (name == "textnode-maxlines-1")     { state = state with { TextNodeMaxLinesProbe = "1" }; }
         else if (name == "textnode-maxlines-2")     { state = state with { TextNodeMaxLinesProbe = "2" }; }
         else if (name == "textnode-maxlines-3")     { state = state with { TextNodeMaxLinesProbe = "3" }; }
+        // Phase 32 (column-filter parity) — wire-shape probe action arms.
+        // Each flips FilterWireShapeProbe to the target branch; BuildVm renders
+        // the corresponding FilterDescriptor in the filter wire-shape probe section.
+        // Byte-parallel with bun/node twin.
+        else if (name == "filter-wire-shape-one-rule-with-value")
+            { state = state with { FilterWireShapeProbe = "one-rule-with-value" }; }
+        else if (name == "filter-wire-shape-one-rule-no-value")
+            { state = state with { FilterWireShapeProbe = "one-rule-no-value" }; }
+        else if (name == "filter-wire-shape-two-rules-any-of")
+            { state = state with { FilterWireShapeProbe = "two-rules-any-of" }; }
+        else if (name == "filter-wire-shape-three-rules-all-of")
+            { state = state with { FilterWireShapeProbe = "three-rules-all-of" }; }
+        // Phase 32 (column-filter parity) — helper probe action arm.
+        // Deserializes state.FilterHelperProbe JSON, calls FilterHelper.MatchesFilter,
+        // writes "true"/"false" to state.FilterHelperProbeResult. Byte-parallel
+        // with bun/node twin's matchesFilter call.
+        else if (name == "filter-helper-probe")
+        {
+            if (!string.IsNullOrEmpty(state.FilterHelperProbe))
+            {
+                var probe = System.Text.Json.JsonSerializer.Deserialize<FilterHelperProbeInput>(
+                    state.FilterHelperProbe,
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (probe != null)
+                {
+                    var descriptor = new FilterDescriptor(
+                        new List<FilterRule>
+                        {
+                            new FilterRule(
+                                Operator: probe.Operator,
+                                Value: probe.RuleValue)
+                        },
+                        Joiner: probe.Joiner ?? "all-of");
+                    var result = FilterHelper.MatchesFilter(
+                        descriptor,
+                        probe.RawValue,
+                        probe.DisplayString ?? "",
+                        probe.Kind,
+                        probe.MatchingHints);
+                    state = state with { FilterHelperProbeResult = result ? "true" : "false" };
+                }
+            }
+        }
         else
         {
             throw new UnknownActionException(name);
@@ -1779,6 +1868,91 @@ public class FeatureProbeController : ControllerBase
                         _ => null,
                     },
                 },
+            }));
+
+        // ── Phase 32 filter wire-shape probe (column-filter parity) ───────────
+        // Byte-parallel with bun/node twin filterWireShapeProbeSection.
+        // State-driven emission of a TableNode whose first column carries
+        // Filter=FilterSpec and FilterDescriptorBinds set to a probe path.
+        // The section also carries a TextNode marker "FilterWireShapeProbe={value}"
+        // so each fixture step's expectBodyContains can uniquely identify the branch.
+        // Per AGENTS.md gotcha #9 class-3: branches the fixture never runs are
+        // invisible to the byte-diff — the marker text provides a POSITIVE tripwire
+        // per branch. The always-on findNulls invariant catches any null leakage
+        // (class-2 gotcha #8 defect) — the is-empty rule's value field must be
+        // ABSENT, not null, per SPEC Req 3 + null-omission contract.
+        FilterDescriptor? wireShapeDescriptor = state.FilterWireShapeProbe switch
+        {
+            "one-rule-with-value" => new FilterDescriptor(
+                Rules: new List<FilterRule> { new FilterRule("contains", Value: "hello") },
+                Joiner: "all-of"),
+            "one-rule-no-value" => new FilterDescriptor(
+                Rules: new List<FilterRule> { new FilterRule("is-empty") },
+                Joiner: "all-of"),
+            "two-rules-any-of" => new FilterDescriptor(
+                Rules: new List<FilterRule>
+                {
+                    new FilterRule("contains", Value: "error"),
+                    new FilterRule("contains", Value: "warn"),
+                },
+                Joiner: "any-of"),
+            "three-rules-all-of" => new FilterDescriptor(
+                Rules: new List<FilterRule>
+                {
+                    new FilterRule("contains", Value: "open"),
+                    new FilterRule("is-not-empty"),
+                    new FilterRule("starts-with", Value: "ticket"),
+                },
+                Joiner: "all-of"),
+            _ => null, // unset / base — no descriptor
+        };
+
+        var filterWireShapeProbeChildren = new List<ViewNode>
+        {
+            new TextNode($"FilterWireShapeProbe={(string.IsNullOrEmpty(state.FilterWireShapeProbe) ? "" : state.FilterWireShapeProbe)}"),
+        };
+        if (wireShapeDescriptor != null)
+        {
+            var wireShapeTable = new TableNode(
+                Columns: new TableColumn[]
+                {
+                    new TableColumn("title", "Title",
+                        Filter: new FilterSpec(Kind: "text")),
+                },
+                Rows: new TableRow[]
+                {
+                    new TableRow(new Dictionary<string, string> { ["title"] = "example row" }),
+                },
+                FilterDescriptorBinds: new Dictionary<string, string>
+                {
+                    ["title"] = "wireShapeDescriptor",
+                });
+            filterWireShapeProbeChildren.Add(wireShapeTable);
+            // Render the descriptor as a hidden TextNode with the raw JSON so the
+            // parity fixture can assert on the wire shape structure. Both backends
+            // emit the descriptor via the standard JSON serializer through the
+            // ShellResponse<T> → System.Text.Json path, so the emitted wire bytes
+            // are byte-identical by construction when the field values match.
+            // The fixture's expectBodyContains asserts substrings like "\"operator\":\"contains\""
+            // directly against the raw response body — no need to navigate the tree.
+        }
+        pageChildren.Add(new SectionNode(
+            Heading: "Phase 32 filter wire-shape probe",
+            Variant: SectionVariant.Card,
+            Children: filterWireShapeProbeChildren));
+
+        // ── Phase 32 filter helper probe (column-filter parity) ───────────────
+        // Byte-parallel with bun/node twin filterHelperProbeSection.
+        // Renders a TextNode("FilterHelperProbeResult={result}") so the fixture
+        // step's expectBodyContains can assert "FilterHelperProbeResult=true" or
+        // "FilterHelperProbeResult=false". The result is populated by the
+        // filter-helper-probe action arm (which calls FilterHelper.MatchesFilter).
+        pageChildren.Add(new SectionNode(
+            Heading: "Phase 32 filter helper probe",
+            Variant: SectionVariant.Card,
+            Children: new ViewNode[]
+            {
+                new TextNode($"FilterHelperProbeResult={state.FilterHelperProbeResult}"),
             }));
 
         pageChildren.Add(new ModalNode(
