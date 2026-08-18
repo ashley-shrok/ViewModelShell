@@ -667,13 +667,13 @@ Plans:
 **Goal:** Ship the framework-internal foundation for typed column filtering — additive wire vocabulary (column value-kinds, per-type operator vocabularies, multi-rule FilterDescriptors with all-of/any-of joiners) and a byte-identical reference truth function on both backends, proven by exhaustive tests. No adapter changes, no demo changes, no publish.
 **Requirements**: REQ-CF1-01, REQ-CF1-02, REQ-CF1-03, REQ-CF1-04, REQ-CF1-05, REQ-CF1-06, REQ-CF1-07, REQ-CF1-08
 **Depends on:** Phase 31
-**Plans:** 4 plans
+**Plans:** 2/4 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 32-01-PLAN.md — TS wire types (FilterSpec/FilterDescriptor/ValueKind/operators on index.ts) + matchesFilter reference truth function on server.ts + NASA vitest suite (wave 1, parallel to 32-02)
-- [ ] 32-02-PLAN.md — .NET wire types (ViewModels.cs byte-parallel) + FilterHelper.MatchesFilter in new FilterHelper.cs + xUnit NASA suite (wave 1, parallel to 32-01)
+- [x] 32-01-PLAN.md — TS wire types (FilterSpec/FilterDescriptor/ValueKind/operators on index.ts) + matchesFilter reference truth function on server.ts + NASA vitest suite (wave 1, parallel to 32-02)
+- [x] 32-02-PLAN.md — .NET wire types (ViewModels.cs byte-parallel) + FilterHelper.MatchesFilter in new FilterHelper.cs + xUnit NASA suite (wave 1, parallel to 32-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
