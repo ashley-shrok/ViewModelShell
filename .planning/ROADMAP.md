@@ -602,3 +602,13 @@ Plans:
 - [x] 31-04-PLAN.md — Release ritual: green-tree gate + CHANGELOG/MIGRATION + npm+NuGet 9.2.0 publish + tag + advance main + announce (wave 3) — landed at `858fd20` (release commit) + `1b00571` (SUMMARY); npm 9.2.0 LIVE; NuGet push receipt authoritative; tag v9.2.0 pushed; main advanced; announce sent
 
 **Status:** COMPLETE (v9.2.0 released 2026-08-03)
+
+### Phase 32: column-filter expansion Phase 1 — wire types + reference truth function ('filter helper') + NASA-level tests both backends byte-parallel
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 31
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 32 to break down)
