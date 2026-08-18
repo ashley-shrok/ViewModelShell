@@ -5775,10 +5775,17 @@ export class BrowserAdapter implements Adapter {
           //   "escalated" — more complex (>1 rule, non-contains op, or matching hints)
           const filterState = this.computeFilterState(descriptor, col.filter);
 
-          // Cell wrapper (flex row: inline input/summary + filter button)
-          th.style.display = "flex";
-          th.style.alignItems = "center";
-          th.style.gap = "2px";
+          // Cell wrapper (flex row: inline input/summary + filter button).
+          // MUST live in a nested <div>, NOT on the <th> itself — setting
+          // `display: flex` on a <th> replaces its `display: table-cell`, so
+          // the browser stops laying it out as a table cell and the filter row
+          // collapses under column 1. Only visible when a table has 2+ filterable
+          // columns (single-column filter tables — like HelpDesk agent queue —
+          // are self-hiding because there's only one cell to lay out).
+          const cellWrap = document.createElement("div");
+          cellWrap.style.display = "flex";
+          cellWrap.style.alignItems = "center";
+          cellWrap.style.gap = "2px";
 
           // Inline input or read-only summary (REQ-CF2-06)
           if (filterState === "escalated") {
@@ -5787,7 +5794,7 @@ export class BrowserAdapter implements Adapter {
             summary.className = "vms-filter-inline-summary";
             summary.textContent = this.buildFilterSummary(descriptor!);
             summary.title = summary.textContent; // full text in tooltip
-            th.appendChild(summary);
+            cellWrap.appendChild(summary);
           } else {
             // Editable inline input (empty or simple contains)
             const inp = document.createElement("input");
@@ -5836,7 +5843,7 @@ export class BrowserAdapter implements Adapter {
                 }
               }
             });
-            th.appendChild(inp);
+            cellWrap.appendChild(inp);
           }
 
           // Filter icon button (REQ-CF2-02) — three states:
@@ -5864,7 +5871,8 @@ export class BrowserAdapter implements Adapter {
             this.openFilterPopover(bindPath, col, col.filter!, filterBtn, on);
           });
 
-          th.appendChild(filterBtn);
+          cellWrap.appendChild(filterBtn);
+          th.appendChild(cellWrap);
         }
         filterRow.appendChild(th);
       });
