@@ -1347,6 +1347,242 @@ function jsonResponse(body: string, status: number): Response {
   });
 }
 
+// ─── Phase 32: Column-filter reference truth function ─────────────────────────
+//
+// Public entry point for consumers to evaluate a FilterDescriptor (from state)
+// against a row cell's raw value and display string. Mirrors the byte-parallel
+// .NET twin in FilterHelper.cs.
+//
+// No short-circuit: every rule is evaluated regardless of intermediate results
+// (simpler semantics, easier to test — SPEC Requirement 6 / CONTEXT D-03).
+
+import type {
+  FilterDescriptor,
+  FilterRule,
+  ValueKind,
+  MatchingHint,
+} from "./index.js";
+
+/**
+ * Returns true if `rawValue` matches the empty-value semantics.
+ * null, undefined, and empty string ("") are considered empty.
+ * Whitespace-only strings are NOT empty (raw value semantics, per SPEC Req 6).
+ */
+function isEmpty(v: unknown): boolean {
+  return v === null || v === undefined || v === "";
+}
+
+/**
+ * Case-insensitive display-string contains check with optional ignore-punctuation hint.
+ * When `ignore-punctuation` is in matchingHints, strips $, £, €, commas, and periods
+ * from both sides before comparing.
+ */
+function applyContains(
+  displayString: string,
+  ruleValue: unknown,
+  matchingHints?: MatchingHint[],
+): boolean {
+  const ruleStr = String(ruleValue ?? "");
+  let haystack = displayString.toLowerCase();
+  let needle = ruleStr.toLowerCase();
+  if (matchingHints?.includes("ignore-punctuation")) {
+    const strip = (s: string) => s.replace(/[$£€,.]/g, "");
+    haystack = strip(haystack);
+    needle = strip(needle);
+  }
+  return haystack.includes(needle);
+}
+
+/**
+ * ISO date string comparison: returns negative if a < b, 0 if equal, positive if a > b.
+ * Relies on ISO-8601's lexicographic = chronological sort property.
+ */
+function isoCompare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * Evaluate a single FilterRule against a cell's raw value and display string.
+ * Returns false for unknown operators (Tampering T-32-01-01: unknown operator = no match).
+ */
+function evaluateRule(
+  rule: FilterRule,
+  rawValue: unknown,
+  displayString: string,
+  kind: ValueKind,
+  matchingHints?: MatchingHint[],
+): boolean {
+  const op = rule.operator;
+
+  switch (kind) {
+    case "text": {
+      switch (op) {
+        case "contains":
+          return applyContains(displayString, rule.value, matchingHints);
+        case "equals":
+          return String(rawValue ?? "") === String(rule.value ?? "");
+        case "starts-with":
+          return String(rawValue ?? "").toLowerCase().startsWith(String(rule.value ?? "").toLowerCase());
+        case "ends-with":
+          return String(rawValue ?? "").toLowerCase().endsWith(String(rule.value ?? "").toLowerCase());
+        case "is-empty":
+          return isEmpty(rawValue);
+        case "is-not-empty":
+          return !isEmpty(rawValue);
+        default:
+          return false;
+      }
+    }
+
+    case "number": {
+      switch (op) {
+        case "contains":
+          return applyContains(displayString, rule.value, matchingHints);
+        case "equals":
+          return isEmpty(rawValue) ? false : Number(rawValue) === Number(rule.value);
+        case "does-not-equal":
+          return isEmpty(rawValue) ? false : Number(rawValue) !== Number(rule.value);
+        case "greater-than":
+          return isEmpty(rawValue) ? false : Number(rawValue) > Number(rule.value);
+        case "greater-than-or-equal":
+          return isEmpty(rawValue) ? false : Number(rawValue) >= Number(rule.value);
+        case "less-than":
+          return isEmpty(rawValue) ? false : Number(rawValue) < Number(rule.value);
+        case "less-than-or-equal":
+          return isEmpty(rawValue) ? false : Number(rawValue) <= Number(rule.value);
+        case "between": {
+          if (isEmpty(rawValue)) return false;
+          const [low, high] = rule.value as [number, number];
+          const n = Number(rawValue);
+          return n >= Number(low) && n <= Number(high);
+        }
+        case "is-empty":
+          return isEmpty(rawValue);
+        case "is-not-empty":
+          return !isEmpty(rawValue);
+        default:
+          return false;
+      }
+    }
+
+    case "date": {
+      switch (op) {
+        case "contains":
+          return applyContains(displayString, rule.value, matchingHints);
+        case "is":
+          return isEmpty(rawValue) ? false : isoCompare(String(rawValue), String(rule.value)) === 0;
+        case "before":
+          return isEmpty(rawValue) ? false : isoCompare(String(rawValue), String(rule.value)) < 0;
+        case "after":
+          return isEmpty(rawValue) ? false : isoCompare(String(rawValue), String(rule.value)) > 0;
+        case "in-range": {
+          if (isEmpty(rawValue)) return false;
+          const [from, to] = rule.value as [string, string];
+          const raw = String(rawValue);
+          return isoCompare(raw, from) >= 0 && isoCompare(raw, to) <= 0;
+        }
+        case "is-empty":
+          return isEmpty(rawValue);
+        case "is-not-empty":
+          return !isEmpty(rawValue);
+        default:
+          return false;
+      }
+    }
+
+    case "fixed-set": {
+      switch (op) {
+        case "contains":
+          return applyContains(displayString, rule.value, matchingHints);
+        case "is":
+          return String(rawValue ?? "") === String(rule.value ?? "");
+        case "is-not":
+          return String(rawValue ?? "") !== String(rule.value ?? "");
+        case "is-empty":
+          return isEmpty(rawValue);
+        case "is-not-empty":
+          return !isEmpty(rawValue);
+        default:
+          return false;
+      }
+    }
+
+    case "yes-no": {
+      switch (op) {
+        case "contains":
+          return applyContains(displayString, rule.value, matchingHints);
+        case "is-true":
+          return rawValue === true;
+        case "is-false":
+          return rawValue === false;
+        case "is-empty":
+          // false and true are valid boolean values (not empty); only null/undefined/"" are empty
+          return rawValue === null || rawValue === undefined || rawValue === "";
+        case "is-not-empty":
+          return rawValue !== null && rawValue !== undefined && rawValue !== "";
+        default:
+          return false;
+      }
+    }
+
+    default:
+      return false;
+  }
+}
+
+/**
+ * Evaluates a `FilterDescriptor` against a single row cell's value.
+ *
+ * Call this from your action handler to filter rows. Provide:
+ * - `descriptor` — the current filter for this column (from state at the path
+ *   declared by `TableNode.filterDescriptorBinds[columnKey]`).
+ * - `rawValue` — the cell's raw typed value (number, boolean, ISO date string,
+ *   enum string, or null/undefined for empty cells).
+ * - `displayString` — the string the user sees for this cell. Used by the
+ *   `contains` operator on every kind (matches what the user sees, not the
+ *   raw value). Pass the same string your BuildVm puts in `TableRow.cells`.
+ * - `kind` — the column's declared value-kind from `TableColumn.filter.kind`.
+ * - `matchingHints` — (optional) the column's `TableColumn.filter.matchingHints`.
+ *   Pass them here so the `ignore-punctuation` hint is honored in contains.
+ *
+ * Returns `true` if the descriptor matches, `false` if it does not.
+ *
+ * No short-circuit: every rule is evaluated regardless of intermediate results.
+ * Unknown operators return `false` (no match — tampered/unknown operators are safe).
+ *
+ * Phase 32 server-subpath addition. Mirrors the .NET `FilterHelper.MatchesFilter`
+ * in the main NuGet package.
+ *
+ * @example
+ * ```ts
+ * const rows = allRows.filter(row =>
+ *   matchesFilter(
+ *     state.nameFilter,          // FilterDescriptor from state
+ *     row.name,                  // raw value
+ *     row.name,                  // display string
+ *     "text",                    // kind from column spec
+ *   )
+ * );
+ * ```
+ */
+export function matchesFilter(
+  descriptor: FilterDescriptor,
+  rawValue: unknown,
+  displayString: string,
+  kind: ValueKind,
+  matchingHints?: MatchingHint[],
+): boolean {
+  const results = descriptor.rules.map((r) =>
+    evaluateRule(r, rawValue, displayString, kind, matchingHints),
+  );
+
+  if (descriptor.joiner === "any-of") {
+    return results.some(Boolean);
+  }
+  // "all-of" — every rule must match; empty rules array → true (vacuous)
+  return results.every(Boolean);
+}
+
 /**
  * 9.0.0 (SKEW-01) — Global version-skew guard. Wrap this around ANY route
  * (GET or POST) that serves a VMS endpoint, and the request is fail-closed
