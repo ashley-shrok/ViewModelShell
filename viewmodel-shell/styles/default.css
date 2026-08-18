@@ -2479,6 +2479,196 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   outline: none;
 }
 .vms-table__filter-input:focus { border-color: var(--vms-accent); }
+
+/* ── Phase 33 (33-01): typed column-filter popover + filter button ── */
+
+/* Portal container: fixed overlay that hosts the popover DOM.
+   Sibling of the table wrapper → escapes its overflow-x:auto clip (D-02).
+   z-index 1050: above modal backdrop (1000) but below toast region (1100)
+   and skew-lock (1200) so filter popovers don't cover notifications. */
+.vms-popover-portal {
+  position: fixed;
+  z-index: 1050;
+  top: 0;
+  left: 0;
+  /* The portal itself is click-through; individual popovers re-enable pointer
+     events so clicks outside them are correctly detected by the document
+     outside-click handler. */
+  pointer-events: none;
+}
+.vms-popover-portal > * { pointer-events: auto; }
+
+/* Filter popover panel — anchored via position:fixed by JS (D-03).
+   max-height + overflow-y:auto so near-bottom edge flip-above fallback
+   lets the popover scroll internally rather than clipping off-screen. */
+.vms-filter-popover {
+  position: fixed; /* JS sets top/left via getBoundingClientRect */
+  background: var(--vms-surface);
+  border: 1px solid var(--vms-border);
+  border-radius: var(--vms-radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  padding: var(--vms-space-sm);
+  min-width: 220px;
+  max-width: 340px;
+  max-height: 80vh;
+  overflow-y: auto;
+  font-size: var(--vms-text-sm);
+}
+
+/* Filter icon button — sits adjacent to the inline filter input.
+   position:relative is required for the escalation dot overlay. */
+.vms-filter-button {
+  position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--vms-text-muted);
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--vms-radius-sm);
+  flex-shrink: 0;
+  line-height: 1;
+}
+.vms-filter-button:hover { color: var(--vms-text); background: var(--vms-hover); }
+.vms-filter-button:focus-visible {
+  outline: 2px solid var(--vms-accent);
+  outline-offset: 1px;
+}
+/* "escalated" state: button is accented when active filter is nontrivial */
+.vms-filter-button[aria-expanded="true"] { color: var(--vms-accent); }
+
+/* Escalation dot — small filled circle top-right of the filter button,
+   indicating a nontrivial descriptor (>1 rule or non-default operator).
+   Uses var(--vms-accent) so it inherits theme color. */
+.vms-filter-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vms-accent);
+  position: absolute;
+  top: 1px;
+  right: 1px;
+}
+
+/* Inline read-only summary (REQ-CF2-06) — shown instead of the editable input
+   when the descriptor is escalated (nontrivial). Italic + muted per spec. */
+.vms-filter-inline-summary {
+  font-style: italic;
+  color: var(--vms-text-muted);
+  font-size: var(--vms-text-sm);
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* Matches the inline input height so the filter row stays the same height
+     regardless of whether the editable or read-only surface is rendered. */
+  padding: var(--vms-space-2xs) var(--vms-space-xs);
+  min-width: 80px;
+  max-width: 160px;
+}
+
+/* Popover internal elements */
+.vms-filter-op-select {
+  width: 100%;
+  background: var(--vms-surface-2);
+  border: 1px solid var(--vms-border);
+  border-radius: var(--vms-radius-sm);
+  color: var(--vms-text);
+  font-family: var(--vms-font-body);
+  font-size: var(--vms-text-sm);
+  padding: var(--vms-space-2xs) var(--vms-space-xs);
+  margin-bottom: var(--vms-space-xs);
+}
+.vms-filter-value-input {
+  width: 100%;
+  background: var(--vms-surface-2);
+  border: 1px solid var(--vms-border);
+  border-radius: var(--vms-radius-sm);
+  color: var(--vms-text);
+  font-family: var(--vms-font-body);
+  font-size: var(--vms-text-sm);
+  padding: var(--vms-space-2xs) var(--vms-space-xs);
+}
+.vms-filter-value-input:focus { border-color: var(--vms-accent); outline: none; }
+.vms-filter-joiner {
+  display: flex;
+  gap: var(--vms-space-xs);
+  margin: var(--vms-space-xs) 0;
+}
+.vms-filter-joiner button {
+  flex: 1;
+  padding: 2px 6px;
+  border: 1px solid var(--vms-border);
+  border-radius: var(--vms-radius-sm);
+  background: none;
+  cursor: pointer;
+  font-size: var(--vms-text-sm);
+  color: var(--vms-text-muted);
+}
+/* Active joiner button: accent fill with white-on-accent text.
+   WCAG check: var(--vms-accent) is theme-defined. The framework's theme
+   tokens are designed to contrast white text at ≥ 4.5:1 at the AA threshold.
+   If a theme's --vms-accent is too light, the 'filter-slash' note in the
+   SUMMARY documents the AA responsibility on the theme author. */
+.vms-filter-joiner button.active {
+  background: var(--vms-accent);
+  color: #fff;
+  border-color: var(--vms-accent);
+}
+.vms-filter-footer {
+  display: flex;
+  gap: var(--vms-space-xs);
+  margin-top: var(--vms-space-sm);
+  align-items: center;
+}
+.vms-filter-add-rule {
+  flex: 0 0 auto;
+  font-size: var(--vms-text-sm);
+  background: none;
+  border: 1px dashed var(--vms-border);
+  border-radius: var(--vms-radius-sm);
+  padding: 2px 6px;
+  cursor: pointer;
+  color: var(--vms-text-muted);
+}
+.vms-filter-add-rule:hover { color: var(--vms-text); border-color: var(--vms-text-muted); }
+.vms-filter-clear {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--vms-border);
+  border-radius: var(--vms-radius-sm);
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: var(--vms-text-sm);
+  color: var(--vms-text-muted);
+}
+.vms-filter-clear:hover { color: var(--vms-text); }
+.vms-filter-apply {
+  background: var(--vms-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--vms-radius-sm);
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: var(--vms-text-sm);
+  font-weight: 500;
+}
+.vms-filter-apply:hover { filter: brightness(1.1); }
+.vms-filter-remove-rule {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--vms-text-muted);
+  font-size: var(--vms-text-base);
+  padding: 0 4px;
+  line-height: 1;
+  align-self: center;
+  flex-shrink: 0;
+}
+.vms-filter-remove-rule:hover { color: var(--vms-danger, var(--vms-text)); }
 .vms-table__row { transition: background var(--vms-t); }
 .vms-table__row:not(:last-child) .vms-table__td { border-bottom: 1px solid var(--vms-border); }
 .vms-table__row--clickable { cursor: pointer; }

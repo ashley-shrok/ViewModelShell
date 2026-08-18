@@ -27,6 +27,7 @@ import type {
   ChipNode, ChipListNode,
   RichTextFieldNode, RichTextToolbarNode, RichTextTool,
   ChatComposerNode, ChatComposerStatus, ChatComposerSubmitMode,
+  FilterDescriptor, FilterRule, FilterSpec, ValueKind, TableColumn,
 } from "./index.js";
 import { ICONS } from "./icons-payload.js";
 
@@ -252,7 +253,48 @@ export class BrowserAdapter implements Adapter {
   private composerKeyCounter = new Map<string, number>();
   private composerKeysSeen = new Set<string>();
 
-  constructor(private container: HTMLElement) {}
+  // Phase 33 (33-01) — typed column-filter popover infrastructure.
+  //
+  // `filterDrafts` — persistent (NOT per-render) Map from bind-path to the
+  //   in-progress FilterDescriptor for that column. Keyed by the BIND PATH
+  //   (the value from filterDescriptorBinds[colKey]) so drafts survive
+  //   server-driven re-renders that redraw the table. Same pattern as
+  //   fileRegistry, editorInstances, composerRegistry.
+  private filterDrafts = new Map<string, FilterDescriptor>();
+
+  // `popoverPortal` — a single <div class="vms-popover-portal"> created ONCE
+  //   in the constructor, appended AFTER the container's main content area so
+  //   it is a SIBLING of the table wrapper — escaping the wrapper's
+  //   overflow-x:auto clip by construction (REQ-CF2-05, D-02). Popover DOM
+  //   nodes are appended into it on open and removed on close.
+  private popoverPortal!: HTMLDivElement;
+
+  // `activePopover` — tracks the currently-open popover (null when closed).
+  //   Cleared by render() preamble (any re-render closes the popover) and by
+  //   closeFilterPopover().
+  private activePopover: {
+    bindPath: string;
+    colKey: string;
+    button: HTMLButtonElement;
+    popoverEl: HTMLDivElement;
+  } | null = null;
+
+  // `popoverOutsideHandler` / `popoverScrollResizeCleanup` — document-level
+  //   outside-click + key listeners, and resize/scroll reposition cleanup.
+  //   Both are registered on popover open and removed on close (and in the
+  //   render() preamble). Same discipline as lookupOutsideHandlers.
+  private popoverOutsideHandler: ((e: Event) => void) | null = null;
+  private popoverScrollResizeCleanup: (() => void) | null = null;
+
+  constructor(private container: HTMLElement) {
+    // Create the popover portal div and append it to the container. It is a
+    // SIBLING of the table wrapper element, so it escapes the table wrapper's
+    // overflow-x:auto clip (D-02, REQ-CF2-05). Created in the constructor
+    // (not lazily) so render() calls that access it always find a stable target.
+    this.popoverPortal = document.createElement("div");
+    this.popoverPortal.className = "vms-popover-portal";
+    container.appendChild(this.popoverPortal);
+  }
 
   render(
     vm: ViewNode,
@@ -360,6 +402,25 @@ export class BrowserAdapter implements Adapter {
     // otherwise outlive the popup it closes over and accumulate forever.
     this.lookupOutsideHandlers.forEach(h => document.removeEventListener("mousedown", h));
     this.lookupOutsideHandlers = [];
+
+    // Phase 33 (33-01) — drop any open filter popover on re-render. The
+    // popoverPortal survives the innerHTML wipe (it's a sibling of the table
+    // wrapper, not inside the wiped subtree), so the popover DOM must be
+    // removed here. The document-level handlers are removed before the wipe
+    // so a handler closing over a destroyed popup can never fire.
+    if (this.popoverOutsideHandler) {
+      document.removeEventListener("mousedown", this.popoverOutsideHandler, true);
+      document.removeEventListener("keydown", this.popoverOutsideHandler as EventListener, true);
+      this.popoverOutsideHandler = null;
+    }
+    if (this.popoverScrollResizeCleanup) {
+      this.popoverScrollResizeCleanup();
+      this.popoverScrollResizeCleanup = null;
+    }
+    // Remove popover DOM node from the portal (if any open popover was rendered).
+    const existingPopover = this.popoverPortal.querySelector<HTMLDivElement>(".vms-filter-popover");
+    if (existingPopover) this.popoverPortal.removeChild(existingPopover);
+    this.activePopover = null;
 
     // Phase 12 (CHART-01/03) — reset the per-render chart bookkeeping (NOT
     // chartInstances, which is deliberately persistent). Same per-render reset
@@ -5688,8 +5749,129 @@ export class BrowserAdapter implements Adapter {
     });
     thead.appendChild(headerRow);
 
-    const hasFilters = n.columns.some(c => c.filterable) && !!n.filterAction;
-    if (hasFilters) {
+    // Phase 33 (33-01) — two-path filter row rendering:
+    //   NEW path: filterDescriptorBinds present → always-visible input + filter
+    //     button per filterable column (Round 2 hybrid shape, REQ-CF2-01..06).
+    //   LEGACY path: old filterable+filterAction fields → pre-Phase-33 behavior,
+    //     kept alive until Plan 02 removes the old wire fields (Wave 2 bridge).
+    const hasNewFilters = !!n.filterDescriptorBinds && n.columns.some(c => c.filter != null);
+    const hasLegacyFilters = n.columns.some(c => c.filterable) && !!n.filterAction;
+    if (hasNewFilters) {
+      const filterRow = document.createElement("tr");
+      filterRow.className = "vms-table__filter-row";
+      if (tableHasCheckboxes) {
+        filterRow.appendChild(document.createElement("th"));
+      }
+      n.columns.forEach(col => {
+        const th = document.createElement("th");
+        if (col.filter != null && n.filterDescriptorBinds?.[col.key] != null) {
+          const bindPath = n.filterDescriptorBinds[col.key];
+          const descriptor = this.sa.read(bindPath) as FilterDescriptor | null | undefined ?? null;
+
+          // Icon-state determination (REQ-CF2-02):
+          //   "empty" — no active filter at all
+          //   "simple" — exactly one contains rule with no matching hints
+          //   "escalated" — more complex (>1 rule, non-contains op, or matching hints)
+          const filterState = this.computeFilterState(descriptor, col.filter);
+
+          // Cell wrapper (flex row: inline input/summary + filter button)
+          th.style.display = "flex";
+          th.style.alignItems = "center";
+          th.style.gap = "2px";
+
+          // Inline input or read-only summary (REQ-CF2-06)
+          if (filterState === "escalated") {
+            // Read-only compact summary for nontrivial descriptors
+            const summary = document.createElement("span");
+            summary.className = "vms-filter-inline-summary";
+            summary.textContent = this.buildFilterSummary(descriptor!);
+            summary.title = summary.textContent; // full text in tooltip
+            th.appendChild(summary);
+          } else {
+            // Editable inline input (empty or simple contains)
+            const inp = document.createElement("input");
+            inp.type = "text";
+            inp.className = "vms-table__filter-input";
+            inp.dataset.col = col.key;
+            // Stable id for focus+caret restore across re-renders (same as legacy path)
+            inp.id = `vms-tablefilter-${col.key}`;
+            inp.placeholder = "Filter…";
+            // Seed from the current contains rule value (or empty string)
+            const currentContainsValue =
+              filterState === "simple" && descriptor?.rules[0]?.value != null
+                ? String(descriptor.rules[0].value)
+                : "";
+            inp.value = currentContainsValue;
+            inp.addEventListener("input", () => {
+              // Write a single contains rule to state on every keystroke.
+              // NOTE: This writes STATE only — no named action is dispatched.
+              // The server picks up the updated descriptor on the next regular
+              // action (e.g. a poll, page navigation, or any user-initiated
+              // dispatch). This is the Phase 33 filter-state contract: the
+              // descriptor bind path IS a state path and is round-tripped on
+              // every dispatch without a separate filter-specific action wire.
+              if (inp.value === "") {
+                this.sa.write(bindPath, null);
+              } else {
+                this.sa.write(bindPath, {
+                  rules: [{ operator: "contains", value: inp.value }],
+                  joiner: "all-of",
+                } as FilterDescriptor);
+              }
+            });
+            inp.addEventListener("keydown", (e) => {
+              if (e.key === "Enter") {
+                // Enter: write the contains descriptor to state (same as input
+                // event) and do NOT dispatch a named action — state update is
+                // the commit. See SUMMARY.md "Inline Enter behavior" for the
+                // documented behavioral change from the legacy filterAction path.
+                if (inp.value === "") {
+                  this.sa.write(bindPath, null);
+                } else {
+                  this.sa.write(bindPath, {
+                    rules: [{ operator: "contains", value: inp.value }],
+                    joiner: "all-of",
+                  } as FilterDescriptor);
+                }
+              }
+            });
+            th.appendChild(inp);
+          }
+
+          // Filter icon button (REQ-CF2-02) — three states:
+          //   "empty"    → filter-slash glyph (no active filter)
+          //   "simple"   → filter glyph (plain funnel, simple contains active)
+          //   "escalated"→ filter glyph + dot (nontrivial descriptor)
+          const filterBtn = document.createElement("button");
+          filterBtn.type = "button";
+          filterBtn.className = "vms-filter-button";
+          filterBtn.setAttribute("aria-label", `Filter ${col.label ?? col.key}`);
+          filterBtn.setAttribute("aria-expanded", "false");
+          filterBtn.setAttribute("aria-haspopup", "dialog");
+
+          const iconName: IconName = filterState === "empty" ? "filter-slash" : "filter";
+          filterBtn.appendChild(this.renderIconSvg(iconName, "sm", undefined, undefined));
+
+          if (filterState === "escalated") {
+            const dot = document.createElement("span");
+            dot.className = "vms-filter-dot";
+            dot.setAttribute("aria-hidden", "true");
+            filterBtn.appendChild(dot);
+          }
+
+          filterBtn.addEventListener("click", () => {
+            this.openFilterPopover(bindPath, col, col.filter!, filterBtn, on);
+          });
+
+          th.appendChild(filterBtn);
+        }
+        filterRow.appendChild(th);
+      });
+      thead.appendChild(filterRow);
+    } else if (hasLegacyFilters) {
+      // Legacy filter row path — kept alive as a Wave 1 bridge until Plan 02
+      // removes the old wire fields (filterable, filterValue, filterBinds,
+      // filterAction). DO NOT REMOVE this branch until Plan 02 lands.
       const filterAction = n.filterAction!;
       const filterRow = document.createElement("tr");
       filterRow.className = "vms-table__filter-row";
@@ -5709,18 +5891,18 @@ export class BrowserAdapter implements Adapter {
           // workflow-table pattern). Without an id the value survives (it's
           // bound state) but focus/caret are lost on every poll tick.
           inp.id = `vms-tablefilter-${col.key}`;
-          const bindPath = n.filterBinds?.[col.key];
-          const bound = bindPath != null ? this.sa.read(bindPath) : undefined;
+          const legacyBindPath = n.filterBinds?.[col.key];
+          const bound = legacyBindPath != null ? this.sa.read(legacyBindPath) : undefined;
           inp.value = bound != null
             ? String(bound)
             : (col.filterValue ?? "");
           inp.placeholder = `Filter…`;
-          if (bindPath != null) {
-            inp.addEventListener("input", () => { this.sa.write(bindPath, inp.value); });
+          if (legacyBindPath != null) {
+            inp.addEventListener("input", () => { this.sa.write(legacyBindPath, inp.value); });
           }
           inp.addEventListener("keydown", (e) => {
             if (e.key === "Enter") {
-              if (bindPath != null) this.sa.write(bindPath, inp.value);
+              if (legacyBindPath != null) this.sa.write(legacyBindPath, inp.value);
               on(filterAction);
             }
           });
@@ -6574,5 +6756,515 @@ export class BrowserAdapter implements Adapter {
     if (runs && runs.length > 0) this.inlineRuns(runs, el);
     else el.textContent = content == null ? "" : String(content);
     parent.appendChild(el);
+  }
+
+  // ─── Phase 33 (33-01): typed column-filter popover helpers ──────────────────
+
+  /** Determines the three-state icon grammar for a column's filter.
+   *  "empty"    → no active filter (filter-slash glyph)
+   *  "simple"   → exactly one contains rule with no matching hints (plain funnel)
+   *  "escalated"→ anything more complex (plain funnel + dot)
+   */
+  private computeFilterState(
+    descriptor: FilterDescriptor | null | undefined,
+    spec: FilterSpec,
+  ): "empty" | "simple" | "escalated" {
+    if (descriptor == null || descriptor.rules.length === 0) return "empty";
+    const hasMatchingHints = (spec.matchingHints?.length ?? 0) > 0;
+    if (
+      descriptor.rules.length === 1 &&
+      descriptor.rules[0].operator === "contains" &&
+      !hasMatchingHints
+    ) return "simple";
+    return "escalated";
+  }
+
+  /** Builds a compact human-readable summary of a nontrivial FilterDescriptor
+   *  for the inline read-only display (REQ-CF2-06). Truncated to 40 chars.
+   */
+  private buildFilterSummary(descriptor: FilterDescriptor): string {
+    const joiner = descriptor.joiner === "all-of" ? " AND " : " OR ";
+    const parts = descriptor.rules.map(rule => {
+      const op = rule.operator;
+      const val = rule.value;
+      if (op === "is-empty") return "is empty";
+      if (op === "is-not-empty") return "is not empty";
+      if (op === "is-true") return "yes";
+      if (op === "is-false") return "no";
+      if (op === "between" && Array.isArray(val)) return `between ${val[0]} and ${val[1]}`;
+      if (op === "in-range" && Array.isArray(val)) return `${val[0]} to ${val[1]}`;
+      if (val != null) return `${op} "${val}"`;
+      return op;
+    });
+    const full = parts.join(joiner);
+    return full.length > 40 ? full.slice(0, 39) + "…" : full;
+  }
+
+  /** Returns the default operator for a value kind (used when adding a new rule). */
+  private defaultOpForKind(kind: ValueKind): string {
+    return kind === "yes-no" ? "is-true" : "contains";
+  }
+
+  /** Returns the operator options for a value kind. */
+  private operatorsForKind(kind: ValueKind): Array<{ value: string; label: string }> {
+    const ops: Record<ValueKind, Array<{ value: string; label: string }>> = {
+      "text":      [
+        { value: "contains",    label: "Contains" },
+        { value: "equals",      label: "Equals" },
+        { value: "starts-with", label: "Starts with" },
+        { value: "ends-with",   label: "Ends with" },
+        { value: "is-empty",    label: "Is empty" },
+        { value: "is-not-empty",label: "Is not empty" },
+      ],
+      "number":    [
+        { value: "contains",           label: "Contains" },
+        { value: "equals",             label: "Equals" },
+        { value: "does-not-equal",     label: "Does not equal" },
+        { value: "greater-than",       label: ">" },
+        { value: "greater-than-or-equal", label: "≥" },
+        { value: "less-than",          label: "<" },
+        { value: "less-than-or-equal", label: "≤" },
+        { value: "between",            label: "Between" },
+        { value: "is-empty",           label: "Is empty" },
+        { value: "is-not-empty",       label: "Is not empty" },
+      ],
+      "date":      [
+        { value: "contains",    label: "Contains" },
+        { value: "is",          label: "Is" },
+        { value: "before",      label: "Before" },
+        { value: "after",       label: "After" },
+        { value: "in-range",    label: "In range" },
+        { value: "is-empty",    label: "Is empty" },
+        { value: "is-not-empty",label: "Is not empty" },
+      ],
+      "fixed-set": [
+        { value: "contains",    label: "Contains" },
+        { value: "is",          label: "Is" },
+        { value: "is-not",      label: "Is not" },
+        { value: "is-empty",    label: "Is empty" },
+        { value: "is-not-empty",label: "Is not empty" },
+      ],
+      "yes-no":    [
+        { value: "contains",    label: "Contains" },
+        { value: "is-true",     label: "Yes" },
+        { value: "is-false",    label: "No" },
+        { value: "is-empty",    label: "Is empty" },
+        { value: "is-not-empty",label: "Is not empty" },
+      ],
+    };
+    return ops[kind] ?? ops["text"];
+  }
+
+  /** Returns true if the operator has no value input (it's a boolean/empty test). */
+  private isNoValueOperator(op: string): boolean {
+    return ["is-empty", "is-not-empty", "is-true", "is-false"].includes(op);
+  }
+
+  /** Returns true if the operator takes a range value (2-element array). */
+  private isRangeOperator(op: string): boolean {
+    return op === "between" || op === "in-range";
+  }
+
+  /** Opens the filter popover for a column (REQ-CF2-03, D-01, D-02, D-03).
+   *  Called by the filter-button click handler in the new filter row path.
+   */
+  private openFilterPopover(
+    bindPath: string,
+    col: TableColumn,
+    spec: FilterSpec,
+    button: HTMLButtonElement,
+    on: (action: ActionEvent) => void,
+  ): void {
+    // Close any already-open popover (discard its draft)
+    this.closeFilterPopover(true);
+
+    // Seed the draft from current state (or a single empty rule if nothing)
+    const currentDescriptor = this.sa.read(bindPath) as FilterDescriptor | null | undefined ?? null;
+    let draft: FilterDescriptor;
+    if (currentDescriptor && currentDescriptor.rules.length > 0) {
+      draft = {
+        rules: currentDescriptor.rules.map(r => ({ ...r })),
+        joiner: currentDescriptor.joiner,
+      };
+    } else {
+      draft = {
+        rules: [{ operator: this.defaultOpForKind(spec.kind) as FilterRule["operator"] }],
+        joiner: "all-of",
+      };
+    }
+    this.filterDrafts.set(bindPath, draft);
+
+    // Build the popover element
+    const popoverEl = document.createElement("div");
+    popoverEl.className = "vms-filter-popover";
+    popoverEl.setAttribute("role", "dialog");
+    popoverEl.setAttribute("aria-label", `Filter ${col.label ?? col.key}`);
+    popoverEl.setAttribute("aria-modal", "false");
+
+    // Render initial content
+    this.renderFilterPopoverContent(popoverEl, bindPath, col, spec, on);
+
+    // Append to portal (REQ-CF2-05, D-02)
+    this.popoverPortal.appendChild(popoverEl);
+    this.activePopover = { bindPath, colKey: col.key, button, popoverEl };
+    button.setAttribute("aria-expanded", "true");
+
+    // Position immediately (D-03)
+    this.positionPopover(button, popoverEl);
+
+    // Outside-click handler (document-level, capture phase): close + discard
+    // if the click is not inside the popover and not on the trigger button.
+    const outsideClickHandler = (e: Event) => {
+      if (!popoverEl.contains(e.target as Node) && e.target !== button) {
+        this.closeFilterPopover(true);
+        button.focus();
+      }
+    };
+    // Escape key handler: close + discard
+    const keyHandler = (e: Event) => {
+      if ((e as KeyboardEvent).key === "Escape") {
+        this.closeFilterPopover(true);
+        button.focus();
+      }
+    };
+    document.addEventListener("mousedown", outsideClickHandler, true);
+    document.addEventListener("keydown", keyHandler, true);
+    // Combine both handlers under a single removal function for render() preamble
+    // cleanup. We track a combined "outside handler" reference for the render
+    // preamble to call (it stores the cleanup in popoverOutsideHandler).
+    // We need to remove BOTH from document on cleanup, so we store a wrapper:
+    const combinedCleanup = () => {
+      document.removeEventListener("mousedown", outsideClickHandler, true);
+      document.removeEventListener("keydown", keyHandler, true);
+    };
+    // Store as a pseudo-event-listener for the render() preamble cleanup
+    // (the preamble calls removeEventListener with this.popoverOutsideHandler).
+    // Since we need to remove TWO listeners, we repurpose the field as a
+    // "call this to remove all document listeners" reference via a closure trick:
+    // We set popoverOutsideHandler to a dummy that calls combinedCleanup on first
+    // invocation. The render() preamble calls its specialized removal using the
+    // stored references — but since we changed the approach (storing cleanup as
+    // popoverScrollResizeCleanup is the right slot), let's store the doc-listener
+    // cleanup there and keep popoverScrollResizeCleanup for resize/scroll.
+    // Actually: keep popoverOutsideHandler for the click listener only, and add
+    // a dedicated keyHandler field. Since we only have two cleanup slots, we
+    // compose them: store ONE cleanup function that removes ALL doc listeners
+    // in popoverScrollResizeCleanup. The render() preamble calls it.
+    // This is cleaner than the two-listener approach. Let's revise:
+
+    // Reposition on resize / scroll (capture-phase scroll, since the portal
+    // is not a descendant of the table's scroll container — D-03).
+    const repositionHandler = () => this.positionPopover(button, popoverEl);
+    window.addEventListener("resize", repositionHandler);
+    window.addEventListener("scroll", repositionHandler, true);
+
+    // Store cleanup for render() preamble. We put doc-listener cleanup here
+    // and combine it with the resize/scroll cleanup:
+    this.popoverScrollResizeCleanup = () => {
+      document.removeEventListener("mousedown", outsideClickHandler, true);
+      document.removeEventListener("keydown", keyHandler, true);
+      window.removeEventListener("resize", repositionHandler);
+      window.removeEventListener("scroll", repositionHandler, true);
+    };
+    // popoverOutsideHandler is not used for removal here (cleanup is in
+    // popoverScrollResizeCleanup). Set to null to avoid render() preamble
+    // double-cleanup. The render() preamble checks popoverScrollResizeCleanup.
+    this.popoverOutsideHandler = null;
+  }
+
+  /** Renders (or re-renders) the content inside the filter popover element.
+   *  Called on open and on any in-popover state change (add-rule, op-change).
+   */
+  private renderFilterPopoverContent(
+    popoverEl: HTMLDivElement,
+    bindPath: string,
+    col: TableColumn,
+    spec: FilterSpec,
+    on: (action: ActionEvent) => void,
+  ): void {
+    popoverEl.innerHTML = "";
+    const draft = this.filterDrafts.get(bindPath);
+    if (!draft) return;
+
+    const operators = this.operatorsForKind(spec.kind);
+
+    // Render each rule
+    draft.rules.forEach((rule, idx) => {
+      // Joiner toggle between rules (only when > 1 rule, shown BEFORE rule idx > 0)
+      if (idx > 0) {
+        const joinerDiv = document.createElement("div");
+        joinerDiv.className = "vms-filter-joiner";
+        const andBtn = document.createElement("button");
+        andBtn.type = "button";
+        andBtn.textContent = "AND";
+        if (draft.joiner === "all-of") andBtn.classList.add("active");
+        andBtn.addEventListener("click", () => {
+          draft.joiner = "all-of";
+          this.renderFilterPopoverContent(popoverEl, bindPath, col, spec, on);
+          this.positionPopover(this.activePopover!.button, popoverEl);
+        });
+        const orBtn = document.createElement("button");
+        orBtn.type = "button";
+        orBtn.textContent = "OR";
+        if (draft.joiner === "any-of") orBtn.classList.add("active");
+        orBtn.addEventListener("click", () => {
+          draft.joiner = "any-of";
+          this.renderFilterPopoverContent(popoverEl, bindPath, col, spec, on);
+          this.positionPopover(this.activePopover!.button, popoverEl);
+        });
+        joinerDiv.appendChild(andBtn);
+        joinerDiv.appendChild(orBtn);
+        popoverEl.appendChild(joinerDiv);
+      }
+
+      const ruleRow = document.createElement("div");
+      ruleRow.className = "vms-filter-rule-row";
+      ruleRow.style.display = "flex";
+      ruleRow.style.gap = "4px";
+      ruleRow.style.alignItems = "flex-start";
+      ruleRow.style.marginBottom = "4px";
+
+      // Operator select
+      const opSelect = document.createElement("select");
+      opSelect.className = "vms-filter-op-select";
+      operators.forEach(op => {
+        const opt = document.createElement("option");
+        opt.value = op.value;
+        opt.textContent = op.label;
+        if (op.value === rule.operator) opt.selected = true;
+        opSelect.appendChild(opt);
+      });
+      opSelect.addEventListener("change", () => {
+        draft.rules[idx] = { operator: opSelect.value as FilterRule["operator"] };
+        this.renderFilterPopoverContent(popoverEl, bindPath, col, spec, on);
+        this.positionPopover(this.activePopover!.button, popoverEl);
+      });
+      ruleRow.appendChild(opSelect);
+
+      // Value input(s) — hidden for no-value operators
+      if (!this.isNoValueOperator(rule.operator)) {
+        if (this.isRangeOperator(rule.operator)) {
+          // Two inputs for range (between / in-range)
+          const rangeVal = Array.isArray(rule.value) ? rule.value : ["", ""];
+          const inp0 = document.createElement("input");
+          inp0.type = rule.operator === "between" ? "number" : "date";
+          inp0.className = "vms-filter-value-input";
+          inp0.value = rangeVal[0] != null ? String(rangeVal[0]) : "";
+          inp0.placeholder = "From";
+          inp0.style.flex = "1";
+          inp0.addEventListener("input", () => {
+            const cur = Array.isArray(draft.rules[idx].value) ? draft.rules[idx].value as unknown[] : ["", ""];
+            draft.rules[idx] = { ...draft.rules[idx], value: [inp0.value, cur[1]] };
+          });
+          const sep = document.createElement("span");
+          sep.textContent = "–";
+          sep.style.alignSelf = "center";
+          const inp1 = document.createElement("input");
+          inp1.type = rule.operator === "between" ? "number" : "date";
+          inp1.className = "vms-filter-value-input";
+          inp1.value = rangeVal[1] != null ? String(rangeVal[1]) : "";
+          inp1.placeholder = "To";
+          inp1.style.flex = "1";
+          inp1.addEventListener("input", () => {
+            const cur = Array.isArray(draft.rules[idx].value) ? draft.rules[idx].value as unknown[] : ["", ""];
+            draft.rules[idx] = { ...draft.rules[idx], value: [cur[0], inp1.value] };
+          });
+          ruleRow.appendChild(inp0);
+          ruleRow.appendChild(sep);
+          ruleRow.appendChild(inp1);
+        } else {
+          // Single value input
+          const valueInp = this.buildFilterValueInput(spec, rule);
+          valueInp.style.flex = "1";
+          valueInp.addEventListener("change", () => {
+            draft.rules[idx] = { ...draft.rules[idx], value: (valueInp as HTMLInputElement | HTMLSelectElement).value };
+          });
+          if (valueInp.tagName === "INPUT") {
+            (valueInp as HTMLInputElement).addEventListener("input", () => {
+              draft.rules[idx] = { ...draft.rules[idx], value: (valueInp as HTMLInputElement).value };
+            });
+          }
+          ruleRow.appendChild(valueInp);
+        }
+      }
+
+      // Remove-rule button (only for rules after the first)
+      if (idx > 0) {
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "vms-filter-remove-rule";
+        removeBtn.setAttribute("aria-label", "Remove rule");
+        removeBtn.textContent = "×";
+        removeBtn.style.alignSelf = "center";
+        removeBtn.addEventListener("click", () => {
+          draft.rules.splice(idx, 1);
+          this.renderFilterPopoverContent(popoverEl, bindPath, col, spec, on);
+          this.positionPopover(this.activePopover!.button, popoverEl);
+        });
+        ruleRow.appendChild(removeBtn);
+      }
+
+      popoverEl.appendChild(ruleRow);
+    });
+
+    // Footer: Add rule + Clear + Apply
+    const footer = document.createElement("div");
+    footer.className = "vms-filter-footer";
+
+    const addRuleBtn = document.createElement("button");
+    addRuleBtn.type = "button";
+    addRuleBtn.className = "vms-filter-add-rule";
+    addRuleBtn.textContent = "+ Add rule";
+    addRuleBtn.addEventListener("click", () => {
+      draft.rules.push({ operator: this.defaultOpForKind(spec.kind) as FilterRule["operator"] });
+      this.renderFilterPopoverContent(popoverEl, bindPath, col, spec, on);
+      this.positionPopover(this.activePopover!.button, popoverEl);
+    });
+
+    const clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.className = "vms-filter-clear";
+    clearBtn.textContent = "Clear";
+    clearBtn.addEventListener("click", () => {
+      // Clear writes an empty/null descriptor to state and closes the popover.
+      // No named action is dispatched — same state-only contract as inline Enter.
+      this.sa.write(bindPath, null);
+      this.closeFilterPopover(false);
+    });
+
+    const applyBtn = document.createElement("button");
+    applyBtn.type = "button";
+    applyBtn.className = "vms-filter-apply";
+    applyBtn.textContent = "Apply";
+    applyBtn.addEventListener("click", () => {
+      // Apply: commit the draft to state, then close (no named action dispatch —
+      // state update IS the commit; server picks it up on next dispatch).
+      const cleanDraft: FilterDescriptor = {
+        rules: draft.rules.filter(r => {
+          // Drop empty contains rules (user clicked Add Rule but didn't type)
+          if (r.operator === "contains" && (r.value == null || r.value === "")) return false;
+          return true;
+        }),
+        joiner: draft.joiner,
+      };
+      if (cleanDraft.rules.length === 0) {
+        this.sa.write(bindPath, null);
+      } else {
+        this.sa.write(bindPath, cleanDraft);
+      }
+      this.closeFilterPopover(false);
+    });
+
+    footer.appendChild(addRuleBtn);
+    footer.appendChild(clearBtn);
+    footer.appendChild(applyBtn);
+    popoverEl.appendChild(footer);
+  }
+
+  /** Builds the value input element for a single filter rule. */
+  private buildFilterValueInput(spec: FilterSpec, rule: FilterRule): HTMLInputElement | HTMLSelectElement {
+    const op = rule.operator;
+    const val = rule.value;
+
+    if (spec.kind === "fixed-set" && (op === "is" || op === "is-not")) {
+      // <select> populated from spec.options
+      const sel = document.createElement("select");
+      sel.className = "vms-filter-value-input";
+      (spec.options ?? []).forEach(opt => {
+        const o = document.createElement("option");
+        o.value = opt;
+        o.textContent = opt;
+        if (opt === val) o.selected = true;
+        sel.appendChild(o);
+      });
+      return sel;
+    }
+
+    const inp = document.createElement("input");
+    inp.className = "vms-filter-value-input";
+
+    if (spec.kind === "number" && op !== "contains" && op !== "equals") {
+      inp.type = "number";
+    } else if (spec.kind === "date" && (op === "is" || op === "before" || op === "after")) {
+      inp.type = "date";
+    } else {
+      inp.type = "text";
+    }
+
+    inp.value = val != null ? String(val) : "";
+    return inp;
+  }
+
+  /** Positions the popover element relative to the trigger button using
+   *  position:fixed + getBoundingClientRect() + viewport-edge clamping (D-03).
+   */
+  private positionPopover(button: HTMLButtonElement, popoverEl: HTMLDivElement): void {
+    const rect = button.getBoundingClientRect();
+    const gap = 4;
+
+    // Initial placement: directly below the button, left-aligned
+    let top = rect.bottom + gap;
+    let left = rect.left;
+
+    // Apply initial position so we can measure the popover
+    popoverEl.style.position = "fixed";
+    popoverEl.style.top = `${top}px`;
+    popoverEl.style.left = `${left}px`;
+    popoverEl.style.visibility = "hidden"; // hide while measuring
+    popoverEl.style.display = "block";
+
+    // Measure the popover (now it's in the DOM and positioned)
+    const pr = popoverEl.getBoundingClientRect();
+
+    // Right-edge clamp: nudge left if off right edge
+    if (pr.right > window.innerWidth - gap) {
+      left = Math.max(gap, left - (pr.right - (window.innerWidth - gap)));
+    }
+
+    // Bottom-edge clamp: flip above if too tall, else clamp to top with scroll
+    if (pr.bottom > window.innerHeight - gap) {
+      const flipTop = rect.top - pr.height - gap;
+      if (flipTop >= gap) {
+        top = flipTop; // flip above the trigger
+      } else {
+        top = gap; // clamp to near-top; CSS max-height + overflow-y:auto handles internal scroll
+      }
+    }
+
+    popoverEl.style.top = `${top}px`;
+    popoverEl.style.left = `${left}px`;
+    popoverEl.style.visibility = ""; // restore visibility
+  }
+
+  /** Closes the filter popover, optionally discarding (not committing) the draft.
+   *  Called by: outside-click, Escape, Apply button, Clear button, render() preamble.
+   */
+  private closeFilterPopover(discard: boolean): void {
+    if (!this.activePopover) return;
+
+    // discard = true → drop the draft without committing (outside-click, Escape)
+    // discard = false → draft has already been committed to state (Apply/Clear)
+    // Either way, remove the popover DOM and clear state.
+
+    const { button, popoverEl } = this.activePopover;
+
+    // Remove popover from portal
+    if (popoverEl.parentNode) popoverEl.parentNode.removeChild(popoverEl);
+
+    // Restore button state
+    button.setAttribute("aria-expanded", "false");
+
+    // Clear all listeners (popoverScrollResizeCleanup covers all of them)
+    if (this.popoverScrollResizeCleanup) {
+      this.popoverScrollResizeCleanup();
+      this.popoverScrollResizeCleanup = null;
+    }
+    if (this.popoverOutsideHandler) {
+      // Belt-and-braces: remove the listener if it was set via the old path
+      document.removeEventListener("mousedown", this.popoverOutsideHandler, true);
+      this.popoverOutsideHandler = null;
+    }
+
+    this.activePopover = null;
   }
 }
