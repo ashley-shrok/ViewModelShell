@@ -442,6 +442,10 @@ export class BrowserAdapter implements Adapter {
     this.composerKeysSeen = new Set();
 
     this.container.innerHTML = "";
+    // Re-append the popover portal after the innerHTML wipe (the wipe removes
+    // all container children, including the portal — it must be re-attached so
+    // openFilterPopover's appendChild and container.querySelector both work).
+    this.container.appendChild(this.popoverPortal);
     this.node(vm, this.container, onAction);
 
     // Phase 12 (CHART-03) — mark-sweep: destroy + drop any Chart instance whose
