@@ -682,3 +682,13 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 32-04-PLAN.md — Full green-tree gate (11 commands) + stage CHANGELOG.md Unreleased entry (wave 3, no publish/tag/announce — Phase 33 owns the release)
+
+### Phase 33: Column filter expansion Phase 2 — adapter UI (popover + slash-through funnel + always-visible-input) + demo migration to typed FilterSpec/FilterDescriptor wire (HelpDesk + Showcase + FeatureProbe .NET/bun twins) + removal of old filterable/filterValue/filterBinds/filterAction fields (all 8 across TS + .NET) + MIGRATION.md + aligned major-version bump on npm + NuGet + release ritual (tag + advance main + #vms-announcements post) + Poppy pilot coordination on PBMInvoices
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 32
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 33 to break down)
