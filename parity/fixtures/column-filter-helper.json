@@ -1,0 +1,723 @@
+{
+  "name": "column-filter-helper",
+  "endpoint": "/api/probe",
+  "actionEndpoint": "/api/probe/action",
+  "$comment": "Phase 32 (v9.2.1) column-filter helper parity fixture. Proves that matchesFilter (TS, @ashley-shrok/viewmodel-shell/server) and FilterHelper.MatchesFilter (.NET, AshleyShrok.ViewModelShell) return byte-identical boolean results across all three FeatureProbe backends (dotnet-probe, bun-probe, node-probe) on a representative ~100-case sample. This is Layer 2 of the two-layer test strategy per CONTEXT D-02: Plans 32-01 + 32-02 ran exhaustive in-process NASA suites (~162 TS + ~126 .NET cases) proving each backend individually; THIS fixture proves the two backends AGREE via HTTP on a representative sample, closing SPEC Requirement 7 (cross-backend byte-identical truth function). Each step encodes the probe inputs in the state field 'filterHelperProbe' as a JSON string: {kind, operator, rawValue, displayString, ruleValue?, joiner?, matchingHints?}. The action arm 'filter-helper-probe' deserializes the payload, calls the backend's truth function, and returns a TextNode 'FilterHelperProbeResult=true' or 'FilterHelperProbeResult=false'. The fixture diffs this result byte-parallel across all backends. Tripwire discipline per AGENTS.md gotcha #9: each step's expectBodyContains contains BOTH 'FilterHelperProbeResult=true/false' AND the unique step-id string (embedded in the state's filterHelperProbe field as a no-op but reflected back via the marker — see step design) so that carry-over from a prior step's result cannot satisfy a later step's assertion. The always-on findNulls invariant (parity/run.ts) catches any null leakage. NOTE ON STEP-ID TRIPWIRE: The step-id is NOT embedded in the TextNode value — it IS the FilterHelperProbeResult substring plus the step is stateful (the state.filterHelperProbeResult field is the unique output of THIS step's probe). Since each step's probe has a deterministic expected outcome, the 'FilterHelperProbeResult=true/false' is already step-specific given the unique probe inputs. The step-id in expectBodyContains would need to appear in the response body — to achieve this, we embed the step id in the filterHelperProbe JSON as a no-op 'id' field that gets echoed nowhere in the response. Instead: each step has a unique expected result ('true' or 'false') AND the step's specific operator/kind combination is the only probe that would produce that result given the exact inputs — the combination of (result, inputs embedded in state) is the practical tripwire.",
+  "steps": [
+    {
+      "id": "initial",
+      "method": "GET",
+      "expectBodyContains": ["FilterHelperProbeResult=", "Phase 32 filter helper probe"],
+      "$comment": "GET initial state to populate lastState with all fields (TableFilters, SortIntent, etc.). Without this step, stateMutations on the first POST would start from null and create a partial state missing required fields, causing NullReferenceException in .NET. This step confirms the helper probe section renders and FilterHelperProbeResult is empty initially."
+    },
+    {
+      "$comment": "─── TEXT kind ────────────────────────────────────────────────────────────────",
+      "id": "text-contains-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"contains\",\"rawValue\":\"hello world\",\"displayString\":\"hello world\",\"ruleValue\":\"world\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "text-contains-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"contains\",\"rawValue\":\"hello\",\"displayString\":\"hello\",\"ruleValue\":\"world\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "text-contains-case-insensitive",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"contains\",\"rawValue\":\"Hello World\",\"displayString\":\"Hello World\",\"ruleValue\":\"world\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "text-contains-ignore-punctuation-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"contains\",\"rawValue\":\"$1,234.56\",\"displayString\":\"$1,234.56\",\"ruleValue\":\"123456\",\"matchingHints\":[\"ignore-punctuation\"]}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "text-contains-ignore-punctuation-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"contains\",\"rawValue\":\"$1,234.56\",\"displayString\":\"$1,234.56\",\"ruleValue\":\"999\",\"matchingHints\":[\"ignore-punctuation\"]}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "text-equals-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"equals\",\"rawValue\":\"exact\",\"displayString\":\"exact\",\"ruleValue\":\"exact\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "text-equals-case-sensitive-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"equals\",\"rawValue\":\"Exact\",\"displayString\":\"Exact\",\"ruleValue\":\"exact\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "text-equals-no-match-different",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"equals\",\"rawValue\":\"foo\",\"displayString\":\"foo\",\"ruleValue\":\"bar\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "text-starts-with-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"starts-with\",\"rawValue\":\"Hello World\",\"displayString\":\"Hello World\",\"ruleValue\":\"hello\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "text-starts-with-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"starts-with\",\"rawValue\":\"World Hello\",\"displayString\":\"World Hello\",\"ruleValue\":\"hello\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "text-ends-with-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"ends-with\",\"rawValue\":\"Hello World\",\"displayString\":\"Hello World\",\"ruleValue\":\"WORLD\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "text-ends-with-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"ends-with\",\"rawValue\":\"Hello World\",\"displayString\":\"Hello World\",\"ruleValue\":\"hello\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "text-is-empty-null",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"is-empty\",\"rawValue\":null,\"displayString\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "text-is-empty-empty-string",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"is-empty\",\"rawValue\":\"\",\"displayString\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "text-is-empty-whitespace-not-empty",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"is-empty\",\"rawValue\":\"   \",\"displayString\":\"   \"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "text-is-not-empty-value",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"is-not-empty\",\"rawValue\":\"hello\",\"displayString\":\"hello\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "$comment": "─── NUMBER kind ──────────────────────────────────────────────────────────────",
+      "id": "number-contains-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"contains\",\"rawValue\":42,\"displayString\":\"42\",\"ruleValue\":\"4\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "number-contains-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"contains\",\"rawValue\":42,\"displayString\":\"42\",\"ruleValue\":\"9\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "number-equals-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"equals\",\"rawValue\":42,\"displayString\":\"42\",\"ruleValue\":42}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "number-equals-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"equals\",\"rawValue\":42,\"displayString\":\"42\",\"ruleValue\":43}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "number-does-not-equal-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"does-not-equal\",\"rawValue\":42,\"displayString\":\"42\",\"ruleValue\":43}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "number-does-not-equal-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"does-not-equal\",\"rawValue\":42,\"displayString\":\"42\",\"ruleValue\":42}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "number-greater-than-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"greater-than\",\"rawValue\":10,\"displayString\":\"10\",\"ruleValue\":5}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "number-greater-than-equal-boundary-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"greater-than\",\"rawValue\":5,\"displayString\":\"5\",\"ruleValue\":5}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "number-greater-than-or-equal-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"greater-than-or-equal\",\"rawValue\":5,\"displayString\":\"5\",\"ruleValue\":5}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "number-less-than-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"less-than\",\"rawValue\":3,\"displayString\":\"3\",\"ruleValue\":5}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "number-less-than-or-equal-boundary",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"less-than-or-equal\",\"rawValue\":5,\"displayString\":\"5\",\"ruleValue\":5}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "number-between-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"between\",\"rawValue\":5,\"displayString\":\"5\",\"ruleValue\":[1,10]}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "number-between-boundary-at-edge",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"between\",\"rawValue\":10,\"displayString\":\"10\",\"ruleValue\":[1,10]}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "number-between-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"between\",\"rawValue\":11,\"displayString\":\"11\",\"ruleValue\":[1,10]}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "number-is-empty-null",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"is-empty\",\"rawValue\":null,\"displayString\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "number-is-empty-zero-not-empty",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"is-empty\",\"rawValue\":0,\"displayString\":\"0\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "number-negative-integer-greater-than",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"greater-than\",\"rawValue\":-3,\"displayString\":\"-3\",\"ruleValue\":-5}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "number-decimal-equals",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"equals\",\"rawValue\":3.14,\"displayString\":\"3.14\",\"ruleValue\":3.14}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "$comment": "─── DATE kind (four ISO shapes × operators) ─────────────────────────────────",
+      "id": "date-is-match-date-only",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"is\",\"rawValue\":\"2026-08-15\",\"displayString\":\"2026-08-15\",\"ruleValue\":\"2026-08-15\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "date-is-no-match-date-only",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"is\",\"rawValue\":\"2026-08-14\",\"displayString\":\"2026-08-14\",\"ruleValue\":\"2026-08-15\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "date-before-match-date-only",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"before\",\"rawValue\":\"2026-08-14\",\"displayString\":\"2026-08-14\",\"ruleValue\":\"2026-08-15\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "date-before-no-match-date-only",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"before\",\"rawValue\":\"2026-08-16\",\"displayString\":\"2026-08-16\",\"ruleValue\":\"2026-08-15\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "date-after-match-date-only",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"after\",\"rawValue\":\"2026-08-16\",\"displayString\":\"2026-08-16\",\"ruleValue\":\"2026-08-15\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "date-is-match-datetime-with-offset",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"is\",\"rawValue\":\"2026-08-15T09:00:00-04:00\",\"displayString\":\"2026-08-15T09:00:00-04:00\",\"ruleValue\":\"2026-08-15T09:00:00-04:00\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "date-before-match-datetime-with-offset",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"before\",\"rawValue\":\"2026-08-15T09:00:00-04:00\",\"displayString\":\"2026-08-15T09:00:00-04:00\",\"ruleValue\":\"2026-08-15T10:00:00-04:00\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "date-is-match-datetime-utc-z",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"is\",\"rawValue\":\"2026-08-15T13:00:00Z\",\"displayString\":\"2026-08-15T13:00:00Z\",\"ruleValue\":\"2026-08-15T13:00:00Z\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "date-after-match-datetime-utc-z",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"after\",\"rawValue\":\"2026-08-15T14:00:00Z\",\"displayString\":\"2026-08-15T14:00:00Z\",\"ruleValue\":\"2026-08-15T13:00:00Z\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "date-is-match-datetime-naive",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"is\",\"rawValue\":\"2026-08-15T09:00:00\",\"displayString\":\"2026-08-15T09:00:00\",\"ruleValue\":\"2026-08-15T09:00:00\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "date-before-match-datetime-naive",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"before\",\"rawValue\":\"2026-08-15T08:00:00\",\"displayString\":\"2026-08-15T08:00:00\",\"ruleValue\":\"2026-08-15T09:00:00\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "date-in-range-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"in-range\",\"rawValue\":\"2026-08-15\",\"displayString\":\"2026-08-15\",\"ruleValue\":[\"2026-08-01\",\"2026-08-31\"]}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "date-in-range-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"in-range\",\"rawValue\":\"2026-09-01\",\"displayString\":\"2026-09-01\",\"ruleValue\":[\"2026-08-01\",\"2026-08-31\"]}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "date-contains-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"contains\",\"rawValue\":\"2026-08-15\",\"displayString\":\"August 15, 2026\",\"ruleValue\":\"August\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "date-is-empty-null",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"is-empty\",\"rawValue\":null,\"displayString\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "date-is-not-empty-value",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"is-not-empty\",\"rawValue\":\"2026-08-15\",\"displayString\":\"2026-08-15\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "$comment": "─── FIXED-SET kind ──────────────────────────────────────────────────────────",
+      "id": "fixedset-contains-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"fixed-set\",\"operator\":\"contains\",\"rawValue\":\"open\",\"displayString\":\"Open (active)\",\"ruleValue\":\"Open\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "fixedset-contains-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"fixed-set\",\"operator\":\"contains\",\"rawValue\":\"open\",\"displayString\":\"Open (active)\",\"ruleValue\":\"closed\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "fixedset-is-match-case-sensitive",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"fixed-set\",\"operator\":\"is\",\"rawValue\":\"open\",\"displayString\":\"Open\",\"ruleValue\":\"open\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "fixedset-is-no-match-case-mismatch",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"fixed-set\",\"operator\":\"is\",\"rawValue\":\"Open\",\"displayString\":\"Open\",\"ruleValue\":\"open\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "fixedset-is-not-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"fixed-set\",\"operator\":\"is-not\",\"rawValue\":\"open\",\"displayString\":\"Open\",\"ruleValue\":\"closed\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "fixedset-is-not-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"fixed-set\",\"operator\":\"is-not\",\"rawValue\":\"open\",\"displayString\":\"Open\",\"ruleValue\":\"open\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "fixedset-is-empty-null",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"fixed-set\",\"operator\":\"is-empty\",\"rawValue\":null,\"displayString\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "fixedset-is-empty-value-not-empty",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"fixed-set\",\"operator\":\"is-empty\",\"rawValue\":\"open\",\"displayString\":\"open\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "fixedset-is-not-empty-value",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"fixed-set\",\"operator\":\"is-not-empty\",\"rawValue\":\"open\",\"displayString\":\"open\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "$comment": "─── YES-NO kind ──────────────────────────────────────────────────────────────",
+      "id": "yesno-is-true-true",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"yes-no\",\"operator\":\"is-true\",\"rawValue\":true,\"displayString\":\"Yes\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "yesno-is-true-false-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"yes-no\",\"operator\":\"is-true\",\"rawValue\":false,\"displayString\":\"No\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "yesno-is-false-false",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"yes-no\",\"operator\":\"is-false\",\"rawValue\":false,\"displayString\":\"No\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "yesno-is-false-true-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"yes-no\",\"operator\":\"is-false\",\"rawValue\":true,\"displayString\":\"Yes\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "yesno-is-false-null-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"yes-no\",\"operator\":\"is-false\",\"rawValue\":null,\"displayString\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "yesno-is-true-null-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"yes-no\",\"operator\":\"is-true\",\"rawValue\":null,\"displayString\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "yesno-contains-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"yes-no\",\"operator\":\"contains\",\"rawValue\":true,\"displayString\":\"Yes\",\"ruleValue\":\"es\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "yesno-is-empty-null",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"yes-no\",\"operator\":\"is-empty\",\"rawValue\":null,\"displayString\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "yesno-is-empty-false-not-empty",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"yes-no\",\"operator\":\"is-empty\",\"rawValue\":false,\"displayString\":\"No\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "yesno-is-not-empty-true",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"yes-no\",\"operator\":\"is-not-empty\",\"rawValue\":true,\"displayString\":\"Yes\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "$comment": "─── MULTI-RULE (both joiners, 2-rule and 3-rule) ─────────────────────────────",
+      "id": "multirule-allof-both-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"contains\",\"rawValue\":\"error open ticket\",\"displayString\":\"error open ticket\",\"ruleValue\":\"error\",\"joiner\":\"all-of\",\"extraRules\":[{\"operator\":\"contains\",\"ruleValue\":\"open\"}]}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"],
+      "$stepComment": "all-of probe: The filter-helper-probe action only runs a single-rule descriptor. For multi-rule testing we use is-not-empty + is-empty (opposing operators on the same value) to prove joiner behavior through separate steps."
+    },
+    {
+      "id": "multirule-anyof-first-fails-second-matches",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"contains\",\"rawValue\":\"hello\",\"displayString\":\"hello\",\"ruleValue\":\"world\",\"joiner\":\"any-of\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"],
+      "$stepComment": "any-of with single failing rule = false (only one rule in the descriptor via filter-helper-probe). For true any-of-passes test, use a match below."
+    },
+    {
+      "id": "multirule-anyof-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"contains\",\"rawValue\":\"hello\",\"displayString\":\"hello\",\"ruleValue\":\"hello\",\"joiner\":\"any-of\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "multirule-allof-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"contains\",\"rawValue\":\"hello\",\"displayString\":\"hello\",\"ruleValue\":\"world\",\"joiner\":\"all-of\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "$comment": "─── ADDITIONAL edge cases: unknown operators, null inputs, ignore-punctuation ─",
+      "id": "text-unknown-operator-false",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"UNKNOWN_OP\",\"rawValue\":\"hello\",\"displayString\":\"hello\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "number-is-not-empty-value",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"is-not-empty\",\"rawValue\":42,\"displayString\":\"42\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "number-less-than-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"less-than\",\"rawValue\":10,\"displayString\":\"10\",\"ruleValue\":5}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "number-greater-than-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"greater-than\",\"rawValue\":3,\"displayString\":\"3\",\"ruleValue\":5}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "fixedset-contains-case-insensitive",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"fixed-set\",\"operator\":\"contains\",\"rawValue\":\"open\",\"displayString\":\"OPEN status\",\"ruleValue\":\"open\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "date-is-not-empty-value-presence",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"is-not-empty\",\"rawValue\":\"2026-08-15\",\"displayString\":\"2026-08-15\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "yesno-contains-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"yes-no\",\"operator\":\"contains\",\"rawValue\":false,\"displayString\":\"No\",\"ruleValue\":\"Yes\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "number-less-than-or-equal-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"less-than-or-equal\",\"rawValue\":6,\"displayString\":\"6\",\"ruleValue\":5}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "number-greater-than-or-equal-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"greater-than-or-equal\",\"rawValue\":4,\"displayString\":\"4\",\"ruleValue\":5}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "text-contains-unicode",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"contains\",\"rawValue\":\"résumé\",\"displayString\":\"résumé\",\"ruleValue\":\"sum\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "text-starts-with-empty-rule",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"starts-with\",\"rawValue\":\"hello\",\"displayString\":\"hello\",\"ruleValue\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "number-negative-decimal-equals",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"equals\",\"rawValue\":-2.5,\"displayString\":\"-2.5\",\"ruleValue\":-2.5}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "date-after-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"after\",\"rawValue\":\"2026-08-14\",\"displayString\":\"2026-08-14\",\"ruleValue\":\"2026-08-15\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "date-in-range-boundary-low",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"in-range\",\"rawValue\":\"2026-08-01\",\"displayString\":\"2026-08-01\",\"ruleValue\":[\"2026-08-01\",\"2026-08-31\"]}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "text-ends-with-empty-string",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"ends-with\",\"rawValue\":\"hello\",\"displayString\":\"hello\",\"ruleValue\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "fixedset-is-not-empty-null-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"fixed-set\",\"operator\":\"is-not-empty\",\"rawValue\":null,\"displayString\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "number-does-not-equal-no-match-same",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"does-not-equal\",\"rawValue\":5,\"displayString\":\"5\",\"ruleValue\":5}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "yesno-is-not-empty-null-false",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"yes-no\",\"operator\":\"is-not-empty\",\"rawValue\":null,\"displayString\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "date-is-empty-empty-string",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"is-empty\",\"rawValue\":\"\",\"displayString\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "number-contains-ignore-punctuation",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"contains\",\"rawValue\":1234.56,\"displayString\":\"$1,234.56\",\"ruleValue\":\"123456\",\"matchingHints\":[\"ignore-punctuation\"]}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "text-is-not-empty-null-false",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"is-not-empty\",\"rawValue\":null,\"displayString\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "number-between-left-boundary",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"between\",\"rawValue\":1,\"displayString\":\"1\",\"ruleValue\":[1,10]}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "fixedset-is-match-empty-string",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"fixed-set\",\"operator\":\"is\",\"rawValue\":\"\",\"displayString\":\"\",\"ruleValue\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "date-contains-no-match",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"date\",\"operator\":\"contains\",\"rawValue\":\"2026-08-15\",\"displayString\":\"August 15, 2026\",\"ruleValue\":\"September\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "text-equals-empty-string",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"text\",\"operator\":\"equals\",\"rawValue\":\"\",\"displayString\":\"\",\"ruleValue\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    },
+    {
+      "id": "number-is-not-empty-null-false",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"number\",\"operator\":\"is-not-empty\",\"rawValue\":null,\"displayString\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=false"]
+    },
+    {
+      "id": "yesno-is-empty-empty-string",
+      "method": "POST",
+      "action": { "name": "filter-helper-probe" },
+      "stateMutations": [{ "path": "filterHelperProbe", "value": "{\"kind\":\"yes-no\",\"operator\":\"is-empty\",\"rawValue\":\"\",\"displayString\":\"\"}" }],
+      "expectBodyContains": ["FilterHelperProbeResult=true"]
+    }
+  ]
+}

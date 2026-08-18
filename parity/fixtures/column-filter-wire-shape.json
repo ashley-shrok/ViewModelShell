@@ -1,0 +1,60 @@
+{
+  "name": "column-filter-wire-shape",
+  "endpoint": "/api/probe",
+  "actionEndpoint": "/api/probe/action",
+  "$comment": "Phase 32 (v9.2.1) column-filter wire-shape parity fixture. Proves that the four FilterDescriptor combinations required by SPEC Requirement 3 serialize byte-identically across all three FeatureProbe backends (dotnet-probe, bun-probe, node-probe). The four combinations are: (a) one rule WITH a value ('contains' + value:'hello' + joiner:'all-of'), (b) one rule WITHOUT a value ('is-empty' — value field ABSENT, not null, per SPEC Req 3 + AGENTS.md null-omission gotcha #8), (c) two rules joined 'any-of', (d) three rules joined 'all-of'. Tripwire discipline follows AGENTS.md gotcha #9 class-2 (findNulls — always-on in parity/run.ts, catches 'value':null null leakage the normalize diff would scrub before comparing) and class-3 (expectBodyContains per step — the step-specific marker text 'FilterWireShapeProbe={branch}' proves the branch actually ran on both backends; a mutation that stopped emitting the marker OR started emitting 'value':null for the is-empty rule would fail LOUDLY instead of going vacuous). A diff-only approach cannot prove the is-empty rule's value field is absent (class-2 defect) because normalize.ts drops nulls before comparing — if both backends emitted 'value':null they would agree and the diff would pass. The findNulls invariant sees the RAW parsed body before normalization, so null drift is caught. For the value-absent case (is-empty), expectBodyContains proves the branch ran but CANNOT assert a string is absent (positive assertions only); findNulls provides the complementary negative guarantee.",
+  "steps": [
+    {
+      "id": "wire-shape-initial",
+      "method": "GET",
+      "expectBodyContains": [
+        "FilterWireShapeProbe=",
+        "Phase 32 filter wire-shape probe"
+      ],
+      "$comment": "Branch INITIAL (GET). State slot defaults to '' — buildVm renders the wire-shape probe section with the marker TextNode 'FilterWireShapeProbe=' (empty suffix). No FilterDescriptor in the TableNode (unset branch). The always-on findNulls invariant separately catches any 'value':null regression on ANY step."
+    },
+    {
+      "id": "wire-shape-one-rule-with-value",
+      "method": "POST",
+      "action": { "name": "filter-wire-shape-one-rule-with-value" },
+      "expectBodyContains": [
+        "FilterWireShapeProbe=one-rule-with-value",
+        "\"operator\":\"contains\"",
+        "\"joiner\":\"all-of\"",
+        "\"value\":\"hello\""
+      ],
+      "$comment": "Branch ONE-RULE-WITH-VALUE. FilterDescriptor = {rules:[{operator:'contains',value:'hello'}], joiner:'all-of'}. Both the operator and value fields must be present on the wire — expectBodyContains tripwires prove all three. The 'FilterWireShapeProbe=one-rule-with-value' marker confirms the branch ran (gotcha #9 class-3). The value field IS present here (not an is-empty rule), so findNulls' always-on check is satisfied trivially."
+    },
+    {
+      "id": "wire-shape-one-rule-no-value",
+      "method": "POST",
+      "action": { "name": "filter-wire-shape-one-rule-no-value" },
+      "expectBodyContains": [
+        "FilterWireShapeProbe=one-rule-no-value",
+        "\"operator\":\"is-empty\""
+      ],
+      "$comment": "Branch ONE-RULE-NO-VALUE (is-empty). FilterDescriptor = {rules:[{operator:'is-empty'}], joiner:'all-of'}. The value field MUST be ABSENT from the emitted JSON — not 'value':null, simply missing. This is SPEC Req 3 acceptance criterion (a). The expectBodyContains proves the branch ran (class-3 tripwire) and proves 'is-empty' crosses the wire. The findNulls invariant (always-on) catches the 'value':null regression case — if a backend emits 'value':null for an operator with no value, findNulls fires LOUD even though the cross-backend diff would see both backends agreeing and pass silently. This is the primary load-bearing tripwire for SPEC Req 3. Per AGENTS.md null-omission (gotcha #8): FilterRule.Value is annotated [JsonIgnore WhenWritingNull] on the .NET side; on the TS side the rule is built without the value key using conditional spread. Either bug (null instead of absent) is caught by findNulls here."
+    },
+    {
+      "id": "wire-shape-two-rules-any-of",
+      "method": "POST",
+      "action": { "name": "filter-wire-shape-two-rules-any-of" },
+      "expectBodyContains": [
+        "FilterWireShapeProbe=two-rules-any-of",
+        "\"joiner\":\"any-of\""
+      ],
+      "$comment": "Branch TWO-RULES-ANY-OF. FilterDescriptor = {rules:[{operator:'contains',value:'error'},{operator:'contains',value:'warn'}], joiner:'any-of'}. SPEC Req 3 acceptance criterion (b): the emitted JSON must contain '\"joiner\":\"any-of\"'. The tripwire confirms the branch ran AND proves the joiner literal crosses the wire correctly on both backends."
+    },
+    {
+      "id": "wire-shape-three-rules-all-of",
+      "method": "POST",
+      "action": { "name": "filter-wire-shape-three-rules-all-of" },
+      "expectBodyContains": [
+        "FilterWireShapeProbe=three-rules-all-of",
+        "\"joiner\":\"all-of\"",
+        "\"starts-with\""
+      ],
+      "$comment": "Branch THREE-RULES-ALL-OF. FilterDescriptor = {rules:[{op:'contains',value:'open'},{op:'is-not-empty'},{op:'starts-with',value:'ticket'}], joiner:'all-of'}. SPEC Req 3 acceptance criterion (c): three rules in all-of. The '\"starts-with\"' tripwire proves all three operators are serialized (starts-with only appears in the third rule, so its presence implies all three rules reached the wire). The 'FilterWireShapeProbe=three-rules-all-of' marker confirms the branch ran."
+    }
+  ]
+}
