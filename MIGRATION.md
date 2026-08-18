@@ -6,6 +6,213 @@ to be aware of. It is copy-pasteable — every command and version string is con
 
 ---
 
+## Migrating to v10.0.0 — Typed column-filter wire (BREAKING)
+
+v10.0.0 replaces the old `filterable`/`filterValue`/`filterBinds`/`filterAction` filter wire with a typed `filter`/`filterDescriptorBinds` shape. This is a **breaking change** — apps using the old wire must update their column declarations, table node declarations, state records, and action handlers. There is no compatibility shim; upgrade in place.
+
+### The 8 removed fields
+
+| Backend | Removed from | Field |
+|---------|-------------|-------|
+| TypeScript (npm) | `TableColumn` | `filterable?: boolean` |
+| TypeScript (npm) | `TableColumn` | `filterValue?: string` |
+| TypeScript (npm) | `TableNode` | `filterBinds?: Record<string, string>` |
+| TypeScript (npm) | `TableNode` | `filterAction?: ActionEvent` |
+| .NET (NuGet) | `TableColumn` | `Filterable` |
+| .NET (NuGet) | `TableColumn` | `FilterValue` |
+| .NET (NuGet) | `TableNode` | `FilterBinds` |
+| .NET (NuGet) | `TableNode` | `FilterAction` |
+
+### Replacement fields
+
+**Per-column:** `filter?: FilterSpec` (TS) / `Filter: FilterSpec` (.NET) — declares the column's value-kind and options.
+
+```typescript
+// TypeScript: FilterSpec shape
+{ kind: "text" | "number" | "date" | "fixed-set" | "yes-no", options?: string[], matchingHints?: string[] }
+```
+
+**Per-table:** `filterDescriptorBinds?: Record<string, string>` (TS) / `FilterDescriptorBinds: Dictionary<string,string>` (.NET) — maps each filterable column key to the state bind path where its `FilterDescriptor` lives.
+
+**State:** Each bind path holds a `FilterDescriptor`: `{ rules: FilterRule[], joiner: "all-of" | "any-of" }`. `FilterRule` is `{ operator: string, value?: unknown }`. The adapter writes descriptors to state automatically as the user types — no named filter action needed.
+
+**Truth function:** Call `matchesFilter(descriptor, rawValue, displayString, kind)` (TS server subpath) or `FilterHelper.MatchesFilter(descriptor, rawValue, displayString, kind)` (.NET) in your action handler to evaluate each row against the current descriptor.
+
+### Before / after — C# (HelpDesk agent-queue reference)
+
+**State record — before:**
+
+```csharp
+public record AgentState(
+    // ...
+    string TitleFilter,            // free-text title filter (plain string)
+    // ...
+)
+{
+    public static AgentState Initial() => new(
+        // ...
+        TitleFilter: "",
+        // ...
+    );
+}
+```
+
+**State record — after:**
+
+```csharp
+public record AgentState(
+    // ...
+    // Phase 33 — typed FilterDescriptor for the Title column.
+    // Null when no filter is active. WhenWritingNull per gotcha #8.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    FilterDescriptor? TitleFilterDescriptor,
+    // ...
+)
+{
+    public static AgentState Initial() => new(
+        // ...
+        TitleFilterDescriptor: null,
+        // ...
+    );
+}
+```
+
+**BuildVm — before:**
+
+```csharp
+// TableColumn: Filterable + FilterValue
+new TableColumn("title", "Title",
+    Filterable: true,
+    FilterValue: state.TitleFilter.Length > 0 ? state.TitleFilter : null),
+
+// TableNode: FilterBinds + FilterAction
+new TableNode(
+    Columns: [...],
+    Rows: rows,
+    FilterBinds: new Dictionary<string, string> { ["title"] = "titleFilter" },
+    FilterAction: new ActionDescriptor("filter-text"),
+    Selection: bulkSelection)
+```
+
+**BuildVm — after:**
+
+```csharp
+// TableColumn: Filter: new FilterSpec("text") — no FilterValue needed
+new TableColumn("title", "Title", Filter: new FilterSpec("text")),
+
+// TableNode: FilterDescriptorBinds — maps column key to state bind path
+new TableNode(
+    Columns: [...],
+    Rows: rows,
+    FilterDescriptorBinds: new Dictionary<string, string> { ["title"] = "titleFilterDescriptor" },
+    // No FilterAction — descriptors arrive via state at the bind path
+    Selection: bulkSelection)
+```
+
+**Action handler — before:**
+
+```csharp
+// Separate filter-text action case
+else if (name == "filter-text")
+{
+    // TitleFilter is already in state via the column filterBind.
+    state = state with { SelectedIds = new Dictionary<string, bool>(), BulkSelection = [] };
+}
+
+// DB call used TitleFilter directly:
+var matching = db.CountMatching(status, state.TitleFilter);
+var tickets = withinCap ? db.GetMatching(status, state.TitleFilter, Cap) : new List<Ticket>();
+```
+
+**Action handler — after:**
+
+```csharp
+// filter-* cases merged (tab nav + filter descriptor both use the same prefix):
+if (name.StartsWith("filter-"))
+{
+    // Filter descriptor already in state via bind. RESET-ON-NAV: clear selection.
+    state = state with { SelectedIds = new Dictionary<string, bool>(), BulkSelection = [] };
+}
+
+// Extract plain-string SQL optimization for "contains" (only case the DB uses):
+var titleDescriptor = state.TitleFilterDescriptor;
+var sqlTitleFilter = (
+    titleDescriptor?.Rules.Count == 1 &&
+    titleDescriptor.Rules[0].Operator == "contains" &&
+    titleDescriptor.Rules[0].Value is string sv
+) ? sv : "";
+var matching = db.CountMatching(status, sqlTitleFilter);
+
+// In-memory filter via FilterHelper.MatchesFilter:
+var allMatchingTickets = withinCap ? db.GetMatching(status, sqlTitleFilter, Cap) : new List<Ticket>();
+var tickets = (titleDescriptor == null || titleDescriptor.Rules.Count == 0)
+    ? allMatchingTickets
+    : allMatchingTickets.Where(t =>
+        FilterHelper.MatchesFilter(titleDescriptor, t.Title, t.Title, "text")).ToList();
+```
+
+### Before / after — TypeScript (brief)
+
+**Before:**
+
+```typescript
+// Column:
+{ key: "title", header: "Title", filterable: true, filterValue: state.titleFilter || undefined }
+
+// Table:
+{ filterBinds: { title: "titleFilter" }, filterAction: { name: "filter-text" } }
+
+// Action handler:
+case "filter-text":
+  state = { ...state, titleFilter: state.titleFilter /* already in state via bind */ };
+  break;
+
+// Row evaluation:
+rows.filter(r => r.title.toLowerCase().includes(state.titleFilter.toLowerCase()))
+```
+
+**After:**
+
+```typescript
+// Column:
+{ key: "title", header: "Title", filter: { kind: "text" } }
+
+// Table:
+{ filterDescriptorBinds: { title: "filterDescriptors.title" } }
+// No filterAction — descriptors arrive via state at the bind path
+
+// Row evaluation via truth function (from @ashley-shrok/viewmodel-shell/server):
+import { matchesFilter } from "@ashley-shrok/viewmodel-shell/server";
+rows.filter(r => matchesFilter(state.filterDescriptors?.title, r.title, r.title, "text"))
+```
+
+**Note for browser-only pages:** `matchesFilter` lives in the server subpath (`@ashley-shrok/viewmodel-shell/server`) which carries Node built-ins and **cannot be imported in a browser page** (gotcha #13). Browser-only front-ends must apply filter logic inline by reading `FilterDescriptor.rules` directly — see `demo/Showcase/frontend/src/main.ts` for the reference implementation.
+
+### Consumer upgrade note
+
+Apps must upgrade on v10.0.0 — the old wire fields are gone. There is no compatibility layer. The framework's `matchesFilter` / `FilterHelper.MatchesFilter` reference truth function handles all filter evaluation; consumers no longer write bespoke filter loops for typed columns.
+
+### Companion NuGet
+
+Consumers using `AshleyShrok.ViewModelShell.Markdown` must upgrade it to `0.2.3` alongside the core (floor dep on core 10.0.0, mandatory rebuild per AGENTS.md gotcha #9 core-major-bump rule):
+
+```bash
+dotnet add package AshleyShrok.ViewModelShell --version 10.0.0
+dotnet add package AshleyShrok.ViewModelShell.Markdown --version 0.2.3
+```
+
+### Bumping both packages
+
+```bash
+# TypeScript / npm
+npm install @ashley-shrok/viewmodel-shell@10.0.0
+
+# .NET / NuGet
+dotnet add package AshleyShrok.ViewModelShell --version 10.0.0
+```
+
+---
+
 ## Upgrading to v9.2.0
 
 Additive optional axis on `TextNode` — **no consumer action required.** Existing apps continue to work unchanged. Skip the rest of this section unless you want to adopt the new axis.
