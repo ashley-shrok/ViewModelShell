@@ -2001,6 +2001,60 @@ public record ModalNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ModalSize? Size = null
 ) : ViewNode;
 
+// ─── Phase 32: Typed column-filter wire types ────────────────────────────────
+//
+// FilterSpec, FilterRule, and FilterDescriptor are Phase 32 additive wire
+// additions. They coexist with the legacy filterable/filterValue/filterBinds/
+// filterAction shape; Phase 33 removes the legacy fields.
+//
+// Closed-union fields (Kind, Operator, Joiner) are typed as `string` in .NET
+// per the AGENTS.md "closed-unions-enforced-on-ONE-side-only" invariant — the
+// TS closed union is the specification; .NET uses string for these fields so
+// there is no compile-time constraint here. The TS union IS the constraint.
+//
+// Every nullable field carries WhenWritingNull per AGENTS.md gotcha #8.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>Declares the filter schema for a filterable column — value-kind,
+/// optional fixed-set option list, and optional matching-behavior hints.
+/// Phase 32 additive wire addition; coexists with legacy filterable?/filterValue?
+/// shape until Phase 33 removes the old fields.
+/// Kind is a closed string union on the TS twin: "text" | "number" | "date" |
+/// "fixed-set" | "yes-no". Typed as string here per the closed-unions-on-one-side
+/// invariant — the TS union is the source of truth.</summary>
+public record FilterSpec(
+    string Kind,
+    /// <summary>For "fixed-set" columns, the closed option list the user can select
+    /// from. Absent on all other kinds. WhenWritingNull per gotcha #8.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Options = null,
+    /// <summary>Opt-in per-column matching-behavior hints. Currently one member:
+    /// "ignore-punctuation" strips $, £, €, commas, and periods before contains
+    /// comparison (useful for currency columns). WhenWritingNull per gotcha #8.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? MatchingHints = null
+);
+
+/// <summary>One condition in a FilterDescriptor. Operator is a closed string union
+/// on the TS twin (per kind). Value is ABSENT (WhenWritingNull) when the operator
+/// carries no value — is-empty, is-not-empty, is-true, is-false. Never set Value
+/// to null explicitly: omit it. Byte-parallel with the TS FilterRule.value? which
+/// is structurally absent when not set, per AGENTS.md null-omission contract.</summary>
+public record FilterRule(
+    string Operator,
+    /// <summary>The filter value. Absent when the operator carries no value
+    /// (is-empty, is-not-empty, is-true, is-false). WhenWritingNull per gotcha #8.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] object? Value = null
+);
+
+/// <summary>An ordered list of filter rules plus a combination rule.
+/// Joiner is a closed string union: "all-of" | "any-of".
+/// all-of = every rule must match; any-of = at least one rule must match.
+/// No short-circuit: every rule is evaluated regardless of intermediate results
+/// (simpler semantics, easier to test — per CONTEXT D-06).</summary>
+public record FilterDescriptor(
+    IReadOnlyList<FilterRule> Rules,
+    string Joiner
+);
+
 public record TableColumn(
     string Key,
     string Label,
@@ -2014,7 +2068,14 @@ public record TableColumn(
     // 6.12.0 (TOOL-01) — hover-only info tooltip on the column HEADER. Useful
     // for annotating short header labels ("MTD", "Δ 7d") with a full
     // explanation. See FieldNode.Tooltip.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip = null,
+    // Phase 32 (CF-01) — typed-filter schema for this column. Declares the
+    // value-kind (Kind), optional fixed-set option list (Options), and optional
+    // matching hints (MatchingHints). The current filter instance (the ordered
+    // rules + joiner) lives in state at the path declared by
+    // TableNode.FilterDescriptorBinds. Coexists with the legacy
+    // Filterable/FilterValue/FilterBinds/FilterAction shape at Phase 32 close.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] FilterSpec? Filter = null
 );
 
 public record TableRow(
@@ -2090,7 +2151,12 @@ public record TableNode(
     /// rows the user can currently see (a row filtered/paginated out of view is not harvested). An app
     /// wanting cross-page/persistent selection ignores this block and reads its own selectedIds map.
     /// Selectable rows must carry TableRow.Id. Null = no bulk toolbar.</summary>
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TableSelection? Selection = null
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TableSelection? Selection = null,
+    /// <summary>Phase 32 (CF-01) — typed-filter bind paths, keyed by column key. Each value is a
+    /// state path where the column's current FilterDescriptor lives. Parallel to FilterBinds for the
+    /// legacy shape. Both fields remain valid at Phase 32 close; Phase 33 removes the legacy fields.
+    /// WhenWritingNull per AGENTS.md gotcha #8.</summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, string>? FilterDescriptorBinds = null
 ) : ViewNode;
 
 /// <summary>Visible-scoped bulk-action toolbar for a TableNode — see TableNode.Selection.
