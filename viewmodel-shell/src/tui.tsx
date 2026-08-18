@@ -1386,17 +1386,8 @@ function TableView({ node, ctx }: { node: TableNode; ctx: RCtx }) {
             );
           })}
         </box>
-        {/* Filter row (read-only for B2; inputs in B3) */}
-        {node.columns.some((c) => c.filterable) ? (
-          <box flexDirection="row" gap={2}>
-            {sel ? <text fg="#888888">{"   "}</text> : null}
-            {node.columns.map((c) => (
-              <text key={c.key} fg="#888888">
-                {c.filterable ? (c.filterValue ? `[${c.filterValue}]` : "[filter]") : ""}
-              </text>
-            ))}
-          </box>
-        ) : null}
+        {/* TUI filter row commented out — uses old wire (filterable/filterValue removed in Phase 33);
+            Phase TBD; see bounty tui-filter-refresh */}
         {/* Data rows */}
         {node.rows.map((row, ri) => {
           // Phase 6 — TableRow.action → TableRow.actions[]. Per-row buttons

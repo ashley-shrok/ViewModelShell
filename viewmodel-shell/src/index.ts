@@ -25,7 +25,7 @@ export interface ActionEvent {
    * This field never rides inside the `_action` POST payload — the wire shape
    * stays `{name}` only (the Phase 6 shape). `blocking` travels on the SAME
    * ActionEvent object already embedded on a triggering node's
-   * `action`/`dismissAction`/`sortActions[...]`/`filterAction`/`prevAction`/
+   * `action`/`dismissAction`/`sortActions[...]`/`prevAction`/
    * `nextAction`/tab `action` field; the server never needs to see it.
    */
   blocking?: boolean;
@@ -706,7 +706,7 @@ export interface FieldNode {
    * browser warns `[vms:lookup-no-searchbind]`.
    *
    * Keystrokes write here immediately (the query is state); **Enter** dispatches
-   * `searchAction`. That is the same cadence `TableNode.filterAction` uses.
+   * `searchAction`. That is the same cadence as table search actions.
    *
    * 🚨 The query is what the user TYPED. It is **not** the display text: an
    * input showing the selected label (a form loaded with a reference already
@@ -719,7 +719,7 @@ export interface FieldNode {
   searchBind?: string;
   /**
    * LOOKUP INPUTS ONLY (Phase 21). Dispatched **on ENTER**, as an **ordinary
-   * action** — the same cadence `TableNode.filterAction` uses, and the same one
+   * action** — the same cadence as table search actions, and the same one
    * `action` above uses. Keystrokes write `searchBind` and dispatch nothing;
    * there is **no debounce** and **no live-query lane**.
    *
@@ -1277,17 +1277,11 @@ export interface ModalNode {
 }
 
 // ─── Phase 32: Typed column filter wire vocabulary ────────────────────────────
-// Additive additions that coexist with the existing filterable?/filterValue?/
-// filterBinds?/filterAction? shape. Old fields remain valid and unmodified.
-// Phase 33 removes the old shape as part of the adapter migration.
+// Old wire fields removed in Phase 33. Only the new typed vocabulary remains.
 
 /**
- * Declares what kind of value a filterable column holds. Drives the available
+ * Declares what kind of value a typed-filter column holds. Drives the available
  * operator vocabulary and the typed value inputs in the filter popover.
- *
- * Phase 32 additive wire addition — coexists with the existing
- * `filterable?`/`filterValue?` shape which remains valid and unmodified.
- * Phase 33 removes the old shape as part of the adapter migration.
  */
 export type ValueKind = "text" | "number" | "date" | "fixed-set" | "yes-no";
 
@@ -1415,7 +1409,6 @@ export interface FilterDescriptor {
  * The CURRENT filter instance (the ordered rules + joiner) lives in state at
  * the path declared by `TableNode.filterDescriptorBinds[columnKey]`.
  *
- * Phase 32 additive wire addition — see `TableColumn.filter?`.
  */
 export interface FilterSpec {
   /** Declares what kind of value this column holds. Drives operator vocabulary. */
@@ -1437,16 +1430,11 @@ export interface TableColumn {
   key: string;
   label: string;
   sortable?: boolean;
-  filterable?: boolean;
-  filterValue?: string;
   /**
-   * Phase 32 typed-filter schema for this column. Declares the value-kind,
+   * Typed-filter schema for this column. Declares the value-kind,
    * optional fixed-set options, and optional matching hints. The current filter
    * instance (the ordered rules + joiner) lives in state at the path declared
    * by `TableNode.filterDescriptorBinds[columnKey]`.
-   *
-   * Coexists with the legacy `filterable?`/`filterValue?` shape — both remain
-   * valid at Phase 32 close. Phase 33 removes the old fields.
    */
   filter?: FilterSpec;
   /** If set, cell values render as <a href={value}>{linkLabel}</a> */
@@ -1513,14 +1501,9 @@ export interface TableNode {
   rows: TableRow[];
   /** Path into state where the current sort intent (`{column, direction}`) is read/written. */
   sortBind?: string;
-  /** Per-column filter input bind paths. The renderer reads/writes filter
-   *  values at these paths; the values then travel with the next dispatch. */
-  filterBinds?: Record<string, string>;
   /**
-   * Phase 32 typed-filter bind paths, keyed by column key. Each value is a
-   * state path where the column's current `FilterDescriptor` lives.
-   * Parallel to `filterBinds` for the legacy shape — both fields remain
-   * valid at Phase 32 close. Phase 33 removes `filterBinds`.
+   * Typed-filter bind paths, keyed by column key. Each value is a state path
+   * where the column's current `FilterDescriptor` lives.
    */
   filterDescriptorBinds?: Record<string, string>;
   /** Path into state where the renderer writes the target page number before
@@ -1530,10 +1513,6 @@ export interface TableNode {
    *  unique action name — the renderer writes the new sort intent to `sortBind`
    *  before dispatching. */
   sortActions?: Record<string, ActionEvent>;
-  /** One filter-dispatch action per table. The renderer fires this when the
-   *  user submits the filter form; per-column filter values are already in
-   *  state at the `filterBinds` paths. */
-  filterAction?: ActionEvent;
   /** Server-driven pagination. When set, the adapter renders an "X–Y of N"
    *  range + prev/next controls below the table. **The server slices `rows` to
    *  the current page** — the adapter never paginates client-side (that would

@@ -162,7 +162,6 @@ describe("validateActionNames", () => {
         title: { name: "sort-by-title" },
         date: { name: "sort-by-date" },
       },
-      filterAction: { name: "apply-filter" },
       paginationBind: "page",
       pagination: {
         page: 1,

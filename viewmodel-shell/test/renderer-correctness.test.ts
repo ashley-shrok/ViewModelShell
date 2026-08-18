@@ -70,10 +70,9 @@ describe("Stable ids for focus restore (B1)", () => {
   it("table filter input carries a stable id keyed on the column", () => {
     const c = render({
       type: "table",
-      columns: [{ key: "title", label: "Title", filterable: true }],
+      columns: [{ key: "title", label: "Title", filter: { kind: "text" } }],
       rows: [{ cells: { title: "Alpha" } }],
-      filterBinds: { title: "filters.title" },
-      filterAction: { name: "apply-filters" },
+      filterDescriptorBinds: { title: "filterDescriptors.title" },
     });
     expect(c.querySelector("#vms-tablefilter-title")).not.toBeNull();
     expect((c.querySelector("#vms-tablefilter-title") as HTMLInputElement).className)

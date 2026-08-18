@@ -4467,7 +4467,7 @@ export class BrowserAdapter implements Adapter {
       // ── THE SEARCH (Phase 21, 21-11 / D4 / D11 — BOTH REVERSED) ───────────
       //
       // 🚨 `searchAction` IS AN ORDINARY, BLOCKING ACTION FIRED ON ENTER. It is
-      // byte-for-byte the cadence `TableNode.filterAction` has always used
+      // byte-for-byte the same cadence as table filter actions
       // (table(), below: keystrokes write the bind; ENTER dispatches) and the one
       // the text arm uses. There is NO debounce timer, NO live-query lane, and
       // NOTHING here touches `blocking`.
@@ -5611,8 +5611,8 @@ export class BrowserAdapter implements Adapter {
   }
 
   /** TableNode — sort writes {column, direction} to sortBind then dispatches
-   *  sortActions[col.key]; filter inputs are bound to filterBinds[col.key],
-   *  every keystroke writes, Enter dispatches filterAction; pagination
+   *  sortActions[col.key]; filter inputs are bound to filterDescriptorBinds[col.key],
+   *  every keystroke writes a FilterDescriptor to state; pagination
    *  prev/next write the target page to paginationBind then dispatch
    *  prevAction/nextAction. Per-row controls (row.actions[]) are a mix of
    *  ButtonNode and CheckboxNode; the renderer partitions them by entry.type —
@@ -5749,13 +5749,10 @@ export class BrowserAdapter implements Adapter {
     });
     thead.appendChild(headerRow);
 
-    // Phase 33 (33-01) — two-path filter row rendering:
-    //   NEW path: filterDescriptorBinds present → always-visible input + filter
-    //     button per filterable column (Round 2 hybrid shape, REQ-CF2-01..06).
-    //   LEGACY path: old filterable+filterAction fields → pre-Phase-33 behavior,
-    //     kept alive until Plan 02 removes the old wire fields (Wave 2 bridge).
+    // Phase 33 (33-01) — filter row rendering: filterDescriptorBinds present →
+    //   always-visible input + filter button per filterable column
+    //   (Round 2 hybrid shape, REQ-CF2-01..06).
     const hasNewFilters = !!n.filterDescriptorBinds && n.columns.some(c => c.filter != null);
-    const hasLegacyFilters = n.columns.some(c => c.filterable) && !!n.filterAction;
     if (hasNewFilters) {
       const filterRow = document.createElement("tr");
       filterRow.className = "vms-table__filter-row";
@@ -5864,49 +5861,6 @@ export class BrowserAdapter implements Adapter {
           });
 
           th.appendChild(filterBtn);
-        }
-        filterRow.appendChild(th);
-      });
-      thead.appendChild(filterRow);
-    } else if (hasLegacyFilters) {
-      // Legacy filter row path — kept alive as a Wave 1 bridge until Plan 02
-      // removes the old wire fields (filterable, filterValue, filterBinds,
-      // filterAction). DO NOT REMOVE this branch until Plan 02 lands.
-      const filterAction = n.filterAction!;
-      const filterRow = document.createElement("tr");
-      filterRow.className = "vms-table__filter-row";
-      if (tableHasCheckboxes) {
-        filterRow.appendChild(document.createElement("th"));
-      }
-      n.columns.forEach(col => {
-        const th = document.createElement("th");
-        if (col.filterable) {
-          const inp = document.createElement("input");
-          inp.type = "text";
-          inp.className = "vms-table__filter-input";
-          inp.dataset.col = col.key;
-          // Stable id so render()'s focus+caret restore can re-find this input
-          // after a re-render — critical because a silent poll can fire mid-
-          // keystroke while the user is typing a filter (the canonical
-          // workflow-table pattern). Without an id the value survives (it's
-          // bound state) but focus/caret are lost on every poll tick.
-          inp.id = `vms-tablefilter-${col.key}`;
-          const legacyBindPath = n.filterBinds?.[col.key];
-          const bound = legacyBindPath != null ? this.sa.read(legacyBindPath) : undefined;
-          inp.value = bound != null
-            ? String(bound)
-            : (col.filterValue ?? "");
-          inp.placeholder = `Filter…`;
-          if (legacyBindPath != null) {
-            inp.addEventListener("input", () => { this.sa.write(legacyBindPath, inp.value); });
-          }
-          inp.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") {
-              if (legacyBindPath != null) this.sa.write(legacyBindPath, inp.value);
-              on(filterAction);
-            }
-          });
-          th.appendChild(inp);
         }
         filterRow.appendChild(th);
       });

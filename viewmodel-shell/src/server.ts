@@ -584,7 +584,6 @@ function collectActions(
           recordAction(action, enclosingForm, out);
         }
       }
-      if (table.filterAction) recordAction(table.filterAction, enclosingForm, out);
       if (table.pagination?.prevAction) {
         recordAction(table.pagination.prevAction, enclosingForm, out);
       }

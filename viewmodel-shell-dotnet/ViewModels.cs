@@ -2063,11 +2063,9 @@ public record FilterDescriptor(
 public record TableColumn(
     string Key,
     string Label,
-    // Sortable/Filterable/LinkExternal are dropped from the wire when false
+    // Sortable/LinkExternal are dropped from the wire when false
     // (WhenWritingDefault) → absent, matching the TS optionals (3.3.0, F2).
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Sortable = false,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Filterable = false,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FilterValue = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LinkLabel = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool LinkExternal = false,
     // 6.12.0 (TOOL-01) — hover-only info tooltip on the column HEADER. Useful
@@ -2078,8 +2076,7 @@ public record TableColumn(
     // value-kind (Kind), optional fixed-set option list (Options), and optional
     // matching hints (MatchingHints). The current filter instance (the ordered
     // rules + joiner) lives in state at the path declared by
-    // TableNode.FilterDescriptorBinds. Coexists with the legacy
-    // Filterable/FilterValue/FilterBinds/FilterAction shape at Phase 32 close.
+    // TableNode.FilterDescriptorBinds.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] FilterSpec? Filter = null
 );
 
@@ -2141,13 +2138,10 @@ public record TableNode(
     IReadOnlyList<TableRow> Rows,
     /// <summary>Path into state where the current sort intent ({column, direction}) is read/written.</summary>
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SortBind = null,
-    /// <summary>Per-column filter input bind paths — the renderer reads/writes filter values at these paths.</summary>
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, string>? FilterBinds = null,
     /// <summary>Path into state where the renderer writes the target page number before firing Pagination.PrevAction / NextAction.</summary>
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? PaginationBind = null,
     /// <summary>Per-column sort header click actions, keyed by column key. Each carries a unique action name.</summary>
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, ActionDescriptor>? SortActions = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActionDescriptor? FilterAction = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TablePagination? Pagination = null,
     /// <summary>Visible-scoped bulk-action toolbar (opt-in). The adapter renders Selection.Buttons
     /// ABOVE the table; each button, on click, harvests the currently-CHECKED, currently-RENDERED row
@@ -2157,9 +2151,8 @@ public record TableNode(
     /// wanting cross-page/persistent selection ignores this block and reads its own selectedIds map.
     /// Selectable rows must carry TableRow.Id. Null = no bulk toolbar.</summary>
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TableSelection? Selection = null,
-    /// <summary>Phase 32 (CF-01) — typed-filter bind paths, keyed by column key. Each value is a
-    /// state path where the column's current FilterDescriptor lives. Parallel to FilterBinds for the
-    /// legacy shape. Both fields remain valid at Phase 32 close; Phase 33 removes the legacy fields.
+    /// <summary>Typed-filter bind paths, keyed by column key. Each value is a
+    /// state path where the column's current FilterDescriptor lives.
     /// WhenWritingNull per AGENTS.md gotcha #8.</summary>
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, string>? FilterDescriptorBinds = null
 ) : ViewNode;
@@ -4200,7 +4193,6 @@ public static class ViewTreeValidation
                         Record(action, enclosingForm, sink);
                     }
                 }
-                if (table.FilterAction is { } filter) Record(filter, enclosingForm, sink);
                 if (table.Pagination?.PrevAction is { } prev) Record(prev, enclosingForm, sink);
                 if (table.Pagination?.NextAction is { } next) Record(next, enclosingForm, sink);
                 if (table.Pagination?.JumpAction is { } jump) Record(jump, enclosingForm, sink);
