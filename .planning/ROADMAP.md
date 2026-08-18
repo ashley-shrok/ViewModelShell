@@ -685,8 +685,8 @@ Plans:
 
 ### Phase 33: Column filter expansion Phase 2 — adapter UI (popover + slash-through funnel + always-visible-input) + demo migration to typed FilterSpec/FilterDescriptor wire (HelpDesk + Showcase + FeatureProbe .NET/bun twins) + removal of old filterable/filterValue/filterBinds/filterAction fields (all 8 across TS + .NET) + MIGRATION.md + aligned major-version bump on npm + NuGet + release ritual (tag + advance main + #vms-announcements post) + Poppy pilot coordination on PBMInvoices
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Ship the user-facing surface of the typed column-filter capability: always-visible-input + escalation-popover browser adapter (Round 2 hybrid), `filter-slash` icon glyph, portal positioning, in-process adapter tests, migration of all 7 consumer files, removal of the 8 old wire fields, TUI carved to follow-up, MIGRATION+AGENTS+CHANGELOG docs, and aligned major-version release (npm 10.0.0 + NuGet 10.0.0 + Markdown 0.2.3) with Poppy piloting on PBMInvoices.
+**Requirements**: REQ-CF2-01, REQ-CF2-02, REQ-CF2-03, REQ-CF2-04, REQ-CF2-05, REQ-CF2-06, REQ-CF2-07, REQ-CF2-08, REQ-CF2-09, REQ-CF2-10, REQ-CF2-11, REQ-CF2-12, REQ-CF2-13, REQ-CF2-14
 **Depends on:** Phase 32
 **Plans:** 0 plans
 
