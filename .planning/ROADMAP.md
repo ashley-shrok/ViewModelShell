@@ -667,7 +667,7 @@ Plans:
 **Goal:** Ship the framework-internal foundation for typed column filtering — additive wire vocabulary (column value-kinds, per-type operator vocabularies, multi-rule FilterDescriptors with all-of/any-of joiners) and a byte-identical reference truth function on both backends, proven by exhaustive tests. No adapter changes, no demo changes, no publish.
 **Requirements**: REQ-CF1-01, REQ-CF1-02, REQ-CF1-03, REQ-CF1-04, REQ-CF1-05, REQ-CF1-06, REQ-CF1-07, REQ-CF1-08
 **Depends on:** Phase 31
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -677,7 +677,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 32-03-PLAN.md — Parity fixtures (column-filter-wire-shape.json + column-filter-helper.json) + FeatureProbe probe endpoints on both twins + backends.json registration (wave 2, depends 32-01 + 32-02)
+- [x] 32-03-PLAN.md — Parity fixtures (column-filter-wire-shape.json + column-filter-helper.json) + FeatureProbe probe endpoints on both twins + backends.json registration (wave 2, depends 32-01 + 32-02)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
