@@ -207,14 +207,55 @@ describe("A — REQ-CF2-01: Always-visible inline input + type-and-enter", () =>
     expect(descriptor?.["name"]).toBeNull();
   });
 
-  it("type-and-enter does NOT dispatch a named action (state-only commit)", () => {
+  // Per SPEC REQ-CF2-01 (reaffirmed by Ashley's Plan 33-06 checkpoint feedback):
+  // typing on the inline input is draft-only (write to state, no dispatch), but
+  // pressing Enter MUST dispatch {name: "filter-<colKey>"} so the server sees the
+  // new filter and re-renders. Without the dispatch, a paginated consumer's typing
+  // has zero visible effect until an unrelated action triggers a round trip.
+  it("input event (keystroke) writes to state but does NOT dispatch", () => {
+    const { render, container, dispatched } = setup();
+    render(makeFilterTable("name", "text"));
+    const inp = getFilterInput(container, "name")!;
+    Object.defineProperty(inp, "value", { writable: true, value: "test" });
+    inp.dispatchEvent(new Event("input", { bubbles: true }));
+    // No Enter — should be draft-only
+    expect(dispatched).toHaveLength(0);
+  });
+
+  it("Enter DISPATCHES {name: 'filter-<colKey>'} after writing descriptor to state", () => {
     const { render, container, dispatched } = setup();
     render(makeFilterTable("name", "text"));
     const inp = getFilterInput(container, "name")!;
     Object.defineProperty(inp, "value", { writable: true, value: "test" });
     inp.dispatchEvent(new Event("input", { bubbles: true }));
     fireKey(inp, "Enter");
-    expect(dispatched).toHaveLength(0);
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0]).toEqual({ name: "filter-name" });
+  });
+
+  it("Enter on a different column key dispatches with that column's key", () => {
+    const { render, container, dispatched } = setup();
+    render(makeFilterTable("title", "text"));
+    const inp = getFilterInput(container, "title")!;
+    Object.defineProperty(inp, "value", { writable: true, value: "abc" });
+    inp.dispatchEvent(new Event("input", { bubbles: true }));
+    fireKey(inp, "Enter");
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0]).toEqual({ name: "filter-title" });
+  });
+
+  it("Enter with empty input writes null AND still dispatches (reset signal)", () => {
+    const initial = { fd: { name: { rules: [{ operator: "contains", value: "x" }], joiner: "all-of" } } };
+    const { render, container, dispatched, state } = setup(initial);
+    render(makeFilterTable("name", "text"));
+    const inp = getFilterInput(container, "name")!;
+    Object.defineProperty(inp, "value", { writable: true, value: "" });
+    inp.dispatchEvent(new Event("input", { bubbles: true }));
+    fireKey(inp, "Enter");
+    const fd = (state as Record<string, unknown>)["fd"] as Record<string, unknown>;
+    expect(fd["name"]).toBeNull();
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0]).toEqual({ name: "filter-name" });
   });
 
   // Scenario (d) — contains on non-string kind (date column): type "2026" + Enter
@@ -430,9 +471,10 @@ describe("D — REQ-CF2-04 + D-06(f,g): Popover interactions", () => {
     expect(valInp!.value).toBe("foo");
   });
 
-  // (g) apply-on-Apply: click Apply commits the draft to state; popover closes
-  it("(g) apply-on-Apply: Apply button commits draft to state and closes popover", () => {
-    const { render, container, state } = setup();
+  // (g) apply-on-Apply: click Apply commits the draft to state; popover closes;
+  // dispatches {name: "filter-<colKey>"} per SPEC REQ-CF2-01.
+  it("(g) apply-on-Apply: Apply button commits draft to state, dispatches, and closes popover", () => {
+    const { render, container, state, dispatched } = setup();
     render(makeFilterTable("name", "text"));
     const popoverEl = openPopover(container)!;
 
@@ -448,13 +490,18 @@ describe("D — REQ-CF2-04 + D-06(f,g): Popover interactions", () => {
     const fd = (state as Record<string, unknown>)["fd"] as Record<string, unknown>;
     expect(fd?.["name"]).toMatchObject({ rules: [{ operator: "contains", value: "bar" }], joiner: "all-of" });
 
+    // Apply MUST dispatch — otherwise the server never sees the applied filter
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0]).toEqual({ name: "filter-name" });
+
     // Popover should be removed from DOM
     expect(container.querySelector(".vms-filter-popover")).toBeNull();
   });
 
   // (g) discard-on-outside-click: click outside the popover discards the draft
-  it("(g) discard-on-outside-click: clicking outside discards the draft; state is unchanged", () => {
-    const { render, container, state } = setup();
+  //     — no state write, no named dispatch.
+  it("(g) discard-on-outside-click: clicking outside discards the draft; state is unchanged; NO dispatch", () => {
+    const { render, container, state, dispatched } = setup();
     render(makeFilterTable("name", "text"));
     const popoverEl = openPopover(container)!;
 
@@ -475,13 +522,17 @@ describe("D — REQ-CF2-04 + D-06(f,g): Popover interactions", () => {
     const afterVal = afterFd?.["name"];
     expect(afterVal).toBe(beforeVal); // no change
 
+    // Discard MUST NOT dispatch — that's the entire point of "discard"
+    expect(dispatched).toHaveLength(0);
+
     // Popover should be removed from DOM
     expect(container.querySelector(".vms-filter-popover")).toBeNull();
   });
 
-  // (g) discard-on-Escape: Escape key discards the draft and closes popover
-  it("(g) discard-on-Escape: Escape closes popover and discards draft", () => {
-    const { render, container, state } = setup();
+  // (g) discard-on-Escape: Escape key discards the draft and closes popover;
+  //     no state write, no dispatch (same discard semantics as outside-click).
+  it("(g) discard-on-Escape: Escape closes popover and discards draft; NO dispatch", () => {
+    const { render, container, state, dispatched } = setup();
     render(makeFilterTable("name", "text"));
     openPopover(container)!;
 
@@ -496,12 +547,16 @@ describe("D — REQ-CF2-04 + D-06(f,g): Popover interactions", () => {
     // State unchanged
     const afterFd = (state as Record<string, unknown>)["fd"] as Record<string, unknown> | undefined;
     expect(afterFd?.["name"]).toBe(beforeVal);
+    // Discard MUST NOT dispatch
+    expect(dispatched).toHaveLength(0);
   });
 
-  // (g) clear-commits-empty: clicking Clear writes null to state and closes popover
-  it("(g) clear-commits-empty: Clear button writes null to state and closes popover", () => {
+  // (g) clear-commits-empty: clicking Clear writes null to state, dispatches
+  //     {name: "filter-<colKey>"} per SPEC REQ-CF2-01 (user expects visible
+  //     reset), and closes popover.
+  it("(g) clear-commits-empty: Clear button writes null, dispatches, and closes popover", () => {
     const existingDescriptor: FilterDescriptor = { rules: [{ operator: "contains", value: "foo" }], joiner: "all-of" };
-    const { render, container, state } = setup({ fd: { name: existingDescriptor } });
+    const { render, container, state, dispatched } = setup({ fd: { name: existingDescriptor } });
     render(makeFilterTable("name", "text"));
     const popoverEl = openPopover(container)!;
 
@@ -511,6 +566,10 @@ describe("D — REQ-CF2-04 + D-06(f,g): Popover interactions", () => {
     // State should be null
     const fd = (state as Record<string, unknown>)["fd"] as Record<string, unknown>;
     expect(fd?.["name"]).toBeNull();
+
+    // Clear MUST dispatch — otherwise the visible table doesn't reset
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0]).toEqual({ name: "filter-name" });
 
     // Popover closed
     expect(container.querySelector(".vms-filter-popover")).toBeNull();
@@ -640,8 +699,12 @@ describe("D — REQ-CF2-04 + D-06(f,g): Popover interactions", () => {
     expect(desc!.rules[1]?.value).toBe("beta");
   });
 
-  // Apply does NOT dispatch a named action
-  it("Apply does NOT dispatch a named action (state-only commit)", () => {
+  // Apply MUST dispatch a named action so the server re-renders. Per SPEC
+  // REQ-CF2-01 (reaffirmed by Ashley's Plan 33-06 checkpoint feedback):
+  // Enter/Apply/Clear all dispatch `filter-<colKey>`; without the dispatch a
+  // paginated consumer's Apply has zero visible effect until an unrelated
+  // action triggers a round trip.
+  it("Apply DISPATCHES {name: 'filter-<colKey>'} so the server re-renders", () => {
     const { render, container, dispatched } = setup();
     render(makeFilterTable("name", "text"));
     const popoverEl = openPopover(container)!;
@@ -649,7 +712,8 @@ describe("D — REQ-CF2-04 + D-06(f,g): Popover interactions", () => {
     Object.defineProperty(valInp, "value", { writable: true, value: "test" });
     valInp.dispatchEvent(new Event("input", { bubbles: true }));
     getApplyBtn(popoverEl)!.click();
-    expect(dispatched).toHaveLength(0);
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0]).toEqual({ name: "filter-name" });
   });
 });
 

@@ -5829,10 +5829,17 @@ export class BrowserAdapter implements Adapter {
             });
             inp.addEventListener("keydown", (e) => {
               if (e.key === "Enter") {
-                // Enter: write the contains descriptor to state (same as input
-                // event) and do NOT dispatch a named action — state update is
-                // the commit. See SUMMARY.md "Inline Enter behavior" for the
-                // documented behavioral change from the legacy filterAction path.
+                // Enter: write the contains descriptor to state AND dispatch
+                // {name: "filter-<colKey>"} so the server sees the new filter
+                // and re-renders. Per SPEC REQ-CF2-01: "typing text + Enter
+                // dispatches an action that writes a single {operator:'contains',
+                // value:'...'} rule at that column's bind path." Without the
+                // dispatch a paginated consumer's typing has zero visible effect
+                // until an unrelated action triggers a round trip.
+                //
+                // Column-key convention: `filter-<colKey>` mirrors the parity
+                // fixture catch-all reset-page arm used by both backends
+                // (HelpDesk .NET + bun both handle `name.StartsWith("filter-")`).
                 if (inp.value === "") {
                   this.sa.write(bindPath, null);
                 } else {
@@ -5841,6 +5848,7 @@ export class BrowserAdapter implements Adapter {
                     joiner: "all-of",
                   } as FilterDescriptor);
                 }
+                on({ name: `filter-${col.key}` });
               }
             });
             cellWrap.appendChild(inp);
@@ -7092,9 +7100,11 @@ export class BrowserAdapter implements Adapter {
     clearBtn.className = "vms-filter-clear";
     clearBtn.textContent = "Clear";
     clearBtn.addEventListener("click", () => {
-      // Clear writes an empty/null descriptor to state and closes the popover.
-      // No named action is dispatched — same state-only contract as inline Enter.
+      // Clear writes an empty/null descriptor to state AND dispatches
+      // {name: "filter-<colKey>"} so the server sees the reset and re-renders.
+      // Per SPEC REQ-CF2-01, same shape as inline Enter and popover Apply.
       this.sa.write(bindPath, null);
+      on({ name: `filter-${col.key}` });
       this.closeFilterPopover(false);
     });
 
@@ -7103,8 +7113,9 @@ export class BrowserAdapter implements Adapter {
     applyBtn.className = "vms-filter-apply";
     applyBtn.textContent = "Apply";
     applyBtn.addEventListener("click", () => {
-      // Apply: commit the draft to state, then close (no named action dispatch —
-      // state update IS the commit; server picks it up on next dispatch).
+      // Apply: commit the draft to state AND dispatch {name: "filter-<colKey>"}
+      // so the server sees the applied filter and re-renders. Per SPEC
+      // REQ-CF2-01, same shape as inline Enter and popover Clear.
       const cleanDraft: FilterDescriptor = {
         rules: draft.rules.filter(r => {
           // Drop empty contains rules (user clicked Add Rule but didn't type)
@@ -7118,6 +7129,7 @@ export class BrowserAdapter implements Adapter {
       } else {
         this.sa.write(bindPath, cleanDraft);
       }
+      on({ name: `filter-${col.key}` });
       this.closeFilterPopover(false);
     });
 

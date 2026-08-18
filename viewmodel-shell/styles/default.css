@@ -2570,9 +2570,15 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   max-width: 160px;
 }
 
-/* Popover internal elements */
+/* Popover internal elements — the rule row is a `display:flex` container in browser.ts;
+   op-select must size to content (bounded so the longest label like "Does not equal"
+   fits without wrapping), value-input flexes to fill the remaining space. Prior
+   `width: 100%` on both children caused them to fight for space so the value input
+   collapsed under one character wide when the operator select's default width won. */
 .vms-filter-op-select {
-  width: 100%;
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: min(14rem, 50%);
   background: var(--vms-surface-2);
   border: 1px solid var(--vms-border);
   border-radius: var(--vms-radius-sm);
@@ -2580,10 +2586,10 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   font-family: var(--vms-font-body);
   font-size: var(--vms-text-sm);
   padding: var(--vms-space-2xs) var(--vms-space-xs);
-  margin-bottom: var(--vms-space-xs);
 }
 .vms-filter-value-input {
-  width: 100%;
+  flex: 1 1 0;
+  min-width: 0;
   background: var(--vms-surface-2);
   border: 1px solid var(--vms-border);
   border-radius: var(--vms-radius-sm);
