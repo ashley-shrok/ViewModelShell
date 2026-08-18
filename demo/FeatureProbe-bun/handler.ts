@@ -2089,7 +2089,7 @@ const actionHandler = createAction<FeatureProbeState>(async (payload) => {
         matchingHints?: string[];
       };
       const descriptor: FilterDescriptor = {
-        rules: [{ operator: probe.operator, ...(probe.ruleValue !== undefined ? { value: probe.ruleValue } : {}) }],
+        rules: [{ operator: probe.operator as FilterDescriptor["rules"][0]["operator"], ...(probe.ruleValue !== undefined ? { value: probe.ruleValue } : {}) }],
         joiner: (probe.joiner ?? "all-of") as "all-of" | "any-of",
       };
       // @ts-ignore — kind is a string from the probe payload; matchesFilter accepts ValueKind
