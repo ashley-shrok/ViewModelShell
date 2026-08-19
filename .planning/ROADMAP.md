@@ -688,7 +688,7 @@ Plans:
 **Goal:** Ship the user-facing surface of the typed column-filter capability: always-visible-input + escalation-popover browser adapter (Round 2 hybrid), `filter-slash` icon glyph, portal positioning, in-process adapter tests, migration of all 7 consumer files, removal of the 8 old wire fields, TUI carved to follow-up, MIGRATION+AGENTS+CHANGELOG docs, and aligned major-version release (npm 10.0.0 + NuGet 10.0.0 + Markdown 0.2.3) with Poppy piloting on PBMInvoices.
 **Requirements**: REQ-CF2-01, REQ-CF2-02, REQ-CF2-03, REQ-CF2-04, REQ-CF2-05, REQ-CF2-06, REQ-CF2-07, REQ-CF2-08, REQ-CF2-09, REQ-CF2-10, REQ-CF2-11, REQ-CF2-12, REQ-CF2-13, REQ-CF2-14
 **Depends on:** Phase 32
-**Plans:** 6/7 plans executed
+**Plans:** 7/7 plans complete
 
 Plans:
 - [x] 33-01-PLAN.md — Adapter build: filter-slash glyph + always-visible input + filter-icon button + icon-state grammar + escalation popover + portal positioning + keyboard + inline summary + CSS (wave 1)
@@ -697,4 +697,4 @@ Plans:
 - [x] 33-04-PLAN.md — In-process adapter tests (filter-adapter.test.ts) — all 8 D-06 scenario groups + mutation-verify session (wave 3)
 - [x] 33-05-PLAN.md — Docs: MIGRATION.md v10.0.0 section + AGENTS.md typed-filter section + CHANGELOG Unreleased promotion (wave 3, parallel with 33-04)
 - [x] 33-06-PLAN.md — Full green-tree gate + served verification page + Ashley's real-browser exercise checkpoint (wave 4, autonomous: false)
-- [ ] 33-07-PLAN.md — Release ritual: version bumps + npm publish + NuGet publish (core + Markdown 0.2.3) + tag v10.0.0 + advance main + Poppy DM + #vms-announcements announce (wave 4, autonomous: false)
+- [x] 33-07-PLAN.md — Release ritual: version bumps + npm publish + NuGet publish (core + Markdown 0.2.3) + tag v10.0.0 + advance main + Poppy DM + #vms-announcements announce (wave 4, autonomous: false)
