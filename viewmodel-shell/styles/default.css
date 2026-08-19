@@ -2575,10 +2575,21 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
    fits without wrapping), value-input flexes to fill the remaining space. Prior
    `width: 100%` on both children caused them to fight for space so the value input
    collapsed under one character wide when the operator select's default width won. */
-.vms-filter-op-select {
-  flex: 0 0 auto;
-  min-width: 0;
-  max-width: min(14rem, 50%);
+/* Explicit height + box-sizing on BOTH the op-select and the value-input so a
+   text-typed value input matches the operator select's intrinsic sizing.
+   Without this, the `<input type="text">` computes ~28px while `<select>`
+   computes ~30px on Chrome UA defaults (2px gap) — visible as a vertical
+   misalignment in the popover rule row. `<select>` ignores `line-height`
+   (uses its own intrinsic sizing), so we anchor with `height: 1.875rem` (=
+   30px @ 16px root — matches the pre-fix select box, so the shipped
+   select-select paths stay pixel-identical) + `box-sizing: border-box` so
+   the fixed height includes padding + border. `line-height: 1.2` centers the
+   text-input's caret within the box. */
+.vms-filter-op-select,
+.vms-filter-value-input {
+  height: 1.875rem;
+  box-sizing: border-box;
+  line-height: 1.2;
   background: var(--vms-surface-2);
   border: 1px solid var(--vms-border);
   border-radius: var(--vms-radius-sm);
@@ -2587,16 +2598,14 @@ select.vms-field__input  { cursor: pointer; padding-right: var(--vms-space-xl); 
   font-size: var(--vms-text-sm);
   padding: var(--vms-space-2xs) var(--vms-space-xs);
 }
+.vms-filter-op-select {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: min(14rem, 50%);
+}
 .vms-filter-value-input {
   flex: 1 1 0;
   min-width: 0;
-  background: var(--vms-surface-2);
-  border: 1px solid var(--vms-border);
-  border-radius: var(--vms-radius-sm);
-  color: var(--vms-text);
-  font-family: var(--vms-font-body);
-  font-size: var(--vms-text-sm);
-  padding: var(--vms-space-2xs) var(--vms-space-xs);
 }
 .vms-filter-value-input:focus { border-color: var(--vms-accent); outline: none; }
 .vms-filter-joiner {
